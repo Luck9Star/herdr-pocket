@@ -3,6 +3,9 @@ package org.herdr.pocket
 import android.app.Activity
 import android.content.Context
 import android.os.SystemClock
+import android.os.Build
+import android.graphics.Rect
+import android.view.WindowInsets
 import android.view.inputmethod.InputMethodManager
 import android.webkit.WebView
 import androidx.appcompat.app.AppCompatActivity
@@ -40,6 +43,38 @@ class TerminalKeyboardPlugin(private val activity: Activity) : Plugin(activity) 
         webView === view && !activity.isFinishing && !activity.isDestroyed &&
             (activity as? AppCompatActivity)?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) == true &&
             activity.hasWindowFocus() && view.hasWindowFocus() && view.isAttachedToWindow && view.hasFocus()
+
+    @Command
+    fun topInset(invoke: Invoke) {
+        activity.runOnUiThread {
+            val view = webView
+            val insets = view?.rootWindowInsets
+            if (view == null || insets == null) {
+                invoke.reject("insets_unavailable")
+                return@runOnUiThread
+            }
+            @Suppress("DEPRECATION")
+            val status = if (Build.VERSION.SDK_INT >= 30) insets.getInsets(WindowInsets.Type.statusBars()).top else insets.systemWindowInsetTop
+            val stableStatus = if (Build.VERSION.SDK_INT >= 30) insets.getInsetsIgnoringVisibility(WindowInsets.Type.statusBars()).top else insets.stableInsetTop
+            val cutout = if (Build.VERSION.SDK_INT >= 30) insets.getInsets(WindowInsets.Type.displayCutout()).top else 0
+            val caption = if (Build.VERSION.SDK_INT >= 30) insets.getInsets(WindowInsets.Type.captionBar()).top else 0
+            val stableCaption = if (Build.VERSION.SDK_INT >= 30) insets.getInsetsIgnoringVisibility(WindowInsets.Type.captionBar()).top else 0
+            val top = maxOf(status, stableStatus, cutout, caption, stableCaption)
+            val location = IntArray(2)
+            view.getLocationOnScreen(location)
+            val windowTop = if (Build.VERSION.SDK_INT >= 30) activity.windowManager.currentWindowMetrics.bounds.top else null
+            val safeTop = if (windowTop != null) windowTop + top else Rect().also { view.getWindowVisibleDisplayFrame(it) }.top
+            val overlap = (safeTop - location[1]).coerceAtLeast(0)
+            invoke.resolve(JSObject().apply {
+                put("overlapPx", overlap); put("systemBottomPx", safeTop); put("viewY", location[1])
+                put("statusPx", status); put("stableStatusPx", stableStatus)
+                if (windowTop != null) {
+                    put("windowTopPx", windowTop); put("cutoutPx", cutout)
+                    put("captionPx", caption); put("stableCaptionPx", stableCaption)
+                }
+            })
+        }
+    }
 
     @Command
     fun request(invoke: Invoke) {

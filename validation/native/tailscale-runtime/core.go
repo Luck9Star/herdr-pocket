@@ -129,6 +129,14 @@ type stream struct {
 	ops                       sync.WaitGroup
 }
 
+// Optional hooks wired by the netmon shim (netmon.go). Defaults keep the
+// module self-contained so the isolated GO111MODULE=off core test compiles
+// without third-party imports.
+var (
+	ensureNetmonGetter   = func() {}
+	persistNetmonDiagOne = func(string) {}
+)
+
 func newManager(f factory) *manager {
 	return &manager{nodes: map[uint64]*node{}, streams: map[uint64]*stream{}, makeEngine: f}
 }
@@ -189,6 +197,9 @@ func (m *manager) newNode(c config, store stateStore) (uint64, code) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	gate := &gatedStore{underlying: store}
+	// Product fix, independent of diagnostics: register the Android netmon
+	// getter (no-op on other platforms) before any engine can start.
+	ensureNetmonGetter()
 	m.nodes[id] = &node{id: id, directory: c.Directory, store: gate, engine: m.makeEngine(c, gate), ctx: ctx, cancel: cancel, startDone: make(chan struct{}), closeDone: make(chan struct{})}
 	return id, ok
 }
@@ -393,6 +404,10 @@ func (m *manager) control(id uint64, ms uint32, login bool) (snapshot, code) {
 	n := m.getNode(id)
 	if n == nil {
 		return snapshot{}, notFound
+	}
+	if !login {
+		// Refresh measured diagnose on every status call, best-effort.
+		persistNetmonDiagOne(n.directory)
 	}
 	n.mu.Lock()
 	if n.closing {
@@ -669,6 +684,16 @@ type ioResult struct {
 	data []byte
 }
 
+// At the hard deadline, prefer an already-published read without waiting.
+func takeSettledRead(ch <-chan ioResult) (ioResult, bool) {
+	select {
+	case r := <-ch:
+		return r, true
+	default:
+		return ioResult{}, false
+	}
+}
+
 func (m *manager) streamIO(id uint64, data []byte, size int, ms uint32, write, half bool) ([]byte, int, code) {
 	if !validTimeout(ms) || size < 0 || size > maxIO {
 		return nil, 0, invalid
@@ -708,16 +733,6 @@ func (m *manager) streamIO(id uint64, data []byte, size int, ms uint32, write, h
 	defer cancel()
 	ch := make(chan ioResult, 1)
 	go func() {
-		defer s.ops.Done()
-		defer func() {
-			s.mu.Lock()
-			if write {
-				s.writing = false
-			} else {
-				s.reading = false
-			}
-			s.mu.Unlock()
-		}()
 		deadline, _ := ctx.Deadline()
 		var r ioResult
 		if write {
@@ -730,16 +745,30 @@ func (m *manager) streamIO(id uint64, data []byte, size int, ms uint32, write, h
 			}
 		} else {
 			r.data = make([]byte, size)
-			if e := conn.SetReadDeadline(deadline); e != nil {
+			// End the native read before the hard watchdog so its completion
+			// can be observed without extending the caller's deadline.
+			settle := time.Duration(ms) * time.Millisecond / 4
+			if settle > 100*time.Millisecond {
+				settle = 100 * time.Millisecond
+			}
+			if e := conn.SetReadDeadline(deadline.Add(-settle)); e != nil {
 				r.err = e
 			} else {
 				r.n, r.err = conn.Read(r.data)
 			}
 		}
+		// Publish only after the operation has released its single-flight slot.
+		s.mu.Lock()
+		if write {
+			s.writing = false
+		} else {
+			s.reading = false
+		}
+		s.mu.Unlock()
+		s.ops.Done()
 		ch <- r
 	}()
-	select {
-	case r := <-ch:
+	finish := func(r ioResult) ([]byte, int, code) {
 		if r.err == nil || (!write && errors.Is(r.err, io.EOF)) {
 			return r.data, r.n, ok
 		}
@@ -747,17 +776,29 @@ func (m *manager) streamIO(id uint64, data []byte, size int, ms uint32, write, h
 			m.closeStream(s, false)
 			return nil, r.n, unknownWrite
 		}
-		if e, yes := r.err.(net.Error); yes && e.Timeout() && r.n == 0 {
+		if e, yes := r.err.(net.Error); yes && e.Timeout() {
+			if r.n > 0 {
+				return r.data, r.n, ok
+			}
 			return nil, 0, timedOut
 		}
 		m.closeStream(s, false)
 		return r.data, r.n, ioError
+	}
+	select {
+	case r := <-ch:
+		return finish(r)
 	case <-retired:
 		if write {
 			return nil, 0, unknownWrite
 		}
 		return nil, 0, cancelled
 	case <-ctx.Done():
+		if !write {
+			if r, settled := takeSettledRead(ch); settled {
+				return finish(r)
+			}
+		}
 		m.closeStream(s, false)
 		if write {
 			return nil, 0, unknownWrite

@@ -1,0 +1,129 @@
+name: Tailscale Linux isolated C ABI
+on:
+  push:
+    branches: ['codex/acceptance/ts-cabi-linux']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-cabi:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.27.1'
+          cache: false
+      - name: Check guards and build pinned candidate
+        run: |
+          python3 -m unittest discover -s validation/remote-harness -p test_tailscale_cabi_linux.py -v
+          python3 validation/native/tool/tailscale_candidate.py prepare "$RUNNER_TEMP/ts-cabi-candidate" --cache "$RUNNER_TEMP/ts-cabi-cache"
+          python3 validation/native/tool/tailscale_candidate.py build "$RUNNER_TEMP/ts-cabi-candidate" --cache "$RUNNER_TEMP/ts-cabi-cache"
+          mkdir -m 700 "$RUNNER_TEMP/ts-cabi-bundle"
+          cp "$RUNNER_TEMP/ts-cabi-candidate/libhp_tailscale.so" "$RUNNER_TEMP/ts-cabi-bundle/"
+          cd "$RUNNER_TEMP/ts-cabi-candidate"
+          GOENV=off GOTOOLCHAIN=local CGO_ENABLED=1 GOFLAGS=-mod=readonly \
+            GOMODCACHE="$RUNNER_TEMP/ts-cabi-cache/modules" GOCACHE="$RUNNER_TEMP/ts-cabi-cache/build" \
+            GOPATH="$RUNNER_TEMP/ts-cabi-cache/gopath" go test -c -o "$RUNNER_TEMP/ts-cabi-bundle/ts-fixture" ./fixture
+          GOENV=off GOTOOLCHAIN=local CGO_ENABLED=1 GOFLAGS=-mod=readonly \
+            GOMODCACHE="$RUNNER_TEMP/ts-cabi-cache/modules" GOCACHE="$RUNNER_TEMP/ts-cabi-cache/build" \
+            GOPATH="$RUNNER_TEMP/ts-cabi-cache/gopath" go build -o "$RUNNER_TEMP/ts-cabi-bundle/netmon-probe" \
+              "$GITHUB_WORKSPACE/validation/remote-harness/tailscale_netmon_probe.go"
+      - name: Run production C ABI against private loopback fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          namespace="hp-ts-cabi-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          output="$RUNNER_TEMP/ts-cabi-evidence"
+          mkdir -m 700 "$output"
+          cleanup() {
+            failed=0
+            if sudo ip netns list | awk '{print $1}' | grep -Fxq "$namespace"; then
+              pids=$(sudo ip netns pids "$namespace")
+              if [ -n "$pids" ]; then
+                failed=1
+                if [[ "$pids" =~ ^[[:space:]0-9]+$ ]]; then
+                  sudo kill -TERM $pids || true
+                  for attempt in 1 2 3 4 5; do
+                    pids=$(sudo ip netns pids "$namespace")
+                    [ -z "$pids" ] && break
+                    sleep 1
+                  done
+                  if [ -n "$pids" ]; then sudo kill -KILL $pids || true; fi
+                fi
+              fi
+              sudo ip netns delete "$namespace" || failed=1
+            fi
+            for owned in "$RUNNER_TEMP/ts-cabi-bundle" "$RUNNER_TEMP/ts-cabi-candidate" "$RUNNER_TEMP/ts-cabi-cache"; do
+              if [ -e "$owned" ]; then chmod -R u+w "$owned" || failed=1; rm -rf "$owned" || failed=1; fi
+            done
+            return "$failed"
+          }
+          trap cleanup EXIT
+          sudo ip netns add "$namespace"
+          sudo ip netns exec "$namespace" ip link set lo up
+          idle_status=0
+          sudo ip netns exec "$namespace" runuser -u "$(id -un)" -- env \
+            GITHUB_ACTIONS=true GITHUB_RUN_ID="$GITHUB_RUN_ID" GITHUB_RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT" \
+            RUNNER_TEMP="$RUNNER_TEMP" /usr/bin/python3 validation/remote-harness/tailscale_cabi_linux.py \
+              --bundle "$RUNNER_TEMP/ts-cabi-bundle" --output "$output/idle" --network-mode loopback --fixture-only || idle_status=$?
+          lo_status=0
+          sudo ip netns exec "$namespace" runuser -u "$(id -un)" -- env \
+            GITHUB_ACTIONS=true GITHUB_RUN_ID="$GITHUB_RUN_ID" GITHUB_RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT" \
+            RUNNER_TEMP="$RUNNER_TEMP" /usr/bin/python3 validation/remote-harness/tailscale_cabi_linux.py \
+              --bundle "$RUNNER_TEMP/ts-cabi-bundle" --output "$output/loopback" --network-mode loopback || lo_status=$?
+          sudo ip -n "$namespace" link add hp-fixture0 type dummy
+          sudo ip netns exec "$namespace" sysctl -qw net.ipv6.conf.hp-fixture0.disable_ipv6=1
+          sudo ip -n "$namespace" address add 192.0.2.1/32 dev hp-fixture0
+          sudo ip -n "$namespace" link set hp-fixture0 up
+          dummy_status=0
+          sudo ip netns exec "$namespace" runuser -u "$(id -un)" -- env \
+            GITHUB_ACTIONS=true GITHUB_RUN_ID="$GITHUB_RUN_ID" GITHUB_RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT" \
+            RUNNER_TEMP="$RUNNER_TEMP" /usr/bin/python3 validation/remote-harness/tailscale_cabi_linux.py \
+              --bundle "$RUNNER_TEMP/ts-cabi-bundle" --output "$output/dummy" --network-mode dummy || dummy_status=$?
+          cleanup_status=0
+          cleanup || cleanup_status=$?
+          trap - EXIT
+          python3 - "$output" "$namespace" "$lo_status" "$dummy_status" "$cleanup_status" "$idle_status" <<'PY'
+          import json, os, pathlib, subprocess, sys
+          root=pathlib.Path(sys.argv[1])
+          def load(mode):
+              path=root/mode/'result.json'
+              result=json.loads(path.read_text()) if path.exists() else {'schemaVersion':1,'status':'failed','stage':'runner_preflight','networkMode':mode}
+              result['sourceSHA']=os.environ['GITHUB_SHA']
+              path.parent.mkdir(parents=True,exist_ok=True)
+              path.write_text(json.dumps(result,indent=2)+'\n')
+              return result
+          idle,lo,dummy=load('idle'),load('loopback'),load('dummy')
+          idle_ok=(int(sys.argv[6]) == 0 and idle.get('status') == 'passed' and
+                   len(idle.get('fixtureIdleSnapshots',[])) == 3 and idle.get('fixtureCleanup') is True)
+          partial=lo.get('partialCabi',{})
+          negative=(int(sys.argv[3]) != 0 and lo.get('controlReached') is True and
+                    partial.get('preLoginNoUrl') is True and partial.get('preLoginDialCode') == 7 and
+                    partial.get('beginLoginCode') == 0 and partial.get('authUrlPresent') is False and
+                    all(lo.get(key) is True for key in ('fixtureCleanup','processesStopped','privateRemoved')))
+          counts=dummy.get('controlDiagnostics',{}).get('afterRun',{})
+          positive=(int(sys.argv[4]) == 0 and dummy.get('status') == 'passed' and
+                    all(counts.get(key,0) > 0 for key in ('keyRequests','noiseRequests','registerRequests','mapRequests','authCompletions')) and
+                    counts.get('tlsHandshakeErrors') == 0 and counts.get('secondClientRegistered') is True)
+          removed=sys.argv[2] not in [line.split()[0] for line in subprocess.check_output(['ip','netns','list'],text=True).splitlines() if line.split()]
+          temp=pathlib.Path(os.environ['RUNNER_TEMP'])
+          cleanup_ok=int(sys.argv[5]) == 0 and removed and all(not (temp/name).exists() for name in ('ts-cabi-bundle','ts-cabi-candidate','ts-cabi-cache'))
+          result={'sourceSHA':os.environ['GITHUB_SHA'],'fixtureIdlePassed':idle_ok,'loopbackNegativeObserved':negative,'dummyPositiveObserved':positive,
+                  'namespaceRemoved':removed,'ownedBuildCleanup':cleanup_ok,
+                  'status':'passed' if idle_ok and negative and positive and cleanup_ok else 'failed'}
+          (root/'comparison.json').write_text(json.dumps(result,indent=2)+'\n')
+          sys.exit(0 if result['status']=='passed' else 1)
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: tailscale-cabi-linux-${{ github.sha }}
+          path: ${{ runner.temp }}/ts-cabi-evidence/
+          if-no-files-found: warn
+          retention-days: 14

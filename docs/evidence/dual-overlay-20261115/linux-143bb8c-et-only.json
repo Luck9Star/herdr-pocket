@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "milestone": "easytier-real-overlay-ssh",
+  "sourceSHA": "143bb8c298d619759ec3b6ad425b273397aba056",
+  "runId": "43728679763",
+  "status": "failed",
+  "stage": "probe-positive",
+  "cases": [],
+  "scope": "Linux isolated namespace; EasyTier only, real product OverlayDialer and SSH/herdr read-only; one unconnected TEST-NET dummy",
+  "unverified": [
+    "GUI",
+    "platform vault",
+    "Android",
+    "physical network",
+    "three-provider concurrency"
+  ],
+  "cleanup": {
+    "temporaryCredentialsRemoved": true,
+    "ownedProcessesStopped": true
+  },
+  "isolatedNamespace": true,
+  "testOnlyDummy": true,
+  "noExternalRoutes": true,
+  "loopbackOnlyNamespace": false,
+  "localSshCanaryBeforeOverlay": true,
+  "peerStage": "stopped",
+  "errorCode": "controlled_peer_exited_early",
+  "namespaceProcessesBeforeTeardown": 0,
+  "namespaceRemoved": true
+}

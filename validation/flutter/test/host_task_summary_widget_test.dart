@@ -75,7 +75,9 @@ void main() {
       expect(find.byKey(ValueKey('workspace-task-summary-${a.id}')),findsOneWidget); expect(adapter.pauses,0);
       await tapVisible(tester,'hosts-board-tab'); await tester.pumpAndSettle(); await revealHost(tester,a.id);
       expect(summaryText(tester,a.id),contains('上次主机报告')); expect(summaryText(tester,a.id),contains('受阻至少 2'));
-      expect(summaryText(tester,a.id),contains(DateTime.utc(2026,11,7,10).toLocal().toIso8601String()));
+      final sync = DateTime.utc(2026,11,7,10).toLocal();
+      String two(int n) => n.toString().padLeft(2,'0');
+      expect(summaryText(tester,a.id),contains('同步 ${two(sync.month)}-${two(sync.day)} ${two(sync.hour)}:${two(sync.minute)} · 待核查'));
       adapter.emit(blocked:99); await pumpReports(tester); expect(summaryText(tester,a.id),isNot(contains('99')));
       expect(adapter.calls,1); expect(adapter.pauses,1); expect(adapter.writes,0); expect(adapters.length,1);
       expect(tester.takeException(),isNull); await tester.pumpWidget(const SizedBox()); tabs.dispose(); catalog.dispose();

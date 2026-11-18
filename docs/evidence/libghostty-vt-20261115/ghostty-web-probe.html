@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8"><title>Local terminal adapter probe</title><div id="terminal" style="width:700px;height:260px;background:#111"></div><pre id="result">loading</pre><script type="module">
+import {Ghostty,Terminal} from '/node_modules/ghostty-web/dist/ghostty-web.js';
+const result=document.querySelector('#result');
+try {
+ let ghostty = await Ghostty.load(new URLSearchParams(location.search).has("official") ? "/official-1.0.1.wasm" : undefined); let t=new Terminal({ghostty,cols:40,rows:8,disableStdin:true}); let events=[]; t.open(document.querySelector('#terminal')); t.onData(s=>events.push(s));
+ let enc=new TextEncoder(); t.write(enc.encode('ONE\r\n中😀!')); await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+ let line0=t.buffer.active.getLine(0)?.translateToString(true), line1=t.buffer.active.getLine(1)?.translateToString(true);
+ t.write(enc.encode('\u001b[6n')); await new Promise(r=>setTimeout(r,50)); let response=events.slice();
+ t.resize(50,10); let dims=[t.cols,t.rows]; let canvas=!!document.querySelector('canvas'); let textarea=!!document.querySelector('textarea'); let role=document.querySelector('#terminal').getAttribute('role');
+ t.dispose(); let disposed=!document.querySelector('canvas');
+ result.textContent=JSON.stringify({line0,line1,response,dims,canvas,textarea,role,disposed});
+} catch(e){ result.textContent='ERROR '+String(e)+' '+e.stack; }
+</script>

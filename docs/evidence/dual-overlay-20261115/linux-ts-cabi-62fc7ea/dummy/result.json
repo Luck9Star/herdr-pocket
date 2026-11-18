@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "networkMode": "dummy",
+  "fixtureOnly": false,
+  "status": "passed",
+  "stage": "complete",
+  "controlReached": true,
+  "authorizationCompleted": true,
+  "fixtureCleanup": true,
+  "processesStopped": true,
+  "privateRemoved": true,
+  "proxyEnvironment": {
+    "HTTP_PROXY": false,
+    "HTTPS_PROXY": false,
+    "ALL_PROXY": false,
+    "NO_PROXY": false,
+    "http_proxy": false,
+    "https_proxy": false,
+    "all_proxy": false,
+    "no_proxy": false
+  },
+  "sslCertDirInherited": false,
+  "netmon": {
+    "anyInterfaceUp": true,
+    "haveV4": true,
+    "haveV6": false
+  },
+  "controlDiagnostics": {
+    "baseline": {
+      "keyRequests": 1,
+      "noiseRequests": 0,
+      "registerRequests": 0,
+      "mapRequests": 0,
+      "tlsHandshakeErrors": 0,
+      "authCompletions": 0,
+      "secondClientRegistered": false
+    },
+    "beforeAuthorization": {
+      "keyRequests": 2,
+      "noiseRequests": 1,
+      "registerRequests": 2,
+      "mapRequests": 0,
+      "tlsHandshakeErrors": 0,
+      "authCompletions": 0,
+      "secondClientRegistered": true
+    },
+    "afterAuthorization": {
+      "keyRequests": 2,
+      "noiseRequests": 1,
+      "registerRequests": 2,
+      "mapRequests": 0,
+      "tlsHandshakeErrors": 0,
+      "authCompletions": 1,
+      "secondClientRegistered": true
+    },
+    "afterRun": {
+      "keyRequests": 2,
+      "noiseRequests": 1,
+      "registerRequests": 2,
+      "mapRequests": 6,
+      "tlsHandshakeErrors": 0,
+      "authCompletions": 1,
+      "secondClientRegistered": true
+    }
+  },
+  "cabi": {
+    "startCode": 0,
+    "preLoginNoUrl": true,
+    "preLoginDialCode": 7,
+    "beginLoginCode": 0,
+    "authUrlPresent": true,
+    "running": true,
+    "dialCode": 0,
+    "payloadEqual": true,
+    "streamCloseCode": 0,
+    "streamReleaseCode": 0,
+    "nodeCloseCode": 0,
+    "nodeReleaseCode": 0,
+    "outstandingReadBuffers": 0
+  },
+  "fixtureStderrIndicators": {
+    "panic": false,
+    "testTimeout": false,
+    "tlsError": false,
+    "testFailure": false
+  },
+  "sourceSHA": "62fc7ea56f6a884521e4e8e1978dfbea2bb5294e"
+}

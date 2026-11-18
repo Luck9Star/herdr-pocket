@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "imageSha256": "d0df250ac2773d34d343e07fee66739b6d93965889b16814392134227f203e9c",
+  "imageSize": [
+    828,
+    1792
+  ],
+  "terminalBounds": [
+    0,
+    336,
+    828,
+    758
+  ],
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "expectedToken": "LAMP KEPT FACT PART KEPT DUSK KEPT ARCH",
+  "markerVisible": true,
+  "tokenVisible": true,
+  "ocrEngine": "tesseract 5.5.4",
+  "ocrAttempts": 2,
+  "ocrPageSegmentationMode": 11,
+  "proofSequenceVisible": true
+}

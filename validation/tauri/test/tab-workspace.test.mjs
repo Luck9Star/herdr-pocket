@@ -97,9 +97,13 @@ test('MT09 MT10: direct input sends only current visible epoch and stops after s
     channels[0].onmessage({kind:'input_ready',generation:g,epoch:1,unknown:false,recovery_status:'ready'});
     find('逐键输入').onclick();await flush();await flush();term.data('a');await flush();
     assert.equal(calls.filter(c=>c.name==='remote_tab_input_send' && c.args.draft===false).length,1);
+    const receipt=nodes['view-content'].all().find(n=>n.dataset.role==='input-receipt');
+    assert.equal(receipt.hidden,false);assert.match(receipt.children[1].textContent,/请求 ID：a{32}.*w1:p1.*term_a001.*受理 1 字节.*命令结果/);
+    assert.equal(receipt.attrs['aria-live'],undefined);
     const beforeRender=nodes['view-content'].replaceCount;const b=ui.create(mesh.hostId,mesh);
     assert.equal(nodes['view-content'].replaceCount,beforeRender,'another tab must not detach focused direct terminal');
     await ui.select(b);term.data('b');await flush();
+    assert.equal(receipt.hidden,true);
     assert.equal(calls.filter(c=>c.name==='remote_tab_input_send').length,1);
   } finally {globalThis.document=oldDocument;globalThis.window=oldWindow;}
 });
@@ -244,6 +248,8 @@ function watchWorkspace(fixedTarget=null,options={}) {
       observed.push(args);
       return options.observe?options.observe(args):new Promise(()=>{});
     }
+    if(name==='remote_tab_ack' && options.ack)return options.ack(args);
+    if(name==='remote_tab_control' && options.control)return options.control(args);
     if(name==='remote_tab_select' && options.select)return options.select(args);
     if(name==='remote_tab_input_mode')return options.mode?options.mode(args):Promise.resolve(5);
     if(name==='remote_tab_input_send' && options.send)return options.send(args);
@@ -488,6 +494,21 @@ const acceptedInput = args => Promise.resolve({
     requestId: 'a'.repeat(32), paneId: 'w1:p1', terminalId: 'term_a001',
     acceptedBytes: args.bytes.length,
   },
+});
+
+test('saved tab draft exposes only its matched receipt and clears it on disconnect',async()=>{
+  let reject=false;
+  const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'},{send:args=>reject ? Promise.resolve({status:'rejected'}) : acceptedInput(args)});
+  try {
+    await readyKeyboard(h);h.find('启用草稿输入').onclick();await flush();await flush();
+    const draft=h.all().find(n=>n.attrs['aria-label']==='当前标签草稿');draft.value='你好';draft.oninput();
+    h.find('发送草稿').onclick();await flush();await flush();
+    const receipt=h.all().find(n=>n.dataset.role==='input-receipt');
+    assert.equal(receipt.hidden,false);assert.match(receipt.children[1].textContent,/请求 ID：a{32}.*w1:p1.*term_a001.*受理 6 字节/);
+    reject=true;const next=h.all().find(n=>n.attrs['aria-label']==='当前标签草稿');next.value='x';next.oninput();h.find('发送草稿').onclick();await flush();await flush();
+    assert.equal(receipt.hidden,true);assert.equal(receipt.children[1].textContent,'');
+    h.find('关闭此标签').onclick();await flush();assert.equal(receipt.hidden,true);
+  } finally {h.restore();}
 });
 
 test('saved tab keyboard controls revoke direct and draft leases, stale controls cannot send',async()=>{
@@ -1113,5 +1134,102 @@ test('saved-tab diagnostics isolate same-host tabs and only acknowledge the boun
   const second=h.ui.create('fixture',{paneId:'w1:p2',terminalId:'term_a002'});await h.ui.select(second);assert.equal(row('hostKey'),undefined);await h.start();assert.equal(row('hostKey').dataset.stageState,'unknown');first.onmessage({generation:9,kind:'stage',stage:'authenticated'});assert.equal(row('authentication').dataset.stageState,'unknown');
   h.ui.prepareAffected(['fixture']);assert.ok(h.all().some(e=>e.dataset.attemptState==='ended'));assert.equal(row('hostKey').dataset.stageState,'unknown');
   assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send'||/resize/.test(c.name)).length,0);
+ }finally{h.restore();}
+});
+
+test('explicit observe releases focused terminal and never sends pending input',async()=>{
+  const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});
+  try {
+    await h.start();h.observation(1,'starting');h.watch(1,1);
+    h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});
+    h.observation(1,'active');h.emit({kind:'input_ready',epoch:1,unknown:false,recovery_status:'ready'});
+    h.find('逐键输入').onclick();await flush();await flush();
+    const terminal=h.terminal();assert.equal(document.activeElement,terminal.textarea);
+    h.find('观察').onclick();await flush();await flush();
+    assert.notEqual(document.activeElement,terminal.textarea);
+    assert.equal(terminal.options.disableStdin,true);
+    assert.ok(h.calls.some(c=>c.name==='remote_tab_input_mode' && c.args.mode==='observe'));
+    assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,0);
+  } finally {h.restore();}
+});
+
+
+test('unknown recovery requires current full render and independent confirmation',async()=>{
+  const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});
+  try {
+    await h.start();h.observation(1,'starting');h.observation(1,'active');
+    h.emit({kind:'input_ready',epoch:1,unknown:true,recovery_status:'pending'});
+    const beforeFull=h.find('已核实原目标结果，恢复输入');assert.equal(beforeFull.disabled,true);
+    beforeFull.onclick();await flush();assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_recover').length,0);
+    h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});await flush();
+    const button=h.find('已核实原目标结果，恢复输入');assert.equal(button.disabled,false);
+    window.confirm=()=>false;button.onclick();await flush();assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_recover').length,0);
+    window.confirm=()=>true;button.onclick();await flush();await flush();
+    assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_recover').length,1);
+    assert.equal(h.find('发送草稿').disabled,true);
+  } finally {h.restore();}
+});
+
+test('unknown draft keeps original text and target read-only without replay',async()=>{
+  const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'},{send:()=>Promise.resolve({status:'unknown'})});
+  try {
+    await readyKeyboard(h);h.find('启用草稿输入').onclick();await flush();
+    const draft=h.all().find(n=>n.attrs['aria-label']==='当前标签草稿');draft.value='待核实\u001b';draft.oninput();
+    window.confirm=()=>true;h.find('发送草稿').onclick();await flush();await flush();
+    const review=h.all().find(n=>n.className==='unknown-input-review');assert.equal(review.hidden,false);
+    assert.ok(review.all().some(n=>n.textContent.includes('w1:p1') && n.textContent.includes('term_a001')));
+    assert.ok(review.all().some(n=>n.textContent.startsWith('发送时间：')));
+    assert.ok(review.all().some(n=>n.tagName==='pre' && n.textContent==='待核实\\u{1b}'));
+    assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_send').length,1);
+  } finally {h.restore();}
+});
+
+test('hidden tab labels stale time and cannot reopen input before resumed full',async()=>{
+  const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});
+  try {
+    await readyKeyboard(h);
+    await h.ui.hide();h.observation(2,'paused');
+    assert.ok(h.all().some(n=>n.className==='tab-frame-status' && n.textContent.includes('观察已暂停') && n.textContent.includes('上次画面') && n.textContent.includes('历史不保证完整')));
+    h.find('恢复观察').onclick();await flush();h.observation(3,'resuming');h.observation(3,'active');
+    h.emit({kind:'input_ready',epoch:3,unknown:false,recovery_status:'ready'});
+    assert.ok(h.all().some(n=>n.className==='tab-frame-status' && n.textContent.includes('正在取得当前完整画面')));
+    assert.equal(h.find('逐键输入').disabled,true);assert.equal(h.find('启用草稿输入').disabled,true);
+    h.find('逐键输入').onclick();await flush();assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_mode' && c.args.mode==='direct').length,0);
+    h.emit({kind:'frame',epoch:3,frame:{seq:1,full:true,cols:80,rows:24,bytes:[66]}});await flush();
+    assert.equal(h.find('逐键输入').disabled,false);
+    assert.ok(h.all().some(n=>n.className==='tab-frame-status' && n.textContent.includes('当前观察画面')));
+  } finally {h.restore();}
+});
+
+test('stock observation shows a completed full frame without enabling input capability',async()=>{
+  const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'});
+  try {
+    await h.start();h.observation(1,'active');
+    assert.ok(h.find('正在取得当前完整画面；输入保持关闭。'));
+    h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});await flush();
+    assert.ok(h.find('观察模式；输入已关闭。'));
+    assert.ok(h.all().some(n=>n.className==='tab-frame-status' && n.textContent.includes('当前观察画面')));
+    assert.equal(h.find('逐键输入'),undefined);assert.equal(h.find('启用草稿输入'),undefined);
+    assert.equal(h.calls.filter(c=>c.name==='remote_tab_input_mode' && c.args.mode!=='observe').length,0);
+    assert.equal(h.terminal().options.disableStdin,true);
+  } finally {h.restore();}
+});
+
+for(const pending of ['ack','pause'])test(`explicit stop retires UI input without a late ${pending} hard cancelling its SSH`,async()=>{
+ let reject;const wait=()=>new Promise((_resolve,deny)=>{reject=deny;});
+ const h=watchWorkspace({paneId:'w1:p1',terminalId:'term_a001'},pending==='ack'?{ack:wait}:{control:wait});
+ try {
+  await h.start();h.observation(1,'active');
+  let hiding;
+  if(pending==='ack'){h.emit({kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});await flush();}
+  else {hiding=h.ui.hide();await flush();}
+  assert.equal(typeof reject,'function');
+  h.ui.prepareAffected(['fixture']);
+  assert.equal(h.calls.filter(c=>c.name==='remote_tab_cancel').length,0);
+  reject('stale');await hiding;await flush();await flush();
+  assert.equal(h.calls.filter(c=>c.name==='remote_tab_cancel').length,0);
+  assert.equal(h.terminal()?.options.disableStdin ?? true,true);
+  h.ui.background();await flush();
+  assert.equal(h.calls.filter(c=>c.name==='remote_tab_cancel').length,1,'ordinary background revocation stays hard');
  }finally{h.restore();}
 });

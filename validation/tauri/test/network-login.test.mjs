@@ -6,6 +6,26 @@ import {initNetworkUI} from '../src/network-ui.js';
 const flush=()=>new Promise(r=>setImmediate(r));
 const deferred=()=>{let resolve;return {promise:new Promise(r=>resolve=r),resolve:(v)=>resolve(v)};};
 function timers(){let next=0;const jobs=new Map();return {jobs,schedule:fn=>{jobs.set(++next,fn);return next;},cancel:id=>jobs.delete(id),async tick(){const [id,fn]=jobs.entries().next().value; jobs.delete(id);await fn();}};}
+async function withBrowserTimers(run) {
+  const original={setTimeout:globalThis.setTimeout,clearTimeout:globalThis.clearTimeout},timer=timers();
+  const receiver=value=>{if(value!==undefined && value!==globalThis)throw new TypeError('Illegal invocation');};
+  function schedule(...args){receiver(this);return timer.schedule(...args);}
+  function cancel(...args){receiver(this);return timer.cancel(...args);}
+  globalThis.setTimeout=schedule;globalThis.clearTimeout=cancel;
+  try {
+    assert.throws(()=>({schedule}).schedule(()=>{},1),/Illegal invocation/);
+    assert.throws(()=>({cancel}).cancel(1),/Illegal invocation/);
+    await run(timer);
+  } finally {Object.assign(globalThis,original);}
+}
+test('default polling timers preserve browser receiver rules for start, reschedule and stop',async()=>{
+  await withBrowserTimers(async timer=>{
+    const poll=new NetworkLoginPoll();let reads=0;
+    poll.start(async()=>{reads++;return true;});assert.equal(timer.jobs.size,1);
+    await timer.tick();assert.equal(reads,1);assert.equal(timer.jobs.size,1);
+    poll.stop();assert.equal(timer.jobs.size,0);
+  });
+});
 test('polling is serial and bounded; stopping an in-flight read cannot schedule another',async()=>{
   const timer=timers(), poll=new NetworkLoginPoll({...timer,limit:3}),read=deferred();let calls=0;
   poll.start(async()=>{calls++;return read.promise;});const first=timer.tick();await flush();assert.equal(calls,1);assert.equal(timer.jobs.size,0);
@@ -32,7 +52,7 @@ class Element {
   querySelectorAll(s){return s==='input[type=password]'?this.descendants().filter(n=>n.type==='password'):[];}
   querySelector(s){return s==='[role=status]'?this.descendants().find(n=>n.attrs.role==='status'):null;}
 }
-async function harness(run,{present=true,state='needs-login'}={}) {
+async function harness(run,{present=true,state='needs-login',useDefaultTimers=false}={}) {
   const old={document:globalThis.document,window:globalThis.window,confirm:globalThis.confirm};const panel=new Element('section'),open=new Element('button');panel.hidden=true;
   const listeners={};globalThis.document={hidden:false,getElementById:id=>id==='network-panel'?panel:open,createElement:t=>new Element(t),addEventListener:(n,fn)=>listeners[n]=fn};globalThis.window={addEventListener:(n,fn)=>listeners[n]=fn};globalThis.confirm=()=>true;
   const profile={id:'a'.repeat(32),label:'TS',provider:'tailscale',enabled:true,revision:1,settings:{controlUrl:'',hostname:''}},handle='11111111-1111-4111-8111-111111111111';
@@ -48,7 +68,7 @@ async function harness(run,{present=true,state='needs-login'}={}) {
     case 'network_node_open_auth':return;
     default:throw Error(name);
   }};
-  const ui=initNetworkUI({native:true,invoke,getHosts:()=>[{id:'h',name:'host'}],onAffected:async()=>{},pollOptions:timer});
+  const ui=initNetworkUI({native:true,invoke,getHosts:()=>[{id:'h',name:'host'}],onAffected:async()=>{},pollOptions:useDefaultTimers?undefined:timer});
   const h={ui,panel,open,profile,binding,calls,timer,listeners,button:text=>panel.descendants().find(n=>n.tagName==='button'&&n.textContent===text),texts:()=>panel.descendants().map(n=>n.textContent),setReview:(u,t)=>{auth=u;token=t;},waitLogin:()=>loginWait=deferred(),waitStatus:()=>statusWait=deferred(),allowStatus:()=>{statusWait=null;},setState:s=>state=s};
   try{open.onclick();await flush();await run(h);}finally{ui.close();Object.assign(globalThis,old);}
 }
@@ -90,5 +110,17 @@ test('visibilitychange clears original URL and discards late read; resume only r
     const opened=h.calls.find(c=>c.name==='network_node_open_auth');assert.equal(opened.args.reviewToken,'review-current');assert.equal(opened.args.expectedAuthUrl,'https://login.test/current');
     assert.equal(h.calls.filter(c=>['network_node_login','network_node_start'].includes(c.name)).length,0);
     assert.ok(h.calls.filter(c=>c.name==='network_node_login_status').length>=3);assert.equal(h.timer.jobs.size,1);
+  });
+});
+
+test('default browser timers keep the needs-login profile and explicit login action visible',async()=>{
+  await withBrowserTimers(async timer=>{
+    await harness(async h=>{
+      assert.equal(h.panel.descendants().filter(node=>(node.className||'').split(/\s+/).includes('network-profile-card')).length,1);
+      assert.ok(h.button('登录 Tailscale'));
+      assert.equal(h.texts().some(text=>text.includes('网络配置读取失败')),false);
+      assert.equal(timer.jobs.size,1);
+    },{useDefaultTimers:true});
+    assert.equal(timer.jobs.size,0);
   });
 });

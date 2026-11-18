@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "imageSha256": "3186054bb898d15bf13f96613f6be08c7eeb419493725babcbf9c0529aef76bc",
+  "imageSize": [
+    1320,
+    2868
+  ],
+  "terminalBounds": [
+    48,
+    813,
+    1224,
+    1287
+  ],
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "expectedToken": "DUSK HEAD FARM ARCH LAMP LAST FADE ARCH",
+  "markerVisible": true,
+  "tokenVisible": true,
+  "ocrEngine": "tesseract 5.5.4",
+  "ocrAttempts": 1,
+  "ocrPageSegmentationMode": 6,
+  "proofSequenceVisible": true
+}

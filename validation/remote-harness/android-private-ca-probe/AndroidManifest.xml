@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.herdr.tlsprobe" android:versionCode="1" android:versionName="1.0">
+  <uses-permission android:name="android.permission.INTERNET"/>
+  <instrumentation android:name="org.herdr.tlsprobe.ProbeInstrumentation" android:targetPackage="org.herdr.tlsprobe"/>
+  <application android:label="Isolated Go TLS probe" android:debuggable="true" android:extractNativeLibs="true"/>
+</manifest>

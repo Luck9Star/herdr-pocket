@@ -17,6 +17,12 @@ import 'pairing_gui_test.dart' show tapVisible;
 import 'remote_page_test.dart' show PendingAdapter;
 import 'remote_test_data.dart';
 
+Future<void> showNetworkDetails(WidgetTester tester,String id) async {
+  if (find.byKey(ValueKey('network-edit-$id')).evaluate().isNotEmpty) return;
+  final details=find.byKey(PageStorageKey('network-details-$id'));
+  await tester.ensureVisible(details); await tester.tap(details); await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('missing Android TS bridge fails before device-key access, SSH or system fallback',(tester) async {
     final previous = foundation.debugDefaultTargetPlatformOverride;
@@ -56,11 +62,11 @@ void main() {
     final tokens = (await tester.runAsync(DesignTokens.load))!;
     await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:NetworkProfilesPage(
       catalog:catalog,closeTabs:(_) {},identityStore:identities,runtime:runtime)));
-    await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pumpAndSettle();
-    await tapVisible(tester,'network-node-start-${profile.id}'); await tester.pumpAndSettle();
+    await showNetworkDetails(tester,profile.id); await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pumpAndSettle();
+    await showNetworkDetails(tester,profile.id); await tapVisible(tester,'network-node-start-${profile.id}'); await tester.pumpAndSettle();
     expect(find.text('节点：等待本设备授权'),findsOneWidget);
     expect(runtime.calls.where((c) => c.$1 == 'nodeLogin'),isEmpty);
-    await tapVisible(tester,'network-node-login-${profile.id}'); await tester.pumpAndSettle();
+    await showNetworkDetails(tester,profile.id); await tapVisible(tester,'network-node-login-${profile.id}'); await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('tailscale-login-url')),findsNothing);
     final authorize = find.byKey(const ValueKey('tailscale-login-authorize'));
     expect(tester.widget<FilledButton>(authorize).onPressed,isNull);
@@ -94,7 +100,7 @@ void main() {
     final runtime = TailscaleRuntimeFixture(profile),identities = TailscaleIdentityFixture();
     await tester.pumpWidget(MaterialApp(home:NetworkProfilesPage(
       catalog:catalog,closeTabs:(_) {},identityStore:identities,runtime:runtime)));
-    await tapVisible(tester,'network-identity-${profile.id}'); await tester.pumpAndSettle();
+    await showNetworkDetails(tester,profile.id); await tapVisible(tester,'network-identity-${profile.id}'); await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('network-identity-secret')),findsNothing);
     expect(find.byKey(const ValueKey('network-identity-mode')),findsNothing);
     await tapVisible(tester,'network-identity-review'); await tapVisible(tester,'network-identity-create');
@@ -115,9 +121,9 @@ void main() {
     final identities = TailscaleIdentityFixture();
     await tester.pumpWidget(MaterialApp(home:NetworkProfilesPage(
       catalog:catalog,closeTabs:(_) {},identityStore:identities,runtime:runtime)));
-    await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pumpAndSettle();
+    await showNetworkDetails(tester,profile.id); await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pumpAndSettle();
     final revision = catalog.revision,writes = storage.writes;
-    await tapVisible(tester,'network-toggle-${profile.id}'); await tester.pumpAndSettle();
+    await showNetworkDetails(tester,profile.id); await tapVisible(tester,'network-toggle-${profile.id}'); await tester.pumpAndSettle();
     await tapVisible(tester,'network-confirm'); await tester.pumpAndSettle();
     expect(catalog.revision,revision); expect(catalog.networkProfiles.single.enabled,isTrue);
     expect(runtime.calls.where((c) => c.$1 == 'nodeStop').length,1);
@@ -135,8 +141,8 @@ void main() {
     await identities.create(profile,'DEVICE_STATE',Uint8List(0));
     await tester.pumpWidget(MaterialApp(home:NetworkProfilesPage(
       catalog:catalog,closeTabs:(_) {},identityStore:identities,runtime:runtime)));
-    await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pumpAndSettle();
-    await tapVisible(tester,'network-node-login-${profile.id}'); await tester.pumpAndSettle();
+    await showNetworkDetails(tester,profile.id); await tapVisible(tester,'network-node-refresh-${profile.id}'); await tester.pumpAndSettle();
+    await showNetworkDetails(tester,profile.id); await tapVisible(tester,'network-node-login-${profile.id}'); await tester.pumpAndSettle();
     await tapVisible(tester,'tailscale-login-review'); await tapVisible(tester,'tailscale-login-authorize'); await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('tailscale-login-url')),findsOneWidget);
     await catalog.addNetwork(testNetwork('zerotier')); await tester.pumpAndSettle();

@@ -108,6 +108,13 @@ class CleanupTests(unittest.TestCase):
 
 
 class WiringTests(unittest.TestCase):
+    def test_retained_card_checks_stale_status_and_exact_blocked_count(self):
+        from paired_gui import retained_host_card_matches
+        detail='上次快照（状态已陈旧） · 会话 work · 受阻 1 · 同步 时间'
+        self.assertTrue(retained_host_card_matches(detail,'上次快照 · 受阻 1 · 12:34'))
+        self.assertFalse(retained_host_card_matches(detail,'当前快照 · 受阻 1 · 12:34'))
+        self.assertFalse(retained_host_card_matches(detail,'上次快照 · 受阻 10 · 12:34'))
+
     def test_stock_android_only_prepares_extra_workspaces_and_primary_config_stays_separate(self):
         source=Path(__file__).with_name('run-ci.py').read_text()
         start=source.index("        if (args.paired_gui in ('tauri-android','flutter-android')")

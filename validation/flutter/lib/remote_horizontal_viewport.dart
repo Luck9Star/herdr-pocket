@@ -102,7 +102,8 @@ class _RemoteHorizontalViewportState extends State<RemoteHorizontalViewport> {
       restore(width,constraints.maxWidth);
       if (!width.isFinite || width <= 0 || !constraints.maxWidth.isFinite || constraints.maxWidth <= 0) return const SizedBox.shrink();
       final overflow = width * widget.columns > constraints.maxWidth;
-      final terminalHeight = overflow ? 312.0 : 360.0;
+      final availableHeight = constraints.maxHeight.isFinite ? constraints.maxHeight : 360.0;
+      final terminalHeight = (availableHeight - (overflow ? 48.0 : 0.0)).clamp(0.0, double.infinity);
       return Column(children:[
         SizedBox(height:terminalHeight,child:SingleChildScrollView(key:const ValueKey('remote-horizontal-scroll'),
           controller:scroll,scrollDirection:Axis.horizontal,

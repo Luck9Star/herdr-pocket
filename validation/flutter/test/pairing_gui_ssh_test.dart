@@ -83,16 +83,25 @@ void main() {
       await tester.pump();
     }
     Future<void> expectHostSummary(String control, RemoteDashboard snapshot, {required bool retained}) async {
-      final owner = find.byKey(ValueKey(control));
+      final boardCard = control.startsWith('host-task-summary-');
+      final owner = find.byKey(ValueKey(boardCard ? control.replaceFirst('host-task-summary-', 'host-card-') : control));
       final known = snapshot.panes.where((p) => const {'idle','working','done','blocked'}.contains(p.agentStatus));
       final unknown = snapshot.panes.length - known.length;
       final blocked = known.where((p) => p.agentStatus == 'blocked').length;
       final count = unknown == 0 ? '受阻 $blocked 个' : '受阻至少 $blocked 个＋$unknown 个状态未知';
-      final detail = '原会话 ${config['session']} · 最后同步 ${snapshot.syncedAt!.toLocal().toIso8601String()}';
+      final time = '最后同步 ${snapshot.syncedAt!.toLocal().toIso8601String()}';
+      final detail = '原会话 ${config['session']} · $time';
+      final local = snapshot.syncedAt!.toLocal();
+      String two(int n) => n.toString().padLeft(2,'0');
+      final shortTime = '同步 ${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}${retained ? ' · 待核查' : ''}';
       await until(() {
         final labels = tester.widgetList<Text>(find.descendant(of:owner,matching:find.byType(Text)))
           .map((widget) => widget.data).whereType<String>();
-        return labels.contains(detail) && labels.any((label) => label.contains(count) &&
+        final identifiesSession = boardCard ? labels.contains('会话 ${config['session']}') && labels.contains(shortTime)
+          : labels.contains(detail);
+        return identifiesSession && labels.any((label) =>
+          (boardCard ? label.contains('受阻${unknown > 0 ? '至少' : ''} $blocked 个') &&
+            (unknown == 0 || label.contains('$unknown 个状态未知')) : label.contains(count)) &&
           label.contains('共 ${snapshot.panes.length} 个窗格') && label.contains('上次主机报告') == retained);
       });
     }

@@ -1,8 +1,26 @@
 # herdr-pocket
 
-> 面向 herdr 用户公开开源的统一 GUI：目标覆盖 iOS、Android、Windows、macOS、Linux，手机优先、桌面紧随，共享主机管理、agent 看板、终端与输入流程。仓库名保留 `herdr-pocket`。
+**活动终端专项 · 2026-11-17**　[R4 同源最终通过与证据](docs/69-mobile-ssh-active-terminal.md)：Flutter／Tauri 普通／换钥、Tauri 加密私钥回归及受检清理通过，范围为 API 35 x86_64 模拟器。
 
-**从这里开始**　[阶段交接：已完成、未完成与恢复顺序](https://github.com/Luck9Star/herdr-pocket/blob/85c150b24dca14412cf01075b832c1014547a3aa/docs/56-project-status-and-handoff.md) · [原型分支与源码](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation) · [最新下载、验收与复测步骤](https://github.com/Luck9Star/herdr-pocket/blob/e9ddfc8d03593e03a6ae539b3f0679a9adf3c84f/docs/53-mobile-connection-diagnostics.md) · [Penpot 手机配对交互原型](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8e75ef79937)
+最终原屏：[Flutter 普通](docs/evidence/mobile-ssh-terminal-20261117/r4-flutter-44003412691-connected-device.png) · [Flutter 换钥](docs/evidence/mobile-ssh-terminal-20261117/r4-flutter-44003412691-rotation-connected-device.png) · [Tauri 普通](docs/evidence/mobile-ssh-terminal-20261117/r4-tauri-44003412623-ssh-terminal-android.png) · [Tauri 换钥](docs/evidence/mobile-ssh-terminal-20261117/r4-tauri-44003412623-ssh-rotation-terminal-android.png)。系统软键盘呈现不等于手工输入法或实体机验收。
+
+> 面向 SSH / herdr 用户公开开源的统一 GUI：目标覆盖 iOS、Android、Windows、macOS、Linux，手机优先、桌面紧随，共享主机管理、agent 看板、终端与输入流程。仓库名保留 `herdr-pocket`。
+
+**iOS 普通 SSH 与换钥 · 2026-11-18**　[R19 两壳同源模拟器结果](docs/70-ios-ssh-host-key-rotation.md#r19-同源结果两壳通过活动标题与顶栏分离)：Flutter 与 Tauri 普通连接、换钥拒绝及取消保留 A、确认 B 后回显和主动断开均通过；Tauri 活动页标题、顶栏与系统状态栏分离。自然截图中底部两个按钮边框末约 8 点被导航栏遮挡，文字和实际点击通过，可滚动查看。范围为 iOS Simulator 和受控回环密码认证，非 iPhone 真机或手工输入法验收。
+
+**普通 SSH 换钥专项 · 2026-11-17**　[两壳 S10 基线复现、同目标 A→B 验收约定与设备证据](docs/68-android-ssh-host-key-rotation.md)：统一源码 `7705241` 的 Flutter／Tauri Android API 35 模拟器验收均通过，完整 ABBB、取消保留旧信任、新指纹确认后输入回显及清理已核验；与下方历史普通 SSH 验收分开。
+
+**2026-11-16 迭代收口**　[本轮交接、三个会话交付、两壳普通 SSH 与 macOS 原生窗口验收、Linux 双网与 Android 双网结果](docs/66-iteration-handoff-2026-11-16.md)（[PR #1](https://github.com/Luck9Star/herdr-pocket/pull/1)）。上轮状态：**普通 SSH 通过**（Flutter / Tauri Android 与 macOS 真 XCUITest）。**2026-11-17 Android 双网**：[两壳 × 两种停网顺序 4/4 实测通过（API 35 模拟器、双受控 SSH 服务）](docs/67-android-dual-network-startup.md)。历史验收与下载入口见下文。
+
+**同源 QA 调试包 · 2026-11-15**　源码 `d925bd0`：[Flutter Android APK（多架构）](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398/artifacts/14162282781) · [Tauri Android APK（仅 arm64-v8a）](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398/artifacts/14162296306)。[本批运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/43715215398)完成：27 项成功、7 项按条件跳过；[macOS/Linux 下载、包名、架构与 SHA256](docs/63-design-parity-and-direct-ssh.md#可下载的同源调试快照)。这是 CI 调试快照，与公开 Release 和设备验收分开。
+
+**双网隔离验收**　[Linux 双向受保护会话与清理记录](docs/65-dual-overlay-validation.md)：`93ca6cd` 在封闭测试网络、EasyTier 客户端指定测试配置下，分别验证停一网后另一网继续输入；默认配置对照未通过；该 Linux 轮次未测 Android，当前 Android 模拟器已有[独立验收](docs/67-android-dual-network-startup.md)，物理真机、真实物理网络及五平台仍未验证。
+
+**终端内核评估**　[libghostty-vt 两壳适配与风险](docs/64-libghostty-terminal-core-evaluation.md)：建议先做受控原型，暂不替换生产终端。
+
+**本分支入口 · 2026-11-15**　首页提供「普通 SSH」和「配对添加」：普通服务器核验指纹后，可用账号密码（仅本次连接在内存使用）或已有私钥打开真实远端 PTY；herdr 路线继续提供配对、会话看板与观察／逐键／草稿。新版看板分行呈现真实会话和受阻目标，并保留搜索与复核；[320/390/桌面界面及验收证据](docs/63-design-parity-and-direct-ssh.md#s01s05-设计与可达性)注明合成截图和设备证据的区别。S06 两条真实 SSH/herdr 的只读与受保护输入，已分别完成 Flutter Widget 回环与 Tauri 原生 Linux GTK 验收；普通 SSH 两壳在同源码 `a9afe9c` 的各自 debug 构建中通过 API35 Android 模拟器验收，Flutter 相同产品代码的独立验收构建另有 [iOS Simulator 密码连接实测](docs/63-design-parity-and-direct-ssh.md#flutter-普通-ssh-ios-simulator)。另见 [iOS 普通 SSH／换钥 R19 结果与历史证据](docs/70-ios-ssh-host-key-rotation.md)。同源码不等于同一二进制；CI 调试包与公开 Release 分开，具体功能须按 artifact 对应源码 SHA 核对，不能外推手机真机或五平台运行验收。
+
+**从这里开始**　[阶段交接：已完成、未完成与恢复顺序](https://github.com/Luck9Star/herdr-pocket/blob/85c150b24dca14412cf01075b832c1014547a3aa/docs/56-project-status-and-handoff.md) · [原型分支与源码](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation) · [历史下载、验收与复测步骤](https://github.com/Luck9Star/herdr-pocket/blob/e9ddfc8d03593e03a6ae539b3f0679a9adf3c84f/docs/53-mobile-connection-diagnostics.md) · [Penpot 手机配对交互原型](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8e75ef79937)
 
 **手机闭环 · 2026-11-07**　Flutter 和 Tauri 已在 Android API 35 x86_64 云模拟器上走通设备配对审查、SSH 认证、看板、选定 pane 的持续观察和停止。主机摘要显示已知受阻数、状态未知数、原会话和最后同步时间；返回列表保留上次快照。[验收结果、两轮失败及复测](docs/34-mobile-host-task-summary.md)
 
@@ -46,7 +64,7 @@ Flutter 与 Tauri 继续并行验证，物理手机的输入正确性、字形�
 
 ## 首版做什么
 
-五端首版都连接**远端 herdr 主机**：手机扫码配对（手动配置兜底）→ 审查连接配置与主机身份 → 主动连接 → 查看 agent 和终端 → 显式输入 → 断线后核实状态。扫码不要求先安装本项目桌面 GUI。桌面本机 herdr 接入后续再做，首版不管理本地进程或 WSL 服务；后台通知、文件 / diff 后置，不承诺后台常连。
+herdr 路线连接**远端 herdr 主机**（普通 SSH 路线见[本轮增量](docs/63-design-parity-and-direct-ssh.md)）：手机扫码配对（手动配置兜底）→ 审查连接配置与主机身份 → 主动连接 → 查看 agent 和终端 → 显式输入 → 断线后核实状态。扫码不要求先安装本项目桌面 GUI。桌面本机 herdr 接入后续再做，首版不管理本地进程或 WSL 服务；后台通知、文件 / diff 后置，不承诺后台常连。
 
 配对采用按需运行并退出的一次性主机辅助命令：主机用户明确确认后添加手机专属 SSH 公钥，并提供撤销入口；不静默修改授权或留下常驻服务。
 

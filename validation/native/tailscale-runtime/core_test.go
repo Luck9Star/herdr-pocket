@@ -342,8 +342,12 @@ func TestUnsettledReadTimeoutRetiresRatherThanRetry(t *testing.T) {
 	id := addNode(t, m, "x")
 	c := &stubbornConn{readGate: make(chan struct{}), readEntered: make(chan struct{})}
 	sid := addStream(m, id, c)
+	started := time.Now()
 	if _, _, rc := m.streamIO(sid, nil, 1, 10, false, false); rc != cancelled {
 		t.Fatalf("unfinished read reported retryable: %v", rc)
+	}
+	if time.Since(started) > time.Second {
+		t.Fatal("unfinished read exceeded bounded settlement")
 	}
 	<-c.readEntered
 	if m.streamRelease(sid) != busy {
@@ -1003,5 +1007,101 @@ func TestUnstartedNodeRetiresStoreWithoutEngineClose(t *testing.T) {
 	}
 	if host.reads.Load() != 0 || host.writes.Load() != 0 {
 		t.Fatal("host touched after unstarted release")
+	}
+}
+
+// delayedTimeoutConn models a deadline-aware read delivered after its context timer.
+type delayedTimeoutConn struct{ net.Conn }
+
+func (c delayedTimeoutConn) Read(p []byte) (int, error) {
+	n, err := c.Conn.Read(p)
+	if e, ok := err.(net.Error); ok && e.Timeout() {
+		time.Sleep(20 * time.Millisecond)
+	}
+	return n, err
+}
+
+func TestIdleDeadlineRacePreservesPipe(t *testing.T) {
+	m := managerWith(&fakeEngine{})
+	id := addNode(t, m, "idle-race")
+	left, right := net.Pipe()
+	defer right.Close()
+	sid := addStream(m, id, delayedTimeoutConn{left})
+	for i := 0; i < 3; i++ {
+		if _, _, rc := m.streamIO(sid, nil, 1, 200, false, false); rc != timedOut {
+			t.Fatalf("idle read %d: %v", i, rc)
+		}
+	}
+	done := make(chan error, 1)
+	go func() { _, err := right.Write([]byte("Z")); done <- err }()
+	data, n, rc := m.streamIO(sid, nil, 1, 1000, false, false)
+	if rc != ok || n != 1 || string(data[:n]) != "Z" {
+		t.Fatalf("later byte: %d %v", n, rc)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	closeNode(t, m, id)
+}
+
+func TestIdleDeadlinePreservesRealTCP(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	peerCh := make(chan net.Conn, 1)
+	go func() { c, _ := listener.Accept(); peerCh <- c }()
+	client, err := net.Dial("tcp", listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer := <-peerCh
+	if peer == nil {
+		t.Fatal("accept failed")
+	}
+	defer peer.Close()
+	m := managerWith(&fakeEngine{})
+	id := addNode(t, m, "idle-tcp")
+	sid := addStream(m, id, client)
+	for i := 0; i < 3; i++ {
+		if _, _, rc := m.streamIO(sid, nil, 1, 30, false, false); rc != timedOut {
+			t.Fatalf("idle TCP %d: %v", i, rc)
+		}
+	}
+	if _, err := peer.Write([]byte("Q")); err != nil {
+		t.Fatal(err)
+	}
+	data, n, rc := m.streamIO(sid, nil, 1, 1000, false, false)
+	if rc != ok || n != 1 || string(data[:n]) != "Q" {
+		t.Fatalf("later TCP byte: %d %v", n, rc)
+	}
+	closeNode(t, m, id)
+}
+
+// A Go reader may deliver bytes with its timeout; never discard the bytes.
+type partialTimeoutConn struct{ stubbornConn }
+
+func (c *partialTimeoutConn) Read(p []byte) (int, error) { p[0] = 'P'; return 1, timeoutError{} }
+func TestReadBytesWithTimeoutAreDelivered(t *testing.T) {
+	m := managerWith(&fakeEngine{})
+	id := addNode(t, m, "partial-timeout")
+	sid := addStream(m, id, &partialTimeoutConn{})
+	data, n, rc := m.streamIO(sid, nil, 1, 1000, false, false)
+	if rc != ok || n != 1 || data[0] != 'P' {
+		t.Fatalf("partial timeout: %d %v", n, rc)
+	}
+	closeNode(t, m, id)
+}
+
+func TestHardDeadlinePrefersAlreadySettledReadWithoutWaiting(t *testing.T) {
+	ch := make(chan ioResult, 1)
+	ch <- ioResult{n: 1, data: []byte("X"), err: timeoutError{}}
+	r, settled := takeSettledRead(ch)
+	if !settled || r.n != 1 || string(r.data) != "X" {
+		t.Fatal("lost settled result")
+	}
+	if _, settled = takeSettledRead(ch); settled {
+		t.Fatal("empty read appeared settled")
 	}
 }

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "imageSha256": "a729c8c2f1ef811529942da24219406685507b0fd76f2ab626da5858eca1cb8d",
+  "imageSize": [
+    1320,
+    2868
+  ],
+  "terminalBounds": [
+    48,
+    984,
+    1224,
+    1287
+  ],
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "expectedToken": "PATH KEPT PART BARN KEPT EAST FAST PART",
+  "markerVisible": true,
+  "tokenVisible": true,
+  "ocrEngine": "tesseract 5.5.4",
+  "ocrAttempts": 1,
+  "ocrPageSegmentationMode": 6,
+  "proofSequenceVisible": true
+}

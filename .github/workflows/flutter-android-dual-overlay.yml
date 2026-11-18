@@ -1,0 +1,140 @@
+name: Flutter Android dual-overlay GUI acceptance
+on:
+  workflow_dispatch:
+  push:
+    branches: ['codex/acceptance-flutter-dual-overlay/**', 'codex/acceptance-flutter-dual-build/**']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: flutter-dual-overlay-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  device:
+    if: startsWith(github.ref, 'refs/heads/codex/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      NATIVE_SOURCE: 547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8
+      HOST_SOURCE: 5404adfb3c86f5174edda38f1d0c63c8d81996c5
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8
+          path: native-source
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 5404adfb3c86f5174edda38f1d0c63c8d81996c5
+          path: host-source
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17.0.18+8'
+      - name: Install isolated fixtures and check private exchange guards
+        run: |
+          python3 -m venv "$RUNNER_TEMP/dual-python"
+          "$RUNNER_TEMP/dual-python/bin/pip" install -r validation/pairing/requirements.txt 'paramiko==4.0.0'
+          "$RUNNER_TEMP/dual-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_flutter_android_dual_overlay.py' -v
+          sudo apt-get update
+          sudo apt-get install -y acl openssh-server iproute2 libpulse0 libgl1 libgl1-mesa-dri libnss3 libxkbcommon-x11-0 libxcb-cursor0
+      - name: Download independently fixed native and host inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14261768985/zip" > "$RUNNER_TEMP/normal.zip"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14261004231/zip" > "$RUNNER_TEMP/qa.zip"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14171011473/zip" > "$RUNNER_TEMP/host.zip"
+          echo '23bdd1d79ded537d64fec25e9926f56a75c7ac3bf0f6f1b71e517bf67e8e0f3d  '"$RUNNER_TEMP/normal.zip" | sha256sum -c -
+          echo 'ac4fbf7c5c5de8d6aa1c0f695fdf0e5f43a1e7a9afa98a1b3a57e47695f1c769  '"$RUNNER_TEMP/qa.zip" | sha256sum -c -
+          echo '4bdc54843a9f438896db3717bd002859021fab51cbe60339c35e8a62a5bd6698  '"$RUNNER_TEMP/host.zip" | sha256sum -c -
+          mkdir "$RUNNER_TEMP/normal" "$RUNNER_TEMP/qa" "$RUNNER_TEMP/host"
+          unzip -q "$RUNNER_TEMP/normal.zip" -d "$RUNNER_TEMP/normal"
+          unzip -q "$RUNNER_TEMP/qa.zip" -d "$RUNNER_TEMP/qa"
+          unzip -q "$RUNNER_TEMP/host.zip" -d "$RUNNER_TEMP/host"
+      - name: Prepare fixed SDK and verify native inputs
+        run: |
+          python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/flutter-sdk"
+          echo "$RUNNER_TEMP/flutter-sdk/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/flutter-sdk/bin/flutter" precache --android
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
+          readelf="$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          python3 native-source/validation/native/tool/android_bundle.py verify "$RUNNER_TEMP/normal" --abi x86_64 --commit "$NATIVE_SOURCE" --readelf "$readelf"
+          python3 native-source/validation/native/tool/android_dual_qa_bundle.py verify --normal "$RUNNER_TEMP/normal" --qa "$RUNNER_TEMP/qa" --commit "$NATIVE_SOURCE" --readelf "$readelf"
+          python3 host-source/validation/remote-harness/dual_overlay_shared_bundle.py verify --bundle "$RUNNER_TEMP/host" --source-sha "$HOST_SOURCE" --restore-executable
+      - name: Prepare isolated production app and integration tests
+        run: |
+          python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/flutter-dual-app"
+          python3 validation/flutter/tool/candidate.py apply --destination "$RUNNER_TEMP/flutter-dual-app"
+          cd "$RUNNER_TEMP/flutter-dual-app"
+          flutter pub get
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-dual-app"
+          echo 'android { packaging { jniLibs.keepDebugSymbols += "**/libherdr_flutter_network_runtime.so" } }' >> android/app/build.gradle.kts
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/android_device_test.py" prepare --destination "$RUNNER_TEMP/flutter-dual-app"
+          flutter pub get
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/android_device_test.py" verify-lock --destination "$RUNNER_TEMP/flutter-dual-app"
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/dual_overlay_apk.py" install --bundle "$RUNNER_TEMP/qa" --project "$RUNNER_TEMP/flutter-dual-app"
+          flutter analyze lib integration_test
+      - name: Compile instrumentation without launching a device
+        if: startsWith(github.ref, 'refs/heads/codex/acceptance-flutter-dual-build/')
+        run: |
+          cd "$RUNNER_TEMP/flutter-dual-app"
+          flutter build apk --debug --target-platform android-x64 -t integration_test/android_dual_overlay_test.dart \
+            --dart-define=HERDR_ANDROID_DUAL_OVERLAY=true \
+            --dart-define=HERDR_ANDROID_DUAL_RUN_ID=1 \
+            --dart-define=HERDR_ANDROID_DUAL_FIRST_STOP=et
+          mkdir "$RUNNER_TEMP/instrumentation-build"
+          cp build/app/outputs/flutter-apk/app-debug.apk "$RUNNER_TEMP/instrumentation-build/app-debug.apk"
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/dual_overlay_apk.py" verify --bundle "$RUNNER_TEMP/qa" --apk "$RUNNER_TEMP/instrumentation-build/app-debug.apk" > "$RUNNER_TEMP/instrumentation-build/manifest.json"
+          python3 -c 'import json,os,pathlib; p=pathlib.Path(os.environ["RUNNER_TEMP"])/"instrumentation-build/manifest.json"; d=json.loads(p.read_text()); d.update(uiSource=os.environ["GITHUB_SHA"],nativeSource=os.environ["NATIVE_SOURCE"],variant="test-only-private-ca",instrumentationIncluded=True,deviceTest="not run"); p.write_text(json.dumps(d,indent=2)+"\n")'
+      - name: Upload isolated instrumentation build evidence
+        if: startsWith(github.ref, 'refs/heads/codex/acceptance-flutter-dual-build/')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: flutter-dual-instrumentation-build-${{ github.sha }}
+          path: ${{ runner.temp }}/instrumentation-build/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Exercise both directions on the owned API35 emulator
+        id: device
+        if: startsWith(github.ref, 'refs/heads/codex/acceptance-flutter-dual-overlay/')
+        run: |
+          AVD_EVIDENCE_DIR="$RUNNER_TEMP/dual-avd" bash validation/remote-harness/with-android-emulator.sh \
+            "$RUNNER_TEMP/dual-python/bin/python" validation/remote-harness/flutter_android_dual_overlay.py \
+              --project "$RUNNER_TEMP/flutter-dual-app" --qa-bundle "$RUNNER_TEMP/qa" \
+              --host-bundle "$RUNNER_TEMP/host" --host-checkout "$GITHUB_WORKSPACE/host-source" \
+              --host-source "$HOST_SOURCE" --native-source "$NATIVE_SOURCE" --output "$RUNNER_TEMP/dual-evidence"
+      - name: Preserve a failed report when device evidence is missing
+        if: always() && startsWith(github.ref, 'refs/heads/codex/acceptance-flutter-dual-overlay/')
+        env:
+          DEVICE_OUTCOME: ${{ steps.device.outcome }}
+        run: |
+          python3 - <<'PYCODE'
+          import json, os, pathlib
+          output = pathlib.Path(os.environ['RUNNER_TEMP']) / 'dual-evidence'
+          output.mkdir(mode=0o700, exist_ok=True)
+          manifest = output / 'manifest.json'
+          if not manifest.exists():
+              outcome = os.environ.get('DEVICE_OUTCOME', '')
+              if outcome not in ('success', 'failure', 'cancelled', 'skipped'):
+                  outcome = 'unknown'
+              report = {'schemaVersion': 1, 'kind': 'flutter-android-dual-overlay',
+                        'status': 'failed', 'errorCode': 'device_manifest_missing',
+                        'deviceStepOutcome': outcome, 'uiSource': os.environ['GITHUB_SHA'],
+                        'nativeSource': os.environ['NATIVE_SOURCE'], 'hostSource': os.environ['HOST_SOURCE']}
+              manifest.write_text(json.dumps(report, indent=2) + '\n')
+              raise SystemExit(1)
+          PYCODE
+      - name: Upload only sanitized device manifest
+        if: always() && startsWith(github.ref, 'refs/heads/codex/acceptance-flutter-dual-overlay/')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: flutter-android-dual-overlay-${{ github.sha }}
+          path: ${{ runner.temp }}/dual-evidence/manifest.json
+          if-no-files-found: warn
+          retention-days: 14

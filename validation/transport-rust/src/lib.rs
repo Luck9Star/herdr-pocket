@@ -1,4 +1,4 @@
-//! Experimental in-memory, one-shot SSH reader. No credential discovery or terminal write API.
+//! Experimental in-memory SSH transports. Ordinary PTY shells require an explicit reviewed target.
 use base64ct::{Base64, Encoding};
 use russh::{
     ChannelMsg, Disconnect, client,
@@ -45,6 +45,7 @@ mod controlled;
 pub mod session_watch;
 pub mod dashboard_review;
 pub mod direct_observation;
+pub mod direct_shell;
 pub use controlled::{DashboardTarget, observe_interactive_controlled_target_with_dialer, ControlledInputHooks, ObservationAck, ObservationControl, ObservationPhase, ObservationSnapshot, observe_interactive_controlled_with_dialer};
 
 pub const CONFIG_LIMIT: usize = 32768;
@@ -223,6 +224,7 @@ fn observe_command_with_canvas(config: &RemoteConfig, terminal_id: &str, canvas:
 pub struct Audit {
     host_key_checked: AtomicBool,
     host_key_matched: AtomicBool,
+    presented_host_key_fingerprint: Mutex<Option<String>>,
     auth_started: AtomicBool,
     snapshot_received: AtomicBool,
     full_frame_received: AtomicBool,
@@ -245,6 +247,13 @@ impl Audit {
             snapshot_received: self.snapshot_received.load(Ordering::SeqCst),
             full_frame_received: self.full_frame_received.load(Ordering::SeqCst),
         }
+    }
+    /// The fingerprint a refused handshake presented. Direct-shell only, never audited.
+    pub fn presented_host_key_fingerprint(&self) -> Option<String> {
+        self.presented_host_key_fingerprint
+            .lock()
+            .ok()
+            .and_then(|slot| slot.clone())
     }
 }
 
@@ -390,6 +399,16 @@ impl client::Handler for Pinned {
         // A pinned raw public key is not authorization for a certificate signed by it.
         let matches = key.certificate().is_none() && key.public_key() == self.expected;
         self.audit.host_key_matched.store(matches, Ordering::SeqCst);
+        if !matches && key.certificate().is_none() {
+            // Keep the fingerprint the rejected handshake actually presented.
+            let fingerprint = key
+                .public_key()
+                .fingerprint(russh::keys::HashAlg::Sha256)
+                .to_string();
+            if let Ok(mut slot) = self.audit.presented_host_key_fingerprint.lock() {
+                *slot = Some(fingerprint);
+            }
+        }
         Ok(matches)
     }
     async fn server_channel_open_session(
@@ -519,13 +538,28 @@ fn parse_frame(value: Value) -> Result<Vec<u8>> {
     let text = value["bytes"].as_str().ok_or("invalid_full_frame")?;
     Base64::decode_vec(text).map_err(|_| "invalid_full_frame")
 }
+// Raw RSA public keys remain encoded as ssh-rsa, but host signatures must
+// negotiate rsa-sha2-256/512. Never offer the legacy RSA/SHA1 signature.
+fn safe_ssh_preferences() -> russh::Preferred {
+    let mut preferred = russh::Preferred::default();
+    preferred.key = std::borrow::Cow::Owned(preferred.key.iter()
+        .filter(|algorithm| !matches!(algorithm, Algorithm::Rsa { hash: None }))
+        .cloned().collect());
+    preferred
+}
 async fn connect_pinned(
     config: &RemoteConfig, cancel: &Cancellation, audit: Arc<Audit>, expected: PublicKey,
     inactivity_timeout: Option<Duration>, dialer: &dyn transport::Dialer,
 ) -> Result<(client::Handle<Pinned>, Option<transport::OverlayRouteIdentity>)> {
+    connect_pinned_endpoint(&config.host, config.port, cancel, audit, expected, inactivity_timeout, dialer).await
+}
+async fn connect_pinned_endpoint(
+    host: &str, port: u16, cancel: &Cancellation, audit: Arc<Audit>, expected: PublicKey,
+    inactivity_timeout: Option<Duration>, dialer: &dyn transport::Dialer,
+) -> Result<(client::Handle<Pinned>, Option<transport::OverlayRouteIdentity>)> {
     let stream = tokio::select! { biased;
         _ = cancel.wait() => return Err("cancelled"),
-        result = timeout(Duration::from_secs(8), dialer.dial(config.host.clone(), config.port, cancel.clone())) => result.map_err(|_| "timeout")??,
+        result = timeout(Duration::from_secs(8), dialer.dial(host.to_owned(), port, cancel.clone())) => result.map_err(|_| "timeout")??,
     };
     let route = stream.route_identity();
     let settings = client::Config {
@@ -533,6 +567,7 @@ async fn connect_pinned(
         maximum_packet_size: 32768,
         channel_buffer_size: 2,
         inactivity_timeout,
+        preferred: safe_ssh_preferences(),
         ..Default::default()
     };
     let connect = bounded(

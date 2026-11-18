@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "scope": "API35 x86_64 owned AVD shell and three synthetic TCP echoes; no App, SSH or TLS",
+  "deviceEcho": {
+    "control": true,
+    "derp": true,
+    "easytier": true
+  },
+  "deviceEchoBytes": {
+    "control": 13,
+    "derp": 10,
+    "easytier": 14
+  },
+  "reverseRemoved": true,
+  "relayClosed": true,
+  "peerProcessesStopped": true,
+  "privateRemoved": true,
+  "reverseAddsConfirmed": 3,
+  "reverseRemovalsConfirmed": 3,
+  "relayStats": {
+    "control": {
+      "accepted": 1,
+      "upstreamBytes": 13,
+      "downstreamBytes": 13,
+      "workerFailures": 0
+    },
+    "derp": {
+      "accepted": 1,
+      "upstreamBytes": 10,
+      "downstreamBytes": 10,
+      "workerFailures": 0
+    },
+    "easytier": {
+      "accepted": 1,
+      "upstreamBytes": 14,
+      "downstreamBytes": 14,
+      "workerFailures": 0
+    }
+  },
+  "adbDiagnostics": [],
+  "reverseListDiagnostics": [
+    {
+      "lineCount": 0,
+      "valid": true
+    },
+    {
+      "lineCount": 1,
+      "valid": true
+    },
+    {
+      "lineCount": 2,
+      "valid": true
+    },
+    {
+      "lineCount": 3,
+      "valid": true
+    },
+    {
+      "lineCount": 3,
+      "valid": true
+    },
+    {
+      "lineCount": 2,
+      "valid": true
+    },
+    {
+      "lineCount": 2,
+      "valid": true
+    },
+    {
+      "lineCount": 1,
+      "valid": true
+    },
+    {
+      "lineCount": 1,
+      "valid": true
+    },
+    {
+      "lineCount": 0,
+      "valid": true
+    },
+    {
+      "lineCount": 0,
+      "valid": true
+    }
+  ],
+  "sourceSHA": "75bb4ee5701176a72fcc221d13b5a963b2df2e89",
+  "namespaceRemoved": true,
+  "avdWrapperSucceeded": true
+}

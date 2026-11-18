@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "kind": "flutter-android-dual-overlay",
+  "status": "failed",
+  "uiSource": "c0e5c51cfc172983a37edf93b0b7e1cea35cc94b",
+  "nativeSource": "93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc",
+  "hostSource": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
+  "hostArtifactId": 14171011473,
+  "hostArtifactSha256": "4bdc54843a9f438896db3717bd002859021fab51cbe60339c35e8a62a5bd6698",
+  "nativeVariant": "test-only-private-ca-x86_64",
+  "apiLevel": 35,
+  "physicalDevice": false,
+  "rawLogsUploaded": false,
+  "cases": [
+    {
+      "firstStop": "et",
+      "status": "failed",
+      "stage": "host_start",
+      "instrumentationApkSha256": "04868e800efcc4cc64bbbd737ced876bd79235ea0065d54b8e202a49b131d5ca",
+      "errorCode": "device_runner_failed",
+      "sharedCleanup": {
+        "reverseRemoved": true,
+        "relayStopped": true,
+        "controllerStopped": true,
+        "namespaceRemoved": true,
+        "hostPrivateDirectoryRemoved": true,
+        "controlReaderStopped": true,
+        "privateFilesRemoved": true
+      },
+      "hostCleanup": true,
+      "packageRemoved": true,
+      "forwardsRestored": true
+    },
+    {
+      "firstStop": "ts",
+      "status": "failed",
+      "stage": "host_start",
+      "instrumentationApkSha256": "a1624874cd5dbc6e7521802f3929201f7a550e19d77155073bf491ffa7a902d6",
+      "errorCode": "device_runner_failed",
+      "sharedCleanup": {
+        "reverseRemoved": true,
+        "relayStopped": true,
+        "controllerStopped": true,
+        "namespaceRemoved": true,
+        "hostPrivateDirectoryRemoved": true,
+        "controlReaderStopped": true,
+        "privateFilesRemoved": true
+      },
+      "hostCleanup": true,
+      "packageRemoved": true,
+      "forwardsRestored": true
+    }
+  ]
+}

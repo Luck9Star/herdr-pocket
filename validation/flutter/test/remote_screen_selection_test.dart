@@ -12,7 +12,14 @@ const textKey = ValueKey('remote-screen-selection-text');
 const copyKey = ValueKey('remote-screen-selection-copy');
 const cancelKey = ValueKey('remote-screen-selection-cancel');
 
+Future<void> showDisplayTools(WidgetTester tester) async {
+  if (find.byKey(openKey).evaluate().isNotEmpty) return;
+  final tools=find.byKey(const ValueKey('remote-display-tools'));
+  await tester.ensureVisible(tools); await tester.tap(tools); await tester.pumpAndSettle();
+}
+
 Future<void> openSelection(WidgetTester tester) async {
+  await showDisplayTools(tester);
   final open = find.byKey(openKey);
   await tester.ensureVisible(open); await tester.pump();
   final inner = find.descendant(of:find.byType(TerminalView),matching:find.byType(Scrollable)).first;
@@ -109,6 +116,7 @@ void main() {
 
   testWidgets('lifecycle stop clears selectable content and invalidates a retained open callback', (tester) async {
     final adapter = input.InputFixtureAdapter(); await input.start(tester,adapter);
+    await showDisplayTools(tester);
     final oldOpen = tester.widget<OutlinedButton>(find.byKey(openKey)).onPressed!;
     await openSelection(tester); final controller = tester.widget<TextField>(find.byKey(textKey)).controller!;
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden); await tester.pump();

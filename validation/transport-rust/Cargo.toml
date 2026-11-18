@@ -22,7 +22,7 @@ overlay-native-fixture = ["overlay-runtime/native-fixture"]
 [dependencies]
 herdr-android-network-source = { version = "=0.1.0", path = "../android-network-source", optional = true }
 overlay-runtime = { package = "herdr-overlay-runtime-probe", version = "=0.1.0", path = "../overlay-runtime" }
-russh = { version = "=0.65.0", default-features = false, features = ["ring"] }
+russh = { version = "=0.65.0", default-features = false, features = ["ring", "rsa"] }
 tokio = { version = "=1.54.1", features = ["macros", "rt-multi-thread", "net", "io-util", "time", "sync"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.154"

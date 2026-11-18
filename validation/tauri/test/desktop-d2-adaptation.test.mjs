@@ -89,8 +89,12 @@ test('D2: crossing below 900px stashes only the non-focus panel and annotates th
     bDraft().value='窄窗草稿';bDraft().oninput();
     const resumeAt=s.calls.findIndex(c=>c.name==='remote_tab_control'&&c.args.tabId===a&&c.args.action==='resume');
     assert.ok(resumeAt>=0,'前置：分屏已恢复副面板 A');
+    // S11 nav 标签状态：宽屏副面板处于观察中，不得误标“观察已暂停”
+    const navText=()=>s.nodes['view-tabs'].children.map(n=>n.textContent).join('|');
+    assert.ok(!navText().includes('观察已暂停'),'宽屏观察副面板不误标“观察已暂停”');
     // 动态收窄
     s.setWidth(800);await s.flush();
+    assert.ok(!navText().includes('观察已暂停'),'后端 paused 快照到达前（pausing）不得误标“已暂停”');
     assert.equal(s.panels().length,1,'窄窗必须自动收纳第二面板、退回单面板');
     assert.equal(s.panels()[0].dataset.tabId,b,'输入焦点所在的面板继续在前台显示');
     assert.equal(s.nodes['view-content'].getAttribute('data-split'),'1');
@@ -104,6 +108,12 @@ test('D2: crossing below 900px stashes only the non-focus panel and annotates th
     assert.ok(!s.nodes['view-content'].all().some(n=>n.dataset.role==='split-note'),'双面板说明随分屏一起收起');
     assert.equal(s.splitButton.hidden,true,'窄窗分屏入口隐藏');
     await s.settlePaused(a);  // 后端确认暂停（真实链路中 pause 由 observation 快照落定）
+    // S11：paused 快照到达后，被收纳副面板的 nav button 必须标注“观察已暂停”且保留原主机名与 paneId
+    const aTabButton=s.nodes['view-tabs'].children.find(n=>n.textContent.includes('aaaa')&&n.textContent.includes('w1:p1'));
+    assert.ok(aTabButton && aTabButton.textContent.includes('观察已暂停'),'paused 快照到达后被收纳副面板 nav button 明确标注“观察已暂停”');
+    assert.ok(aTabButton.textContent.startsWith('aaaa · w1:p1'),'暂停标注完整保留原主机名与 paneId');
+    const bTabButton=s.nodes['view-tabs'].children.find(n=>n.textContent.includes('bbbb'));
+    assert.ok(bTabButton && !bTabButton.textContent.includes('观察已暂停'),'当前焦点面板 B 不误标');
     // resize 纪律（收窄方向）：窗口变化绝不触发远端/本地 resize
     assert.equal(s.resizes.length,0,'收窄不得触发 terminal.resize');
     assert.ok(!s.calls.some(c=>c.name.includes('resize')),'不得出现任何 resize 类后端调用');
@@ -133,6 +143,9 @@ test('D2: widening back restores both panels without rebuilding observation or r
     assert.ok(s.nodes['view-content'].all().some(n=>n.dataset.role==='split-note'),'双面板说明回归');
     assert.equal(s.panelOf(a).dataset.focus,'false');
     assert.equal(s.panelOf(b).dataset.focus,'true');
+    // S11：变宽恢复后，副面板暂停标注必须消失
+    const aTabButton=s.nodes['view-tabs'].children.find(n=>n.textContent.includes('aaaa')&&n.textContent.includes('w1:p1'));
+    assert.ok(aTabButton && !aTabButton.textContent.includes('观察已暂停'),'变宽恢复后暂停标注消失');
     // 被收纳面板状态不丢：恢复后副面板继续收帧并确认（接着 activate 发送的 seq:1 继续发 seq:2）
     const ackBefore=s.calls.filter(c=>c.name==='remote_tab_ack'&&c.args.tabId===a).length;
     s.send(a,{kind:'frame',epoch:1,frame:{seq:2,full:false,cols:80,rows:24,bytes:[67]}});

@@ -1,0 +1,183 @@
+{
+  "schemaVersion": 1,
+  "scope": "Local xterm raster controls; not an Android device screenshot",
+  "reviewDate": "2026-11-17",
+  "checks": [
+    {
+      "name": "tauri-pixel-positive.png",
+      "exit": 0,
+      "marker": true,
+      "token": true,
+      "error": null,
+      "engine": "tesseract 5.5.4"
+    },
+    {
+      "name": "tauri-pixel-positive.png",
+      "exit": 1,
+      "marker": true,
+      "token": false,
+      "error": "terminal_screenshot_token_not_visible",
+      "engine": "tesseract 5.5.4"
+    },
+    {
+      "name": "connected.png",
+      "exit": 1,
+      "marker": false,
+      "token": false,
+      "error": "terminal_screenshot_echo_not_visible",
+      "engine": "tesseract 5.5.4"
+    },
+    {
+      "name": "rotation-connected.png",
+      "exit": 1,
+      "marker": false,
+      "token": false,
+      "error": "terminal_screenshot_echo_not_visible",
+      "engine": "tesseract 5.5.4"
+    }
+  ],
+  "chromiumGeometryControls": {
+    "scope": "Local Chromium and real xterm raster; controlled connection state, not Android or native Tauri device evidence",
+    "coordinateUnit": "CSS logical pixels; image pixels follow each imageSize",
+    "cases": [
+      {
+        "case": "long-target-before",
+        "sourceRecord": "tauri-immutable-320.json",
+        "sourceImage": "tauri-immutable-320.png",
+        "imageSha256": "c853eedd914b07e63578620970c4edef1e999ad02ca2e3563503c9d5cbbe45e2",
+        "imageSize": [
+          640,
+          1000
+        ],
+        "target": "long-fixture-user-plus-23@[2001:db8:abcd:1234::aa]:22 · SSH 已连接",
+        "targetRect": [
+          16,
+          -21,
+          288,
+          58
+        ],
+        "terminalRect": [
+          24,
+          65,
+          270,
+          192
+        ],
+        "viewport": [
+          320,
+          500
+        ],
+        "scroll": [
+          0,
+          210
+        ],
+        "writes": 2,
+        "connected": {
+          "host": "2001:db8:abcd:1234::aa",
+          "port": 22,
+          "username": "long-fixture-user-plus-23"
+        },
+        "formHost": "changed-form.invalid"
+      },
+      {
+        "case": "long-target-after",
+        "sourceRecord": "tauri-immutable-after-320.json",
+        "sourceImage": "tauri-immutable-after-320.png",
+        "imageSha256": "f4c3fba1d3ff895906f97a8bdf238bf942ea2865c3cc4c5c5800950165a84ee0",
+        "imageSize": [
+          640,
+          1000
+        ],
+        "target": "long-fixture-user-plus-23@[2001:db8:abcd:1234::aa]:22 · SSH 已连接",
+        "targetRect": [
+          16,
+          15,
+          288,
+          22
+        ],
+        "terminalRect": [
+          24,
+          65,
+          270,
+          192
+        ],
+        "viewport": [
+          320,
+          500
+        ],
+        "scroll": [
+          0,
+          174
+        ],
+        "writes": 2,
+        "connected": {
+          "host": "2001:db8:abcd:1234::aa",
+          "port": 22,
+          "username": "long-fixture-user-plus-23"
+        },
+        "targetScrollWidth": 544,
+        "targetClientWidth": 288,
+        "formHost": "changed-form.invalid",
+        "reachableScrollEnd": 256
+      },
+      {
+        "case": "normal-target-driver-selection",
+        "sourceRecord": "tauri-selection-390.json",
+        "sourceImage": "tauri-selection-390.png",
+        "imageSha256": "f96bbcf87751bf4f34a47e2e89c473ae00ed7266e90e9fd317c7f69cc66f404c",
+        "imageSize": [
+          780,
+          1688
+        ],
+        "target": "fixture@127.0.0.1:22 · SSH 已连接",
+        "targetRect": [
+          16,
+          189,
+          358,
+          22
+        ],
+        "terminalRect": [
+          24,
+          239,
+          337,
+          352
+        ],
+        "viewport": [
+          390,
+          844
+        ],
+        "scroll": [
+          0,
+          0
+        ],
+        "writes": 2,
+        "driverGeometry": {
+          "targetMatched": true,
+          "targetVisible": true,
+          "terminalVisible": true,
+          "targetRect": [
+            16,
+            188.8125,
+            358,
+            22
+          ],
+          "viewport": [
+            390,
+            844
+          ],
+          "dpr": 2,
+          "visualViewport": [
+            0,
+            0,
+            1
+          ],
+          "terminal": [
+            24,
+            238.8125,
+            337,
+            352
+          ]
+        }
+      }
+    ]
+  }
+}

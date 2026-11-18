@@ -1,0 +1,37 @@
+{
+  "scope": "Post-credential terminal pixels only; no target, keyboard, password or key",
+  "r1": {
+    "run": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43992117555",
+    "artifact": "14288109122",
+    "officialZipSha256": "583f80a3f20c12fb2c4c75ac65f0a351b7d41ef2d2a84b242ec7902231a3c9e2",
+    "sourceImage": "ordinary-first-failed-device.png",
+    "sourceImageSha256": "0d8bd2a947a142ed04681eed2464796902f13185d39ae7c8981629777482e5c0",
+    "crop": [
+      0,
+      468,
+      1080,
+      907
+    ],
+    "sample": "flutter-r1-ordinary-terminal.png",
+    "meaning": "Visible complete old token; historical OCR failure, not a successful acceptance",
+    "historicalObservation": {
+      "ocrEngine": "tesseract 5.3.4",
+      "error": "terminal_screenshot_token_not_visible",
+      "markerVisible": true,
+      "tokenVisible": false
+    }
+  },
+  "newWords": {
+    "sample": "flutter-word-token-control.png",
+    "meaning": "Actual Flutter 3.47.9 TerminalView raster with controlled input; no Android/SSH proof",
+    "font": "Project ProbeNerd/JetBrainsMonoNerdFontMono-Regular.ttf",
+    "fontSize": 14,
+    "devicePixelRatio": 2.75,
+    "crop": [
+      0,
+      0,
+      500,
+      250
+    ]
+  }
+}

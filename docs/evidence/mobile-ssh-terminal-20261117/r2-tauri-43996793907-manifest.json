@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "5f588efde42c66472c8b909500a1d8cadc11d829",
+  "status": "failed",
+  "scope": "synthetic loopback SSH and owned API35 Android WebView; CDP input is not real IME composition",
+  "apkSha256": "0fa020d0ffc3efe3f83405f20c26a90b662bdca4b9907ead1ec9c0f9433d3f3a",
+  "probeEvidence": {
+    "connectionObserved": true,
+    "authenticationAccepted": true
+  },
+  "errorCode": "direct_terminal_framebuffer_mapping_invalid"
+}

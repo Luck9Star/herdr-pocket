@@ -81,6 +81,9 @@ test('wide split mounts two panels and the partner keeps observing (visibility s
     assert.ok(s.calls.some(c=>c.name==='remote_tab_control'&&c.args.tabId===a&&c.args.action==='pause'));
     assert.equal(s.splitButton.hidden,false,'宽屏且已有两个标签：分屏入口可用');
     s.splitButton.onclick();await s.flush();
+    s.send(a,{kind:'observation',snapshot:{epoch:1,phase:'active'}});
+    s.send(a,{kind:'frame',epoch:1,frame:{seq:2,full:true,cols:80,rows:24,bytes:[65]}});
+    s.send(a,{kind:'input_ready',epoch:1,unknown:false,recovery_status:'none'});await s.flush();
     assert.equal(s.splitButton.getAttribute('aria-pressed'),'true');
     assert.equal(s.panels().length,2,'分屏后必须同时挂载两个面板');
     assert.ok(s.calls.some(c=>c.name==='remote_tab_visible'&&c.args.tabId===a),'开启分屏必须把副面板重新置为可见（集合语义）');
@@ -92,7 +95,7 @@ test('wide split mounts two panels and the partner keeps observing (visibility s
     assert.ok(s.nodes['view-content'].all().some(n=>n.dataset.role==='split-note'&&n.textContent.includes('未发送 PTY resize')),'分屏必须明示不 resize 远端');
     // 副面板（非活动标签）继续收帧并确认——多可见语义
     const ackBefore=s.calls.filter(c=>c.name==='remote_tab_ack'&&c.args.tabId===a).length;
-    s.send(a,{kind:'frame',epoch:1,frame:{seq:2,full:false,cols:80,rows:24,bytes:[66]}});
+    s.send(a,{kind:'frame',epoch:1,frame:{seq:3,full:false,cols:80,rows:24,bytes:[66]}});
     await s.flush();
     assert.equal(s.calls.filter(c=>c.name==='remote_tab_ack'&&c.args.tabId===a).length,ackBefore+1,'分屏副面板必须继续接收并确认帧');
     // 非焦点面板输入入口禁用，不得出现可点的静默 no-op
@@ -129,6 +132,9 @@ test('panels keep independent target/draft/UI state across a focus swap', async 
     const b=await s.openTab('mesh-pane-b');
     await s.settlePaused(a);
     s.splitButton.onclick();await s.flush();
+    s.send(a,{kind:'observation',snapshot:{epoch:1,phase:'active'}});
+    s.send(a,{kind:'frame',epoch:1,frame:{seq:2,full:true,cols:80,rows:24,bytes:[65]}});
+    s.send(a,{kind:'input_ready',epoch:1,unknown:false,recovery_status:'none'});await s.flush();
     const mesh=target('mesh-pane-b');
     assert.ok(s.panelOf(a).all().some(n=>n.textContent&&n.textContent.includes('w1:p1')),'面板 A 显示自己的目标');
     assert.ok(s.panelOf(b).all().some(n=>n.textContent&&n.textContent.includes(mesh.paneId)),'面板 B 显示自己的目标');

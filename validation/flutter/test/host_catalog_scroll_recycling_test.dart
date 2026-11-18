@@ -47,12 +47,13 @@ void main() {
     // Scroll a host card into view, which evicts the header rows.
     tester.state<ScrollableState>(boardScrollable()).position.jumpTo(400);
     await tester.pump();
-    for (final key in ['hosts-add','hosts-networks','hosts-search','hosts-task-filter']) {
+    for (final key in ['hosts-add','hosts-search','hosts-task-filter']) {
       expect(byKeyOf(key).evaluate().length,0,
         reason:'$key should be recycled once the board scrolled away');
     }
+    expect(byKeyOf('hosts-networks'),findsOneWidget); // Persistent navigation remains available.
     // Each header control comes back through the same scroll the device test uses.
-    for (final key in ['hosts-add','hosts-networks','hosts-search','hosts-task-filter']) {
+    for (final key in ['hosts-add','hosts-search','hosts-task-filter']) {
       await tester.scrollUntilVisible(byKeyOf(key),-300,scrollable:boardScrollable());
       await tester.pump();
       expect(byKeyOf(key).evaluate().length,1,
@@ -69,10 +70,14 @@ void main() {
     final a=tabProfile('Host A','Build-Session','100.64.0.1','direct','opaque-a');
     final b=tabProfile('Host B','Other-Session','100.64.0.2','direct','opaque-b');
     await catalog.add(a); await catalog.add(b);
+    for (var i=0;i<4;i++) { await catalog.add(tabProfile('Extra $i','Session$i','127.0.0.${i+10}','direct','extra-$i')); }
     final tabs=HostTabs(),keys=TestDeviceKeys(fixtureConfig()['privateKeyPem'] as String);
     await mountBoard(tester,catalog,tabs,keys);
 
     // Scroll the delete button into view, which leaves the list top recycled.
+    final management=find.byKey(ValueKey('host-management-${a.id}'));
+    await tester.scrollUntilVisible(management,300,scrollable:boardScrollable());
+    await tester.tap(management); await tester.pumpAndSettle();
     final deleteControl=find.byKey(ValueKey('host-delete-${a.id}'));
     await tester.scrollUntilVisible(deleteControl,300,scrollable:boardScrollable());
     await tester.pump();
@@ -84,6 +89,9 @@ void main() {
     expect(catalog.profiles.any((profile) => profile.id == a.id),isFalse);
     // ...but its notice row is still out of the tree while the board stays
     // scrolled; a caller that waits for the text without scrolling spins.
+    tester.state<ScrollableState>(boardScrollable()).position.jumpTo(
+      tester.state<ScrollableState>(boardScrollable()).position.maxScrollExtent);
+    await tester.pump();
     expect(find.textContaining('本机已删除 · 主机授权未因此撤销').evaluate().isEmpty,isTrue,
       reason:'the notice must be recycled while the board is scrolled away');
     // Scrolling back to the top rebuilds the notice row.

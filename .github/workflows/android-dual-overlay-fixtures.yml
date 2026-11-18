@@ -1,0 +1,126 @@
+name: Android dual overlay shared Linux fixtures
+on:
+  workflow_dispatch:
+  workflow_call:
+    outputs:
+      hostSource:
+        value: ${{ jobs.assemble.outputs.host_source }}
+      artifactId:
+        value: ${{ jobs.assemble.outputs.artifact_id }}
+      artifactDigest:
+        value: ${{ jobs.assemble.outputs.artifact_digest }}
+  push:
+    branches: ['codex/acceptance-dual-fixtures/**']
+permissions:
+  contents: read
+concurrency:
+  group: android-dual-fixtures-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  input-fixture:
+    uses: ./.github/workflows/input-extension-validation.yml
+  peers:
+    if: startsWith(github.ref, 'refs/heads/codex/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      CARGO_BUILD_JOBS: '2'
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.27.1'
+          cache: false
+      - name: Install pinned build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake pkg-config libssl-dev openssh-server iproute2
+          rustup toolchain install 1.95.0 1.96.0 --profile minimal
+          test "$(go version | awk '{print $3}')" = go1.27.1
+          test "$(rustc +1.95.0 --version | awk '{print $2}')" = 1.95.0
+          test "$(rustc +1.96.0 --version | awk '{print $2}')" = 1.96.0
+      - name: Test bundle guards
+        run: python3 -m unittest discover -s validation/remote-harness -p test_dual_overlay_shared_bundle.py -v
+      - name: Build fixed EasyTier peer
+        run: |
+          python3 validation/remote-harness/easytier_loopback.py prepare \
+            --bundle "$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID" \
+            --output "$RUNNER_TEMP/easytier-evidence"
+      - name: Build fixed Tailscale candidate and fixture executable
+        run: |
+          python3 validation/native/tool/tailscale_candidate.py prepare "$RUNNER_TEMP/shared-ts-candidate" --cache "$RUNNER_TEMP/shared-ts-cache"
+          python3 validation/native/tool/tailscale_candidate.py build "$RUNNER_TEMP/shared-ts-candidate" --cache "$RUNNER_TEMP/shared-ts-cache"
+          cd "$RUNNER_TEMP/shared-ts-candidate"
+          GOENV=off GOTOOLCHAIN=local CGO_ENABLED=1 GOFLAGS=-mod=readonly \
+            GOMODCACHE="$RUNNER_TEMP/shared-ts-cache/modules" GOCACHE="$RUNNER_TEMP/shared-ts-cache/build" \
+            GOPATH="$RUNNER_TEMP/shared-ts-cache/gopath" go test -c -o "$RUNNER_TEMP/shared-ts-fixture" ./fixture
+      - name: Report build-only executable sizes
+        run: |
+          stat --printf='peerBytes=%s\n' "$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID/peer"
+          stat --printf='tsFixtureBytes=%s\n' "$RUNNER_TEMP/shared-ts-fixture"
+      - name: Record fixed sources and executable hashes
+        run: |
+          python3 validation/remote-harness/dual_overlay_shared_bundle.py record-peers \
+            --et-bundle "$RUNNER_TEMP/hp-easytier-bundle-$GITHUB_RUN_ID" \
+            --et-evidence "$RUNNER_TEMP/easytier-evidence" \
+            --ts-work "$RUNNER_TEMP/shared-ts-candidate" \
+            --ts-fixture "$RUNNER_TEMP/shared-ts-fixture" \
+            --output "$RUNNER_TEMP/dual-peer-artifact"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dual-overlay-peers-${{ github.sha }}
+          path: ${{ runner.temp }}/dual-peer-artifact/
+          if-no-files-found: error
+          retention-days: 7
+  assemble:
+    needs: [input-fixture, peers]
+    if: startsWith(github.ref, 'refs/heads/codex/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      host_source: ${{ github.sha }}
+      artifact_id: ${{ steps.publish.outputs.artifact-id }}
+      artifact_digest: ${{ steps.publish.outputs.artifact-digest }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: input-fixture-${{ github.sha }}
+          path: ${{ runner.temp }}/input-fixture
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: dual-overlay-peers-${{ github.sha }}
+          path: ${{ runner.temp }}/dual-peer-artifact
+      - name: Verify and assemble same-source fixture bundle
+        run: |
+          python3 validation/remote-harness/dual_overlay_shared_bundle.py assemble \
+            --peers "$RUNNER_TEMP/dual-peer-artifact" --input-dir "$RUNNER_TEMP/input-fixture" \
+            --output "$RUNNER_TEMP/dual-shared-fixtures"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        id: publish
+        with:
+          name: dual-overlay-shared-fixtures-${{ github.sha }}
+          path: ${{ runner.temp }}/dual-shared-fixtures/
+          if-no-files-found: error
+          retention-days: 7
+  download-replay:
+    needs: assemble
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: dual-overlay-shared-fixtures-${{ github.sha }}
+          path: ${{ runner.temp }}/dual-shared-fixtures
+      - name: Verify downloaded artifact against this checkout
+        run: |
+          python3 validation/remote-harness/dual_overlay_shared_bundle.py verify \
+            --bundle "$RUNNER_TEMP/dual-shared-fixtures" --source-sha "$GITHUB_SHA" --restore-executable

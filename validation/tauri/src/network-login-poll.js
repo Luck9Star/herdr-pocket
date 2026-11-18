@@ -1,7 +1,7 @@
 // One serial, bounded read loop per visible panel. Cancellation prevents publication
 // even if a native status request itself cannot be interrupted.
 export class NetworkLoginPoll {
-  constructor({schedule=setTimeout,cancel=clearTimeout,limit=30,delay=2000,timeout=60000,now=Date.now}={}) {
+  constructor({schedule=(...args)=>setTimeout(...args),cancel=(...args)=>clearTimeout(...args),limit=30,delay=2000,timeout=60000,now=Date.now}={}) {
     this.schedule=schedule;this.cancelTimer=cancel;this.limit=limit;this.delay=delay;this.timeout=timeout;this.now=now;this.epoch=0;this.timer=null;
   }
   stop(){this.epoch++;if(this.timer!==null)this.cancelTimer(this.timer);this.timer=null;}

@@ -17,6 +17,24 @@ void main() {
     expect(tabs.tabs.length,2); expect(tabs.active!.provider,'tailscale');
     tabs.close(a.id); expect(tabs.active,isNull); expect(b.visible.value,isFalse); tabs.dispose();
   });
+  test('split keeps both observers visible and transfers the sole input lease before granting it',() {
+    final tabs=HostTabs();
+    tabs.open(profile('A','tailscale')); final a=tabs.active!;
+    tabs.open(profile('B','easytier')); final b=tabs.active!;
+    tabs.splitWith(a.id);
+    expect(a.visible.value,isTrue); expect(b.visible.value,isTrue);
+    expect(a.inputEligible.value,isFalse); expect(b.inputEligible.value,isTrue);
+    final left=tabs.splitLeftId,events=<String>[];
+    a.inputEligible.addListener(() => events.add('A:${a.inputEligible.value}'));
+    b.inputEligible.addListener(() => events.add('B:${b.inputEligible.value}'));
+    tabs.select(a.id);
+    expect(events,['B:false','A:true']);
+    expect(tabs.splitLeftId,left); expect(a.visible.value,isTrue); expect(b.visible.value,isTrue);
+    tabs.closeSplit();
+    expect(a.visible.value,isTrue); expect(a.inputEligible.value,isTrue);
+    expect(b.visible.value,isFalse); expect(b.inputEligible.value,isFalse);
+    tabs.dispose();
+  });
   test('MT01 MT06 same host has independent views; disabling it closes only its views',() {
     final p = profile('A','zerotier'), tabs = HostTabs(); tabs.open(p); final old = tabs.active;
     tabs.select(null); tabs.open(p); expect(identical(tabs.active,old),isFalse); expect(tabs.tabs.length,2);

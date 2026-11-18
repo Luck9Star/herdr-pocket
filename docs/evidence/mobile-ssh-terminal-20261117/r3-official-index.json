@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 1,
+  "batch": "R3",
+  "sourceSHA": "84177d58e1f3f167b79d4338ef63bcc4e4c6d1e1",
+  "reviewDate": "2026-11-17",
+  "batchVerdict": "Ordinary and rotation screen proofs passed on both clients; Flutter workflow passed; Tauri workflow failed at encrypted_key before peer connection and still has system-overlay pixels on the Add Host button",
+  "officialArchives": [
+    {
+      "shell": "flutter",
+      "run": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43999535238",
+      "artifact": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43999535238/artifacts/14291876959",
+      "officialZipBytes": 834058,
+      "officialZipSha256": "47d8c3ed0fb8f78c6cc4f8d90b50b1a31a452701545bdb2a50eaaf9e55e9809d"
+    },
+    {
+      "shell": "tauri",
+      "run": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43999535331",
+      "artifact": "https://github.com/Luck9Star/herdr-pocket/actions/runs/43999535331/artifacts/14291269159",
+      "officialZipBytes": 818173,
+      "officialZipSha256": "62a48f3e80b54f9398e81fe545808c0e8b13cb6fda0af19bbf7971704a620e75"
+    }
+  ],
+  "byteExactArchivedFiles": [
+    {
+      "source": "r3-flutter-official/direct-ssh-public/result.json",
+      "archive": "r3-flutter-43999535238-result.json",
+      "bytes": 11352,
+      "sha256": "0de979519c10038aff7e785542a50b01ada4b63f1fa8d5866252e9f1d42ca35d"
+    },
+    {
+      "source": "r3-flutter-official/direct-ssh-public/ordinary-screen-proof.json",
+      "archive": "r3-flutter-43999535238-ordinary-screen-proof.json",
+      "bytes": 1563,
+      "sha256": "dca549390e2a9d98b4a7cbe51813b35468d64bcffd54c66f9ef64f296719430f"
+    },
+    {
+      "source": "r3-flutter-official/direct-ssh-public/key-rotation-screen-proof.json",
+      "archive": "r3-flutter-43999535238-key-rotation-screen-proof.json",
+      "bytes": 1567,
+      "sha256": "95778e08c91ba8b6117312ac5fc1759e7f9de61f45ea215a472a8279b1e33af7"
+    },
+    {
+      "source": "r3-flutter-independent.json",
+      "archive": "r3-flutter-43999535238-independent.json",
+      "bytes": 1039,
+      "sha256": "6cf062e4d1cb8e2b0fd6d63f39e7462cf709dbf01f8deea8156a51b04b8fd67b"
+    },
+    {
+      "source": "r3-tauri-official/tauri-direct-evidence/manifest.json",
+      "archive": "r3-tauri-43999535331-manifest.json",
+      "bytes": 9995,
+      "sha256": "a5f24d0f094b175b2b7574e9f3b7d4a3debd39530564aae259af5c6520e06620"
+    },
+    {
+      "source": "r3-tauri-official/tauri-direct-evidence/ssh-terminal-android.json",
+      "archive": "r3-tauri-43999535331-ordinary-screen-proof.json",
+      "bytes": 2044,
+      "sha256": "bce62cbc2b0de7b6e09257d4df0db2c0348edef3ea7f352ecff465362b8859fc"
+    },
+    {
+      "source": "r3-tauri-official/tauri-direct-evidence/ssh-rotation-terminal-android.json",
+      "archive": "r3-tauri-43999535331-rotation-screen-proof.json",
+      "bytes": 2053,
+      "sha256": "5f2837433678ef59dd2d9df25c5ac6eb871ff8095e29841f956a6bb4d935ff20"
+    },
+    {
+      "source": "r3-tauri-independent.json",
+      "archive": "r3-tauri-43999535331-independent.json",
+      "bytes": 555,
+      "sha256": "65c14ab1461697dd5e0f438249b1038073a6251157e477d189b5992c2e4fa329"
+    },
+    {
+      "source": "r3-tauri-official/tauri-direct-evidence/ssh-terminal-android.png",
+      "archive": "r3-tauri-43999535331-ordinary-overlap.png",
+      "bytes": 181146,
+      "sha256": "d31d276905a5ae8ac03129bcc75bb00a91e83e7c25d5ab0c30762a76a5787ec4"
+    }
+  ],
+  "officialImages": [
+    {
+      "shell": "flutter",
+      "officialPath": "direct-ssh-public/connected-device.png",
+      "mainAdbScreen": true,
+      "imageSize": [
+        1080,
+        2340
+      ],
+      "bytes": 163769,
+      "sha256": "42def2f03ae523830900b492cd740a3a540a13854b45b8a619e98cfb9436d15e",
+      "localCopy": false
+    },
+    {
+      "shell": "flutter",
+      "officialPath": "direct-ssh-public/rotation-connected-device.png",
+      "mainAdbScreen": true,
+      "imageSize": [
+        1080,
+        2340
+      ],
+      "bytes": 158023,
+      "sha256": "3790a79626672c490a1b09899a2e33c7b5aae3ab1d57967bef7393855ca4a285",
+      "localCopy": false
+    },
+    {
+      "shell": "flutter",
+      "officialPath": "direct-ssh-public/connected.png",
+      "mainAdbScreen": false,
+      "imageSize": [
+        1080,
+        2340
+      ],
+      "bytes": 92993,
+      "sha256": "65ee3e2914e2b98ac6bf9740b76997591fbb7ac95f942225d937e0c3301a7d1f",
+      "localCopy": false
+    },
+    {
+      "shell": "flutter",
+      "officialPath": "direct-ssh-public/rotation-connected.png",
+      "mainAdbScreen": false,
+      "imageSize": [
+        1080,
+        2340
+      ],
+      "bytes": 86709,
+      "sha256": "6a9eafd1312131b95a236b9bf6334abb77e9027e8401ccce3c0d6447c89dfda7",
+      "localCopy": false
+    },
+    {
+      "shell": "tauri",
+      "officialPath": "tauri-direct-evidence/ssh-terminal-android.png",
+      "mainAdbScreen": true,
+      "imageSize": [
+        1080,
+        2340
+      ],
+      "bytes": 181146,
+      "sha256": "d31d276905a5ae8ac03129bcc75bb00a91e83e7c25d5ab0c30762a76a5787ec4",
+      "localCopy": true
+    },
+    {
+      "shell": "tauri",
+      "officialPath": "tauri-direct-evidence/ssh-rotation-terminal-android.png",
+      "mainAdbScreen": true,
+      "imageSize": [
+        1080,
+        2340
+      ],
+      "bytes": 180795,
+      "sha256": "81ed99d6ccec144830b6b8b96377b2dc0b8c3d35ffcbfceefaa545c4317e3c3b",
+      "localCopy": false
+    },
+    {
+      "shell": "tauri",
+      "officialPath": "tauri-direct-evidence/ssh-terminal-android-webview-before.png",
+      "mainAdbScreen": false,
+      "imageSize": [
+        1081,
+        2341
+      ],
+      "bytes": 151561,
+      "sha256": "ef19ee40ac8bc7d5d016465b0f2b027266293102b749998ce39c719df957e99f",
+      "localCopy": false
+    }
+  ],
+  "systemOverlayMeasurement": {
+    "comparisonRegionInclusive": [
+      820,
+      45,
+      1009,
+      114
+    ],
+    "cdpRgb": [
+      79,
+      70,
+      229
+    ],
+    "adbRgb": [
+      32,
+      28,
+      92
+    ],
+    "matchingChangedPixels": 494,
+    "changedPixelBoundsInclusive": [
+      897,
+      78,
+      1002,
+      86
+    ],
+    "scope": "Same captured app frame versus actual framebuffer; system icons cover part of the Add Host button brand background"
+  },
+  "primaryFinalImages": "Final accepted device evidence is R4; see r4-official-index.json. This batch remains a historical partial/failed result."
+}

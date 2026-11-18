@@ -1,3 +1,19 @@
+// Closed details may retain layout rectangles for descendants that are not
+// painted. Keep the first summary eligible: it remains visible when closed.
+export function isPaintedOccluder(node) {
+  for (let parent=node.parentElement; parent; parent=parent.parentElement) {
+    if (parent.tagName !== 'DETAILS' || parent.open) continue;
+    const summary=Array.from(parent.children || []).find(child=>child.tagName==='SUMMARY');
+    if (!summary || (node!==summary && !summary.contains(node))) return false;
+  }
+  // Some WebKit versions lack this API; the explicit details check above is
+  // the fallback. Opacity is intentionally not ignored as an occlusion.
+  if (typeof node.checkVisibility === 'function') {
+    try { if (!node.checkVisibility()) return false; } catch { /* use geometry */ }
+  }
+  return true;
+}
+
 // Only fully visible cells are exported. Rectangles are intersected with every
 // CSS clipping ancestor and the visual viewport; hit tests reject occlusion.
 export function visibleCellBounds(terminal) {
@@ -24,7 +40,7 @@ export function visibleCellBounds(terminal) {
   // the box might be behind it. This avoids leaking a sliver under a title.
   const occluders=[];
   for(const node of document.querySelectorAll('*')) {
-    if(node===root || root.contains(node) || node.contains(root))continue;
+    if(node===root || root.contains(node) || node.contains(root) || !isPaintedOccluder(node))continue;
     const style=getComputedStyle(node);
     if(style.display==='none' || style.visibility==='hidden')continue;
     for(const box of node.getClientRects()) {

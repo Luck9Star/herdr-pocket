@@ -9,7 +9,7 @@ SCRIPT = Path(__file__).with_name('with-android-emulator.sh')
 
 
 class EmulatorCleanupTest(unittest.TestCase):
-    def run_cleanup(self, responses, original=0):
+    def run_cleanup(self, responses, original=0, process_exit=0):
         source = SCRIPT.read_text().split('cleanup() {', 1)[1].split('\ntrap cleanup EXIT', 1)[0]
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -20,8 +20,9 @@ ANDROID_SERIAL=emulator-5554
 avd_pid=12345
 evidence_real="$TEST_DIR"
 evidence_event() { printf '%s\\n' "$*" >> "$evidence_real/lifecycle.txt"; }
+resource_snapshot() { :; }
 kill() { return 1; }
-wait() { return 0; }
+wait() { return "$PROCESS_EXIT"; }
 sleep() { :; }
 timeout() {
   local n
@@ -39,7 +40,7 @@ cleanup() {''' + source + '''
 trap cleanup EXIT
 exit "$ORIGINAL_STATUS"
 '''
-            env = dict(os.environ, TEST_DIR=temp, ORIGINAL_STATUS=str(original))
+            env = dict(os.environ, TEST_DIR=temp, ORIGINAL_STATUS=str(original), PROCESS_EXIT=str(process_exit))
             result = subprocess.run(['bash', '-c', shell], env=env, capture_output=True, text=True)
             return result, (root / 'lifecycle.txt').read_text(), int((root / 'count').read_text())
 
@@ -65,6 +66,11 @@ exit "$ORIGINAL_STATUS"
         self.assertEqual(self.run_cleanup(['error'])[0].returncode, 1)
         self.assertEqual(self.run_cleanup(['absent'], original=130)[0].returncode, 130)
         self.assertEqual(self.run_cleanup(['error'], original=143)[0].returncode, 143)
+
+    def test_dead_emulator_exit_status_is_recorded_without_masking_failure(self):
+        result, evidence, _ = self.run_cleanup(['absent'], original=42, process_exit=137)
+        self.assertEqual(result.returncode, 42)
+        self.assertIn('alive_on_entry=false exit_status=137', evidence)
 
     def test_foreign_device_refused_before_launch(self):
         with tempfile.TemporaryDirectory() as temp:

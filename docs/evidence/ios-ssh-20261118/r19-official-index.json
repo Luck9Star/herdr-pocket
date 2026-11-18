@@ -1,0 +1,256 @@
+{
+  "schemaVersion": 1,
+  "round": "R19",
+  "sourceSHA": "58fe474384fe7aa644f41b1662d2919100cb0842",
+  "sourceURL": "https://github.com/Luck9Star/herdr-pocket/commit/58fe474384fe7aa644f41b1662d2919100cb0842",
+  "run": {
+    "id": 44278328784,
+    "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44278328784",
+    "status": "completed",
+    "conclusion": "success"
+  },
+  "scope": "iOS 模拟器的普通 SSH 与 S10 主机密钥变更验收",
+  "batchPassed": true,
+  "outcome": {
+    "flutter": "passed",
+    "tauri": "passed"
+  },
+  "officialArtifacts": [
+    {
+      "client": "flutter",
+      "artifactId": "14416813106",
+      "artifactURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44278328784/artifacts/14416813106",
+      "artifactName": "flutter-ordinary-ssh-ios-58fe474384fe7aa644f41b1662d2919100cb0842",
+      "jobId": 134712097532,
+      "jobURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44278328784/job/134712097532",
+      "jobConclusion": "success",
+      "zipBytes": 672635,
+      "zipSHA256": "071fc2157074bbb22f810dd2e0fc9fe4cd2f77da3c34609a99ea667ecd269caf"
+    },
+    {
+      "client": "tauri",
+      "artifactId": "14416357146",
+      "artifactURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44278328784/artifacts/14416357146",
+      "artifactName": "tauri-ordinary-ssh-ios-58fe474384fe7aa644f41b1662d2919100cb0842",
+      "jobId": 134712098125,
+      "jobURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44278328784/job/134712098125",
+      "jobConclusion": "success",
+      "zipBytes": 565953,
+      "zipSHA256": "e1c574f419c1b7f21f5bddd2084da88b7ef7f8626d13e35237cee191819eca2d"
+    }
+  ],
+  "files": [
+    {
+      "path": "r19-flutter-result.json",
+      "client": "flutter",
+      "sourceArtifactId": "14416813106",
+      "sourceMember": "result.json",
+      "bytes": 17387,
+      "sha256": "1bed68ba370576e6d71a87070938daab71da063e3bed66cf6e73852c1c9110ee"
+    },
+    {
+      "path": "r19-flutter-ordinary-terminal.png",
+      "client": "flutter",
+      "sourceArtifactId": "14416813106",
+      "sourceMember": "ordinary-terminal.png",
+      "bytes": 222527,
+      "sha256": "a08cca3d263110e851d0f3a8c5f85c6301acc6cfc96851d3fed85dd5ef3ea056"
+    },
+    {
+      "path": "r19-flutter-key-change-terminal.png",
+      "client": "flutter",
+      "sourceArtifactId": "14416813106",
+      "sourceMember": "key-change-terminal.png",
+      "bytes": 222221,
+      "sha256": "d0df250ac2773d34d343e07fee66739b6d93965889b16814392134227f203e9c"
+    },
+    {
+      "path": "r19-flutter-key-change-review.png",
+      "client": "flutter",
+      "sourceArtifactId": "14416813106",
+      "sourceMember": "key-change-review.png",
+      "bytes": 179224,
+      "sha256": "6393d5f481b06c078fada4aa06d3a4a70a66073013c90af53e834c7dc1f5a222"
+    },
+    {
+      "path": "r19-flutter-ordinary-terminal-ocr.json",
+      "client": "flutter",
+      "sourceArtifactId": "14416813106",
+      "sourceMember": "ordinary-terminal-ocr.json",
+      "bytes": 485,
+      "sha256": "28dcbddc09c8773e8607bbc23c081d13169b5d48db20112b5b244a41a48657fe"
+    },
+    {
+      "path": "r19-flutter-key-change-terminal-ocr.json",
+      "client": "flutter",
+      "sourceArtifactId": "14416813106",
+      "sourceMember": "key-change-terminal-ocr.json",
+      "bytes": 485,
+      "sha256": "cd9a917242a9052c2ade25272fca6ce145c5868e308f40e9401f12de59384bda"
+    },
+    {
+      "path": "r19-tauri-result.json",
+      "client": "tauri",
+      "sourceArtifactId": "14416357146",
+      "sourceMember": "result.json",
+      "bytes": 38489,
+      "sha256": "cc0e8a7697acd5fa08ff2036c8b92f78799a4b2e1ef597b18d355aeb668e5943"
+    },
+    {
+      "path": "r19-tauri-ordinary-terminal.png",
+      "client": "tauri",
+      "sourceArtifactId": "14416357146",
+      "sourceMember": "ordinary-terminal.png",
+      "bytes": 219183,
+      "sha256": "7513ccaee78d9852f7c09d3b8efaa53eb78813780b8ef60a6c728a1f2f423777"
+    },
+    {
+      "path": "r19-tauri-key-change-terminal.png",
+      "client": "tauri",
+      "sourceArtifactId": "14416357146",
+      "sourceMember": "key-change-terminal.png",
+      "bytes": 219255,
+      "sha256": "a729c8c2f1ef811529942da24219406685507b0fd76f2ab626da5858eca1cb8d"
+    },
+    {
+      "path": "r19-tauri-key-change-review.png",
+      "client": "tauri",
+      "sourceArtifactId": "14416357146",
+      "sourceMember": "key-change-review.png",
+      "bytes": 260078,
+      "sha256": "ad9ab634f40e454d115246819142c84df8aaffac44043a5ca85dc34dfd71ec00"
+    },
+    {
+      "path": "r19-tauri-ordinary-terminal-ocr.json",
+      "client": "tauri",
+      "sourceArtifactId": "14416357146",
+      "sourceMember": "ordinary-terminal-ocr.json",
+      "bytes": 488,
+      "sha256": "568fefbc5cb274e7ad6f5a2e37722fb4fa8f252a0ca799dd0f577c5150cf0ff6"
+    },
+    {
+      "path": "r19-tauri-key-change-terminal-ocr.json",
+      "client": "tauri",
+      "sourceArtifactId": "14416357146",
+      "sourceMember": "key-change-terminal-ocr.json",
+      "bytes": 488,
+      "sha256": "5c710d478a199410b0e0334176c62fe4babcf7e32d7b57a8a7cff1d376d58ca4"
+    }
+  ],
+  "verification": {
+    "sourceSHAMatched": true,
+    "officialRunAndJobsMatched": true,
+    "zipBytesAndSHAMatched": true,
+    "zipIntegrityPassed": true,
+    "zipMetadataMatched": true,
+    "originalByteCopyVerified": true,
+    "crossHashVerified": true,
+    "ocrCriteriaVerified": true,
+    "serverSequenceVerified": true,
+    "rejectedWriteAndDisconnectVerified": true,
+    "s10Verified": true,
+    "tauriHeaderGeometryVerified": true,
+    "imageMetadataMatched": true,
+    "visualInspectionCompleted": true,
+    "rawLogsExcluded": true,
+    "temporaryKeysExcluded": true,
+    "headerBoundsAvailableFlutter": false
+  },
+  "sequenceEvidence": {
+    "flutterOrdinary": "protocol.connectionEvents = A,A；authAttempts = 0,1",
+    "flutterRotation": "rotation.finalEvidence = initialProbe A / rejectedTransport B / freshProbe B / acceptedSession B；authAttempts = 0,0,0,1；前三连接 pty/shell/input/output 全 0；acceptedSession inputBytes = 9；stage = 4；connectionsClosed = true",
+    "tauriOrdinary": "cases.ordinary.peer.connectionEvents = A,A；authAttempts = 0,1",
+    "tauriRotation": "cases.keyChange.peer.connectionEvents = A,B,B,B；authAttempts = 0,0,0,1；前三连接 pty/shell/input/output 全 0；acceptedSession inputBytes = 9；rotationEvidence 末项 stage = 4；connectionsClosed = true"
+  },
+  "disconnectEvidence": {
+    "flutter": "ordinary/keyChange 的 accepted session 均 sessionClosed=true、connectionsClosed=true，peerClosedBeforeDriverExit=true；rotation.device.disconnectUiConfirmed=true",
+    "tauri": "ordinary/keyChange 均 disconnected=true、connectionsClosed=true，accepted session 均 sessionClosed=true；nativeCheckpoint=key_change_disconnect"
+  },
+  "visualNotes": {
+    "inspection": "本次归档逐张读取六张原图，并将图像尺寸、OCR terminalBounds 与结果几何互证。",
+    "tauriHeading": "ordinary/key-change 两张自然终端均完整显示 H2「普通 SSH 终端」，未见标题裁切。",
+    "tauriSystemBar": "两图系统栏时间、信号、Wi-Fi 与电池可见；statusBarFrames=[0,0,440,54]，nativeScale=3，对应 1320×162 像素。",
+    "tauriBottomActionButtons": "两图底导航覆盖「打开键盘」「断开连接」按钮下边框，独立目检约 8pt；按钮文字可见。实际断开证据见 disconnectEvidence。",
+    "reviewImages": "双客户端 key-change-review 均显示主机指纹变化、新旧指纹与取消入口；review 图按 no-OCR 设计审查用途保留。"
+  },
+  "headerBounds": {
+    "note": "以下值逐项取自 R19 result.json 的 terminalScreenshot.headerBounds 与终端/OCR 实际字段；两案例相同。Flutter terminalScreenshot 只有 imageFile/imageSha256/criteriaFile/criteriaSha256，无 headerBounds。",
+    "terminalImage": {
+      "imageSize": [
+        1320,
+        2868
+      ],
+      "nativeScale": 3.0,
+      "systemCapture": "XCUIScreen.main",
+      "terminalBounds": [
+        48,
+        984,
+        1224,
+        1287
+      ]
+    },
+    "ordinary": {
+      "sameOwner": true,
+      "headingFrame": [
+        16,
+        161,
+        154,
+        30
+      ],
+      "headerBottom": 130,
+      "addFrame": [
+        334,
+        80,
+        91,
+        44
+      ],
+      "statusBarFrames": [
+        [
+          0,
+          0,
+          440,
+          54
+        ]
+      ],
+      "brandFrame": [
+        62,
+        80,
+        107,
+        24
+      ]
+    },
+    "keyChange": {
+      "sameOwner": true,
+      "headingFrame": [
+        16,
+        161,
+        154,
+        30
+      ],
+      "headerBottom": 130,
+      "addFrame": [
+        334,
+        80,
+        91,
+        44
+      ],
+      "statusBarFrames": [
+        [
+          0,
+          0,
+          440,
+          54
+        ]
+      ],
+      "brandFrame": [
+        62,
+        80,
+        107,
+        24
+      ]
+    }
+  },
+  "excludedZipMembers": [
+    "flutter/preconnect.png"
+  ]
+}

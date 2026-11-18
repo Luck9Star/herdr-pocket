@@ -9,6 +9,32 @@ use tauri::{
 #[cfg(target_os = "android")]
 struct TerminalKeyboard<R: Runtime>(PluginHandle<R>);
 
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemTopInset {
+    overlap_px: u32,
+    system_bottom_px: i32,
+    view_y: i32,
+    status_px: u32,
+    stable_status_px: u32,
+    window_top_px: Option<i32>,
+    cutout_px: Option<u32>,
+    caption_px: Option<u32>,
+    stable_caption_px: Option<u32>,
+}
+
+#[tauri::command]
+pub async fn mobile_system_top_inset<R: Runtime>(app: AppHandle<R>) -> Result<SystemTopInset, String> {
+    #[cfg(target_os = "android")]
+    {
+        let plugin = app.try_state::<TerminalKeyboard<R>>().ok_or("insets_unavailable")?;
+        let result = plugin.0.run_mobile_plugin_async::<SystemTopInset>("topInset", serde_json::json!({})).await.map_err(|_| "insets_unavailable")?;
+        Ok(result)
+    }
+    #[cfg(not(target_os = "android"))]
+    { let _ = app; Err("insets_unavailable".into()) }
+}
+
 #[cfg(target_os = "android")]
 pub fn android_plugin<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("pocketterminalkeyboard")

@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "expectedTarget": "fixture@127.0.0.1:56611",
+  "expectedToken": "RATE FARM SAND LEFT LEFT HEAT LAND FARM",
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "captureEngine": "adb exec-out screencap -p",
+  "coordinateEngine": "measured WebView frame or exact CDP/framebuffer pixel registration",
+  "captureAttempts": 1,
+  "geometryBefore": {
+    "viewport": [
+      393,
+      851
+    ],
+    "targetRect": [
+      16,
+      206.9204559326172,
+      361.0909118652344,
+      23.272727966308594
+    ],
+    "terminal": [
+      24,
+      258.19317626953125,
+      344,
+      352
+    ],
+    "visualViewport": [
+      0,
+      0,
+      1
+    ],
+    "dpr": 2.75,
+    "targetVisible": true,
+    "targetMatched": true,
+    "terminalVisible": true,
+    "webViewCandidateBounds": [
+      [
+        0,
+        0,
+        1080,
+        2340
+      ]
+    ],
+    "webViewCandidateCount": 1
+  },
+  "webViewBeforeSha256": "801bf7a885472e8d02ceca6e7919b5efe47630db6157bea2439eecd9c6fefd91",
+  "imageSha256": "81ed99d6ccec144830b6b8b96377b2dc0b8c3d35ffcbfceefaa545c4317e3c3b",
+  "imageSize": [
+    1080,
+    2340
+  ],
+  "image": "ssh-rotation-terminal-android.png",
+  "imageCaptureAttempt": 1,
+  "geometryAfter": {
+    "viewport": [
+      393,
+      851
+    ],
+    "targetRect": [
+      16,
+      206.9204559326172,
+      361.0909118652344,
+      23.272727966308594
+    ],
+    "terminal": [
+      24,
+      258.19317626953125,
+      344,
+      352
+    ],
+    "visualViewport": [
+      0,
+      0,
+      1
+    ],
+    "dpr": 2.75,
+    "targetVisible": true,
+    "targetMatched": true,
+    "terminalVisible": true,
+    "webViewCandidateBounds": [
+      [
+        0,
+        0,
+        1080,
+        2340
+      ]
+    ],
+    "webViewCandidateCount": 1
+  },
+  "coordinateMethod": "uiautomator_full_frame",
+  "terminalBounds": [
+    66,
+    710,
+    945,
+    967
+  ],
+  "markerVisible": true,
+  "tokenVisible": true,
+  "ocrEngine": "tesseract 5.3.4",
+  "ocrAttempts": 1,
+  "ocrPageSegmentationMode": 6,
+  "proofSequenceVisible": true
+}

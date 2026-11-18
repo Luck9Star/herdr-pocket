@@ -80,6 +80,14 @@ impl DirectObservation {
         })
     }
 
+    pub fn stop_gracefully(&self) {
+        self.retired.store(true, Ordering::SeqCst);
+        self.control.stop_gracefully();
+        if let Ok(mut p) = self.pending.lock() {
+            p.select.take(); p.ack.take();
+            if let Some((_, input)) = p.input.take() {input.invalidate();}
+        }
+    }
     pub fn cancel(&self) {
         self.retired.store(true, Ordering::SeqCst);
         self.cancel.cancel();

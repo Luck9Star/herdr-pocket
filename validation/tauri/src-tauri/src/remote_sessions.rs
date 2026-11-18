@@ -34,13 +34,22 @@ impl Session {
     }
 }
 
+#[derive(Clone)]
+pub struct StopPlan {
+    pub targets:Vec<(String,u64,u64)>,
+    pub controls:Vec<herdr_readonly_transport::ObservationControl>,
+    pub node:Option<herdr_readonly_transport::mobile_nodes::NodeAttempt>,
+    pub legacy:Option<(u64,u64)>,
+}
+struct Stopping {binding:Binding,plan:StopPlan,active:bool}
 #[derive(Default)]
 /// Slot model: `visible` is a per-session flag (many tabs may observe simultaneously);
 /// `focus` stays a single slot — at most one tab may hold input focus at any time.
-pub struct Sessions { entries: HashMap<String, Session>, next: u64, pub focus: Option<(String,u64,u64,u64)> }
+pub struct Sessions { entries: HashMap<String, Session>, next: u64, stopping: Vec<Stopping>, pub focus: Option<(String,u64,u64,u64)> }
 impl Sessions {
     pub fn begin(&mut self, tab: &str, owner: u64, host: Option<String>, binding: Option<Binding>) -> Result<(u64, Cancellation), &'static str> {
         if tab.is_empty() || tab.len() > 64 || !tab.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_') || owner == 0 {return Err("invalid_tab");}
+        if binding.as_ref().is_some_and(|b|self.is_stopping(b)) {return Err("mobile_node_stop_pending");}
         if self.entries.contains_key(tab) {return Err("tab_busy");}
         if self.entries.len() >= 8 {return Err("tab_capacity");}
         let mut session = Session {owner, host_id:host, node_binding:binding, ..Session::default()};
@@ -92,6 +101,33 @@ impl Sessions {
         let targets:Vec<_>=self.entries.iter().filter(|(_,s)|s.record.as_ref().and_then(|r|r.pairing.as_ref()).is_some_and(|p|p.handle==handle)).map(|(id,s)|(id.clone(),s.owner,s.generation)).collect();
         for (id,owner,generation) in targets {self.cancel(&id,owner,generation)}
     }
+    pub fn stop_binding(&mut self,binding:&Binding,node:Option<herdr_readonly_transport::mobile_nodes::NodeAttempt>,legacy:Option<(u64,u64)>)->Result<StopPlan,&'static str> {
+        if let Some(stop)=self.stopping.iter_mut().find(|s|s.binding==*binding) {
+            if stop.active {return Err("mobile_node_stop_pending");}
+            stop.active=true;
+            let mut plan=stop.plan.clone();plan.controls.clear();return Ok(plan);
+        }
+        let targets:Vec<_>=self.entries.iter().filter(|(_,s)|s.node_binding.as_ref()==Some(binding)).map(|(id,s)|(id.clone(),s.owner,s.generation)).collect();
+        let mut controls=Vec::new();
+        for (id,owner,generation) in &targets {
+            if self.focus.as_ref().is_some_and(|(tab,o,g,_)|tab==id && o==owner && g==generation) {self.focus=None;}
+            if let Some(s)=self.entries.get_mut(id) {
+                s.visible=false;
+                if let Some(control)=&s.control {controls.push(control.clone());} else {s.gate.cancel();}
+                if let Some((_,_,input))=s.input.take() {input.invalidate();}
+                s.select.take();s.ack.take();
+            }
+            if self.entries.get(id).is_some_and(|s|!s.claimed) {self.cancel(id,*owner,*generation);}
+        }
+        let plan=StopPlan {targets,controls,node,legacy};
+        self.stopping.push(Stopping {binding:binding.clone(),plan:plan.clone(),active:true});Ok(plan)
+    }
+    pub fn stop_settled(&self,targets:&[(String,u64,u64)])->bool {
+        targets.iter().all(|(id,owner,generation)|self.entries.get(id).is_none_or(|s|s.owner!=*owner || s.generation!=*generation))
+    }
+    pub fn is_stopping(&self,binding:&Binding)->bool {self.stopping.iter().any(|s|s.binding==*binding)}
+    pub fn defer_stop(&mut self,binding:&Binding) {if let Some(stop)=self.stopping.iter_mut().find(|s|s.binding==*binding) {stop.active=false;}}
+    pub fn finish_stop(&mut self,binding:&Binding) {self.stopping.retain(|s|s.binding!=*binding);}
     pub fn cancel_binding(&mut self, binding:&Binding) {
         let targets:Vec<_>=self.entries.iter().filter(|(_,s)|s.node_binding.as_ref()==Some(binding)).map(|(id,s)|(id.clone(),s.owner,s.generation)).collect();
         for (id,owner,generation) in targets {self.cancel(&id,owner,generation)}
@@ -281,4 +317,57 @@ mod tests {
         assert_eq!(session.select_dashboard(41,1,2,"w1:p1".into(),"term_def".into()),Err("stale_selection"));
     }
 
+}
+
+#[cfg(test)]
+mod stop_tests {
+    use super::*;
+    #[test]
+    fn explicit_stop_captures_full_binding_and_fences_only_matching_new_attempts() {
+        let binding=Binding::new("profile".into(),1,"qa".into(),"identity-a".into()).unwrap();
+        let other=Binding::new("profile".into(),1,"qa".into(),"identity-b".into()).unwrap();
+        let mut tabs=Sessions::default();
+        let (a,ca)=tabs.begin("a",1,Some("host-a".into()),Some(binding.clone())).unwrap();tabs.claim("a",1,a).unwrap();
+        let control=herdr_readonly_transport::ObservationControl::new();tabs.get_mut("a").unwrap().control=Some(control.clone());
+        let (b,cb)=tabs.begin("b",2,Some("host-b".into()),Some(other.clone())).unwrap();tabs.claim("b",2,b).unwrap();
+        tabs.set_visible("a",1,a).unwrap();tabs.set_visible("b",2,b).unwrap();
+        let plan=tabs.stop_binding(&binding,None,None).unwrap();let targets=plan.targets;let controls=plan.controls;
+        assert_eq!(targets,vec![("a".into(),1,a)]);
+        assert!(!tabs.is_visible("a",1,a));assert!(tabs.is_visible("b",2,b));
+        assert!(!ca.is_cancelled() && !cb.is_cancelled());
+        assert_eq!(control.snapshot().phase,herdr_readonly_transport::ObservationPhase::Starting);
+        for control in controls {control.stop_gracefully();}
+        assert!(!ca.is_cancelled());assert!(!tabs.stop_settled(&targets));
+        assert!(matches!(tabs.begin("blocked",3,None,Some(binding.clone())),Err("mobile_node_stop_pending")));
+        assert!(tabs.begin("other",3,None,Some(other)).is_ok());
+        assert!(!tabs.finish("a",2,a));assert!(!tabs.stop_settled(&targets));
+        tabs.finish("a",1,a);assert!(tabs.stop_settled(&targets));
+        tabs.finish_stop(&binding);let (new,_) =tabs.begin("a",4,None,Some(binding)).unwrap();
+        tabs.cancel("a",1,a);assert!(tabs.claim("a",4,new).is_ok());assert!(!cb.is_cancelled());
+    }
+}
+
+#[cfg(test)]
+mod deferred_stop_tests {
+ use super::*;
+ #[test]
+ fn delayed_retirement_requires_new_explicit_stop_and_rejects_parallel_native_admission() {
+  let binding=Binding::new("profile".into(),1,"qa".into(),"identity".into()).unwrap();let mut tabs=Sessions::default();
+  let (g,_)=tabs.begin("a",1,None,Some(binding.clone())).unwrap();tabs.claim("a",1,g).unwrap();
+  let first=tabs.stop_binding(&binding,None,Some((7,11))).unwrap();
+  assert!(matches!(tabs.stop_binding(&binding,None,None),Err("mobile_node_stop_pending")));
+  tabs.defer_stop(&binding);assert!(tabs.is_stopping(&binding));
+  assert!(matches!(tabs.begin("new",2,None,Some(binding.clone())),Err("mobile_node_stop_pending")));
+  tabs.finish("a",1,g);
+  let retry=tabs.stop_binding(&binding,None,Some((7,12))).unwrap();
+  assert_eq!(retry.targets,first.targets);assert_eq!(retry.legacy,Some((7,11)));assert!(tabs.stop_settled(&retry.targets));
+  let mut native_calls=0;
+  if tabs.stop_settled(&retry.targets){native_calls+=1;}
+  assert!(tabs.stop_binding(&binding,None,None).is_err());assert_eq!(native_calls,1);
+  // A failed native cleanup stays fenced, but another explicit click can
+  // retry only the original plan. Success alone releases its admission fence.
+  tabs.defer_stop(&binding);assert!(tabs.is_stopping(&binding));
+  let again=tabs.stop_binding(&binding,None,None).unwrap();assert_eq!(again.legacy,Some((7,11)));
+  tabs.finish_stop(&binding);assert!(!tabs.is_stopping(&binding));
+ }
 }

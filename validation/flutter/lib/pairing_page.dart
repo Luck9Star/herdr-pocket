@@ -10,22 +10,26 @@ import 'host_catalog.dart';
 import 'pairing.dart';
 import 'remote_adapter.dart';
 import 'remote_page.dart';
+import 'remote_workflow_widgets.dart';
 import 'host_task_summary.dart';
 
 /// Public request/response review. Native identity creation is always explicit;
 /// missing/locked storage has no fallback, and responses never establish SSH trust.
 class PairingPage extends StatefulWidget {
-  const PairingPage({super.key,required this.tokens,this.keys,this.adapter,this.onRequest,this.clock,this.catalog,this.profileId,this.visibility,this.onViewState,this.requestedTarget,this.onOpenPane,this.summaryLeaseFactory});
+  const PairingPage({super.key,required this.tokens,this.keys,this.adapter,this.onRequest,this.clock,this.catalog,this.profileId,this.visibility,this.inputEligible,this.onViewState,this.requestedTarget,this.onOpenPane,this.summaryLeaseFactory,this.registerTransport,this.overlayAdapterFactory});
   final DesignTokens tokens;
   final DeviceKeys? keys;
   final HostCatalog? catalog;
   final String? profileId;
   final ValueListenable<bool>? visibility;
-  final void Function(String,String?,String?)? onViewState;
+  final ValueListenable<bool>? inputEligible;
+  final void Function(String,String?,String?,DateTime?)? onViewState;
   final RemotePane? requestedTarget;
   final void Function(RemotePane)? onOpenPane;
   final HostDashboardLease Function(HostProfile)? summaryLeaseFactory;
   final RemoteReadOnlyAdapter? adapter;
+  final VoidCallback Function(Future<void> Function())? registerTransport;
+  @visibleForTesting final RemoteReadOnlyAdapter Function(SocketConnector)? overlayAdapterFactory;
   final void Function(Map<String,dynamic>)? onRequest;
   static PendingDevicePairing? retainedPairing;
   static Map<String,dynamic>? retainedTarget;
@@ -131,7 +135,12 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
     timer = Timer.periodic(const Duration(seconds:1),(_) {
       final p = pairing; if (p == null) return;
       final previous = p.state; p.tick(now);
-      if (mounted && p.state != previous) setState(() { status = '请求已到期 · 授权结果仍未知，不会重放请求'; });
+      final previewExpired = responsePreview != null &&
+        (now < (responsePreview!['issued_at'] as int) || now >= (responsePreview!['expires_at'] as int));
+      if (mounted && (p.state != previous || previewExpired)) setState(() {
+        if (previewExpired) { responsePreview = null; sourceReviewed = false; }
+        if (p.state != previous) status = '请求已到期 · 授权结果仍未知，不会重放请求';
+      });
     });
   }
   void cancelWaiting() {
@@ -286,9 +295,9 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
     setState(() { busy = true; status = '请在连接页再次审查冻结目标；只有实际 pin 与 SSH 认证成功才标记已配对'; });
     final summaryLease = savedProfile == null ? null : widget.summaryLeaseFactory?.call(savedProfile!);
     await Navigator.push<void>(context,MaterialPageRoute(builder:(_) => RemotePage(tokens:widget.tokens,
-      adapter:widget.adapter,visibility:widget.visibility,networkBinding:networkBinding,pairedTarget:target,deviceKeys:keys,keyHandle:p.handle,onViewState:widget.onViewState,
+      adapter:widget.adapter,visibility:widget.visibility,inputEligible:widget.inputEligible,networkBinding:networkBinding,pairedTarget:target,deviceKeys:keys,keyHandle:p.handle,onViewState:widget.onViewState,
       requestedTarget:widget.requestedTarget,onOpenPane:widget.onOpenPane,
-      summaryLease:summaryLease,
+      summaryLease:summaryLease,registerTransport:widget.registerTransport,overlayAdapterFactory:widget.overlayAdapterFactory,
       devicePublicKey:p.request['public_key'] as String,onConnecting:() { ticket = p.connect(); },onAuthenticated:() { p.connectionResult(ticket,true); if (mounted) setState(() {}); },
       onStopped:() { if (['connecting','paired'].contains(p.state)) { p.generation++; p.state = 'waiting-connectivity'; } })));
     if (!mounted) return;
@@ -352,7 +361,10 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
   void previewResponse({bool edited = true}) {
     if (edited) invalidateScan();
     Map<String,dynamic>? preview;
-    try { preview = decodePairing(Uint8List.fromList(utf8.encode(response.text)),now); } catch (_) { /* invalid is not trusted */ }
+    try {
+      final decoded = decodePairing(Uint8List.fromList(utf8.encode(response.text)),now);
+      if (decoded['type'] == 'pairing-binding-response') preview = decoded;
+    } catch (_) { /* invalid is not trusted */ }
     setState(() { sourceReviewed = false; responsePreview = preview; });
   }
   @override
@@ -468,17 +480,39 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
     child:TextField(key:ValueKey('pair-$name'),controller:fields[name],enabled:!busy && pairing == null && (savedProfile == null || name == 'device'),
       autocorrect:false,maxLength:name == 'expectedHostKey' ? 4096 : 1024,decoration:InputDecoration(labelText:label,counterText:''),
       onChanged:(_) { invalidateScan(); setState(() { targetReviewed = false; profilePreview = null; }); }));
+  String get targetFingerprint {
+    try { return pairingFingerprint(fields['expectedHostKey']!.text); }
+    catch (_) { return '填入完整公钥后显示 SHA256 指纹'; }
+  }
+  Widget section(String title, List<Widget> children, {String? subtitle, IconData icon = Icons.shield_outlined}) =>
+    RemoteWorkflowCard(tokens:widget.tokens,title:title,subtitle:subtitle,icon:icon,
+      child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:children));
   @override
   Widget build(BuildContext context) {
     final p = pairing;
-    return Scaffold(appBar:AppBar(title:const Text('设备配对 · 公开请求')),
-      body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-        Semantics(liveRegion:true,child:Text(status,key:const ValueKey('pair-status'))),
-        const SizedBox(height:12),
+    return Scaffold(appBar:AppBar(title:const Text('设备配对')),
+      body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(20),
+        child:Center(child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:760),
+        child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+        Text(p == null ? '连接你的工作台' : '核对后，交给主机确认',
+          style:const TextStyle(fontSize:26,fontWeight:FontWeight.w700,letterSpacing:-0.5)),
+        const SizedBox(height:8),
+        Text('设备独立身份 · 公开请求交付 · SSH 单独验证',style:TextStyle(fontSize:13,color:widget.tokens.color('textSecondary'))),
+        RemoteWorkflowSteps(tokens:widget.tokens,labels:const ['核验目标','主机授权','独立验证'],
+          current:p == null ? 0 : ['authorized-unverified','waiting-connectivity','paired'].contains(p.state) ? 2 : 1),
+        RemoteWorkflowNotice(tokens:widget.tokens,child:Semantics(liveRegion:true,child:Text(status,key:const ValueKey('pair-status')))),
         if (!platformAvailable) const Text('此平台的设备安全存储桥不可用 · 设备配对已禁用，可返回手动隔离实验'),
         if (widget.catalog == null && PairingPage.retainedOrphan != null) TextButton(key:const ValueKey('pair-delete-orphan'),onPressed:busy || widgetBindingChanged ? null : deleteOrphan,child:const Text('明确删除原身份引用')),
         if (p == null) ...[
-          if (canImportProfile) ...[
+          if (canImportProfile) section('扫描或粘贴公开资料',[
+            Container(height:112,alignment:Alignment.center,
+              decoration:BoxDecoration(color:widget.tokens.color('canvas'),borderRadius:BorderRadius.circular(12),
+                border:Border.all(color:widget.tokens.color('brandBorder'))),
+              child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[
+                Icon(Icons.qr_code_scanner,size:38,color:widget.tokens.color('brand')),
+                const SizedBox(height:8),Text(scanAvailable ? '使用手机相机导入主机资料' : '手机可扫码，当前平台可粘贴资料',style:const TextStyle(fontSize:12)),
+              ])),
+            const SizedBox(height:12),
             const Text('公开连接资料不证明主机身份；请通过可信渠道独立核验指纹。'),
             if (scanAvailable) TextButton.icon(key:const ValueKey('profile-scan'),onPressed:scanning ? null : scanProfile,
               icon:const Icon(Icons.qr_code_scanner),label:const Text('扫描公开连接资料')),
@@ -488,22 +522,40 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
               SelectableText('待预览（尚未信任）\n主机 ${profilePreview!.values['host']}:${profilePreview!.values['port']}\n账号 ${profilePreview!.values['username']}\n网络 ${profilePreview!.values['provider']}\n会话 ${profilePreview!.values['session']}\nsocket ${profilePreview!.values['socketPath']}\nherdr ${profilePreview!.values['herdrPath']}\n主机指纹 ${profilePreview!.fingerprint}',key:const ValueKey('profile-preview')),
               TextButton(key:const ValueKey('profile-fill'),onPressed:scanning ? null : fillProfile,child:const Text('明确填入未审查表单')),
             ],
-          ],
-          DropdownButtonFormField<String>(key:const ValueKey('pair-provider'),initialValue:provider,decoration:const InputDecoration(labelText:'网络 provider（仅配置，入网未知）'),items:[for (final p in hostProviders) DropdownMenuItem(value:p,child:Text(hostProviderLabel(p)))],onChanged:busy || importedOverlayProvider != null ? null : (value) { if (value != null) setState(() { provider = value; targetReviewed = false; profilePreview = null; invalidateScan(); }); }),
+          ],icon:Icons.qr_code_2,subtitle:'资料仅填入表单，不建立信任或自动连接'),
+          section('01 · 确认连接目标',[
+          DropdownButtonFormField<String>(key:const ValueKey('pair-provider'),isExpanded:true,initialValue:provider,decoration:const InputDecoration(labelText:'网络 provider（仅配置，入网未知）'),items:[for (final p in hostProviders) DropdownMenuItem(value:p,child:Text(hostProviderLabel(p)))],onChanged:busy || importedOverlayProvider != null ? null : (value) { if (value != null) setState(() { provider = value; targetReviewed = false; profilePreview = null; invalidateScan(); }); }),
           if (importedOverlayProvider != null) Text('公开资料声明 $importedOverlayProvider · 配对后请在主机列表明确绑定同类本机网络，首次绑定前禁止连接。'),
           const SizedBox(height:12),
           input('host','SSH 主机 / IP'), input('port','SSH 端口'), input('username','主机账号'),
           input('session','命名会话（非 default）'), input('socketPath','命名会话 socket 绝对路径'),
-          input('herdrPath','herdr 可执行文件绝对路径'), input('expectedHostKey','可信渠道核验的 Ed25519 主机公钥'), input('device','设备名称（英文、数字、空格）'),
+          input('herdrPath','herdr 可执行文件绝对路径'),
+          ],icon:Icons.dns_outlined,subtitle:'账号、命名会话与网络必须指向同一目标'),
+          section('02 · 独立核验主机指纹',[
+            input('expectedHostKey','可信渠道核验的 Ed25519 主机公钥'),
+            Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(
+              color:widget.tokens.color('cardSubtle'),borderRadius:BorderRadius.circular(10)),
+              child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                Text('SSH 主机指纹',style:TextStyle(fontSize:11,color:widget.tokens.color('textSecondary'))),
+                const SizedBox(height:8),SelectableText(targetFingerprint,key:const ValueKey('pair-target-fingerprint'),
+                  style:const TextStyle(fontFamily:'ProbeNerd',fontSize:12,height:1.6)),
+              ])),
+            const SizedBox(height:12),
+            const Text('请通过主机管理员或其他可信渠道比对完整指纹。扫码、粘贴或保存资料本身不证明身份。',style:TextStyle(fontSize:12,height:1.6)),
+          ]),
+          section('03 · 创建设备独立身份',[
+          input('device','设备名称（英文、数字、空格）'),
           CheckboxListTile(key:const ValueKey('pair-target-review'),value:targetReviewed,
             onChanged:busy || scanning || !appResumed ? null : (value) => setState(() { targetReviewed = value == true; }),
             title:const Text('我已通过可信渠道核验账号、主机公钥与命名会话资料')),
           FilledButton(key:const ValueKey('pair-create'),onPressed:targetReviewed && !busy && !scanning && appResumed && !creationUnknown && !profileBlocked && platformAvailable ? create : null,
             child:const Text('在此设备创建独立身份并生成公开请求')),
+          ],icon:Icons.phonelink_lock,subtitle:'只有明确确认后，才创建设备身份和公开请求'),
         ] else ...[
           if (needsNetworkBinding) const Text('需先返回主机列表，选择／解除网络绑定，明确绑定相同 provider 的本机网络；不会自动使用系统直连。',key:ValueKey('pair-network-required')),
           if (savedProfile != null && !needsNetworkBinding) Text(savedProfile!.networkProfileId == null ? '系统直连（沿用系统路由） · 在线状态未知；每标签独立连接'
             : '网络：${widget.catalog?.networkFor(savedProfile!)?.label} · ${widget.catalog?.networkFor(savedProfile!)?.provider} · 入网状态未知；每标签独立连接'),
+          section('01 · 交付当前公开请求',[
           Text('状态 ${p.state} · 主机授权 ${p.authorization}',key:const ValueKey('pair-state')),
           SelectableText('原请求编号 ${p.request['request_id']}\n账号 ${p.request['account']}\n主机指纹 ${p.request['host_key']}\n设备指纹 ${pairingFingerprint(p.request['public_key'] as String)}\n请求到期 ${p.request['expires_at']} · ${requestAvailable(p) ? '当前有效' : '不可再交付授权请求'}',key:const ValueKey('pair-handoff-summary')),
           const Text('只将有效的公开请求交给主机。主机操作者应先用 helper preview 独立核对编号、账号和两端指纹，再用 authorize 明确确认；取消等待不会撤销主机授权。'),
@@ -511,21 +563,32 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
           if (requestAvailable(p)) ...[const SizedBox(height:12), SelectableText(p.wire,key:const ValueKey('pair-request')),
             const Text('复制不可用时，可手动选择上方公开请求全文；不要交付过期请求。')],
           TextButton(key:const ValueKey('pair-copy'),onPressed:!busy && !scanning && !profileBlocked && pageVisible && appResumed && requestAvailable(p) ? copyRequest : null,child:const Text('复制当前公开请求')),
+          ],icon:Icons.computer,subtitle:'主机操作者需独立核对后明确 authorize'),
+          section('02 · 核对主机授权响应',[
           const Text('响应本身没有来源认证。请独立核验主机生成的响应来源、账号与两端指纹；粘贴不等于信任。'),
           if (scanAvailable) TextButton.icon(key:const ValueKey('pair-scan'),onPressed:busy || scanning || profileBlocked || !pageVisible || !appResumed || p.state == 'revoked' ? null : scanResponse,icon:const Icon(Icons.qr_code_scanner),label:const Text('扫描主机响应')),
           TextField(key:const ValueKey('pair-response'),controller:response,enabled:!busy,maxLength:2048,minLines:3,maxLines:6,
             decoration:const InputDecoration(labelText:'公开授权／撤销响应 JSON'),onChanged:(_) => previewResponse()),
+          ValueListenableBuilder<TextEditingValue>(valueListenable:response, builder:(context,value,_) =>
+            value.text.isEmpty ? const SizedBox.shrink() : TextButton(key:const ValueKey('pair-response-recheck'),
+              onPressed:busy || scanning || !pageVisible || !appResumed || profileBlocked
+                ? null : () => previewResponse(edited:false),
+              child:const Text('重新核验响应'))),
           if (responsePreview != null) Text('待审查响应\n请求编号 ${responsePreview!['request_id']}\n账号 ${responsePreview!['account']}\n主机 ${responsePreview!['host_key']}\n设备 ${responsePreview!['fingerprint']}\n状态 ${responsePreview!['status']} · 新增授权 ${responsePreview!['authorization_added']}\n期限 ${responsePreview!['issued_at']} → ${responsePreview!['expires_at']}',key:const ValueKey('pair-response-preview')),
           CheckboxListTile(key:const ValueKey('pair-source-review'),value:sourceReviewed,
             onChanged:busy || scanning || !appResumed ? null : (v) => setState(() { sourceReviewed = v == true; }),title:const Text('我已独立核验响应来源、账号与两端指纹')),
           FilledButton(key:const ValueKey('pair-accept'),onPressed:sourceReviewed && responsePreview != null && !busy && !scanning &&
             pageVisible && appResumed && !profileBlocked && widget.catalog?.ready != false ? accept : null,child:const Text('审查并接受绑定响应')),
+          ],icon:Icons.fact_check_outlined),
+          section('03 · 单独验证 SSH 连接',[
           if (['authorized-unverified','waiting-connectivity','paired'].contains(p.state)) FilledButton(
             key:const ValueKey('pair-connect'),onPressed:busy || !identityAvailable || profileBlocked || needsNetworkBinding || widget.catalog?.ready == false ? null : connect,child:const Text('主动审查连接并读取看板')),
           if (savedProfile != null && !identityAvailable) TextButton(key:const ValueKey('pair-recheck-key'),onPressed:busy ? null : checkExistingIdentity,child:const Text('仅重新核验原设备身份')),
           TextButton(key:const ValueKey('pair-cancel'),onPressed:busy || widgetBindingChanged ? null : cancelWaiting,child:const Text('取消等待（不撤销主机授权）')),
           TextButton(key:const ValueKey('pair-delete'),onPressed:busy || widgetBindingChanged ? null : delete,child:const Text('删除本机身份（不撤销主机授权）')),
+          const Text('取消等待或删除本机身份，都不会撤销主机授权。撤销需由主机操作者执行并独立核验回执。',style:TextStyle(fontSize:12,height:1.6)),
+          ],icon:Icons.cable,subtitle:'主机授权通过后，仍需主动核验远端连接与会话'),
         ],
-      ]))));
+      ]))))));
   }
 }

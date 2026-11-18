@@ -1,0 +1,148 @@
+{
+  "libraryVersion": "1.0.1",
+  "transportWrites": 0,
+  "checks": [
+    {
+      "name": "utf8_every_two_chunk_boundary",
+      "passed": true
+    },
+    {
+      "name": "cjk_emoji_cell_width_cursor_7",
+      "passed": true
+    },
+    {
+      "name": "utf8_one_byte_chunks",
+      "passed": true,
+      "actual": "a中😀é!"
+    },
+    {
+      "name": "combining_accent_text_and_width",
+      "passed": true,
+      "actual": "é"
+    },
+    {
+      "name": "grapheme_mode_2027_zwj_text_and_width",
+      "passed": true,
+      "actual": "👨‍👩‍👧‍👦"
+    },
+    {
+      "name": "sgr_bold_red_style",
+      "passed": true
+    },
+    {
+      "name": "sgr_reset_and_text",
+      "passed": true,
+      "actual": "RN"
+    },
+    {
+      "name": "alternate_screen_enter",
+      "passed": true,
+      "actual": "ALT"
+    },
+    {
+      "name": "alternate_screen_restore",
+      "passed": true,
+      "actual": "MAIN"
+    },
+    {
+      "name": "ansi_unicode_one_byte_chunks",
+      "passed": true,
+      "actual": "中😀"
+    },
+    {
+      "name": "local_resize_reflow_preserves_text",
+      "passed": true,
+      "actual": "abcdefg"
+    },
+    {
+      "name": "same_session_partial_utf8_continues",
+      "passed": true,
+      "actual": "😀Z"
+    },
+    {
+      "name": "new_instance_isolates_partial_utf8",
+      "passed": true,
+      "actual": "��Z"
+    },
+    {
+      "name": "new_instance_isolates_partial_csi",
+      "passed": true,
+      "actual": "mZ"
+    },
+    {
+      "name": "dsr_callback_captured_locally",
+      "passed": true
+    },
+    {
+      "name": "readonly_policy_drops_replies",
+      "passed": true
+    },
+    {
+      "name": "key_up_normal_mode",
+      "passed": true
+    },
+    {
+      "name": "key_up_application_mode",
+      "passed": true
+    },
+    {
+      "name": "callback_not_inherited_by_new_instance",
+      "passed": true
+    }
+  ],
+  "observations": [
+    {
+      "name": "reset_isolates_partial_utf8",
+      "supported": false,
+      "actual": "😀Z"
+    },
+    {
+      "name": "reset_isolates_partial_csi",
+      "supported": false,
+      "actual": "Z"
+    }
+  ],
+  "checkCount": 19,
+  "observationCount": 2,
+  "failureCount": 0,
+  "source": {
+    "tag": "vt-1.0.1",
+    "tagObject": "e9dc690b08bde7e2ec9c7aff8a18a85c9cade46d",
+    "releaseCommit": "108cacb17ed8990840cd14abfce43d8ed8503ca1",
+    "githubReportsTagSignatureVerified": true,
+    "downloadBase": "https://release.files.ghostty.org/libghostty-vt/1.0.1/",
+    "verifiedSha256": {
+      "SHA256SUMS": "bb7a3cf9d6de0f9cb278a94006a96586375de5d56d4df74e03ea59dac035a069",
+      "ghostty-vt-1.0.1.xcframework.zip": "c0f9631277f726154c8f521954d17cdc41aac4626fc0df8cf925a19ee58e829b"
+    }
+  },
+  "execution": {
+    "os": "Darwin",
+    "osVersion": "27.2.1",
+    "architecture": "arm64",
+    "kind": "native-local-C-ABI",
+    "compiler": "Apple clang version 21.0.0 (clang-2100.4.1.1)",
+    "binary": "Mach-O 64-bit executable arm64; linked libSystem only",
+    "probeSourceSha256": "bbd8c38533116a8d8ab8f47e3179ec95ed88645f83e113a783858ce8790c1fe1",
+    "exitCode": 0
+  },
+  "scope": {
+    "networkOrPtyOpenedByProbe": false,
+    "rendererOrDeviceValidated": false,
+    "packageSignatureVerifiedByThisScript": false,
+    "description": "Synthetic terminal core only; no remote transport, font pixels, IME or native app UI."
+  },
+  "acceptancePolicy": {
+    "sessionIsolation": "free old terminal and create a new instance",
+    "requireResetIsolation": false,
+    "rejectedResetHypotheses": [
+      "reset_isolates_partial_utf8",
+      "reset_isolates_partial_csi"
+    ]
+  },
+  "repeatability": {
+    "runs": 20,
+    "identicalReports": true,
+    "exitCode": 0
+  }
+}

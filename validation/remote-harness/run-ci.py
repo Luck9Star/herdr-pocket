@@ -293,12 +293,16 @@ def main():
     parser.add_argument('--paired-gui', choices=('flutter', 'tauri', 'tauri-android', 'flutter-android'))
     parser.add_argument('--tauri-app', type=Path)
     parser.add_argument('--input-fixture', type=Path)
+    parser.add_argument('--s06-split', action='store_true',
+                        help='opt-in two real SSH/herdr targets through the Flutter desktop split UI')
     parser.add_argument('--android-guarded-input', action='store_true')
     parser.add_argument('--android-tui', action='store_true',
                         help='also exercise curses on the same paired and guarded Android target')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     require_runner(os.environ)
+    if args.s06_split and args.paired_gui not in ('flutter', 'tauri'):
+        parser.error('--s06-split requires a desktop --paired-gui route')
     try:
         validate_mode(args.paired_gui, bool(args.input_fixture), args.android_guarded_input, args.android_tui)
     except EvidenceError as exc:
@@ -498,7 +502,12 @@ LogLevel VERBOSE
             report.update(milestone=milestone,
                           **gui_report_fields(args.paired_gui, {'status': 'failed'}, bool(args.input_fixture)))
             report.pop('cancelScope', None)
-            result = run_gui(args, root, env, config)
+            if args.s06_split:
+                from s06_split_gui import run_gui as run_split
+                report['milestone'] = 'S06-two-real-ssh-herdr-targets'
+                result = run_split(args, root, env, config, command, final_pty_evidence)
+            else:
+                result = run_gui(args, root, env, config)
             report.update(gui_report_fields(args.paired_gui, result, bool(args.input_fixture)))
             report['checks'].append(result)
             publish()

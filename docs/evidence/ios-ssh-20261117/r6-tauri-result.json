@@ -1,0 +1,386 @@
+{
+  "schemaVersion": 1,
+  "status": "failed",
+  "platform": "ios-simulator",
+  "client": "tauri",
+  "sourceSHA": "9c9f93d37d503dc27ef4cf840fb39f554e59e64b",
+  "scope": "owned_loopback_ordinary_ssh",
+  "stage": "ordinary_form",
+  "artifacts": {},
+  "cases": {
+    "ordinary": {
+      "status": "not_run",
+      "fingerprint": "SHA256:6SQHhDZOOQTgnDfk2z6MQtG87fePq+Ir6pH2AtsBXNU"
+    },
+    "keyChange": {
+      "status": "not_run",
+      "fingerprints": {
+        "A": "SHA256:EzXhQAJJ12LzLSc+pNCMefThDqN79BuriW3akW2vxXc",
+        "B": "SHA256:hnKbpH0kPbDkqrSFX55ayT2+co6pCHKkXBkKUi0pJVo"
+      }
+    }
+  },
+  "cleanup": {
+    "simulatorDeleted": true,
+    "fixturesClosed": true,
+    "privateFilesRemoved": true
+  },
+  "application": {
+    "bundleIdentifier": "dev.herdrpocket.tauriprobe",
+    "executableSha256": "177a7b05f44c4a6c1b5729a67c45afd20348ed9a1bf32af0433ca132170eef29",
+    "projectSha256": "40e4f657d615a6bffbd31525c3c7e71223c082a2af0cd45f14f25eafd8611714"
+  },
+  "toolchain": {
+    "xcodeVersion": "16.4",
+    "xcodeBuild": "16F6",
+    "simulatorSDKVersion": "18.5"
+  },
+  "simulator": {
+    "deviceType": "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max",
+    "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-26-2"
+  },
+  "nativeCheckpoint": "ordinary_open_ssh",
+  "homeDiagnostics": {
+    "ordinary": {
+      "windowCount": 2,
+      "webViewCount": 3,
+      "appAlertCount": 0,
+      "inputCount": 4,
+      "alertMembers": {
+        "allow": false,
+        "deny": false,
+        "localNetwork": false,
+        "ok": false,
+        "automation": false
+      },
+      "knownEmptyHome": false,
+      "knownErrors": {
+        "connectionError": false,
+        "loading": false,
+        "webProcessError": false,
+        "browserPreview": false,
+        "hostStorageError": false,
+        "dnsError": false,
+        "devURL": false
+      },
+      "appForeground": true,
+      "members": {
+        "emptyHeading": {
+          "count": 0,
+          "roles": []
+        },
+        "addHeading": {
+          "count": 0,
+          "roles": []
+        },
+        "zeroHosts": {
+          "count": 1,
+          "roles": [
+            "staticText"
+          ]
+        },
+        "headerAdd": {
+          "roles": [
+            "button"
+          ],
+          "count": 1
+        },
+        "homeHeading": {
+          "count": 0,
+          "roles": []
+        },
+        "brand": {
+          "count": 2,
+          "roles": [
+            "other",
+            "staticText"
+          ]
+        },
+        "sshOption": {
+          "count": 2,
+          "roles": [
+            "other",
+            "staticText"
+          ]
+        },
+        "emptyAdd": {
+          "roles": [],
+          "count": 0
+        },
+        "ordinaryShortcut": {
+          "count": 0,
+          "roles": []
+        }
+      },
+      "alertSnapshotFailed": false,
+      "unknownVisibleTextCount": 28,
+      "systemAlertCount": 0
+    }
+  },
+  "navigationTrace": {
+    "ordinary": [
+      {
+        "member": "headerAdd",
+        "selection": "buttonRole",
+        "method": "elementCenter",
+        "performed": true,
+        "geometry": {
+          "frame": [
+            149,
+            69,
+            42,
+            20
+          ],
+          "statusBarFrames": [
+            [
+              0,
+              0,
+              440,
+              54
+            ]
+          ],
+          "role": "button",
+          "fullyVisible": true,
+          "screenFrame": [
+            0,
+            0,
+            440,
+            956
+          ],
+          "enabled": true,
+          "ownerResolved": true,
+          "hittable": true,
+          "centerVisible": true,
+          "visibleFrame": [
+            0,
+            54,
+            440,
+            902
+          ]
+        },
+        "targetPresentAfter": true,
+        "afterGeometry": {
+          "ownerResolved": true,
+          "visibleFrame": [
+            0,
+            54,
+            440,
+            902
+          ],
+          "enabled": true,
+          "statusBarFrames": [
+            [
+              0,
+              0,
+              440,
+              54
+            ]
+          ],
+          "centerVisible": true,
+          "screenFrame": [
+            0,
+            0,
+            440,
+            956
+          ],
+          "hittable": true,
+          "role": "button",
+          "frame": [
+            149,
+            69,
+            42,
+            20
+          ],
+          "fullyVisible": true
+        },
+        "elapsedMs": 9293,
+        "before": {
+          "noKnownErrors": true,
+          "formOwnerResolved": false,
+          "windowCount": 1,
+          "formByStructure": false,
+          "webViewCount": 3,
+          "sshTitleSeen": false,
+          "noAlerts": true,
+          "appForeground": true,
+          "emptyHomeIdentity": true,
+          "page": "emptyHome",
+          "credentialsEmpty": true,
+          "inputCount": 0,
+          "addTitleSeen": false
+        },
+        "after": {
+          "addTitleSeen": false,
+          "webViewCount": 3,
+          "emptyHomeIdentity": true,
+          "credentialsEmpty": true,
+          "formByStructure": false,
+          "inputCount": 0,
+          "noAlerts": true,
+          "formOwnerResolved": false,
+          "appForeground": true,
+          "page": "emptyHome",
+          "windowCount": 2,
+          "sshTitleSeen": false,
+          "noKnownErrors": true
+        },
+        "outcome": "noProgress"
+      },
+      {
+        "member": "emptyAdd",
+        "selection": "buttonRole",
+        "method": "elementCenter",
+        "performed": true,
+        "geometry": {
+          "visibleFrame": [
+            0,
+            54,
+            440,
+            902
+          ],
+          "enabled": true,
+          "hittable": true,
+          "screenFrame": [
+            0,
+            0,
+            440,
+            956
+          ],
+          "statusBarFrames": [
+            [
+              0,
+              0,
+              440,
+              54
+            ]
+          ],
+          "ownerResolved": true,
+          "centerVisible": true,
+          "frame": [
+            179,
+            273,
+            82,
+            44
+          ],
+          "fullyVisible": true,
+          "role": "button"
+        },
+        "targetPresentAfter": false,
+        "afterGeometry": null,
+        "elapsedMs": 2340,
+        "before": {
+          "page": "emptyHome",
+          "sshTitleSeen": false,
+          "appForeground": true,
+          "addTitleSeen": false,
+          "credentialsEmpty": true,
+          "emptyHomeIdentity": true,
+          "windowCount": 2,
+          "webViewCount": 3,
+          "inputCount": 0,
+          "noKnownErrors": true,
+          "noAlerts": true,
+          "formOwnerResolved": false,
+          "formByStructure": false
+        },
+        "after": {
+          "emptyHomeIdentity": false,
+          "windowCount": 2,
+          "webViewCount": 3,
+          "addTitleSeen": true,
+          "formByStructure": false,
+          "page": "addChoice",
+          "formOwnerResolved": false,
+          "noKnownErrors": true,
+          "sshTitleSeen": true,
+          "appForeground": true,
+          "credentialsEmpty": true,
+          "noAlerts": true,
+          "inputCount": 0
+        },
+        "outcome": "addChoice"
+      },
+      {
+        "member": "sshChoice",
+        "selection": "buttonRole",
+        "method": "elementCenter",
+        "performed": true,
+        "geometry": {
+          "centerVisible": true,
+          "frame": [
+            179,
+            244,
+            117,
+            45
+          ],
+          "visibleFrame": [
+            0,
+            54,
+            440,
+            902
+          ],
+          "hittable": true,
+          "screenFrame": [
+            0,
+            0,
+            440,
+            956
+          ],
+          "enabled": true,
+          "fullyVisible": true,
+          "statusBarFrames": [
+            [
+              0,
+              0,
+              440,
+              54
+            ]
+          ],
+          "role": "button",
+          "ownerResolved": true
+        },
+        "targetPresentAfter": false,
+        "afterGeometry": null,
+        "elapsedMs": 10300,
+        "before": {
+          "formOwnerResolved": false,
+          "noKnownErrors": true,
+          "credentialsEmpty": true,
+          "page": "addChoice",
+          "webViewCount": 3,
+          "appForeground": true,
+          "formByStructure": false,
+          "sshTitleSeen": true,
+          "addTitleSeen": true,
+          "noAlerts": true,
+          "windowCount": 2,
+          "emptyHomeIdentity": false,
+          "inputCount": 0
+        },
+        "after": {
+          "noAlerts": true,
+          "noKnownErrors": true,
+          "sshTitleSeen": true,
+          "formOwnerResolved": false,
+          "emptyHomeIdentity": false,
+          "inputCount": 4,
+          "appForeground": true,
+          "page": "unexpected",
+          "formByStructure": false,
+          "webViewCount": 3,
+          "addTitleSeen": false,
+          "windowCount": 2,
+          "credentialsEmpty": true
+        },
+        "outcome": "unexpected"
+      }
+    ]
+  },
+  "nativeFailureCode": "native_ssh_form_unproven",
+  "runtimeDiagnostics": [
+    {
+      "classification": "xctest_failed"
+    }
+  ],
+  "error": "tauri_ios_native_check_failed"
+}

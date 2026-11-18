@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/widgets.dart';
@@ -23,8 +24,15 @@ class HostTab {
   final RemotePane? requestedTarget;
   final navigator = GlobalKey<NavigatorState>();
   final visible = ValueNotifier<bool>(false);
+  final inputEligible = ValueNotifier<bool>(false);
   final ValueNotifier<HostTabView> view;
   HostDashboardLease? summaryLease;
+  Future<void> Function()? _closeTransport;
+  VoidCallback registerTransport(Future<void> Function() close) {
+    _closeTransport = close;
+    return () { if (identical(_closeTransport,close)) _closeTransport = null; };
+  }
+  Future<void> closeTransport() => _closeTransport?.call() ?? Future<void>.value();
   bool _disposed = false;
   int _viewRevision = 0;
   static String networkFor(HostProfile p,List<NetworkProfile> networks) {
@@ -33,24 +41,26 @@ class HostTab {
     final found = networks.where((n) => n.id == p.networkProfileId).toList();
     return found.length == 1 ? '${found.single.label} · ${found.single.provider}' : '网络未知';
   }
-  void report(String state,String? paneId,String? terminalId) {
+  void report(String state,String? paneId,String? terminalId,DateTime? frameAt) {
     final revision = ++_viewRevision;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_disposed && revision == _viewRevision) view.value = HostTabView(state,paneId,terminalId);
+      if (!_disposed && revision == _viewRevision) view.value = HostTabView(state,paneId,terminalId,frameAt);
     });
   }
   static String bindingFor(HostProfile p,[List<NetworkProfile> networks=const []]) => jsonEncode({'id':p.id,'target':p.target,
     'networkProfileId':p.networkProfileId,'requiresNetworkBinding':p.requiresNetworkBinding,'network':p.networkProfileId == null ? null : networks.where((n) => n.id == p.networkProfileId).map((n) => n.toJson()).toList(),
     'pairing':{'handle':p.pairingRecord['handle'],'request':p.pairingRecord['request']}});
-  void dispose() { _disposed = true; summaryLease?.close(); visible.value = false; visible.dispose(); view.dispose(); }
+  void dispose() { _disposed = true; summaryLease?.close(); visible.value = false; inputEligible.value = false; visible.dispose(); inputEligible.dispose(); view.dispose(); }
 }
 
 class HostTabView {
-  const HostTabView(this.state,this.paneId,this.terminalId);
+  const HostTabView(this.state,this.paneId,this.terminalId,[this.frameAt]);
   final String state;
   final String? paneId,terminalId;
+  final DateTime? frameAt;
   String get label => switch (state) { 'live' => '观察中', 'paused' => '已暂停', 'unknown' => '结果未知', _ => '陈旧' };
   String get target => paneId == null ? '尚未选目标' : '$paneId · ${terminalId ?? '未知终端'}';
+  String get frameLabel => frameAt == null ? '尚无终端画面' : '画面更新于 ${frameAt!.toLocal().toIso8601String().substring(0,16).replaceAll('T',' ')}';
 }
 
 /// Selecting a tab revokes the previous visibility lease before granting the
@@ -61,6 +71,8 @@ class HostTabs extends ChangeNotifier {
   int _nextId = 0;
   List<HostTab> get tabs => List.unmodifiable(_tabs);
   String? activeId;
+  String? splitId;
+  String? splitLeftId;
   String? notice;
   int get activeIndex => activeId == null ? -1 : _tabs.indexWhere((t) => t.id == activeId);
   HostTab? get active => activeIndex < 0 ? null : _tabs[activeIndex];
@@ -73,19 +85,61 @@ class HostTabs extends ChangeNotifier {
     final tab = HostTab(id,profile,adapter:adapter,requestedTarget:requestedTarget,networks:networks); _tabs.add(tab);
     select(tab.id); return true;
   }
+  /// Both visible tabs may observe; input belongs only to the selected tab.
   void select(String? id) {
     if (id != null && find(id) == null) return;
     if (activeId == id) return;
-    active?.summaryLease?.invalidate(); active?.visible.value = false;
-    activeId = id; active?.visible.value = true; notice = null; notifyListeners();
+    final old = active;
+    old?.inputEligible.value = false;
+    if (splitId != null && id == splitId) {
+      splitId = activeId;
+    } else {
+      old?.summaryLease?.invalidate(); old?.visible.value = false;
+      final other = splitId == null ? null : find(splitId!);
+      other?.summaryLease?.invalidate(); other?.visible.value = false;
+      splitId = null; splitLeftId = null;
+    }
+    activeId = id;
+    active?.visible.value = true;
+    active?.inputEligible.value = true;
+    notice = null; notifyListeners();
+  }
+  void splitWith(String id) {
+    final other = find(id);
+    if (active == null || other == null || id == activeId || id == splitId) return;
+    final previous = splitId == null ? null : find(splitId!);
+    previous?.summaryLease?.invalidate(); previous?.visible.value = false;
+    splitId = id; splitLeftId = activeId;
+    other.visible.value = true;
+    other.inputEligible.value = false;
+    notice = null; notifyListeners();
+  }
+  void closeSplit() {
+    final other = splitId == null ? null : find(splitId!);
+    if (other == null) { splitId = null; splitLeftId = null; return; }
+    other.inputEligible.value = false; other.summaryLease?.invalidate(); other.visible.value = false;
+    splitId = null; splitLeftId = null; notifyListeners();
   }
   void close(String id) {
     final tab = find(id); if (tab == null) return;
-    tab.summaryLease?.close(); tab.visible.value = false;
-    if (activeId == id) activeId = null; // do not implicitly activate another host
+    tab.inputEligible.value = false; tab.summaryLease?.close(); tab.visible.value = false;
+    if (activeId == id) {
+      final other = splitId == null ? null : find(splitId!);
+      other?.summaryLease?.invalidate(); other?.visible.value = false;
+      activeId = null; splitId = null; splitLeftId = null; // do not implicitly activate another host
+    } else if (splitId == id) { splitId = null; splitLeftId = null; }
     _tabs.remove(tab); tab.dispose(); notifyListeners();
   }
   void closeHost(String hostId) { for (final tab in List<HostTab>.of(forHost(hostId))) { close(tab.id); } }
+  /// Start cancellation before removing widgets; a frame is not a cleanup ack.
+  Future<bool> closeHostsAndWait(Set<String> hostIds,{Duration budget = const Duration(seconds:5)}) async {
+    final affected = _tabs.where((tab) => hostIds.contains(tab.hostId)).toList();
+    final closing = [for (final tab in affected) Future<void>.sync(tab.closeTransport)];
+    for (final tab in affected) { close(tab.id); }
+    try { await Future.wait(closing).timeout(budget); return true; }
+    catch (_) { return false; } // User stop remains available after bounded cleanup.
+  }
+
   void reconcile(List<HostProfile> profiles,[List<NetworkProfile> networks=const []]) {
     var changed = false;
     for (final tab in List<HostTab>.of(_tabs)) {

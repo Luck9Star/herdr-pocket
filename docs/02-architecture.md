@@ -2,6 +2,10 @@
 
 状态：**2026-10-29 架构设计基线，尚非已完成产品**。2026-10-30 已有并行验证壳与有限实测，见[验证记录](09-prototype-validation.md)；下文“本轮”指原设计核查。上游协议以 herdr 0.9.5 为取证对象，历史本机记录保留在[调研文档](00-research.md)。
 
+**2026-11-15 范围增量**：远端接入现在分为 herdr 工作台与普通 SSH 终端。前者仍使用下文的命名 session/socket、能力核验与受保护输入；后者只需要标准 SSH 服务，主机公钥经独立核验后，使用密码或已有私钥认证，再开启独立 `session → PTY → shell`。普通 SSH 不依赖 herdr、socket、配对 helper 或 agent 看板。两条原型分别由 DartSSH2 与 Rust/russh 实现，当前普通 SSH 使用系统 TCP/DNS 路由，未据此声明三网桥接或五平台通过。详情与实测范围见[设计与普通 SSH 交接](63-design-parity-and-direct-ssh.md)。
+
+普通 SSH 的输入、输出、resize 和关闭绑定本次后端会话 ID；连接中即可取消，旧会话不能向新目标写入。Rust 输出按序号逐包确认并保留 SSH 窗口背压；写入结果不明时不重发。本次认证凭据不进入主机目录或导出文件。它拥有独立 PTY，窗口尺寸可以发送 SSH `window-change`；herdr 的观察画布与共享 PTY 尺寸规则保持原有边界。
+
 项目面向公开开源，统一交付 **iOS、Android、Windows、macOS、Linux** 客户端，**手机优先、桌面紧随**。Flutter 是第一验证候选，Tauri 2 + xterm.js + Rust 是同规格 A/B 的主要挑战者；框架尚未最终锁定，依据和定案门槛见[技术栈复评](06-technology-evaluation.md)。共享协议、连接状态和输入规则，手机与桌面使用自适应界面。
 
 **Tailscale 与 EasyTier 为各正式支持平台的核心必需能力，ZeroTier 同步纳入首版集成目标**。三种网络分别适配，不把它们压成一个已支持开关。五端目标不等于当前已支持：协议、终端/IME、overlay、安全存储和打包按平台通过 M0.5 及后续验收，才能进入正式支持矩阵。产品行为见[产品设计](05-product-design.md)，阶段门槛见[路线图](04-roadmap.md)。
@@ -41,7 +45,7 @@ UI 线程不做同步原生阻塞。transport worker 负责 SSH、解析与有�
 | SSH/core | DartSSH2 与 Rust/russh 分别验证，core 不绑定 UI | DartSSH2 `forwardLocalUnix` 自 2.14.0 已有；russh 亦有 streamlocal/exec/自定义流，均验证 host key 与关闭语义 |
 | 终端 | Flutter 侧 `terminal_view` 0.5.0；Tauri 侧 xterm.js 6.0.0 | 使用同一手机 fixture 比较 IME、ANSI、触控、Nerd Font/cell 和负载；通过前不锁组件 |
 | RPC | SSH `direct-streamlocal@openssh.com` | 普通请求一条 channel，不做 exec+socat/python 回退 |
-| 实时终端 | SSH exec 运行 `herdr terminal session observe`，不分配 PTY | 依赖远端 herdr CLI、正确 socket/会话定位及 exec 权限；与 RPC socket channel 分开 |
+| herdr 实时终端 | SSH exec 运行 `herdr terminal session observe`，不分配 PTY | 依赖远端 herdr CLI、正确 socket/会话定位及 exec 权限；与 RPC socket channel 分开 |
 | Overlay | Tailscale + EasyTier 核心必需，ZeroTier 同步集成 | 三 provider 共用 TCP 字节流契约；五端 15 个组合独立验收，不以系统 VPN 替代内置节点 |
 | 生命周期 | 挂起、休眠或网络恢复后重新检查连接 | 手机后台与桌面最小化不是同一事件；按平台验证休眠/唤醒/退出，推送与托盘常驻后置 |
 | 凭据 | 共享接口 + 各平台受保护存储 | iOS/macOS、Android、Windows、Linux 分别验证；安全存储不可用不落明文 |
@@ -64,7 +68,7 @@ Rust core 可供 Flutter FFI 或 Tauri 使用，不将其网络收益算成 WebV
 
 共享层拥有 Host 身份、能力协商、RPC/事件、终端帧、generation/epoch、输入草稿及不重放规则。平台层只实现原生字节流、安全凭据存储、窗口/键盘与生命周期入口，不能另造一套桌面协议或放宽输入确认。首版支持多个终端标签：手机切换标签，桌面可分屏同时观察；任何时刻只有一个明确获得输入焦点的目标，多终端可见不等于向多个目标广播输入。
 
-按用户确定的范围，桌面首版只作为**远端 herdr 控制 GUI**。Windows 客户端通过 SSH 访问已支持的远端 Unix socket，不代表 Windows 本地 daemon、named pipe 或 WSL 已受支持。本机连接留待后续，本地 socket adapter 仅保留扩展位置，不进入首版 API 或验收。首版不安装、启动或管理本地 daemon/shell/WSL。
+2026-10-29 的桌面基线为**远端 herdr 控制 GUI**；2026-11-15 增加上述普通 SSH 远端终端。Windows 客户端通过 SSH 访问已支持的远端 Unix socket，不代表 Windows 本地 daemon、named pipe 或 WSL 已受支持。本机连接留待后续，本地 socket adapter 仅保留扩展位置，不进入首版 API 或验收。首版不安装、启动或管理本地 daemon/shell/WSL。
 
 平台能力与发布门槛见 [ADR-0005](adr/0005-unified-mobile-desktop.md)，不能仅凭任一框架构建成功宣称完整五端支持。
 

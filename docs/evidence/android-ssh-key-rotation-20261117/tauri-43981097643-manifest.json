@@ -1,0 +1,216 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "77052412af63cff61392e1fc412e7d2fe35552fd",
+  "status": "passed",
+  "scope": "synthetic loopback SSH and owned API35 Android WebView; CDP input is not real IME composition",
+  "apkSha256": "d355184b1b41a937e6759b713e9a844ce25e8818e7b7eae6fae9a14f8f41a89f",
+  "fingerprintReviewed": true,
+  "credentialReviewPreserved": true,
+  "connected": true,
+  "terminalInputReceived": true,
+  "terminalEchoRendered": true,
+  "disconnected": true,
+  "passwordCleared": true,
+  "helperKeysExact": true,
+  "peer": {
+    "authAccepted": true,
+    "ptyRequested": true,
+    "shellRequested": true,
+    "markerReceived": true,
+    "sessionClosed": true
+  },
+  "cleanup": {
+    "browser": true,
+    "application": true,
+    "forward": true,
+    "reverse": true,
+    "fixtureConnections": true
+  },
+  "phase": "complete",
+  "rotation": {
+    "probeReviewed": true,
+    "refusalBlocked": true,
+    "reviewNoExits": true,
+    "cancelKeptTrust": true,
+    "reprobePresented": true,
+    "connected": true,
+    "terminalInputReceived": true,
+    "terminalEchoRendered": true,
+    "disconnected": true,
+    "passwordCleared": true,
+    "rotationEvidence": [
+      {
+        "stage": 2,
+        "connections": 2,
+        "connectionsClosed": true,
+        "initialProbe": {
+          "id": 1,
+          "hostKey": "A",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "rejectedTransport": {
+          "id": 2,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        }
+      },
+      {
+        "stage": 3,
+        "connections": 3,
+        "connectionsClosed": true,
+        "initialProbe": {
+          "id": 1,
+          "hostKey": "A",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "rejectedTransport": {
+          "id": 2,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "freshProbe": {
+          "id": 3,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        }
+      },
+      {
+        "stage": 4,
+        "connections": 4,
+        "connectionsClosed": true,
+        "initialProbe": {
+          "id": 1,
+          "hostKey": "A",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "rejectedTransport": {
+          "id": 2,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "freshProbe": {
+          "id": 3,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "acceptedSession": {
+          "id": 4,
+          "hostKey": "B",
+          "authAttempts": 1,
+          "authSuccesses": 1,
+          "ptyRequests": 1,
+          "shellRequests": 1,
+          "inputBytes": 9,
+          "outputBytes": 60,
+          "authAccepted": true,
+          "markerReceived": true,
+          "sessionClosed": true,
+          "closed": true
+        }
+      }
+    ],
+    "cleanup": {
+      "browser": true,
+      "application": true,
+      "forward": true,
+      "reverse": true,
+      "fixtureConnections": true
+    },
+    "s10Screenshot": true
+  },
+  "encryptedKey": {
+    "fingerprintReviewed": true,
+    "credentialReviewPreserved": true,
+    "connected": true,
+    "terminalInputReceived": true,
+    "terminalEchoRendered": true,
+    "disconnected": true,
+    "passwordCleared": true,
+    "peer": {
+      "authAccepted": true,
+      "ptyRequested": true,
+      "shellRequested": true,
+      "markerReceived": true,
+      "sessionClosed": true
+    },
+    "cleanup": {
+      "browser": true,
+      "application": true,
+      "forward": true,
+      "reverse": true,
+      "fixtureConnections": true
+    }
+  }
+}

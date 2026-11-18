@@ -1,0 +1,439 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "77052412af63cff61392e1fc412e7d2fe35552fd",
+  "kind": "flutter-android-ordinary-ssh",
+  "status": "passed",
+  "cleanup": {
+    "reverseRemoved": true,
+    "packageRemoved": true,
+    "ownedForwardsRemoved": true,
+    "fixtureClosed": true,
+    "flutterToolStopped": true,
+    "rawLogsUploaded": false
+  },
+  "physicalImeVerified": false,
+  "rotation": {
+    "checkpoints": {
+      "rejected": {
+        "stage": 2,
+        "connections": 2,
+        "connectionsClosed": true,
+        "initialProbe": {
+          "id": 1,
+          "hostKey": "A",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "rejectedTransport": {
+          "id": 2,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        }
+      },
+      "cancelled": {
+        "stage": 2,
+        "connections": 2,
+        "connectionsClosed": true,
+        "initialProbe": {
+          "id": 1,
+          "hostKey": "A",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "rejectedTransport": {
+          "id": 2,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        }
+      },
+      "reprobed": {
+        "stage": 3,
+        "connections": 3,
+        "connectionsClosed": true,
+        "initialProbe": {
+          "id": 1,
+          "hostKey": "A",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "rejectedTransport": {
+          "id": 2,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "freshProbe": {
+          "id": 3,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        }
+      },
+      "complete": {
+        "stage": 4,
+        "connections": 4,
+        "connectionsClosed": true,
+        "initialProbe": {
+          "id": 1,
+          "hostKey": "A",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "rejectedTransport": {
+          "id": 2,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "freshProbe": {
+          "id": 3,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "acceptedSession": {
+          "id": 4,
+          "hostKey": "B",
+          "authAttempts": 1,
+          "authSuccesses": 1,
+          "ptyRequests": 1,
+          "shellRequests": 1,
+          "inputBytes": 9,
+          "outputBytes": 60,
+          "authAccepted": true,
+          "markerReceived": true,
+          "sessionClosed": true,
+          "closed": true
+        }
+      }
+    },
+    "device": {
+      "schemaVersion": 1,
+      "platform": "android-api35-emulator",
+      "homepageEntry": true,
+      "sameTarget": true,
+      "oldFingerprintMatchedIndependentA": true,
+      "changedFingerprintMatchedIndependentB": true,
+      "rejectedBeforeAuthentication": true,
+      "reviewNavigationBlocked": true,
+      "cancelKeepsOldTrust": true,
+      "credentialsLockedBeforeApproval": true,
+      "noAutomaticConnection": true,
+      "freshProbeMatchedIndependentB": true,
+      "explicitRotatedTrustRequired": true,
+      "realTerminalView": true,
+      "normalTextInputCommit": true,
+      "remoteEchoVisible": true,
+      "disconnectUiConfirmed": true,
+      "credentialsCleared": true,
+      "physicalImeVerified": false
+    },
+    "peerClosedBeforeDriverExit": true,
+    "protocol": {
+      "stage": 4,
+      "connections": 4,
+      "connectionsClosed": true,
+      "initialProbe": {
+        "id": 1,
+        "hostKey": "A",
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "authAccepted": false,
+        "markerReceived": false,
+        "sessionClosed": false,
+        "closed": true
+      },
+      "rejectedTransport": {
+        "id": 2,
+        "hostKey": "B",
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "authAccepted": false,
+        "markerReceived": false,
+        "sessionClosed": false,
+        "closed": true
+      },
+      "freshProbe": {
+        "id": 3,
+        "hostKey": "B",
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "authAccepted": false,
+        "markerReceived": false,
+        "sessionClosed": false,
+        "closed": true
+      },
+      "acceptedSession": {
+        "id": 4,
+        "hostKey": "B",
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 9,
+        "outputBytes": 60,
+        "authAccepted": true,
+        "markerReceived": true,
+        "sessionClosed": true,
+        "closed": true
+      }
+    },
+    "finalSnapshot": {
+      "authAccepted": true,
+      "ptyRequested": true,
+      "shellRequested": true,
+      "markerReceived": true,
+      "sessionClosed": true,
+      "connections": 4,
+      "connectionsClosed": true,
+      "ptySizes": [
+        [
+          80,
+          24
+        ],
+        [
+          46,
+          45
+        ],
+        [
+          46,
+          42
+        ],
+        [
+          46,
+          25
+        ]
+      ],
+      "connectionEvents": [
+        {
+          "id": 1,
+          "hostKey": "A",
+          "handshakeCompleted": false,
+          "authAttempts": 0,
+          "authAccepted": false,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        {
+          "id": 2,
+          "hostKey": "B",
+          "handshakeCompleted": false,
+          "authAttempts": 0,
+          "authAccepted": false,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        {
+          "id": 3,
+          "hostKey": "B",
+          "handshakeCompleted": false,
+          "authAttempts": 0,
+          "authAccepted": false,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        {
+          "id": 4,
+          "hostKey": "B",
+          "handshakeCompleted": true,
+          "authAttempts": 1,
+          "authAccepted": true,
+          "authSuccesses": 1,
+          "ptyRequests": 1,
+          "shellRequests": 1,
+          "inputBytes": 9,
+          "outputBytes": 60,
+          "markerReceived": true,
+          "sessionClosed": true,
+          "closed": true
+        }
+      ]
+    }
+  },
+  "peerClosedBeforeDriverExit": true,
+  "device": {
+    "schemaVersion": 1,
+    "platform": "android-api35-emulator",
+    "homepageEntry": true,
+    "fingerprintMatched": true,
+    "explicitTrustRequired": true,
+    "realTerminalView": true,
+    "normalTextInputCommit": true,
+    "remoteEchoVisible": true,
+    "disconnectUiConfirmed": true,
+    "credentialsCleared": true,
+    "physicalImeVerified": false
+  },
+  "protocol": {
+    "authAccepted": true,
+    "ptyRequested": true,
+    "shellRequested": true,
+    "markerReceived": true,
+    "sessionClosed": true,
+    "connections": 2,
+    "connectionsClosed": true,
+    "ptySizes": [
+      [
+        80,
+        24
+      ],
+      [
+        46,
+        41
+      ],
+      [
+        46,
+        45
+      ],
+      [
+        46,
+        25
+      ]
+    ],
+    "connectionEvents": [
+      {
+        "id": 1,
+        "hostKey": "A",
+        "handshakeCompleted": false,
+        "authAttempts": 0,
+        "authAccepted": false,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "markerReceived": false,
+        "sessionClosed": false,
+        "closed": true
+      },
+      {
+        "id": 2,
+        "hostKey": "A",
+        "handshakeCompleted": true,
+        "authAttempts": 1,
+        "authAccepted": true,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 9,
+        "outputBytes": 60,
+        "markerReceived": true,
+        "sessionClosed": true,
+        "closed": true
+      }
+    ]
+  },
+  "lastPhase": "read_screenshots"
+}

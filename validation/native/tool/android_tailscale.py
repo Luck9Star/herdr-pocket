@@ -9,6 +9,7 @@ import tarfile
 import zipfile
 
 import tailscale_candidate as candidate
+import android_targets as targets
 
 GO_VERSION = '1.27.3'
 NDK_VERSION = '28.2.13676358'
@@ -87,13 +88,22 @@ def verify_archives(zip_path, tar_path, source, sum_path):
     got = 'h1:' + base64.b64encode(h.digest()).decode('ascii')
     if got != expected[0]:
         raise ValueError('fixed upstream Go module h1 mismatch')
-    patch = source['source']['path']
-    added = 'tsnet/herdr_explicit_auth_test.go'
-    if patch not in original or original[patch] != source['source']['sha256'] or added in original:
-        raise ValueError('fixed upstream source mismatch')
     expected_files = dict(original)
-    expected_files[patch] = source['source']['patchedSha256']
-    expected_files[added] = source['patchTests']['sha256']
+    patches = [source['source'], *source['additionalSources']]
+    if len({item['path'] for item in patches}) != len(patches):
+        raise ValueError('duplicate patched source')
+    for item in patches:
+        path = item['path']
+        if path not in original or original[path] != item['sha256']:
+            raise ValueError('fixed upstream source mismatch')
+        expected_files[path] = item['patchedSha256']
+    added_tests = {
+        'tsnet/herdr_explicit_auth_test.go': source['patchTests']['sha256'],
+        'net/tsdial/herdr_overlay_only_test.go': source['dialPlanTests']['sha256'],
+    }
+    if any(path in original for path in added_tests):
+        raise ValueError('test path already exists in upstream')
+    expected_files.update(added_tests)
     expected_dirs = {'tailscale'}
     for name in expected_files:
         parts = name.split('/')[:-1]
@@ -130,27 +140,18 @@ def verify_archives(zip_path, tar_path, source, sum_path):
         raise ValueError('patched source tar missing entries')
 
 
-def cross_environment(cache, ndk):
-    ndk = Path(ndk).resolve()
-    if ndk.name != NDK_VERSION:
-        raise ValueError('wrong pinned Android NDK')
-    tools = ndk / 'toolchains/llvm/prebuilt/linux-x86_64/bin'
-    paths = {name: tools / binary for name, binary in {
-        'CC': 'aarch64-linux-android35-clang',
-        'CXX': 'aarch64-linux-android35-clang++', 'AR': 'llvm-ar',
-    }.items()}
-    if any(not path.is_file() for path in paths.values()):
-        raise ValueError('existing pinned Linux Android toolchain required')
+def cross_environment(cache, ndk, abi=targets.DEFAULT):
+    directory, compiler = targets.tools(ndk, abi)
     go, env = candidate.environment(cache)
-    env.update({name: str(path) for name, path in paths.items()})
-    env.update(GOOS='android', GOARCH='arm64', CGO_ENABLED='1')
+    env.update(CC=str(compiler), CXX=str(compiler) + '++', AR=str(directory / 'llvm-ar'))
+    env.update(GOOS='android', GOARCH=targets.target(abi)[1], CGO_ENABLED='1')
     return go, env
 
 
-def build(bundle, work, cache, ndk):
+def build(bundle, work, cache, ndk, abi=targets.DEFAULT):
     if os.environ.get('GITHUB_ACTIONS') != 'true':
         raise ValueError('Android native candidate build is CI-only')
-    go, env = cross_environment(cache, ndk)
+    go, env = cross_environment(cache, ndk, abi)
     candidate.prepare(work, cache)
     # Run synthetic host tests with the sanitized host environment. Android
     # output below is inspected only, never executed by the Linux runner.
@@ -174,6 +175,7 @@ def build(bundle, work, cache, ndk):
         shutil.copy2(candidate.MODULE / item['path'], target)
     shutil.copy2(candidate.NATIVE / source['patch']['path'], source_dir / 'explicit-auth.patch')
     shutil.copy2(candidate.NATIVE / source['patchTests']['path'], source_dir / 'explicit-auth-test.go')
+    shutil.copy2(candidate.NATIVE / source['dialPlanTests']['path'], source_dir / 'dial-plan-test.go')
     # Include the exact Go-authenticated module archive, not just a mutable
     # extracted tarball or a self-authored manifest digest.
     downloaded = json.loads((work / 'logs/module-download.json').read_text())
@@ -186,16 +188,17 @@ def build(bundle, work, cache, ndk):
     with tarfile.open(source_dir / 'upstream-source.tar.gz', 'w:gz') as archive:
         archive.add(work / 'upstream/tailscale', arcname='tailscale')
     shutil.copytree(work / 'logs', source_dir / 'logs')
-    return {'library': LIBRARY, 'go': GO_VERSION, 'ndk': NDK_VERSION,
+    return {'library': LIBRARY, 'go': GO_VERSION, 'ndk': NDK_VERSION, 'abi': abi,
             'sourceManifestSha256': candidate.digest(candidate.MANIFEST),
             'moduleSources': candidate.module_files(),
             'hostTests': 'passed', 'androidBuild': 'passed',
             'androidLoad': 'not run', 'node': 'not run'}
 
 
-def verify(bundle, record, files, readelf, inspect):
+def verify(bundle, record, files, readelf, inspect, abi=targets.DEFAULT):
     source = candidate.verify_sources()
     if (record.get('library') != LIBRARY or record.get('go') != GO_VERSION
+            or record.get('abi', targets.DEFAULT) != abi
             or record.get('ndk') != NDK_VERSION
             or record.get('sourceManifestSha256') != candidate.digest(candidate.MANIFEST)
             or record.get('moduleSources') != candidate.module_files()):
@@ -206,7 +209,8 @@ def verify(bundle, record, files, readelf, inspect):
         if path not in files or json.loads((bundle / path).read_text()) != value:
             raise ValueError('Tailscale source record mismatch: ' + path)
     materials = {'tailscale/explicit-auth.patch': source['patch']['sha256'],
-                 'tailscale/explicit-auth-test.go': source['patchTests']['sha256']}
+                 'tailscale/explicit-auth-test.go': source['patchTests']['sha256'],
+                 'tailscale/dial-plan-test.go': source['dialPlanTests']['sha256']}
     materials.update({'tailscale/module/' + item['path']: item['sha256']
                       for item in candidate.module_files()})
     for name, sha in materials.items():
@@ -214,8 +218,9 @@ def verify(bundle, record, files, readelf, inspect):
             raise ValueError('Tailscale source material mismatch: ' + name)
     for path in (LIBRARY, 'libhp_tailscale.h', 'tailscale/upstream-source.zip', 'tailscale/upstream-source.tar.gz',
                  'tailscale/logs/android-go-version.log', 'tailscale/logs/android-build.log',
-                 'tailscale/logs/runtime-tests.log', 'tailscale/logs/explicit-auth-test.log'):
+                 'tailscale/logs/runtime-tests.log', 'tailscale/logs/explicit-auth-test.log',
+                 'tailscale/logs/overlay-dial-plan-test.log'):
         if path not in files:
             raise ValueError('Tailscale build material missing: ' + path)
     verify_archives(bundle / 'tailscale/upstream-source.zip', bundle / 'tailscale/upstream-source.tar.gz', source, candidate.MODULE / 'go.sum')
-    inspect(bundle / LIBRARY, readelf, SYMBOLS)
+    inspect(bundle / LIBRARY, readelf, SYMBOLS, abi=abi)

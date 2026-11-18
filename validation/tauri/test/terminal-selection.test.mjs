@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {visibleCellBounds,visibleTerminalText,createTerminalSelection} from '../src/terminal-selection.js';
+import {visibleCellBounds,visibleTerminalText,createTerminalSelection,isPaintedOccluder} from '../src/terminal-selection.js';
 class Element {
   constructor(tag){this.tag=tag;this.children=[];this.value='';this.selectionStart=0;this.selectionEnd=0;}
   append(...items){this.children.push(...items);}
@@ -78,6 +78,20 @@ test('layout clips to scroll ancestors and excludes occluded and half cells',()=
   finally {globalThis.document=oldDoc;globalThis.getComputedStyle=oldStyle;}
 });
 
+
+test('closed details descendants do not obscure cells; the visible summary and overlays still do',()=>{
+  const details={tagName:'DETAILS',open:false,children:[],parentElement:null};
+  const summary={tagName:'SUMMARY',parentElement:details,contains:n=>n===insideSummary};
+  const insideSummary={tagName:'SPAN',parentElement:summary};
+  const hidden={tagName:'FORM',parentElement:details};details.children=[summary,hidden];
+  assert.equal(isPaintedOccluder(hidden),false);assert.equal(isPaintedOccluder(summary),true);
+  assert.equal(isPaintedOccluder(insideSummary),true);
+  const secondSummary={tagName:'SUMMARY',parentElement:details};details.children.push(secondSummary);
+  assert.equal(isPaintedOccluder(secondSummary),false);
+  details.open=true;assert.equal(isPaintedOccluder(hidden),true);
+  hidden.checkVisibility=()=>false;assert.equal(isPaintedOccluder(hidden),false);
+  hidden.checkVisibility=()=>{throw Error('unsupported');};assert.equal(isPaintedOccluder(hidden),true);
+});
 
 test('real terminal groups emoji sequences without shifting common terminal cells',async()=>{
   const {default:pkg}=await import('@xterm/xterm');

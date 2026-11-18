@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "a9afe9cdbb1f3809f7bb975f41b83705a4825510",
+  "kind": "flutter-ios-simulator-ordinary-ssh",
+  "status": "failed",
+  "cleanup": {
+    "simulatorDeleted": true,
+    "fixtureClosed": true,
+    "flutterToolStopped": true,
+    "appRemoved": true,
+    "privateRemoved": true,
+    "rawLogsUploaded": false
+  },
+  "physicalImeVerified": false,
+  "simulator": {
+    "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-26-2",
+    "runtimeVersion": "26.2",
+    "deviceType": "iPhone 11"
+  },
+  "deviceStage": "probe",
+  "frameworkDiagnostic": {
+    "exceptionClass": "TestFailure",
+    "sourceLine": 14,
+    "excerpt": [
+      "[token]"
+    ],
+    "semantics": {
+      "platformEnabled": true,
+      "realPlatformEnabled": true,
+      "bindingHandles": 2,
+      "pipelineHandles": 0
+    }
+  },
+  "semanticsProbes": {
+    "baseline": {
+      "platformEnabled": true,
+      "realPlatformEnabled": false,
+      "bindingHandles": 1,
+      "pipelineHandles": 0
+    },
+    "home": {
+      "platformEnabled": true,
+      "realPlatformEnabled": false,
+      "bindingHandles": 2,
+      "pipelineHandles": 0
+    }
+  },
+  "failureStage": "probe",
+  "failureKind": "timeout",
+  "uiDiagnostic": {
+    "connectExists": true,
+    "connectEnabled": false,
+    "connectHitTestable": true,
+    "exceptionClass": "TestFailure",
+    "statusCode": "other",
+    "sourceLine": 14
+  },
+  "failureCode": "ios_device_test_failed",
+  "diagnostic": {
+    "phase": "await_driver_exit",
+    "exceptionClass": "Failure",
+    "sourceLocations": [
+      {
+        "file": "flutter_direct_ssh_ios.py",
+        "line": 491
+      }
+    ]
+  },
+  "lastPhase": "await_driver_exit",
+  "containerQueryTimeouts": 26,
+  "flutterLogMarkers": {
+    "xcodeBuildCompleted": false,
+    "buildError": false,
+    "launchError": false,
+    "testFailure": true,
+    "testPassed": false,
+    "testFrameworkException": true,
+    "hitTestWarning": false,
+    "hitTestFinder": false,
+    "widgetNotFound": false,
+    "installationStarted": false,
+    "observatoryConnecting": false,
+    "testLoading": false,
+    "testStarted": true,
+    "xctestBuildSucceeded": true,
+    "xctestStarted": true,
+    "xctestSucceeded": false,
+    "xctestFailed": true,
+    "xctestInstallFailed": false,
+    "xctestLaunchFailed": false,
+    "xctestRunnerExited": false,
+    "xctestEarlyExit": false,
+    "xctestTimedOut": false,
+    "xctestNoTests": false,
+    "xctestBundleLoadFailed": false,
+    "xctestConnectionFailed": false,
+    "xctestCoreSimulatorError": false
+  },
+  "xctestResult": {
+    "resultBundlePresent": true,
+    "summaryReadable": true,
+    "totalTestCount": 1,
+    "passedTests": 0,
+    "failedTests": 1,
+    "skippedTests": 0,
+    "launchFailed": false,
+    "installFailed": false,
+    "runnerExited": false,
+    "timedOut": false,
+    "crashed": false,
+    "noTests": false,
+    "bundleLoadFailed": false,
+    "failureTestIdentifier": "RunnerTests.[token]",
+    "failureReasons": [
+      "((success) is true) failed - EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK"
+    ],
+    "failureFacts": {
+      "frameworkExcerpt": [
+        "The following TestFailure was thrown running a test:",
+        "[token]",
+        "asynchronous suspension"
+      ],
+      "sourceLine": 14
+    }
+  },
+  "protocol": {
+    "authAccepted": false,
+    "ptyRequested": false,
+    "shellRequested": false,
+    "markerReceived": false,
+    "sessionClosed": false,
+    "connections": 1,
+    "connectionsClosed": true,
+    "ptySizes": []
+  },
+  "simulatorCreateAttempted": true,
+  "simulatorCleanup": "deleted"
+}

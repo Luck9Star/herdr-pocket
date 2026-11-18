@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "imageSha256": "71030b9c9dd51a7b09a7c7747f3b34e1aaf6df0c90d54c111d7d2df4b810e4af",
+  "imageSize": [
+    828,
+    1792
+  ],
+  "terminalBounds": [
+    0,
+    336,
+    828,
+    758
+  ],
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "expectedToken": "FARM PART DUSK RACE RATE SALT HEAT FADE",
+  "markerVisible": true,
+  "tokenVisible": true,
+  "ocrEngine": "tesseract 5.5.4",
+  "ocrAttempts": 2,
+  "ocrPageSegmentationMode": 11,
+  "proofSequenceVisible": true
+}

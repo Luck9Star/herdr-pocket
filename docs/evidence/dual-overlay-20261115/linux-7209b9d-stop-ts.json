@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "7209b9d3437f4537cea127079061067067e84508",
+  "status": "failed",
+  "stage": "explicit-auth-and-observe",
+  "stopFirst": "ts",
+  "isolatedNamespace": true,
+  "testOnlyDummy": true,
+  "noExternalRoutes": true,
+  "temporaryCredentialsRemoved": true,
+  "ownedProcessesStopped": true,
+  "tsPeerCleanup": true,
+  "binarySha256": {
+    "peer": "8da9dfb4b670f7350d9780755f7767713c76a37be1a086614f37e14b7f4bcb27",
+    "ts-fixture": "f852d5250daa9aa52fbbbd26605127134d457e0ce06747a161b6f2028884e880",
+    "probe": "7d4b4726f7ca4b97bda5e0f65fa64096c55cb5f95b3fec774f2f603a6cc0897d",
+    "herdr": "8cb39663b4e466006ffb0d68b5efe5be61701446b6c9877bf84cce2c0f762dbc",
+    "lib/libheeler_easytier.so": "16e2d781a724ae9f6ca653945ae631d1b0df5d1fefcefa80f51c512323bd0004",
+    "lib/libhp_tailscale.so": "1678a13fb07d1ff24eafe5ed4d02fa98bf261c1ce83b63363aa6a9fa014f6713"
+  },
+  "etLocalHealth": {
+    "sshPinnedAndAuthenticated": true,
+    "snapshot": true,
+    "inputCapability": true
+  },
+  "tsLocalHealth": {
+    "sshPinnedAndAuthenticated": true,
+    "snapshot": true,
+    "inputCapability": true
+  },
+  "client": {
+    "passed": false,
+    "preloginUrlAbsent": true,
+    "preloginNeedsLogin": true,
+    "beginLoginSubmitted": true,
+    "beginLoginSucceeded": true,
+    "preloginDialRejected": true,
+    "etFull": false,
+    "tsFull": true,
+    "etFirst": false,
+    "tsFirst": false,
+    "etStopped": false,
+    "etStaleRejected": false,
+    "tsAfterStop": false,
+    "tsStopped": false,
+    "tsStaleRejected": false,
+    "etAfterStop": false,
+    "etObserverJoined": true,
+    "tsObserverJoined": true,
+    "localFallbackRejected": false,
+    "crossRouteRejected": false,
+    "cleanup": true
+  },
+  "clientError": "input_not_ready",
+  "observers": {
+    "et": {
+      "stage": "connecting",
+      "error": "handshake_failed",
+      "audit": {
+        "hostKeyChecked": false,
+        "hostKeyMatched": false,
+        "authStarted": false,
+        "snapshotReceived": false,
+        "fullFrameReceived": false
+      }
+    },
+    "ts": {
+      "stage": "snapshot-received",
+      "error": "other_observer_error",
+      "audit": {
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": true
+      }
+    }
+  },
+  "lastTsState": "running",
+  "independentExactInput": false,
+  "etPeer": {
+    "acceptedOverlayStreams": 0,
+    "loopbackTcpConnections": 0,
+    "activeBridgesAfterStop": 0,
+    "loopbackDestinationOnly": true
+  },
+  "tsPeerExitBeforeCleanup": 0,
+  "tsPeerExitedBeforeCleanup": true,
+  "tsPeerPanic": false,
+  "tsPeerTimeout": false,
+  "tsPeerPanicDetail": {
+    "category": "none",
+    "frames": []
+  },
+  "error": "dual_acceptance_failed",
+  "namespaceProcessesBeforeTeardown": 0,
+  "namespaceRemoved": true
+}

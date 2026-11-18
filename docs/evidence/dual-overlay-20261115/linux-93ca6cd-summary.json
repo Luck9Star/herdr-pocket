@@ -1,0 +1,8 @@
+{
+  "sourceSHA": "93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc",
+  "privateLoopbackAcceptancePassed": true,
+  "defaultDiagnosticsComplete": true,
+  "singleEtDiagnosticComplete": true,
+  "cleanupPassed": true,
+  "status": "passed"
+}

@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "20ef361ae4a7624c6de0afd9d970764d4429a588",
+  "kind": "flutter-ios-simulator-ordinary-ssh",
+  "status": "passed",
+  "cleanup": {
+    "simulatorDeleted": true,
+    "fixtureClosed": true,
+    "flutterToolStopped": true,
+    "appRemoved": true,
+    "privateRemoved": true,
+    "rawLogsUploaded": false
+  },
+  "physicalImeVerified": false,
+  "simulator": {
+    "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-26-2",
+    "runtimeVersion": "26.2",
+    "deviceType": "iPhone 11"
+  },
+  "deviceStage": "report_data_set",
+  "maskedPreconnectScreenshot": true,
+  "device": {
+    "schemaVersion": 1,
+    "platform": "ios-simulator",
+    "homepageEntry": true,
+    "fingerprintMatched": true,
+    "explicitTrustRequired": true,
+    "realTerminalView": true,
+    "normalTextInputCommit": true,
+    "remoteEchoVisible": true,
+    "disconnectUiConfirmed": true,
+    "credentialsCleared": true,
+    "physicalImeVerified": false
+  },
+  "peerClosedBeforeDriverExit": true,
+  "semanticsProbes": {
+    "baseline": {
+      "platformEnabled": true,
+      "realPlatformEnabled": false,
+      "bindingHandles": 1,
+      "pipelineHandles": 0
+    },
+    "home": {
+      "platformEnabled": true,
+      "realPlatformEnabled": false,
+      "bindingHandles": 2,
+      "pipelineHandles": 0
+    },
+    "report_data_set": {
+      "platformEnabled": true,
+      "realPlatformEnabled": true,
+      "bindingHandles": 2,
+      "pipelineHandles": 0
+    }
+  },
+  "protocol": {
+    "authAccepted": true,
+    "ptyRequested": true,
+    "shellRequested": true,
+    "markerReceived": true,
+    "sessionClosed": true,
+    "connections": 2,
+    "connectionsClosed": true,
+    "ptySizes": [
+      [
+        80,
+        24
+      ],
+      [
+        49,
+        48
+      ],
+      [
+        49,
+        38
+      ],
+      [
+        49,
+        30
+      ],
+      [
+        49,
+        29
+      ]
+    ]
+  },
+  "lastPhase": "await_driver_exit",
+  "containerQueryTimeouts": 3,
+  "flutterLogMarkers": {
+    "xcodeBuildCompleted": false,
+    "buildError": false,
+    "launchError": false,
+    "testFailure": false,
+    "testPassed": true,
+    "testFrameworkException": false,
+    "hitTestWarning": false,
+    "hitTestFinder": false,
+    "widgetNotFound": false,
+    "installationStarted": false,
+    "observatoryConnecting": false,
+    "testLoading": false,
+    "testStarted": true,
+    "xctestBuildSucceeded": true,
+    "xctestStarted": true,
+    "xctestSucceeded": true,
+    "xctestFailed": false,
+    "xctestInstallFailed": false,
+    "xctestLaunchFailed": false,
+    "xctestRunnerExited": false,
+    "xctestEarlyExit": false,
+    "xctestTimedOut": false,
+    "xctestNoTests": false,
+    "xctestBundleLoadFailed": false,
+    "xctestConnectionFailed": false,
+    "xctestCoreSimulatorError": false
+  },
+  "xctestResult": {
+    "resultBundlePresent": true,
+    "summaryReadable": true,
+    "totalTestCount": 1,
+    "passedTests": 1,
+    "failedTests": 0,
+    "skippedTests": 0,
+    "launchFailed": false,
+    "installFailed": false,
+    "runnerExited": false,
+    "timedOut": false,
+    "crashed": false,
+    "noTests": false,
+    "bundleLoadFailed": false
+  },
+  "simulatorCreateAttempted": true,
+  "simulatorCleanup": "deleted"
+}

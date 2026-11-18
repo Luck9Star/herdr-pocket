@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "round": "R6",
+  "sourceSHA": "9c9f93d37d503dc27ef4cf840fb39f554e59e64b",
+  "sourceURL": "https://github.com/Luck9Star/herdr-pocket/commit/9c9f93d37d503dc27ef4cf840fb39f554e59e64b",
+  "run": {
+    "id": 44043428381,
+    "url": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44043428381",
+    "status": "completed"
+  },
+  "scope": "iOS Simulator ordinary SSH and S10 host-key rotation; no physical-device or manual-IME claim",
+  "batchPassed": false,
+  "authorizedAdditionalBatchCount": 1,
+  "outcome": {
+    "flutter": "passed",
+    "tauri": "failed",
+    "tauriStop": "ordinary_open_ssh/native_ssh_form_unproven"
+  },
+  "officialArtifacts": [
+    {
+      "client": "flutter",
+      "artifactId": 14311845519,
+      "artifactURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44043428381/artifacts/14311845519",
+      "jobId": 133903241512,
+      "jobURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44043428381/job/133903241512",
+      "jobConclusion": "success",
+      "zipBytes": 673644,
+      "zipSHA256": "89654bd5ec7695d367b2d52d8f89d3fb529002c9f0d9a65437d62813a52e3b29"
+    },
+    {
+      "client": "tauri",
+      "artifactId": 14311980335,
+      "artifactURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44043428381/artifacts/14311980335",
+      "jobId": 133903241041,
+      "jobURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44043428381/job/133903241041",
+      "jobConclusion": "failure",
+      "zipBytes": 2016,
+      "zipSHA256": "edb46ca21ac23f3a38edda6f0c3359bb46e68192ff6adb9f4544af49dd7c8632"
+    }
+  ],
+  "files": [
+    {
+      "path": "r6-flutter-ordinary-terminal.png",
+      "client": "flutter",
+      "sourceArtifactId": 14311845519,
+      "sourceMember": "ordinary-terminal.png",
+      "bytes": 223485,
+      "sha256": "8b9c47a952eac37695e251f32d523f627ad81a16bbaeb0c419b3c3b8d1b59a9a"
+    },
+    {
+      "path": "r6-flutter-key-change-review.png",
+      "client": "flutter",
+      "sourceArtifactId": 14311845519,
+      "sourceMember": "key-change-review.png",
+      "bytes": 180808,
+      "sha256": "bc79a86ff62451367b8b9a38101b965832b4f1697376de0412de7c3bf7af00a8"
+    },
+    {
+      "path": "r6-flutter-key-change-terminal.png",
+      "client": "flutter",
+      "sourceArtifactId": 14311845519,
+      "sourceMember": "key-change-terminal.png",
+      "bytes": 223403,
+      "sha256": "cd3181321c0f64239ad5fa432e63bd8ed897c90b9325958d2d583f9041ebaf53"
+    },
+    {
+      "path": "r6-flutter-ordinary-terminal-ocr.json",
+      "client": "flutter",
+      "sourceArtifactId": 14311845519,
+      "sourceMember": "ordinary-terminal-ocr.json",
+      "bytes": 485,
+      "sha256": "4bd794655099fca83ff006ecb5fd51b506250b6f4860ab516d797ca02f498768"
+    },
+    {
+      "path": "r6-flutter-key-change-terminal-ocr.json",
+      "client": "flutter",
+      "sourceArtifactId": 14311845519,
+      "sourceMember": "key-change-terminal-ocr.json",
+      "bytes": 485,
+      "sha256": "543d0932863dd7d5fda5a73284e0197e95425eae5f6425ee8e414ad454752cf0"
+    },
+    {
+      "path": "r6-flutter-result.json",
+      "client": "flutter",
+      "sourceArtifactId": 14311845519,
+      "sourceMember": "result.json",
+      "bytes": 17452,
+      "sha256": "fe82fa9c636be8fc299aa5ebde1e4394461fc6158babd81245c116bf8152b789"
+    },
+    {
+      "path": "r6-tauri-result.json",
+      "client": "tauri",
+      "sourceArtifactId": 14311980335,
+      "sourceMember": "result.json",
+      "bytes": 9296,
+      "sha256": "bc497fdc9c7632914bc779ff43d6f4da569f4b9be17a88828aa1514610331d55"
+    }
+  ],
+  "verification": {
+    "zipMetadataMatched": true,
+    "archiveBytesMatchedZipMembers": true,
+    "pngOriginalMetadataPreserved": true,
+    "flutterOCRImageHashesMatched": true,
+    "flutterOrdinaryAAAndRotationABBBVerified": true,
+    "flutterInputs": {
+      "ordinary": {
+        "target": "fixture@127.0.0.1:49478",
+        "words": [
+          "FADE",
+          "PAST",
+          "LEAF",
+          "DECK",
+          "STAR",
+          "LEAF",
+          "DUSK",
+          "PART"
+        ]
+      },
+      "keyChange": {
+        "target": "fixture@127.0.0.1:49483",
+        "words": [
+          "DUSK",
+          "HAVE",
+          "SEAT",
+          "STAR",
+          "HEAT",
+          "PART",
+          "SALT",
+          "SAND"
+        ]
+      }
+    },
+    "flutterVisualReview": "parent independently reviewed original pixels and Apple Vision; archiver independently viewed all three originals",
+    "pngEXIFReviewed": "only ExifOffset, ColorSpace, ExifImageWidth and ExifImageHeight",
+    "jsonPrivacyReviewed": "sanitized predicates/counters/geometry/fixed codes; no credential values, private keys or raw logs",
+    "excludedZipMembers": [
+      "flutter/preconnect.png"
+    ]
+  }
+}

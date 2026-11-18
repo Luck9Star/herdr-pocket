@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "passed": true,
+  "scope": "macOS arm64 real managed EasyTier C ABI + fixture peer + Paramiko SSH server, localhost outbound sandbox, read-only SSH banner; no auth, herdr or GUI",
+  "sourceInputs": {
+    "archiveSourceCommit": "e2c19b8820e2d84e7a2c3cfb4c8da06a175a24df",
+    "heelerReferenceCommit": "6a2817fc02aeb552df251d9478753c22fd4738bb",
+    "easytierCommit": "728ba94b5029240add6204eed591f22e4e039e6b",
+    "peerSourceSha256": "5fc5e63eda60d5be4fc61d3d9a0b7243153d1554909382886725aad9192fc6fc",
+    "rustVersion": "1.95.0",
+    "protocVersion": "36.2",
+    "fixedUpstreamAndCandidatePatchesVerified": true,
+    "cargoLockedOffline": true
+  },
+  "networkOutboundPolicy": "localhost only",
+  "personalSshReadDenied": true,
+  "sshServerLibrary": "Paramiko 4.0.0",
+  "architecture": "arm64 Mach-O",
+  "librarySha256": "4dcd213d49fc130a413ad05f881c685f15e0147e13acb6ce2198f468ce4db6a9",
+  "peerSha256": "28a37593d1bb2c3f7058bc9915746ae501c794ebb3b24b329316d5359d16b8d6",
+  "peerInitialDiagnostics": {
+    "connectedPeerCount": 0,
+    "expectedVirtualRoutePresent": false,
+    "virtualSshListenerActive": true
+  },
+  "engineStarted": true,
+  "sshBannerViaManagedOverlay": true,
+  "bannerAttempts": 2,
+  "peerQueriedDiagnostics": {
+    "connectedPeerCount": 1,
+    "expectedVirtualRoutePresent": true,
+    "virtualSshListenerActive": true
+  },
+  "activeQueryCompleted": true,
+  "peerResult": {
+    "acceptedOverlayStreams": 1,
+    "activeBridgesAfterStop": 0,
+    "diagnosticsAfterStop": {
+      "connectedPeerCount": 0,
+      "expectedVirtualRoutePresent": false,
+      "virtualSshListenerActive": false
+    },
+    "diagnosticsBeforeStop": {
+      "connectedPeerCount": 0,
+      "expectedVirtualRoutePresent": false,
+      "virtualSshListenerActive": true
+    },
+    "loopbackDestinationOnly": true,
+    "loopbackTcpConnections": 1,
+    "schemaVersion": 1
+  },
+  "sshFixtureStopped": true,
+  "ownedProcessesStopped": true,
+  "managedCleanupSucceeded": true,
+  "temporaryCredentialsRemoved": true,
+  "preliminaryOpenSshAttempt": {
+    "passed": false,
+    "failedBeforeEasyTierNodeStart": true,
+    "category": "macOS nested OpenSSH pre-auth sandbox initialization denied",
+    "cleanupCompleted": true,
+    "replacement": "existing Paramiko 4.0.0 real SSH server, same localhost-only outer sandbox"
+  },
+  "validationBoundary": {
+    "managedProductCAbi": true,
+    "rustOverlayDialer": false,
+    "sshAuthentication": false,
+    "herdrSession": false,
+    "dualProvider": false,
+    "androidOrIos": false
+  }
+}

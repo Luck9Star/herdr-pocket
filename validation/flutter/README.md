@@ -145,3 +145,14 @@ CI CLI只允许运行器本次 `/tmp/hp-mobile-<run>-...` 中的合成配置、l
 取消、过期、重复或错绑定响应拒绝；未知授权不重放，匹配且经审查的撤销响应仍可关闭未知状态。请求和已返回handle在同进程保留：离开再进可明确删除原身份；创建后的public读取或清理未确认则保留已知handle，禁止重放创建。**跨进程配对元数据／handle目录恢复尚未实现**；native身份存在不等于GUI可恢复其记录。取消与本机删除均不声称撤销主机授权，不自动创建替代身份。
 
 新增 `pairing_test.dart`、`device_keys_test.dart`、`pairing_gui_test.dart` 覆盖严格 UTF-8／2048byte／重复键／TTL、完整绑定和代际、SSH签名封装、锁定与真实Widget状态流程。memory double明确标为double，不作为SSH证据。 opt-in `test/pairing_gui_ssh_test.dart` 由隔离harness提供 `HERDR_PAIRING_GUI_CONFIG`（公开目标JSON路径）、`HERDR_PAIRING_GUI_DIR`（临时目录）和 `HERDR_PAIRING_GUI_TEST_KEY`（显式临时测试signer PEM路径）；真实Widget先原子写`request.json`，等待harness审查授权后写`response.json`，经实际控件完成只读连接、选pane、full／delta与停止并写脱敏`result.json`。此测试signer仅在test文件，生产没有私钥导入设备store或测试开关。是否实际通过以本轮云端日志为准。
+
+
+### 普通 SSH 回环验证
+
+在已执行 `ci.py prepare` 的隔离工程上运行：
+
+```sh
+python3 validation/flutter/tool/direct_ssh_fixture_runner.py --project /tmp/herdr-s01-ui
+```
+
+脚本临时创建 Python venv（安装固定的 Paramiko 4.0.0）、临时私钥和三个只监听 127.0.0.1 的测试服务，验证密码、加密私钥、PTY、输入及密钥变化时认证未开始；结束后关闭服务并删除临时目录。需要网络安装测试依赖、`ssh-keygen` 和 PATH 中的 Flutter。密钥和账号均为一次性虚构测试资料；该测试不代表真机或外部 SSH 服务兼容性。

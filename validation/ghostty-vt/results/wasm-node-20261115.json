@@ -1,0 +1,92 @@
+{
+  "libraryVersion": "1.0.1",
+  "transportWrites": 0,
+  "checks": [
+    {
+      "name": "utf8_every_two_chunk_boundary",
+      "passed": true
+    },
+    {
+      "name": "cjk_emoji_cell_width_cursor_7",
+      "passed": true
+    },
+    {
+      "name": "utf8_one_byte_chunks",
+      "passed": true,
+      "actual": "a中😀é!"
+    },
+    {
+      "name": "alternate_screen_enter",
+      "passed": true,
+      "actual": "ALT"
+    },
+    {
+      "name": "alternate_screen_restore",
+      "passed": true,
+      "actual": "MAIN"
+    },
+    {
+      "name": "local_resize_reflow_preserves_text",
+      "passed": true,
+      "actual": "abcdefg"
+    },
+    {
+      "name": "same_session_partial_utf8_continues",
+      "passed": true,
+      "actual": "😀Z"
+    },
+    {
+      "name": "new_instance_isolates_partial_utf8",
+      "passed": true,
+      "actual": "��Z"
+    },
+    {
+      "name": "new_instance_isolates_partial_csi",
+      "passed": true,
+      "actual": "mZ"
+    }
+  ],
+  "observations": [
+    {
+      "name": "reset_isolates_partial_utf8",
+      "supported": false,
+      "actual": "😀Z"
+    },
+    {
+      "name": "reset_isolates_partial_csi",
+      "supported": false,
+      "actual": "Z"
+    }
+  ],
+  "checkCount": 9,
+  "observationCount": 2,
+  "failureCount": 0,
+  "source": {
+    "url": "https://release.files.ghostty.org/libghostty-vt/1.0.1/ghostty-vt-1.0.1-small.wasm",
+    "sha256": "e226900d2126faab515668e5400b69fc78ba3d99aaf9525b325f79707b29bf01",
+    "tag": "vt-1.0.1",
+    "tagObject": "e9dc690b08bde7e2ec9c7aff8a18a85c9cade46d",
+    "releaseCommit": "108cacb17ed8990840cd14abfce43d8ed8503ca1"
+  },
+  "execution": {
+    "kind": "local-Node-WASM-C-ABI",
+    "node": "v22.22.2",
+    "os": "darwin",
+    "architecture": "arm64",
+    "probeSourceSha256": "e2ffb7284b0116c8006d0a9a370372106c61a8ab71e650f728715941dbe82390"
+  },
+  "scope": {
+    "wasmHostImports": 0,
+    "remoteTransportOpened": false,
+    "rendererOrDeviceValidated": false,
+    "callbacksOrKeyEncodingValidatedHere": false
+  },
+  "acceptancePolicy": {
+    "sessionIsolation": "free old terminal and create a new instance",
+    "requireResetIsolation": false,
+    "rejectedResetHypotheses": [
+      "reset_isolates_partial_utf8",
+      "reset_isolates_partial_csi"
+    ]
+  }
+}

@@ -51,8 +51,8 @@ class Element {
     this.events = {};
     this.textContent = '';
   }
-  append(...nodes) { this.children.push(...nodes); }
-  prepend(...nodes) { this.children.unshift(...nodes); }
+  append(...nodes) { for (const node of nodes) node.parentElement=this; this.children.push(...nodes); }
+  prepend(...nodes) { for (const node of nodes) node.parentElement=this; this.children.unshift(...nodes); }
   remove() { this.removed = true; }
   replaceChildren(...nodes) { this.children = [...nodes]; }
   setAttribute(key, value) { this.attrs[key] = value; }
@@ -60,7 +60,7 @@ class Element {
   dispatch(name, event = {}) {
     for (const fn of this.events[name] || []) fn({ target: this, preventDefault() {}, ...event });
   }
-  click() { this.onclick?.({ target: this, preventDefault() {} }); }
+  click() { if(this.tagName==='summary' && this.parentElement?.tagName==='details') this.parentElement.open=!this.parentElement.open; this.onclick?.({ target: this, preventDefault() {} }); }
   checkValidity() { return true; }
   focus() {
     if (document.activeElement === this) return;
@@ -214,14 +214,16 @@ test('host cards give every action a readable name and attach disabled reasons f
     assert.equal(list.children.length, 3);
     const actionsOf = card => card.children.find(node => node.className === 'saved-host-actions');
     for (const card of list.children) {
-      for (const button of actionsOf(card).children) {
+      const manage=actionsOf(card).children.find(node=>node.className==='host-manage');
+      assert.ok(manage); manage.children.find(node=>node.tagName==='summary').click(); assert.equal(manage.open,true);
+      for (const button of actionsOf(card).all().filter(node=>node.tagName==='button')) {
         assert.match(button.textContent, /\S/, 'docs/08:94 按钮有可读名称——主机卡动作按钮必须带可读名称');
       }
-      const rename = card.children.find(node => node.tagName === 'input');
+      const rename = card.all().find(node => node.tagName === 'input');
       assert.match(rename.attrs['aria-label'], /重命名/);
     }
     const betaCard = hostCard(list, beta), gammaCard = hostCard(list, gamma);
-    const buttonByLabel = (card, label) => actionsOf(card).children.find(b => b.textContent === label || b.textContent.startsWith(label));
+    const buttonByLabel = (card, label) => actionsOf(card).all().find(b => b.tagName==='button' && (b.textContent === label || b.textContent.startsWith(label)));
     const open = buttonByLabel(betaCard, '打开');
     assert.equal(open.disabled, true);
     assert.match(describedText(open, betaCard), /已停用/, 'docs/08:94 禁用给原因——读屏须能读到“打开”被禁用的原因');
@@ -248,7 +250,7 @@ test('paste review buttons point their disabled reason text to screen readers', 
 
 async function pairAndConnect(h) {
   const n = h.nodes;
-  n['host-open-remote'].click();
+  n['host-open-remote'].click();n['add-herdr'].click();
   await flush();
   const fields = {
     'remote-host': 'fixture.invalid', 'remote-port': '22', 'remote-user': 'u',

@@ -1,0 +1,649 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "58fe474384fe7aa644f41b1662d2919100cb0842",
+  "kind": "flutter-ios-simulator-ordinary-ssh",
+  "status": "passed",
+  "cleanup": {
+    "simulatorDeleted": true,
+    "fixtureClosed": true,
+    "flutterToolStopped": true,
+    "appRemoved": true,
+    "privateRemoved": true,
+    "rawLogsUploaded": false
+  },
+  "physicalImeVerified": false,
+  "rotation": {
+    "checkpoints": {
+      "rejected": {
+        "stage": 2,
+        "connections": 2,
+        "connectionsClosed": true,
+        "initialProbe": {
+          "id": 1,
+          "hostKey": "A",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "rejectedTransport": {
+          "id": 2,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        }
+      },
+      "cancelled": {
+        "stage": 2,
+        "connections": 2,
+        "connectionsClosed": true,
+        "initialProbe": {
+          "id": 1,
+          "hostKey": "A",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "rejectedTransport": {
+          "id": 2,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        }
+      },
+      "reprobed": {
+        "stage": 3,
+        "connections": 3,
+        "connectionsClosed": true,
+        "initialProbe": {
+          "id": 1,
+          "hostKey": "A",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "rejectedTransport": {
+          "id": 2,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "freshProbe": {
+          "id": 3,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        }
+      },
+      "complete": {
+        "stage": 4,
+        "connections": 4,
+        "connectionsClosed": true,
+        "initialProbe": {
+          "id": 1,
+          "hostKey": "A",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "rejectedTransport": {
+          "id": 2,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "freshProbe": {
+          "id": 3,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "acceptedSession": {
+          "id": 4,
+          "hostKey": "B",
+          "authAttempts": 1,
+          "authSuccesses": 1,
+          "ptyRequests": 1,
+          "shellRequests": 1,
+          "inputBytes": 9,
+          "outputBytes": 102,
+          "authAccepted": true,
+          "markerReceived": true,
+          "sessionClosed": true,
+          "closed": true
+        }
+      }
+    },
+    "device": {
+      "schemaVersion": 1,
+      "platform": "ios-simulator",
+      "homepageEntry": true,
+      "sameTarget": true,
+      "oldFingerprintMatchedIndependentA": true,
+      "changedFingerprintMatchedIndependentB": true,
+      "rejectedBeforeAuthentication": true,
+      "reviewNavigationBlocked": true,
+      "cancelKeepsOldTrust": true,
+      "credentialsLockedBeforeApproval": true,
+      "noAutomaticConnection": true,
+      "freshProbeMatchedIndependentB": true,
+      "explicitRotatedTrustRequired": true,
+      "realTerminalView": true,
+      "normalTextInputCommit": true,
+      "remoteEchoVisible": true,
+      "disconnectUiConfirmed": true,
+      "credentialsCleared": true,
+      "physicalImeVerified": false
+    },
+    "peerClosedBeforeDriverExit": true,
+    "protocol": {
+      "authAccepted": true,
+      "ptyRequested": true,
+      "shellRequested": true,
+      "markerReceived": true,
+      "sessionClosed": true,
+      "connections": 4,
+      "connectionsClosed": true,
+      "ptySizes": [
+        [
+          80,
+          24
+        ],
+        [
+          49,
+          46
+        ],
+        [
+          49,
+          32
+        ],
+        [
+          49,
+          27
+        ]
+      ],
+      "connectionEvents": [
+        {
+          "id": 1,
+          "hostKey": "A",
+          "handshakeCompleted": false,
+          "authAttempts": 0,
+          "authAccepted": false,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true,
+          "phase": "handshake",
+          "closeReason": "preauth_peer_reset",
+          "handshakeMs": null,
+          "firstAuthMs": null,
+          "closedMs": 7625,
+          "hostKeyAlgorithm": "unknown",
+          "clientCipher": "unknown",
+          "serverCipher": "unknown",
+          "socketErrorKind": "connection_reset",
+          "socketErrno": 54
+        },
+        {
+          "id": 2,
+          "hostKey": "B",
+          "handshakeCompleted": false,
+          "authAttempts": 0,
+          "authAccepted": false,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true,
+          "phase": "handshake",
+          "closeReason": "preauth_peer_reset",
+          "handshakeMs": null,
+          "firstAuthMs": null,
+          "closedMs": 3407,
+          "hostKeyAlgorithm": "unknown",
+          "clientCipher": "unknown",
+          "serverCipher": "unknown",
+          "socketErrorKind": "connection_reset",
+          "socketErrno": 54
+        },
+        {
+          "id": 3,
+          "hostKey": "B",
+          "handshakeCompleted": false,
+          "authAttempts": 0,
+          "authAccepted": false,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true,
+          "phase": "handshake",
+          "closeReason": "peer_eof",
+          "handshakeMs": null,
+          "firstAuthMs": null,
+          "closedMs": 291,
+          "hostKeyAlgorithm": "unknown",
+          "clientCipher": "unknown",
+          "serverCipher": "unknown",
+          "socketErrorKind": null,
+          "socketErrno": null
+        },
+        {
+          "id": 4,
+          "hostKey": "B",
+          "handshakeCompleted": true,
+          "authAttempts": 1,
+          "authAccepted": true,
+          "authSuccesses": 1,
+          "ptyRequests": 1,
+          "shellRequests": 1,
+          "inputBytes": 9,
+          "outputBytes": 102,
+          "markerReceived": true,
+          "sessionClosed": true,
+          "closed": true,
+          "phase": "shell",
+          "closeReason": "peer_eof",
+          "handshakeMs": 149,
+          "firstAuthMs": 200,
+          "closedMs": 10222,
+          "hostKeyAlgorithm": "rsa-sha2-512",
+          "clientCipher": "aes256-gcm@openssh.com",
+          "serverCipher": "aes256-gcm@openssh.com",
+          "socketErrorKind": null,
+          "socketErrno": null
+        }
+      ]
+    },
+    "finalEvidence": {
+      "stage": 4,
+      "connections": 4,
+      "connectionsClosed": true,
+      "initialProbe": {
+        "id": 1,
+        "hostKey": "A",
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "authAccepted": false,
+        "markerReceived": false,
+        "sessionClosed": false,
+        "closed": true
+      },
+      "rejectedTransport": {
+        "id": 2,
+        "hostKey": "B",
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "authAccepted": false,
+        "markerReceived": false,
+        "sessionClosed": false,
+        "closed": true
+      },
+      "freshProbe": {
+        "id": 3,
+        "hostKey": "B",
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "authAccepted": false,
+        "markerReceived": false,
+        "sessionClosed": false,
+        "closed": true
+      },
+      "acceptedSession": {
+        "id": 4,
+        "hostKey": "B",
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 9,
+        "outputBytes": 102,
+        "authAccepted": true,
+        "markerReceived": true,
+        "sessionClosed": true,
+        "closed": true
+      }
+    }
+  },
+  "simulator": {
+    "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-26-2",
+    "runtimeVersion": "26.2",
+    "deviceType": "iPhone 11"
+  },
+  "deviceStage": "report_data_set",
+  "maskedPreconnectScreenshot": true,
+  "device": {
+    "schemaVersion": 1,
+    "platform": "ios-simulator",
+    "homepageEntry": true,
+    "fingerprintMatched": true,
+    "explicitTrustRequired": true,
+    "realTerminalView": true,
+    "normalTextInputCommit": true,
+    "remoteEchoVisible": true,
+    "disconnectUiConfirmed": true,
+    "credentialsCleared": true,
+    "physicalImeVerified": false
+  },
+  "peerClosedBeforeDriverExit": true,
+  "layoutOverflows": [],
+  "semanticsProbes": {
+    "baseline": {
+      "platformEnabled": true,
+      "realPlatformEnabled": false,
+      "bindingHandles": 1,
+      "pipelineHandles": 0
+    },
+    "home": {
+      "platformEnabled": true,
+      "realPlatformEnabled": true,
+      "bindingHandles": 2,
+      "pipelineHandles": 0
+    },
+    "report_data_set": {
+      "platformEnabled": true,
+      "realPlatformEnabled": true,
+      "bindingHandles": 2,
+      "pipelineHandles": 0
+    }
+  },
+  "protocol": {
+    "authAccepted": true,
+    "ptyRequested": true,
+    "shellRequested": true,
+    "markerReceived": true,
+    "sessionClosed": true,
+    "connections": 2,
+    "connectionsClosed": true,
+    "ptySizes": [
+      [
+        80,
+        24
+      ],
+      [
+        49,
+        46
+      ],
+      [
+        49,
+        9
+      ],
+      [
+        49,
+        35
+      ],
+      [
+        49,
+        30
+      ],
+      [
+        49,
+        28
+      ],
+      [
+        49,
+        27
+      ]
+    ],
+    "connectionEvents": [
+      {
+        "id": 1,
+        "hostKey": "A",
+        "handshakeCompleted": false,
+        "authAttempts": 0,
+        "authAccepted": false,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "markerReceived": false,
+        "sessionClosed": false,
+        "closed": true,
+        "phase": "handshake",
+        "closeReason": "peer_eof",
+        "handshakeMs": null,
+        "firstAuthMs": null,
+        "closedMs": 298,
+        "hostKeyAlgorithm": "unknown",
+        "clientCipher": "unknown",
+        "serverCipher": "unknown",
+        "socketErrorKind": null,
+        "socketErrno": null
+      },
+      {
+        "id": 2,
+        "hostKey": "A",
+        "handshakeCompleted": true,
+        "authAttempts": 1,
+        "authAccepted": true,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 9,
+        "outputBytes": 102,
+        "markerReceived": true,
+        "sessionClosed": true,
+        "closed": true,
+        "phase": "shell",
+        "closeReason": "peer_eof",
+        "handshakeMs": 125,
+        "firstAuthMs": 355,
+        "closedMs": 7876,
+        "hostKeyAlgorithm": "rsa-sha2-512",
+        "clientCipher": "aes256-gcm@openssh.com",
+        "serverCipher": "aes256-gcm@openssh.com",
+        "socketErrorKind": null,
+        "socketErrno": null
+      }
+    ]
+  },
+  "lastPhase": "await_driver_exit",
+  "containerQueryTimeouts": 0,
+  "containerQueryAttempts": 3,
+  "flutterLogMarkers": {
+    "xcodeBuildCompleted": false,
+    "buildError": false,
+    "launchError": false,
+    "testFailure": false,
+    "testPassed": true,
+    "testFrameworkException": false,
+    "hitTestWarning": false,
+    "hitTestFinder": false,
+    "widgetNotFound": false,
+    "installationStarted": false,
+    "observatoryConnecting": false,
+    "testLoading": false,
+    "testStarted": true,
+    "xctestBuildSucceeded": true,
+    "xctestStarted": true,
+    "xctestSucceeded": true,
+    "xctestFailed": false,
+    "xctestInstallFailed": false,
+    "xctestLaunchFailed": false,
+    "xctestRunnerExited": false,
+    "xctestEarlyExit": false,
+    "xctestTimedOut": false,
+    "xctestNoTests": false,
+    "xctestBundleLoadFailed": false,
+    "xctestConnectionFailed": false,
+    "xctestCoreSimulatorError": false
+  },
+  "xctestResult": {
+    "resultBundlePresent": true,
+    "summaryReadable": true,
+    "totalTestCount": 1,
+    "passedTests": 1,
+    "failedTests": 0,
+    "skippedTests": 0,
+    "launchFailed": false,
+    "installFailed": false,
+    "runnerExited": false,
+    "timedOut": false,
+    "crashed": false,
+    "noTests": false,
+    "bundleLoadFailed": false
+  },
+  "screens": {
+    "key-rotation": {
+      "attempt": 1,
+      "accepted": true,
+      "expectedTarget": "fixture@127.0.0.1:49476",
+      "targetEvidence": {
+        "targetVisible": true,
+        "targetBounds": [
+          249,
+          280,
+          330,
+          40
+        ],
+        "ocrPageSegmentationMode": 7
+      }
+    },
+    "ordinary": {
+      "attempt": 1,
+      "accepted": true,
+      "expectedTarget": "fixture@127.0.0.1:49473",
+      "targetEvidence": {
+        "targetVisible": true,
+        "targetBounds": [
+          250,
+          280,
+          328,
+          40
+        ],
+        "ocrPageSegmentationMode": 7
+      }
+    }
+  },
+  "cases": {
+    "ordinary": {
+      "terminalScreenshot": {
+        "imageFile": "ordinary-terminal.png",
+        "imageSha256": "a08cca3d263110e851d0f3a8c5f85c6301acc6cfc96851d3fed85dd5ef3ea056",
+        "criteriaFile": "ordinary-terminal-ocr.json",
+        "criteriaSha256": "28dcbddc09c8773e8607bbc23c081d13169b5d48db20112b5b244a41a48657fe"
+      },
+      "protocolRef": "protocol"
+    },
+    "keyChange": {
+      "terminalScreenshot": {
+        "imageFile": "key-change-terminal.png",
+        "imageSha256": "d0df250ac2773d34d343e07fee66739b6d93965889b16814392134227f203e9c",
+        "criteriaFile": "key-change-terminal-ocr.json",
+        "criteriaSha256": "cd9a917242a9052c2ade25272fca6ce145c5868e308f40e9401f12de59384bda"
+      },
+      "protocolRef": "rotation.protocol",
+      "reviewScreenshot": {
+        "imageFile": "key-change-review.png",
+        "imageSha256": "6393d5f481b06c078fada4aa06d3a4a70a66073013c90af53e834c7dc1f5a222",
+        "purpose": "design-review-no-ocr"
+      }
+    }
+  },
+  "artifacts": {
+    "ordinary-terminal.png": "a08cca3d263110e851d0f3a8c5f85c6301acc6cfc96851d3fed85dd5ef3ea056",
+    "key-change-terminal.png": "d0df250ac2773d34d343e07fee66739b6d93965889b16814392134227f203e9c",
+    "key-change-review.png": "6393d5f481b06c078fada4aa06d3a4a70a66073013c90af53e834c7dc1f5a222",
+    "preconnect.png": "19ad51eca8d5a5e87e09122598c31824d213f1b9d111425c48163cc4414a388c"
+  },
+  "simulatorCreateAttempted": true,
+  "simulatorCleanup": "deleted"
+}

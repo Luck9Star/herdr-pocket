@@ -1,0 +1,45 @@
+name: Android dual overlay relay isolation
+on:
+  push:
+    branches: ['codex/acceptance/android-dual-overlay-relay']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  namespace-relay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Exercise owned loopback namespace relay
+        shell: bash
+        run: |
+          set -euo pipefail
+          namespace="hp-dual-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          cleanup() {
+            if sudo ip netns list | awk '{print $1}' | grep -Fxq "$namespace"; then
+              remaining=$(sudo ip netns pids "$namespace")
+              if [ -n "$remaining" ]; then
+                echo 'relay_linux: namespace_processes_remain=true'
+                if ! [[ "$remaining" =~ ^[[:space:]0-9]+$ ]]; then return 1; fi
+                sudo kill -TERM $remaining || true
+                for attempt in 1 2 3 4 5; do
+                  remaining=$(sudo ip netns pids "$namespace")
+                  [ -z "$remaining" ] && break
+                  sleep 1
+                done
+                if [ -n "$remaining" ]; then sudo kill -KILL $remaining || true; fi
+                sudo ip netns delete "$namespace"
+                return 1
+              fi
+              sudo ip netns delete "$namespace"
+            fi
+          }
+          trap cleanup EXIT
+          sudo ip netns add "$namespace"
+          sudo ip netns exec "$namespace" ip link set lo up
+          HP_RELAY_LINUX_TEST=1 python3 -W error::ResourceWarning -m unittest discover -s validation/remote-harness -p 'test_android_dual_overlay_relay.py' -v
+          cleanup
+          trap - EXIT
+          if sudo ip netns list | awk '{print $1}' | grep -Fxq "$namespace"; then exit 1; fi
+          echo 'relay_linux: namespace_removed=true'

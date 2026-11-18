@@ -12,9 +12,10 @@ import 'zerotier_device_dialog.dart';
 
 class NetworkProfilesPage extends StatefulWidget {
   const NetworkProfilesPage({super.key,required this.catalog,required this.closeTabs,this.identityStore,this.runtime,
-    this.zeroTierDeviceStore,this.beforeZeroTierForget});
+    this.zeroTierDeviceStore,this.beforeZeroTierForget,this.closeTabsAndWait});
   final HostCatalog catalog;
   final void Function(Set<String>) closeTabs;
+  final Future<bool> Function(Set<String>)? closeTabsAndWait;
   final NetworkIdentityStore? identityStore;
   final NativeNetworkRuntime? runtime;
   final ZeroTierDeviceStore? zeroTierDeviceStore;
@@ -110,15 +111,23 @@ class _NetworkProfilesPageState extends State<NetworkProfilesPage> with WidgetsB
     if (binding == null || pendingStops.contains(profile.id)) return;
     if (pendingStarts.contains(profile.id)) cancelledStarts.add(profile.id);
     pendingStops.add(profile.id); final epoch = nextEpoch(profile.id);
-    closeAffected(profile);
-    setState(() { nodes[profile.id] = NetworkNodeSnapshot('closing',binding); });
+    setState(() { nodes[profile.id] = NetworkNodeSnapshot('closing',binding); notice = null; });
     try {
+      var transportClosed = true;
+      try {
+        final close = widget.closeTabsAndWait;
+        if (close == null) { closeAffected(profile); }
+        else { transportClosed = await close(catalog.networkImpact(profile.id).map((p) => p.id).toSet()); }
+      } catch (_) { transportClosed = false; }
       final result = await runtime.stop(binding);
       if (result.state == 'stopped') {
         if (pendingStarts.contains(profile.id)) stoppedStarts.add(profile.id);
         uncertainStarts.remove(profile.id);
       }
-      if (currentEpoch(profile.id,epoch)) setState(() { nodes[profile.id] = result; });
+      if (currentEpoch(profile.id,epoch)) setState(() {
+        nodes[profile.id] = result;
+        if (!transportClosed) notice = '原节点停止结果已返回；对应 SSH 清退尚未确认，不能视为连接已关闭。';
+      });
     } catch (_) {
       if (currentEpoch(profile.id,epoch)) setState(() { nodes[profile.id] = NetworkNodeSnapshot('closing',binding);
         notice = '停止尚未确认 · 可刷新状态或对原绑定再次明确停止；不自动重试。'; });
@@ -229,42 +238,74 @@ class _NetworkProfilesPageState extends State<NetworkProfilesPage> with WidgetsB
       binding:nodes[profile.id]!.binding!,catalog:catalog,runtime:runtime));
     if (mounted && currentProfile(profile) && foreground) await nodeStatus(profile);
   }
+  String providerName(String provider) => switch (provider) {
+    'tailscale' => 'Tailscale', 'easytier' => 'EasyTier', 'zerotier' => 'ZeroTier', _ => provider,
+  };
+  String hostSummary(NetworkProfile profile) {
+    final hosts = catalog.networkImpact(profile.id);
+    if (hosts.isEmpty) return '未绑定主机';
+    return hosts.length == 1 ? '主机：${hosts.first.label}' : '主机：${hosts.first.label} 等 ${hosts.length} 台';
+  }
   @override
-  Widget build(BuildContext context) => Scaffold(appBar:AppBar(title:const Text('网络管理 · 公开配置')),
+  Widget build(BuildContext context) => Scaffold(appBar:AppBar(title:const Text('网络配置')),
     body:SafeArea(child:ListView(padding:const EdgeInsets.all(16),children:[
-      const Text('Tailscale、EasyTier、ZeroTier 公开配置可由多台主机复用。本机入网资料单独保管，不随配置导出，也不复制 SSH 私钥或三网身份。'),
-      const Text('Android Tailscale / EasyTier 原型可明确启动和停止节点。Tailscale 需本机设备身份与显式授权，等待管理员批准与已就绪分别显示；入网不等于 SSH 或 herdr 成功。缺少原生桥时返回 provider_unavailable。旧主机的 provider 标签仍只是资料。'),
-      OutlinedButton.icon(key:const ValueKey('networks-zerotier-device'),onPressed:available ? sharedZeroTierDevice : null,
-        icon:const Icon(Icons.devices),label:const Text('ZeroTier 共享设备身份 · 全部网络影响')),
+      Text('网络配置可供多台主机复用。保存不代表已入网或 SSH 可用。',
+        style:Theme.of(context).textTheme.bodySmall),
+      const SizedBox(height:12),
+      Wrap(spacing:8,runSpacing:8,children:[
+        FilledButton.icon(key:const ValueKey('networks-add'),
+          onPressed:available && catalog.networkProfiles.length < maxNetworkProfiles ? () => edit() : null,
+          icon:const Icon(Icons.add),label:const Text('新增网络')),
+        OutlinedButton.icon(key:const ValueKey('networks-zerotier-device'),
+          onPressed:available ? sharedZeroTierDevice : null,
+          icon:const Icon(Icons.devices),label:const Text('ZeroTier 共享身份')),
+      ]),
       if (notice != null) Padding(padding:const EdgeInsets.symmetric(vertical:12),child:Text(notice!,key:const ValueKey('networks-notice'))),
-      FilledButton.icon(key:const ValueKey('networks-add'),onPressed:available && catalog.networkProfiles.length < maxNetworkProfiles ? () => edit() : null,
-        icon:const Icon(Icons.add),label:const Text('新增网络配置')),
-      for (final profile in catalog.networkProfiles) Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-        Text(profile.label,style:Theme.of(context).textTheme.titleMedium),
-        Text('${profile.provider} · ${profile.enabled ? '本机启用' : '本机停用'}'),
-        if ({'easytier','tailscale'}.contains(profile.provider)) ...[
-          Text('节点：${networkNodeStateLabel(nodes[profile.id]?.state)}',key:ValueKey('network-node-status-${profile.id}')),
-          if (profile.provider == 'tailscale') const Text('先配置本机入网资料 → 刷新并启动节点 → 授权 / 等待批准 → 主机配对与看板。节点就绪后仍需主动连接。'),
-          if (uncertainStarts.containsKey(profile.id)) const Text('启动结果或期间状态未确认 · 启动和配置写入已锁定；请刷新状态或停止原绑定。'),
-          if (runtime.stopUncertain(profile.id)) const Text('停止尚未确认 · 配置写入已锁定；请刷新状态或明确停止原绑定。'),
-          Wrap(spacing:8,children:[
-            TextButton(key:ValueKey('network-node-refresh-${profile.id}'),onPressed:runtime.supported ? () => nodeStatus(profile) : null,child:const Text('刷新节点状态')),
-            TextButton(key:ValueKey('network-node-start-${profile.id}'),onPressed:canChange(profile) && profile.enabled && nodes[profile.id]?.state == 'stopped' ? () => startNode(profile) : null,child:const Text('启动节点')),
-            TextButton(key:ValueKey('network-node-stop-${profile.id}'),onPressed:(nodes[profile.id]?.binding != null || startingBindings.containsKey(profile.id) || uncertainStarts.containsKey(profile.id)) && !pendingStops.contains(profile.id) ? () => stopNode(profile) : null,child:const Text('停止原节点')),
-            if (profile.provider == 'tailscale') TextButton(key:ValueKey('network-node-login-${profile.id}'),
-              onPressed:loginReady(profile) ? () => login(profile) : null,child:const Text('设备授权与入网状态')),
-          ]),
-        ],
-        Text('引用主机 ${catalog.networkImpact(profile.id).length} 个'),
-        SelectableText(profile.settings.entries.map((e) => '${e.key}: ${e.value}').join('\n')),
-        Wrap(spacing:8,children:[
-          TextButton(key:ValueKey('network-identity-${profile.id}'),onPressed:canChange(profile) ? () => localIdentity(profile) : null,child:const Text('本机入网资料')),
-          TextButton(key:ValueKey('network-edit-${profile.id}'),onPressed:canChange(profile) ? () => edit(profile) : null,child:const Text('编辑公开参数')),
-          TextButton(key:ValueKey('network-toggle-${profile.id}'),onPressed:canChange(profile) ? () => toggle(profile) : null,child:Text(profile.enabled ? '停用与影响预览' : '启用与影响预览')),
-          TextButton(key:ValueKey('network-delete-${profile.id}'),onPressed:canChange(profile) ? () => remove(profile) : null,child:const Text('删除与影响预览')),
-        ]),
-      ]))),
+      if (catalog.networkProfiles.isEmpty) const Padding(padding:EdgeInsets.symmetric(vertical:24),
+        child:Text('暂无网络配置 · 本地配对仍可继续')),
+      const SizedBox(height:8),
+      for (final profile in catalog.networkProfiles) Card(key:ValueKey('network-card-${profile.id}'),color:Theme.of(context).colorScheme.surface,elevation:0,clipBehavior:Clip.antiAlias,
+        shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(14),
+          side:BorderSide(color:Theme.of(context).colorScheme.outlineVariant)),
+        child:ExpansionTile(key:PageStorageKey('network-details-${profile.id}'),
+          title:Text('${profile.label} · ${providerName(profile.provider)}',
+            style:Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight:FontWeight.w700)),
+          subtitle:DefaultTextStyle.merge(
+            style:Theme.of(context).textTheme.bodySmall!.copyWith(color:Theme.of(context).colorScheme.onSurfaceVariant),
+            child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text(profile.enabled ? '本机启用 · 不代表已入网' : '本机停用'),
+            if ({'easytier','tailscale'}.contains(profile.provider))
+              Text('节点：${networkNodeStateLabel(nodes[profile.id]?.state)}',key:ValueKey('network-node-status-${profile.id}'))
+            else const Text('设备与入网状态未读取'),
+            Text(hostSummary(profile)),
+            if (uncertainStarts.containsKey(profile.id)) const Text('启动结果或期间状态未确认 · 启动和配置写入已锁定；请刷新状态或停止原绑定。'),
+            if (runtime.stopUncertain(profile.id)) const Text('停止尚未确认 · 配置写入已锁定；请刷新状态或明确停止原绑定。'),
+          ])),
+          childrenPadding:const EdgeInsets.fromLTRB(16,0,16,12),
+          children:[Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+            if ({'easytier','tailscale'}.contains(profile.provider)) ...[
+              if (profile.provider == 'tailscale') const Text('先配置本机入网资料 → 刷新并启动节点 → 授权 / 等待批准 → 主机配对与看板。节点就绪后仍需主动连接。'),
+              Wrap(spacing:8,children:[
+                TextButton(key:ValueKey('network-node-refresh-${profile.id}'),onPressed:runtime.supported ? () => nodeStatus(profile) : null,child:const Text('刷新节点状态')),
+                TextButton(key:ValueKey('network-node-start-${profile.id}'),onPressed:canChange(profile) && profile.enabled && nodes[profile.id]?.state == 'stopped' ? () => startNode(profile) : null,child:const Text('启动节点')),
+                TextButton(key:ValueKey('network-node-stop-${profile.id}'),onPressed:(nodes[profile.id]?.binding != null || startingBindings.containsKey(profile.id) || uncertainStarts.containsKey(profile.id)) && !pendingStops.contains(profile.id) ? () => stopNode(profile) : null,child:const Text('停止原节点')),
+                if (profile.provider == 'tailscale') TextButton(key:ValueKey('network-node-login-${profile.id}'),
+                  onPressed:loginReady(profile) ? () => login(profile) : null,child:const Text('设备授权与入网状态')),
+              ]),
+            ],
+            SelectableText(key:PageStorageKey('network-settings-${profile.id}'),profile.settings.entries.map((e) => '${e.key}: ${e.value}').join('\n')),
+            Wrap(spacing:8,children:[
+              TextButton(key:ValueKey('network-identity-${profile.id}'),onPressed:canChange(profile) ? () => localIdentity(profile) : null,child:const Text('本机入网资料')),
+              TextButton(key:ValueKey('network-edit-${profile.id}'),onPressed:canChange(profile) ? () => edit(profile) : null,child:const Text('编辑公开参数')),
+              TextButton(key:ValueKey('network-toggle-${profile.id}'),onPressed:canChange(profile) ? () => toggle(profile) : null,child:Text(profile.enabled ? '停用与影响预览' : '启用与影响预览')),
+              TextButton(key:ValueKey('network-delete-${profile.id}'),onPressed:canChange(profile) ? () => remove(profile) : null,child:const Text('删除与影响预览')),
+            ]),
+          ])])),
+      const SizedBox(height:12),
+      Text('入网身份保存在本机。网络组件暂不可用时，已绑定的主机会保持断开；组件恢复后可重新审查并连接。',
+        style:Theme.of(context).textTheme.bodySmall),
     ])));
+
 }
 
 class _NetworkEditor extends StatefulWidget {

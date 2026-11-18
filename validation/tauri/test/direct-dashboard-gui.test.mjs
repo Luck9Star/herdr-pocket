@@ -20,8 +20,8 @@ class Element {
     this.events = {};
     this.textContent = '';
   }
-  append(...nodes) { this.children.push(...nodes); }
-  prepend(...nodes) { this.children.unshift(...nodes); }
+  append(...nodes) { for (const node of nodes) node.parentElement=this; this.children.push(...nodes); }
+  prepend(...nodes) { for (const node of nodes) node.parentElement=this; this.children.unshift(...nodes); }
   remove() { this.removed=true; }
   showModal() { this.previousFocus=document.activeElement; this.open=true; this.modal=true; }
   close() { this.open=false; this.previousFocus?.focus(); }
@@ -33,7 +33,7 @@ class Element {
       fn({ target: this, preventDefault() {}, ...event });
     }
   }
-  click() { this.onclick?.({ target: this, preventDefault() {} }); }
+  click() { if(this.tagName==='summary' && this.parentElement?.tagName==='details') this.parentElement.open=!this.parentElement.open; this.onclick?.({ target: this, preventDefault() {} }); }
   checkValidity() { return true; }
   select(){this.selected=true;}
   setSelectionRange(start,end){this.selection=[start,end];}
@@ -62,6 +62,7 @@ class Element {
 }
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
+function expandedActions(actions) { const details=actions.children.find(node=>node.className==='host-manage'); if(details && !details.open) details.children.find(node=>node.tagName==='summary').click(); return actions.all(); }
 let moduleNonce = 0;
 
 // Exercise the real entry module while replacing only external browser/native imports.
@@ -72,12 +73,13 @@ async function importedRemote() {
     .replace("import {createUnicodeTerminal} from './terminal-unicode.js';", 'const createUnicodeTerminal=(Terminal,options)=>new Terminal(options);')
     .replace("import { Terminal } from '@xterm/xterm';", 'const {Terminal}=globalThis.__directGuiDeps;')
     .replace("import { invoke, Channel } from '@tauri-apps/api/core';", 'const {invoke,Channel}=globalThis.__directGuiDeps;')
+    .replace('  let networkProviders=new Map();', "  let networkProviders=new Map();globalThis.__remoteCatalogState=()=>({revisions:[...networkRevisions],providers:[...networkProviders],font:terminalFontSize});")
     .replace(/from '(\.\/[^']+)'/g, (_match, path) => `from '${new URL(path, url).href}'`);
   const source = Buffer.from(code + `\n// fixture ${++moduleNonce}`).toString('base64');
   return import(`data:text/javascript;base64,${source}`);
 }
 
-async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scanResponse, pairRequest=pairingCameraFixture().request, clipboardWrite, pairAcceptStored=true, hostRemove, hostCleanupRetry } = {}) {
+async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scanResponse, pairRequest=pairingCameraFixture().request, clipboardWrite, pairAcceptStored=true, hostRemove, hostCleanupRetry, read = null } = {}) {
   const previous = {
     document: globalThis.document,
     window: globalThis.window,
@@ -125,13 +127,16 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scan
   let channel = null;
   let resolveObserve;
   let rejectObserve;
-  let readOverride = null;
+  let readOverride = read;
   let sendResult = null;
   const calls = [];
 
   const invoke = async (name, args = {}) => {
     calls.push({ name, args });
-    if (['host_init', 'host_new', 'remote_cancel', 'remote_select', 'remote_ack'].includes(name)) return;
+    if (name === 'ssh_host_key_probe') return {...args,publicKey:'ssh-ed25519 FIXTURE',fingerprint:'SHA256:fixture'};
+    if (name === 'ssh_shell_open') return 'ssh-fixture';
+    if (name === 'ssh_shell_close') return;
+    if (['host_init', 'host_new', 'remote_cancel', 'remote_select', 'remote_ack', 'remote_input_recover'].includes(name)) return;
     if (name === 'pair_scan_response') return scanResponse ? scanResponse() : '';
     if (name === 'remote_input_mode') return inputMode(args);
     if (name === 'remote_input_send' && sendResult) return sendResult;
@@ -228,7 +233,7 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scan
 
 async function pairAndConnect(h, canvas='80x24') {
   const n = h.nodes;
-  n['host-open-remote'].click();
+  n['host-open-remote'].click();n['add-herdr'].click();
   await flush();
   const fields = {
     'remote-host': h.target.host, 'remote-port': '22', 'remote-user': 'u',
@@ -275,6 +280,24 @@ async function openInput(h) {
   h.emit({ kind: 'frame', generation: 9, epoch:1, frame: { seq: 1, full: true,cols:80,rows:24, bytes: [65] } });
   h.emit({ kind: 'input_ready', generation: 9, epoch:1, unknown: false, recovery_status: 'ready' });
 }
+
+test('paired direct and draft show matched receipts without a live region and clear on failure',async()=>{
+  const h=await setup(),n=h.nodes;
+  try {
+    await openInput(h);n['remote-input-direct'].click();await flush();await flush();
+    h.terminal.data('中');await flush();await flush();
+    assert.equal(n['remote-receipt'].hidden,false);
+    assert.match(n['remote-receipt-text'].textContent,/请求 ID：a{32}.*w1:p1.*term_a001.*受理 3 字节.*命令结果/);
+    assert.equal(n['remote-receipt'].attrs['aria-live'],undefined);
+    n['remote-input-draft-mode'].click();await flush();await flush();
+    n['remote-input-draft'].value='你好';n['remote-input-draft'].dispatch('input');
+    n['remote-input-preview'].click();n['remote-input-confirm'].click();await flush();await flush();
+    assert.match(n['remote-receipt-text'].textContent,/受理 6 字节/);
+    h.setSendResult({status:'unknown'});n['remote-input-draft'].value='x';n['remote-input-draft'].dispatch('input');
+    n['remote-input-preview'].click();n['remote-input-confirm'].click();await flush();await flush();
+    assert.equal(n['remote-receipt'].hidden,true);assert.equal(n['remote-receipt-text'].textContent,'');
+  } finally {h.finish();await flush();h.restore();}
+});
 
 test('paired form keyboard controls use the current editor, revoke on hide and reject late IME', async () => {
   const previous=Object.getOwnPropertyDescriptor(globalThis,'navigator');const keyboard=[];
@@ -472,7 +495,7 @@ for (const outcome of ['blur', 'reject', 'cancel']) {
 function summary(nodes, live = true) {
   return live
     ? nodes['host-task-board'].children.find(node => node.attrs['data-live-host-summary'])
-    : nodes['host-list'].children[0].children.find(node => node.attrs['data-host-task-summary']);
+    : nodes['host-list'].children[0].children.flatMap(node => [node, ...node.children]).find(node => node.attrs['data-host-task-summary']);
 }
 
 test('normal new pairing form keeps summary live after pane selection and marks it stale on home return', async () => {
@@ -651,12 +674,12 @@ test('older catalog response cannot overwrite newer host identity or name', asyn
     await flush();
     n['host-return-home'].click();
     await flush(); await flush();
-    assert.equal(n['host-list'].children[0].children[0].textContent, 'New identity');
-    assert.match(summary(n, false).textContent, /任务状态未知/);
+    assert.equal(n['host-list'].children[0].children[0].children[0].textContent, 'New identity');
+    assert.equal(summary(n, false).hidden, true);
     release();
     await flush(); await flush();
-    assert.equal(n['host-list'].children[0].children[0].textContent, 'New identity');
-    assert.match(summary(n, false).textContent, /任务状态未知/);
+    assert.equal(n['host-list'].children[0].children[0].children[0].textContent, 'New identity');
+    assert.equal(summary(n, false).hidden, true);
   } finally { h.finish(); await flush(); h.restore(); }
 });
 
@@ -932,6 +955,11 @@ test('an unknown draft send never returns to the sendable editor', async () => {
     n['remote-input-confirm'].click();
     await flush();
     assert.equal(n['remote-input-draft'].value, '');
+    const review=n['remote-result'].all().find(node=>node.className==='unknown-input-review');
+    assert.equal(review.hidden,false);
+    assert.ok(review.all().some(node=>node.textContent.includes('w1:p1') && node.textContent.includes('term_a001')));
+    assert.ok(review.all().some(node=>node.textContent.startsWith('发送时间：')));
+    assert.ok(review.all().some(node=>node.tagName==='pre' && node.textContent==='不重放'));
     await reconnectTo(h, blockedPane()[0]);
     assert.equal(n['remote-input-draft'].value, '');
     assert.equal(h.calls.filter(call => call.name === 'remote_input_send').length, 1);
@@ -1184,7 +1212,7 @@ test('fresh pairing viewport returns through saved identity only after new full,
   try {
     await openInput(h);v.scrollLeft=240;v.scrollTop=60;v.dispatch('scroll');
     n['host-return-home'].click();h.finish();await flush();await flush();
-    const open=n['host-list'].all().find(e=>e.tagName==='button' && e.textContent==='打开');assert.ok(open);open.click();await flush();
+    const open=n['host-list'].all().find(e=>e.tagName==='button' && e.textContent==='打开主机');assert.ok(open);open.click();await flush();
     n['host-restore-review'].checked=true;n['host-restore'].click();await flush();await flush();
     n['remote-review'].checked=true;n['remote-form'].dispatch('input',{target:n['remote-review']});
     n['remote-form'].dispatch('submit');await flush();
@@ -1217,7 +1245,7 @@ for(const [code,pattern] of [['host_key_mismatch',/主机公钥不匹配.*独立
 test('normal new host entry previews profile, fills every target field without writes, then requires independent device review',async()=>{
   const h=await setup(),n=h.nodes;
   try {
-    n['host-open-remote'].click();await flush();await flush();
+    n['host-open-remote'].click();n['add-herdr'].click();await flush();await flush();
     const before=h.calls.length;
     n['pair-target-review'].checked=true;n['pair-source-review'].checked=true;n['remote-review'].checked=true;n['host-restore-review'].checked=true;
     n['remote-private-key'].value='discard this temporary fixture';
@@ -1244,7 +1272,7 @@ test('normal new host entry previews profile, fills every target field without w
 test('real new host camera entry previews before fill and rejects edits / saved-host identity',async()=>{
   const h=await setup({scanResponse:()=>connectionProfiles.valid[0].raw}),n=h.nodes;
   try {
-    n['host-open-remote'].click();await flush();await flush();const before=h.calls.length;
+    n['host-open-remote'].click();n['add-herdr'].click();await flush();await flush();const before=h.calls.length;
     await n['connection-profile-scan'].onclick();assert.equal(h.calls.length,before+1);assert.equal(n['remote-host'].value,'');
     n['remote-host'].value='edited.invalid';n['remote-form'].dispatch('input',{target:n['remote-host']});
     n['connection-profile-apply'].click();assert.equal(n['remote-host'].value,'edited.invalid');
@@ -1260,7 +1288,7 @@ test('real new host camera entry previews before fill and rejects edits / saved-
 test('real camera entry discards a result after home navigation, background or form edit',async()=>{
  for(const reason of ['home','background','edit']){
   let finish;const result=new Promise(resolve=>finish=resolve),h=await setup({scanResponse:()=>result}),n=h.nodes;
-  try{n['host-open-remote'].click();await flush();await flush();const work=n['connection-profile-scan'].onclick();
+  try{n['host-open-remote'].click();n['add-herdr'].click();await flush();await flush();const work=n['connection-profile-scan'].onclick();
    if(reason==='home')n['host-return-home'].click();if(reason==='background')h.background();if(reason==='edit'){n['remote-host'].value='manual.invalid';n['remote-form'].dispatch('input',{target:n['remote-host']});}
    finish(connectionProfiles.valid[0].raw);await work;await flush();await flush();
    assert.equal(n['connection-profile-raw'].value,'');assert.equal(n['connection-profile-apply'].disabled,true);
@@ -1271,7 +1299,7 @@ test('real camera entry discards a result after home navigation, background or f
 
 test('applied profile retains its visible overlay intent after target edits without retaining trust',async()=>{
  const h=await setup(),n=h.nodes;try{
-  n['host-open-remote'].click();await flush();await flush();
+  n['host-open-remote'].click();n['add-herdr'].click();await flush();await flush();
   n['connection-profile-raw'].value=connectionProfiles.valid[2].raw;await n['connection-profile-preview'].onclick();n['connection-profile-apply'].click();
   assert.match(n['remote-profile-network-note'].textContent,/zerotier/);
   n['remote-review'].checked=true;n['remote-form'].dispatch('input',{target:n['remote-review']});n['remote-form'].dispatch('submit');await flush();
@@ -1293,11 +1321,11 @@ test('applied profile retains its visible overlay intent after target edits with
 });
 test('a saved bound overlay host keeps the ordinary reviewed pairing connection route',async()=>{
  const h=await setup(),n=h.nodes;try{
-  n['host-open-remote'].click();await flush();await flush();n['connection-profile-raw'].value=connectionProfiles.valid[1].raw;
+  n['host-open-remote'].click();n['add-herdr'].click();await flush();await flush();n['connection-profile-raw'].value=connectionProfiles.valid[1].raw;
   await n['connection-profile-preview'].onclick();n['connection-profile-apply'].click();n['host-save'].click();await flush();await flush();await flush();
   h.updateHost({provider:'tailscale',requiresNetworkBinding:true,networkProfileId:'net-fixture',deviceFingerprint:'device-fixture'});
   n['host-return-home'].click();await flush();await flush();await flush();
-  const open=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions').children.find(x=>x.textContent==='打开');open.click();await flush();await flush();
+  const open=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions').children.find(x=>x.textContent==='打开主机');open.click();await flush();await flush();
   assert.equal(n['remote-profile-provider'].value,'tailscale');assert.equal(n['remote-connect'].disabled,true);
   n['host-restore-review'].checked=true;n['host-restore'].click();await flush();await flush();
   n['remote-review'].checked=true;n['remote-form'].dispatch('input',{target:n['remote-review']});
@@ -1309,18 +1337,18 @@ test('a saved bound overlay host keeps the ordinary reviewed pairing connection 
 
 test('manual targets do not receive provider hints, and rebuilding a new host isolates prior network intent',async()=>{
  const h=await setup(),n=h.nodes;try{
-  n['host-open-remote'].click();await flush();await flush();
+  n['host-open-remote'].click();n['add-herdr'].click();await flush();await flush();
   n['remote-host'].value='manual.invalid';n['remote-form'].dispatch('input',{target:n['remote-host']});
   n['host-save'].click();await flush();await flush();await flush();
   assert.equal(Object.hasOwn(h.calls.find(x=>x.name==='host_save').args,'providerHint'),false);
   n['host-return-home'].click();await flush();await flush();await flush();
-  n['host-open-remote'].click();await flush();await flush();
+  n['host-open-remote'].click();n['add-herdr'].click();await flush();await flush();
   n['connection-profile-raw'].value=connectionProfiles.valid[3].raw;await n['connection-profile-preview'].onclick();n['connection-profile-apply'].click();
   assert.equal(n['remote-profile-provider'].value,'easytier');
   n['host-save'].click();await flush();await flush();await flush();
   assert.equal(h.calls.filter(x=>x.name==='host_save')[1].args.providerHint,'easytier');
   n['host-return-home'].click();await flush();await flush();await flush();
-  n['host-open-remote'].click();await flush();await flush();
+  n['host-open-remote'].click();n['add-herdr'].click();await flush();await flush();
   assert.equal(n['remote-profile-provider'].value,'');assert.equal(n['remote-host'].value,'');
   n['remote-host'].value='another-manual.invalid';n['remote-form'].dispatch('input',{target:n['remote-host']});
   n['host-save'].click();await flush();await flush();await flush();
@@ -1329,7 +1357,7 @@ test('manual targets do not receive provider hints, and rebuilding a new host is
 });
 test('explicitly adopting another profile changes network intent while a source edit alone does not',async()=>{
  const h=await setup(),n=h.nodes;try{
-  n['host-open-remote'].click();await flush();await flush();
+  n['host-open-remote'].click();n['add-herdr'].click();await flush();await flush();
   n['connection-profile-raw'].value=connectionProfiles.valid[1].raw;await n['connection-profile-preview'].onclick();n['connection-profile-apply'].click();
   n['connection-profile-raw'].value=connectionProfiles.valid[0].raw;n['connection-profile-raw'].dispatch('input');
   assert.equal(n['remote-profile-provider'].value,'tailscale');assert.equal(n['remote-connect'].disabled,true);
@@ -1343,7 +1371,7 @@ test('explicitly adopting another profile changes network intent while a source 
 for(const timing of ['before-visible','after-visible'])test(`ordinary new-host native scan survives its single Activity round trip ${timing} without preserving trust`,async()=>{
  let finish;const pending=new Promise(resolve=>finish=resolve),h=await setup({scanResponse:()=>pending}),n=h.nodes;
  try{
-  n['host-open-remote'].click();await flush();await flush();
+  n['host-open-remote'].click();n['add-herdr'].click();await flush();await flush();
   n['remote-private-key'].value='fixture temporary credential';n['pair-target-review'].checked=true;
   n['remote-review'].checked=true;n['remote-form'].dispatch('input',{target:n['remote-review']});
   const before=h.calls.length,work=n['connection-profile-scan'].onclick();h.background();
@@ -1365,7 +1393,7 @@ function pairingCameraFixture(now=Math.floor(Date.now()/1000)) {
  return {request:JSON.stringify(request),response:JSON.stringify(response),expires:request.expires_at};
 }
 async function createCameraPair(h) {
- const n=h.nodes;n['host-open-remote'].click();await flush();await flush();
+ const n=h.nodes;n['host-open-remote'].click();n['add-herdr'].click();await flush();await flush();
  const fields={'remote-host':h.target.host,'remote-port':'22','remote-user':'u','remote-pin':h.target.expectedHostKey,'remote-socket':h.target.socketPath,'remote-herdr':h.target.herdrPath,'remote-session':'work','host-save-name':'Fixture'};
  for(const [id,value] of Object.entries(fields))n[id].value=value;
  n['pair-mode'].checked=true;n['pair-target-review'].checked=true;n['pair-create'].click();await flush();await flush();await flush();
@@ -1395,7 +1423,7 @@ for(const reason of ['edit','session','host-switch','expiry','cancel','pagehide'
   await createCameraPair(h);const work=n['pair-scan'].onclick();h.background();
   if(reason==='edit'){n['pair-response'].value='manual';n['remote-form'].dispatch('input',{target:n['pair-response']});}
   if(reason==='session'){n['remote-session'].value='other';n['remote-form'].dispatch('input',{target:n['remote-session']});}
-  if(reason==='host-switch'){h.foreground();n['host-return-home'].click();await flush();await flush();await flush();n['host-open-remote'].click();await flush();await flush();}
+  if(reason==='host-switch'){h.foreground();n['host-return-home'].click();await flush();await flush();await flush();n['host-open-remote'].click();n['add-herdr'].click();await flush();await flush();}
   if(reason==='expiry')clock=fixture.expires*1000+1;
   if(reason==='cancel'){h.foreground();n['pair-cancel'].click();await flush();}
   if(reason==='pagehide')h.windowEvent('pagehide');if(reason==='second-background'){h.foreground();h.background();}
@@ -1435,7 +1463,7 @@ test('clipboard denial retains the readonly original and supports explicit syste
 for(const reason of ['hidden','navigation','edit'])test(`late public clipboard completion cannot publish old handoff status after ${reason}`,async()=>{
  let finish;const pending=new Promise(resolve=>finish=resolve),copied=[],h=await setup({clipboardWrite:raw=>{copied.push(raw);return pending;}}),n=h.nodes;
  try{await createCameraPair(h);const original=n['pair-request'].value,work=n['pair-request-copy'].onclick();assert.deepEqual(copied,[original]);
-  if(reason==='hidden')h.background();if(reason==='navigation'){n['host-return-home'].click();await flush();await flush();await flush();n['host-open-remote'].click();await flush();await flush();}if(reason==='edit')n['remote-form'].dispatch('input',{target:n['pair-response']});
+  if(reason==='hidden')h.background();if(reason==='navigation'){n['host-return-home'].click();await flush();await flush();await flush();n['host-open-remote'].click();n['add-herdr'].click();await flush();await flush();}if(reason==='edit')n['remote-form'].dispatch('input',{target:n['pair-response']});
   finish();await work;assert.equal(n['pair-handoff-status'].textContent,'');assert.equal(copied.length,1);
   if(reason==='navigation'){assert.equal(n['pair-request'].value,'');assert.equal(n['pair-request-summary'].textContent,'');}
  }finally{h.restore();}
@@ -1455,7 +1483,7 @@ for(const state of ['expired','cancelled','authorized'])test(`fresh manual revoc
   n['remote-review'].checked=true;n['remote-form'].dispatch('input',{target:n['remote-review']});n['remote-form'].dispatch('submit');n['pair-create'].click();await flush();assert.equal(h.calls.slice(baseline).filter(x=>x.name==='remote_observe'||x.name==='pair_create').length,0);
   await reviewResponse(h,revokedResponse(fixture,now),{accept:true});assert.match(n['pair-status'].textContent,/目录已确认撤销/);assert.equal(n['remote-connect'].disabled,true);assert.equal(n['pair-request-copy'].disabled,true);
   assert.equal(h.calls.slice(baseline).filter(x=>x.name==='pair_accept').length,1);assert.equal(h.calls.slice(baseline).filter(x=>x.name==='pair_reset').length,0);
-  const actions=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');assert.equal(actions.children.find(x=>x.textContent==='新终端标签').disabled,true);
+  const actions=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');assert.equal(expandedActions(actions).find(x=>x.textContent==='新终端标签').disabled,true);
   assert.ok(n['pair-request-summary'].textContent.includes('device-fingerprint'));
  }finally{h.restore();Date.now=realNow;}
 });
@@ -1477,13 +1505,13 @@ test('revocation persistence failure locks runtime routes without claiming durab
  const fixture=pairingCameraFixture(),h=await setup({pairRequest:fixture.request,pairAcceptStored:false}),n=h.nodes;
  try{await createCameraPair(h);await reviewResponse(h,fixture.response,{accept:true});const baseline=h.calls.length;await reviewResponse(h,revokedResponse(fixture),{accept:true});
   assert.match(n['pair-status'].textContent,/本次运行已停用/);assert.match(n['pair-status'].textContent,/保存未确认/);assert.doesNotMatch(n['pair-status'].textContent,/目录已确认撤销/);assert.equal(n['remote-connect'].disabled,true);
-  n['host-return-home'].click();await flush();await flush();await flush();const actions=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');assert.equal(actions.children.find(x=>x.textContent==='新终端标签').disabled,true);actions.children.find(x=>x.textContent==='打开').click();await flush();
+  n['host-return-home'].click();await flush();await flush();await flush();const actions=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');assert.equal(expandedActions(actions).find(x=>x.textContent==='新终端标签').disabled,true);expandedActions(actions).find(x=>x.textContent==='打开主机').click();await flush();
   assert.equal(h.calls.slice(baseline).filter(x=>['host_restore','host_select','pair_reset','remote_observe'].includes(x.name)).length,0);assert.match(n['host-home-status'].textContent,/不能恢复旧授权/);
  }finally{h.restore();}
 });
 test('restoring a retained revoked record displays the original but cannot copy, create or connect',async()=>{
  const fixture=pairingCameraFixture(),h=await setup({pairRequest:fixture.request}),n=h.nodes;
- try{await createCameraPair(h);await reviewResponse(h,revokedResponse(fixture),{accept:true});n['host-return-home'].click();await flush();await flush();await flush();const actions=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');actions.children.find(x=>x.textContent==='打开').click();await flush();await flush();
+ try{await createCameraPair(h);await reviewResponse(h,revokedResponse(fixture),{accept:true});n['host-return-home'].click();await flush();await flush();await flush();const actions=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');expandedActions(actions).find(x=>x.textContent==='打开主机').click();await flush();await flush();
   n['host-restore-review'].checked=true;n['host-restore'].click();await flush();await flush();assert.match(n['pair-status'].textContent,/原设备记录已撤销/);assert.equal(n['pair-request'].value,fixture.request);assert.equal(n['pair-request-copy'].disabled,true);assert.equal(n['pair-create'].disabled,true);assert.equal(n['remote-connect'].disabled,true);
  }finally{h.restore();}
 });
@@ -1496,7 +1524,7 @@ test('a successful native revoke still requires matching catalog readback before
  const fixture=pairingCameraFixture(),h=await setup({pairRequest:fixture.request}),n=h.nodes;
  try{await createCameraPair(h);h.setRead((name,value)=>name==='host_list'?value.map(host=>({...host,pairingStatus:'authorized'})):value);
   await reviewResponse(h,revokedResponse(fixture),{accept:true});assert.match(n['pair-status'].textContent,/目录读回未确认/);assert.doesNotMatch(n['pair-status'].textContent,/目录已确认撤销/);assert.equal(n['remote-connect'].disabled,true);
-  const actions=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');assert.equal(actions.children.find(x=>x.textContent==='新终端标签').disabled,true);
+  const actions=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');assert.equal(expandedActions(actions).find(x=>x.textContent==='新终端标签').disabled,true);
  }finally{h.restore();}
 });
 
@@ -1511,30 +1539,30 @@ for(const mode of ['identity','host'])test(`pending ${mode} cleanup retains its 
  try{
   await createCameraPair(h);h.updateHost({keyDeletionPending:true,keyCleanupMode:mode,enabled:false});n['host-return-home'].click();await flush();await flush();
   const actions=()=>n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');
-  assert.ok(n['host-list'].children[0].children.some(x=>x.textContent.includes('待确认')));
-  assert.equal(actions().children.find(x=>x.textContent==='打开').disabled,true);assert.equal(actions().children.some(x=>x.textContent==='启用'),false);
+  assert.ok(n['host-list'].children[0].all().some(x=>x.textContent.includes('待确认')));
+  assert.equal(expandedActions(actions()).find(x=>x.textContent==='打开主机').disabled,true);assert.equal(expandedActions(actions()).some(x=>x.textContent==='启用'),false);
   const retryLabel=mode==='identity'?'重试仅清理设备身份':'重试移除主机资料';
-  let retry=actions().children.find(x=>x.textContent===retryLabel);retry.click();await flush();assert.equal(attempts,0);
+  let retry=expandedActions(actions()).find(x=>x.textContent===retryLabel);retry.click();await flush();assert.equal(attempts,0);
   if(mode==='identity')assert.match(retry.textContent,/仅清身份，保留主机资料/);retry.click();await flush();await flush();assert.equal(attempts,1);
   assert.ok(n['host-list'].children.length);assert.match(n['host-home-status'].textContent,/删除未确认/);assert.doesNotMatch(n['host-home-status'].textContent,/连接已停用/);
-  retry=actions().children.find(x=>x.textContent===retryLabel);retry.click();await flush();assert.equal(attempts,1);
+  retry=expandedActions(actions()).find(x=>x.textContent===retryLabel);retry.click();await flush();assert.equal(attempts,1);
   retry.click();await flush();await flush();assert.equal(attempts,2);assert.equal(n['host-list'].children.length,mode==='host'?0:1);
   assert.equal(h.calls.filter(x=>x.name==='host_remove').length,0);
-  if(mode==='identity'){assert.match(n['host-home-status'].textContent,/主机公开资料已保留/);assert.equal(n['host-list'].children[0].children[0].textContent,'Fixture');assert.ok(actions().children.find(x=>x.textContent==='启用'));}
+  if(mode==='identity'){assert.match(n['host-home-status'].textContent,/主机公开资料已保留/);assert.equal(n['host-list'].children[0].children[0].children[0].textContent,'Fixture');assert.ok(expandedActions(actions()).find(x=>x.textContent==='启用'));}
  }finally{h.restore();}
 });
 for(const error of ['connection_active','host_storage_unavailable'])test(`delete failure before disable (${error}) never claims the host stopped`,async()=>{
  const h=await setup({hostRemove:()=>{throw Error(error);}}),n=h.nodes;
  try{await createCameraPair(h);n['host-return-home'].click();await flush();await flush();
-  const actions=()=>n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');const remove=actions().children.find(x=>x.textContent==='移除');remove.click();remove.click();await flush();await flush();
-  assert.match(n['host-home-status'].textContent,/本机删除未确认/);assert.doesNotMatch(n['host-home-status'].textContent,/连接已停用|原引用保留/);assert.equal(actions().children.find(x=>x.textContent==='打开').disabled,false);
+  const actions=()=>n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');const remove=expandedActions(actions()).find(x=>x.textContent==='移除');remove.click();remove.click();await flush();await flush();
+  assert.match(n['host-home-status'].textContent,/本机删除未确认/);assert.doesNotMatch(n['host-home-status'].textContent,/连接已停用|原引用保留/);assert.equal(expandedActions(actions()).find(x=>x.textContent==='打开主机').disabled,false);
  }finally{h.restore();}
 });
 
 test('delete failure with unavailable directory readback still reports an unconfirmed result neutrally',async()=>{
  let failed=false;const h=await setup({hostRemove:()=>{failed=true;throw Error('host_storage_unavailable');}}),n=h.nodes;
  try{await createCameraPair(h);n['host-return-home'].click();await flush();await flush();h.setRead((name,value)=>{if(failed && name==='host_list')throw Error('readback_unavailable');return value;});
-  const actions=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');const remove=actions.children.find(x=>x.textContent==='移除');remove.click();remove.click();await flush();await flush();
+  const actions=n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');const remove=expandedActions(actions).find(x=>x.textContent==='移除');remove.click();remove.click();await flush();await flush();
   assert.match(n['host-home-status'].textContent,/本机删除未确认/);assert.doesNotMatch(n['host-home-status'].textContent,/连接已停用|原引用保留/);
  }finally{h.restore();}
 });
@@ -1699,7 +1727,7 @@ test('paired normal entry retains staged connection facts after auth failure wit
   assert.equal(row('network').dataset.stageState,'pending');h.emit({kind:'stage',generation:9,stage:'host-key-verified'});assert.equal(row('hostKey').dataset.stageState,'verified');assert.equal(row('network').dataset.stageState,'verified');
   h.fail('authentication_failed');await flush();await flush();assert.equal(row('hostKey').dataset.stageState,'verified');assert.equal(row('authentication').dataset.stageState,'failed');assert.equal(row('dashboard').dataset.stageState,'unknown');assert.equal(row('terminal').dataset.stageState,'unknown');
   h.emit({kind:'stage',generation:9,stage:'authenticated'});assert.equal(row('authentication').dataset.stageState,'failed');
-  n['host-return-home'].click();await flush();await flush();n['host-list'].children[0].all().find(e=>e.textContent==='打开').click();await flush();await flush();assert.equal(box.children[0].hidden,false);assert.equal(row('hostKey').dataset.stageState,'verified');
+  n['host-return-home'].click();await flush();await flush();n['host-list'].children[0].all().find(e=>e.textContent==='打开主机').click();await flush();await flush();assert.equal(box.children[0].hidden,false);assert.equal(row('hostKey').dataset.stageState,'verified');
   assert.equal(h.calls.filter(c=>c.name==='remote_observe').length,1);assert.equal(h.calls.filter(c=>c.name==='remote_input_send'||/resize/.test(c.name)).length,0);
  }finally{h.finish();await flush();h.restore();}
 });
@@ -1734,8 +1762,8 @@ test('saved host search intersects public fields, keeps card identity and never 
     const search=value=>{n['host-query'].value=value;n['host-query'].dispatch('input');};
     const callCount=h.calls.length;
     assert.deepEqual(visible(),['first','second','third']);
-    assert.match(cards[1].children[1].textContent,/会话 Night · 已绑定 EasyTier/);
-    assert.match(cards[2].children[1].textContent,/会话 Day · 绑定网络资料不可用/);
+    assert.match(cards[1].children[1].textContent,/已绑定 EasyTier/);
+    assert.match(cards[2].children[1].textContent,/绑定网络资料不可用/);
     for (const [query,expected] of [
       ['同名',['first','second','third']], ['中文',['first']], [' nIgHt ',['second']],
       ['second.example',['second']], ['easyTier',['second']], ['direct',['first']],
@@ -1761,8 +1789,8 @@ test('home can filter historical blocked tasks without turning a stopped connect
     n['host-return-home'].click();await flush();await flush();
     const baseline=h.calls.length,card=n['host-list'].children[0];
     const state=value=>{n['host-attention'].value=value;n['host-attention'].dispatch('change');};
-    state('current');assert.equal(card.hidden,true);assert.match(n['host-attention-current'].textContent,/（0）/);
-    state('history');assert.equal(card.hidden,false);assert.match(n['host-attention-history'].textContent,/（1）/);
+    n['host-filter-current'].click();assert.equal(n['host-attention'].value,'current');assert.equal(card.hidden,true);assert.match(n['host-attention-current'].textContent,/（0）/);
+    n['host-filter-history'].click();assert.equal(n['host-attention'].value,'history');assert.equal(n['host-filter-history'].attrs['aria-pressed'],'true');assert.equal(card.hidden,false);assert.match(n['host-attention-history'].textContent,/（1）/);
     const button=card.all().find(e=>e.dataset.blockedTarget==='w1:p1/term_a001');
     assert.match(button.textContent,/重新核查/);
     n['host-query'].value='absent';n['host-query'].dispatch('input');assert.equal(card.hidden,true);
@@ -1771,4 +1799,224 @@ test('home can filter historical blocked tasks without turning a stopped connect
     assert.equal(n['host-attention'].value,'all');assert.equal(card.hidden,false);
     assert.equal(h.calls.length,baseline);
   } finally {h.finish();await flush();h.restore();}
+});
+
+test('primary navigation returns from network and settings without losing the board', async () => {
+  const h=await setup(), n=h.nodes;
+  try {
+    n['nav-network'].click(); await flush();
+    assert.equal(n['home-network'].hidden,false);
+    n['nav-settings'].click(); await flush();
+    assert.equal(n['home-settings'].hidden,false);
+    assert.equal(n['home-network'].hidden,true);
+    n['show-remote'].dispatch('click'); n['show-remote'].click(); await flush();
+    assert.equal(n['home-dashboard'].hidden,false);
+    assert.equal(n['home-settings'].hidden,true);
+  } finally { h.finish(); h.restore(); }
+});
+
+test('board direct SSH entry uses the existing setup route without connecting', async () => {
+  const h=await setup(), n=h.nodes;
+  try {
+    n['home-open-ssh'].click();
+    assert.equal(n['home-ssh'].hidden,false);
+    assert.equal(n['home-dashboard'].hidden,true);
+    assert.equal(h.calls.some(c=>c.name==='ssh_shell_open' || c.name==='ssh_host_key_probe'),false);
+  } finally {h.finish();h.restore();}
+});
+
+test('native catalog error remains visible on board after navigation', async () => {
+  const h=await setup(), n=h.nodes;
+  try {
+    h.setRead((name,value)=>{if(name==='host_list')throw Error('storage unavailable');return value;});
+    n['show-remote'].dispatch('click'); n['show-remote'].click(); await flush(); await flush();
+    assert.match(n['host-home-status'].textContent,/不可用/);
+    n['nav-settings'].click(); n['show-remote'].dispatch('click'); n['show-remote'].click(); await flush(); await flush();
+    assert.match(n['host-home-status'].textContent,/不可用/);
+  } finally { h.finish(); h.restore(); }
+});
+
+test('SSH credential input preserves reviewed host key; endpoint and identity edits require review', async () => {
+  const h=await setup(), n=h.nodes;
+  try {
+    n['ssh-review'].checked=true;
+    n['ssh-password'].value='test password'; n['ssh-password'].dispatch('input');
+    assert.equal(n['ssh-review'].checked,true);
+    n['ssh-key'].value='test key'; n['ssh-key'].dispatch('input');
+    assert.equal(n['ssh-review'].checked,true);
+    n['ssh-user'].dispatch('input'); assert.equal(n['ssh-review'].checked,false);
+    n['ssh-review'].checked=true; n['ssh-host'].dispatch('input'); assert.equal(n['ssh-review'].checked,false);
+    assert.match(n['ssh-fingerprint'].textContent,/请先探测/);
+  } finally { h.finish(); h.restore(); }
+});
+
+test('SSH authentication selection clears abandoned secrets and sends only the chosen credential', async () => {
+  const h=await setup(), n=h.nodes;
+  try {
+    n['ssh-host'].value='fixture.invalid';n['ssh-port'].value='22';n['ssh-user'].value='fixture';
+    await n['ssh-probe'].onclick();n['ssh-review'].checked=true;
+    n['ssh-password'].value='password fixture';
+    n['ssh-auth-method'].value='key';n['ssh-auth-method'].dispatch('change');
+    assert.equal(n['ssh-password'].value,'');assert.equal(n['ssh-password-fields'].hidden,true);
+    assert.equal(n['ssh-key-fields'].hidden,false);assert.equal(n['ssh-review'].checked,true);
+    n['ssh-key'].value='-----BEGIN OPENSSH PRIVATE KEY-----\nfixture\n-----END OPENSSH PRIVATE KEY-----';
+    n['ssh-passphrase'].value='passphrase fixture';
+    await n['ssh-form'].onsubmit({preventDefault(){}});
+    const keyConfig=h.calls.filter(c=>c.name==='ssh_shell_open').at(-1).args.config;
+    assert.match(keyConfig.privateKeyPem,/\nfixture\n/);assert.equal(keyConfig.privateKeyPassphrase,'passphrase fixture');assert.equal('password' in keyConfig,false);
+    assert.equal(n['ssh-key'].value,'');assert.equal(n['ssh-passphrase'].value,'');
+    n['ssh-key'].value='unused key';n['ssh-passphrase'].value='unused phrase';
+    n['ssh-auth-method'].value='password';n['ssh-auth-method'].dispatch('change');
+    assert.equal(n['ssh-key'].value,'');assert.equal(n['ssh-passphrase'].value,'');assert.equal(n['ssh-key-fields'].hidden,true);
+    n['ssh-password'].value='password fixture';await n['ssh-form'].onsubmit({preventDefault(){}});
+    const passwordConfig=h.calls.filter(c=>c.name==='ssh_shell_open').at(-1).args.config;
+    assert.equal(passwordConfig.password,'password fixture');assert.equal('privateKeyPem' in passwordConfig,false);
+    n['ssh-password'].value='cancel secret';n['ssh-cancel'].click();assert.equal(n['ssh-password'].value,'');
+    n['ssh-key'].value='disconnect secret';n['ssh-passphrase'].value='disconnect phrase';n['ssh-disconnect'].click();
+    assert.equal(n['ssh-key'].value,'');assert.equal(n['ssh-passphrase'].value,'');
+  } finally { h.finish(); h.restore(); }
+});
+
+test('mobile mode controls retain editor focus until intentional mode transition', async () => {
+  const h=await setup(), n=h.nodes;
+  try {
+    await openInput(h);
+    let prevented=false;
+    n['remote-input-direct'].dispatch('pointerdown',{preventDefault(){prevented=true;}});
+    assert.equal(prevented,true);
+    n['remote-input-direct'].click();await flush();await flush();
+    assert.equal(n['remote-input-controls'].dataset.mode,'direct');
+    assert.equal(n['remote-input-direct'].attrs['aria-pressed'],'true');
+    prevented=false;
+    n['remote-input-draft-mode'].dispatch('pointerdown',{preventDefault(){prevented=true;}});
+    assert.equal(prevented,true);
+    n['remote-input-draft-mode'].click();await flush();await flush();
+    assert.equal(n['remote-input-controls'].dataset.mode,'draft');
+    assert.equal(n['remote-input-draft-mode'].attrs['aria-pressed'],'true');
+    assert.equal(n['remote-input-draft-area'].hidden,false);
+  } finally {h.finish();await flush();h.restore();}
+});
+
+test('dock stop cancels the focused direct session without sending another byte',async()=>{
+  const h=await setup(),n=h.nodes;
+  try {
+    await openInput(h);n['remote-input-direct'].click();await flush();await flush();
+    assert.equal(n['remote-stop-dock'].disabled,false);
+    const before=h.calls.filter(c=>c.name==='remote_input_send').length;
+    let prevented=false;n['remote-stop-dock'].dispatch('pointerdown',{preventDefault(){prevented=true;}});
+    assert.equal(prevented,true);n['remote-stop-dock'].click();await flush();
+    h.terminal.data('late');await flush();
+    assert.equal(h.calls.filter(c=>c.name==='remote_input_send').length,before);
+    assert.match(n['remote-captured'].textContent,/陈旧/);
+  } finally {h.finish();await flush();h.restore();}
+});
+
+test('main recovery waits for a rendered full and explicit user confirmation',async()=>{
+  const h=await setup(),n=h.nodes;
+  try {
+    await pairAndConnect(h);publishDashboard(h,blockedPane());
+    n['remote-panes'].children.find(e=>e.tagName==='button' && e.textContent.startsWith('w1:p1')).click();
+    h.emit({kind:'target_bound',generation:9,epoch:1,pane_id:'w1:p1',terminal_id:'term_a001'});
+    h.emit({kind:'input_ready',generation:9,epoch:1,unknown:true,recovery_status:'pending'});
+    assert.equal(n['remote-input-recover'].disabled,true);assert.equal(n['remote-input-direct'].disabled,true);
+    await n['remote-input-recover'].onclick();assert.equal(h.calls.filter(c=>c.name==='remote_input_recover').length,0);
+    h.emit({kind:'frame',generation:9,epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});await flush();
+    assert.equal(n['remote-input-recover'].disabled,false);
+    window.confirm=()=>false;await n['remote-input-recover'].onclick();
+    assert.equal(h.calls.filter(c=>c.name==='remote_input_recover').length,0);
+    window.confirm=()=>true;await n['remote-input-recover'].onclick();
+    assert.equal(h.calls.filter(c=>c.name==='remote_input_recover').length,1);
+    assert.equal(n['remote-input-recover'].hidden,true);
+  } finally {h.finish();await flush();h.restore();}
+});
+
+const emptyCatalog = { revision: 'r1', profiles: [], bindings: [], preferences: { terminalFontSize: 14 } };
+
+test('a known-empty catalog publishes the home and ordinary SSH entry before network preferences resolve', async () => {
+  let releaseNetwork;
+  const pending = new Promise(resolve => { releaseNetwork = resolve; });
+  const h = await setup({ read: (name, value) => name === 'network_list' ? pending : value });
+  const n = h.nodes;
+  try {
+    assert.equal(n['brand-caption'].textContent, '0 台已存主机');
+    assert.equal(n['host-empty'].hidden, false);
+    assert.equal(n['host-home-status'].hidden, true);
+    assert.equal(n['host-list'].children.length, 0);
+    n['home-open-ssh'].click();
+    assert.equal(n['home-ssh'].hidden, false);
+    assert.equal(n['ssh-probe'].disabled, false);
+    releaseNetwork(emptyCatalog);
+    await flush();
+    assert.equal(n['brand-caption'].textContent, '0 台已存主机');
+  } finally { releaseNetwork(emptyCatalog); await flush(); h.restore(); }
+});
+
+test('an empty home keeps its identity when only network preferences are unavailable', async () => {
+  const h = await setup({ read: (name, value) => {
+    if (name === 'network_list') throw Error('network_preferences_unavailable');
+    return value;
+  } });
+  const n = h.nodes;
+  try {
+    assert.equal(n['brand-caption'].textContent, '0 台已存主机');
+    assert.equal(n['host-empty'].hidden, false);
+    assert.equal(n['host-list'].children.length, 0);
+    assert.doesNotMatch(n['host-home-status'].textContent, /本机资料不可用/);
+    assert.match(n['host-home-status'].textContent, /网络配置暂不可读/);
+    n['home-open-ssh'].click();
+    assert.equal(n['home-ssh'].hidden, false);
+    assert.equal(n['ssh-probe'].disabled, false);
+  } finally { h.restore(); }
+});
+
+test('a host_list error never fakes a known-empty home', async () => {
+  const h = await setup({ read: (name, value) => {
+    if (name === 'host_list') throw Error('storage unavailable');
+    return value;
+  } });
+  const n = h.nodes;
+  try {
+    assert.equal(n['brand-caption'].textContent, '本机主机资料不可用');
+    assert.equal(n['host-empty'].hidden, true);
+    assert.match(n['host-home-status'].textContent, /不可用/);
+  } finally { h.restore(); }
+});
+
+test('a known-empty catalog still applies network profiles and the font after the deferred read', async () => {
+  const h = await setup({ read: (name, value) => name === 'network_list'
+    ? { revision: 'r7', profiles: [{ id: 'net1', revision: 7, provider: 'easytier' }], bindings: [], preferences: { terminalFontSize: 18 } }
+    : value });
+  const n = h.nodes;
+  try {
+    assert.equal(n['brand-caption'].textContent, '0 台已存主机');
+    assert.equal(n['host-empty'].hidden, false);
+    assert.equal(n['terminal-font-size'].value, 18);
+    assert.deepEqual(globalThis.__remoteCatalogState(), { revisions: [['net1', 7]], providers: [['net1', 'easytier']], font: 18 });
+    // 一次目录读取 + 既有网络页刷新，不产生第三次网络刷新。
+    assert.equal(h.calls.filter(c => c.name === 'network_list').length, 2);
+  } finally { h.restore(); }
+});
+
+test('a stale network catalog cannot overwrite a newer empty-home refresh', async () => {
+  let releaseStale;
+  const staleRead = new Promise(resolve => { releaseStale = resolve; });
+  let phase = 'stale';
+  const staleCatalog = { revision: 'r0', profiles: [{ id: 'old', revision: 1, provider: 'tailscale' }], bindings: [], preferences: { terminalFontSize: 22 } };
+  const h = await setup({ read: (name, value) => {
+    if (name !== 'network_list') return value;
+    if (phase === 'stale') return staleRead;
+    return { revision: 'r2', profiles: [{ id: 'net2', revision: 9, provider: 'zerotier' }], bindings: [], preferences: { terminalFontSize: 16 } };
+  } });
+  const n = h.nodes;
+  try {
+    assert.equal(n['brand-caption'].textContent, '0 台已存主机');
+    phase = 'current';
+    n['host-return-home'].click();await flush();await flush();
+    const current = { revisions: [['net2', 9]], providers: [['net2', 'zerotier']], font: 16 };
+    assert.equal(n['terminal-font-size'].value, 16);
+    assert.deepEqual(globalThis.__remoteCatalogState(), current);
+    releaseStale(staleCatalog);await flush();
+    assert.equal(n['terminal-font-size'].value, 16);
+    assert.deepEqual(globalThis.__remoteCatalogState(), current);
+  } finally { releaseStale(staleCatalog);await flush();h.restore(); }
 });

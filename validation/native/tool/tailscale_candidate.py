@@ -30,7 +30,8 @@ def verify_sources():
     for path, expected in [(MODULE / "go.mod", source["goModSha256"]),
                            (MODULE / "go.sum", source["goSumSha256"]),
                            (NATIVE / source["patch"]["path"], source["patch"]["sha256"]),
-                           (NATIVE / source["patchTests"]["path"], source["patchTests"]["sha256"])]:
+                           (NATIVE / source["patchTests"]["path"], source["patchTests"]["sha256"]),
+                           (NATIVE / source["dialPlanTests"]["path"], source["dialPlanTests"]["sha256"])]:
         if digest(path) != expected:
             raise ValueError("fixed source mismatch: " + str(path.relative_to(NATIVE)))
     return source
@@ -94,10 +95,13 @@ def verify_candidate(work, source):
     if json.loads((work / "candidate-source.json").read_text()) != source:
         raise ValueError("candidate metadata does not match current fixed sources")
     upstream = work / "upstream/tailscale"
-    if digest(upstream / source["source"]["path"]) != source["source"]["patchedSha256"]:
-        raise ValueError("candidate tsnet source changed")
+    for item in [source["source"], *source["additionalSources"]]:
+        if digest(upstream / item["path"]) != item["patchedSha256"]:
+            raise ValueError("candidate fixed upstream source changed: " + item["path"])
     if digest(upstream / "tsnet/herdr_explicit_auth_test.go") != source["patchTests"]["sha256"]:
         raise ValueError("candidate patch tests changed")
+    if digest(upstream / "net/tsdial/herdr_overlay_only_test.go") != source["dialPlanTests"]["sha256"]:
+        raise ValueError("candidate dial plan tests changed")
     files = module_files()
     if json.loads((work / "module-sources.json").read_text()) != files:
         raise ValueError("source changed since candidate preparation; explicitly sync before testing")
@@ -166,15 +170,17 @@ def prepare(work, cache):
             path = Path(current) / name
             if not path.is_symlink():
                 path.chmod(0o644)
-    target = upstream / source["source"]["path"]
-    if digest(target) != source["source"]["sha256"]:
-        raise ValueError("fixed tsnet source mismatch")
+    for item in [source["source"], *source["additionalSources"]]:
+        if digest(upstream / item["path"]) != item["sha256"]:
+            raise ValueError("fixed upstream source mismatch: " + item["path"])
     patch = NATIVE / source["patch"]["path"]
     run(["git", "apply", "--check", patch], upstream, env, logs / "patch-check.log", 30)
     run(["git", "apply", patch], upstream, env, logs / "patch-apply.log", 30)
-    if digest(target) != source["source"]["patchedSha256"]:
-        raise ValueError("patched tsnet source mismatch")
+    for item in [source["source"], *source["additionalSources"]]:
+        if digest(upstream / item["path"]) != item["patchedSha256"]:
+            raise ValueError("patched upstream source mismatch: " + item["path"])
     shutil.copy2(NATIVE / source["patchTests"]["path"], upstream / "tsnet" / "herdr_explicit_auth_test.go")
+    shutil.copy2(NATIVE / source["dialPlanTests"]["path"], upstream / "net/tsdial/herdr_overlay_only_test.go")
     (work / "candidate-source.json").write_text(json.dumps(source, indent=2) + "\n")
     sync_sources(work, source)
     print(json.dumps({"prepared": str(work), "source": source["tailscaleCommit"],
@@ -189,6 +195,8 @@ def check_or_build(work, cache, build):
     logs = work / "logs"
     run([go, "test", "tailscale.com/tsnet", "-run", "^TestHerdr", "-count=1", "-v"],
         work, env, logs / "explicit-auth-test.log")
+    run([go, "test", "tailscale.com/net/tsdial", "-run", "^TestHerdr", "-count=1", "-v"],
+        work, env, logs / "overlay-dial-plan-test.log")
     run([go, "test", "-race", "-tags", "hp_ts_test", "./...", "-count=1", "-v"], work, env, logs / "runtime-tests.log")
     if build:
         suffix = {"Darwin": ".dylib", "Linux": ".so", "Windows": ".dll"}[platform.system()]

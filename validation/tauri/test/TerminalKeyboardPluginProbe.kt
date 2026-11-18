@@ -16,6 +16,24 @@ fun main() {
     activity.service = ime
     activity.lifecycle.currentState = Lifecycle.State.RESUMED
     plugin.load(view)
+    val root = android.view.View().also { it.y = 100 }
+    view.root = root
+    activity.windowManager.metrics.bounds.top = 100
+    view.y = 100
+    view.insets.top = 56
+    fun topInset(): Int {
+        val request = Invoke()
+        plugin.topInset(request)
+        return request.result["overlapPx"] as Int
+    }
+    check(topInset() == 56)
+    view.y = 156
+    check(topInset() == 0)
+    android.os.Build.VERSION.SDK_INT = 29
+    view.y = 120
+    view.visibleTop = 156
+    check(topInset() == 36)
+    android.os.Build.VERSION.SDK_INT = 35
     fun send(action: String, ticket: String = token): Invoke {
         val request = Invoke()
         request.args = TerminalKeyboardArgs().also { it.action = action; it.ticket = ticket }

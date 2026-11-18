@@ -133,7 +133,393 @@
 @media(max-width:899.98px){#workbench-split{display:none}}
 @media(min-width:900px){
   #view-content[data-split="2"]{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+  #view-content[data-split="2"] > [data-role="split-note"]{grid-column:1 / -1}
   #view-content[data-split="2"] .workbench-panel{min-width:0;border:1px solid var(--hp-termBorder);border-radius:12px;padding:12px}
   #view-content[data-split="2"] .workbench-panel[data-focus="true"]{border-color:var(--hp-brandBorder)}
   .workbench-panel .panel-head{margin:0 0 10px}
+}
+/* S01 board and primary navigation */
+.app-header { max-width:1000px; margin:auto; background:transparent; border:0; padding:20px; padding-top:calc(20px + max(var(--hp-system-top-inset,0px),env(safe-area-inset-top,0px))); gap:8px}
+.android-edge-to-edge:has(#host-home:not([hidden]) #home-ssh:not([hidden]) #ssh-key-change[hidden]) .app-header { position:sticky; top:0; z-index:10; background:var(--hp-canvas); }
+.brand-mark { width:40px; height:40px; font:700 13px ui-monospace,monospace; border-radius:12px}
+.brand-lockup { gap:10px}
+h1 { font-size:18px; margin:0}
+.brand-caption { font-size:11px; color:var(--hp-textSecondary)}
+#host-open-remote { white-space:nowrap}
+.route-tabs { max-width:960px; padding:0 20px; gap:6px}
+.route-tabs button { flex:1; max-width:none; border:0; background:transparent; color:var(--hp-textSecondary)}
+.route-tabs button span { margin-right:7px; font-size:18px}
+.route-tabs button[aria-pressed=true] { background:var(--hp-brandSoft); color:var(--hp-brand)}
+#host-home { padding-top:12px}
+.board-intro h2 { font-size:18px; margin:4px 0}
+.board-intro p { font-size:12px; color:var(--hp-textSecondary); line-height:1.5}
+.board-note { border:1px solid var(--hp-brandBorder); background:var(--hp-brandSoft); color:var(--hp-brand); border-radius:10px; padding:12px; font-size:12px; line-height:1.5}
+.saved-host-card { box-shadow:0 2px 10px #0f172a08}
+.saved-host-card [data-host-task-summary] { background:var(--hp-cardSubtle); border:1px solid var(--hp-border); border-radius:10px; padding:10px}
+.saved-host-card input { max-width:320px}
+#home-settings>button { margin:8px 8px 0 0}
+#home-terminal p,#home-network p { color:var(--hp-textSecondary); line-height:1.6}
+
+@media(max-width:599px) { body { padding-bottom:calc(74px + env(safe-area-inset-bottom))}
+.app-header { padding:16px 16px 6px; padding-top:calc(16px + max(var(--hp-system-top-inset,0px),env(safe-area-inset-top,0px)))}
+.brand-mark { width:36px; height:36px; font-size:12px}
+#host-open-remote { min-height:44px; padding:8px 10px}
+.route-tabs { position:fixed; z-index:50; bottom:0; left:0; right:0; max-width:none; margin:0; padding:4px 8px env(safe-area-inset-bottom); background:var(--hp-card); border-top:1px solid var(--hp-border); box-shadow:0 -4px 20px #0f172a0a}
+.route-tabs button { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; font-size:11px; min-height:60px; padding:4px}
+.route-tabs button span { margin:0; font-size:20px; line-height:22px}
+#host-home { padding:12px 16px 28px}
+.saved-host-card { padding:14px}
+}
+
+
+.ssh-options { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+#ssh-auth-method { display:block; width:100%; min-height:46px; margin:8px 0 12px; font:inherit; }
+#ssh-key-fields label { display:block; margin-bottom:12px; }
+#ssh-key { display:block; width:100%; box-sizing:border-box; }
+#home-ssh label:not(.review-check) { display:block; margin:12px 0; }
+.ssh-fingerprint { padding:12px; border:1px solid var(--hp-border); border-radius:10px; overflow-wrap:anywhere; background:var(--hp-card); }
+.ssh-key-change { margin-top:12px; padding:16px; border-radius:14px; overflow-wrap:anywhere; background:var(--hp-cardSubtle); }
+/* Review hides the app header, so the review page must keep its own top inset. */
+#host-home:has(#home-ssh:not([hidden]) #ssh-key-change:not([hidden])) {
+  padding-top:calc(12px + max(var(--hp-system-top-inset,0px),env(safe-area-inset-top,0px),var(--hp-ios-status-bar-fallback,0px)));
+}
+@media (max-width:599px) and (orientation:portrait) {
+  /* A native iOS WebView can extend behind the status bar with a zero CSS top inset. */
+  .ios-edge-to-edge { --hp-ios-status-bar-fallback:64px; }
+  .ios-edge-to-edge:has(#host-home:not([hidden]) #home-ssh:not([hidden]) #ssh-live:not([hidden])) .app-header {
+    position:sticky; top:0; z-index:10; background:var(--hp-canvas);
+    padding-top:calc(16px + max(var(--hp-system-top-inset,0px),env(safe-area-inset-top,0px),var(--hp-ios-status-bar-fallback)));
+  }
+}
+.ssh-key-change-heading { margin:0 0 12px; font-size:20px; font-weight:700; color:var(--hp-textPrimary); }
+.ssh-key-change-warning { padding:12px; border-radius:12px; border:1px solid var(--hp-dangerBorder); background:var(--hp-dangerSoft); }
+.ssh-key-change-warning-title { margin:0; font-weight:700; font-size:14px; color:var(--hp-dangerText); }
+.ssh-key-change-warning-detail { margin:6px 0 0; font-size:13px; line-height:1.6; color:var(--hp-dangerText); }
+.ssh-key-change-card { margin-top:12px; padding:16px; border:1px solid var(--hp-border); border-radius:16px; background:var(--hp-card); }
+.ssh-key-change-title { margin:0 0 8px; font-weight:600; font-size:15px; color:var(--hp-textPrimary); }
+.ssh-key-change p { margin:4px 0; font-size:13px; line-height:1.6; color:var(--hp-textPrimary); }
+.ssh-key-change #ssh-key-change-note { color:var(--hp-textSecondary); }
+.ssh-key-change-actions { display:grid; grid-template-columns:1fr; gap:8px; margin-top:16px; }
+.ssh-key-change-actions button { width:100%; min-height:44px; }
+.ssh-key-change-actions .secondary { background:var(--hp-card); color:var(--hp-textPrimary); border-color:var(--hp-borderStrong); }
+.ssh-scroll { border-radius:12px; height:min(380px, 50dvh); }
+.host-session {
+  background:var(--hp-cardSubtle);
+  border:1px solid var(--hp-border);
+  border-radius:10px;
+  padding:12px;
+}
+.host-session strong { font-size:13px; }
+.host-session small { color:var(--hp-textSecondary); font-size:11px; }
+.saved-host-card .host-session [data-host-task-summary] { padding:0; border:0; margin:6px 0; }
+.saved-host-card .blocked-target-list { margin:6px 0 0; gap:6px; }
+.saved-host-card .blocked-target-list p { font-size:11px; color:var(--hp-textSecondary); }
+#remote-setup > summary, .remote-key-section > summary {
+  cursor:pointer;
+  color:var(--hp-brand);
+  font-weight:700;
+  padding:12px 0;
+}
+#remote-stop-visible { margin:12px 0; }
+#ssh-live { margin-top:12px; }
+.ssh-helper-keys { display:flex; gap:4px; overflow-x:auto; overscroll-behavior-inline:contain; margin-top:8px; }
+.ssh-helper-keys button { flex:none; min-width:44px; min-height:44px; padding:6px 10px; }
+.ssh-target { position:sticky; top:var(--hp-ssh-sticky-top,max(var(--hp-system-top-inset,0px),env(safe-area-inset-top,0px))); z-index:2; background:var(--hp-canvas); font-weight:700; white-space:nowrap; overflow-x:auto; }
+#home-ssh .ssh-scroll { height:min(55dvh, 520px); }
+@media (max-width:599px) {
+  #home-ssh .ssh-scroll { height:45dvh; }
+  #home-ssh .ssh-options > button { flex:1; }
+}
+.host-task-details > summary, .connection-details > summary, #remote-board-container > summary {
+  cursor:pointer;
+  padding:12px 0;
+  color:var(--hp-textSecondary);
+  font-size:13px;
+  font-weight:700;
+}
+.visually-hidden {
+  position:absolute;
+  width:1px;
+  height:1px;
+  padding:0;
+  margin:-1px;
+  overflow:hidden;
+  clip:rect(0,0,0,0);
+  white-space:nowrap;
+  border:0;
+}
+.host-filter-chips {
+  display:flex;
+  gap:8px;
+  overflow-x:auto;
+  padding:2px 0 8px;
+}
+.host-filter-chips button {
+  flex:none;
+  min-height:44px;
+  border-radius:999px;
+  padding:8px 12px;
+  font-size:12px;
+}
+.host-filter-chips button[aria-pressed=true] {
+  border-color:var(--hp-brandBorder);
+  background:var(--hp-brandSoft);
+  color:var(--hp-brand);
+}
+.host-filters > label[for=host-query] { font-size:12px; }
+.host-card-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.host-card-heading h3 { margin:0; }
+.host-state {
+  flex:none;
+  border:1px solid var(--hp-border);
+  border-radius:999px;
+  padding:4px 9px;
+  color:var(--hp-textSecondary);
+  background:var(--hp-cardSubtle);
+  font-size:11px;
+}
+.host-state[data-state=current] { color:var(--hp-successText); border-color:var(--hp-successBorder); background:var(--hp-successSoft); }
+.host-state[data-state=history] { color:var(--hp-warningText); border-color:var(--hp-warningBorder); background:var(--hp-warningSoft); }
+.saved-host-card .host-route { margin:4px 0 12px; font-size:12px; }
+.host-session { margin:0 0 12px; }
+.host-session strong { display:block; }
+.saved-host-actions { align-items:flex-start; }
+.saved-host-actions > button { flex:1; }
+.board-intro h2 { margin:6px 0; }
+.board-intro { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.board-intro button { min-height:44px; }
+.saved-host-card .host-route { margin:3px 0 6px; }
+.saved-host-card .host-session { margin-bottom:6px; }
+.host-manage { flex:0 0 auto; }
+.host-manage > summary {
+  display:grid;
+  min-height:44px;
+  place-items:center;
+  padding:8px 14px;
+  border:1px solid var(--hp-borderStrong);
+  border-radius:10px;
+  background:var(--hp-card);
+  cursor:pointer;
+  font-size:13px;
+  font-weight:600;
+}
+.host-manage[open] { flex-basis:100%; }
+.host-manage[open] > summary { width:fit-content; }
+.host-management-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.host-empty {
+  padding:24px 16px;
+  border:1px solid var(--hp-border);
+  border-radius:16px;
+  background:var(--hp-card);
+  text-align:center;
+}
+.host-empty h3 { margin:0 0 8px; }
+.host-empty p { margin:0 0 16px; color:var(--hp-textSecondary); font-size:13px; }
+.remote-key-section > label { display:block; margin:12px 0; }
+/* Mobile herdr controls stay above navigation and the visible keyboard. */
+@media (max-width:599px) {
+  body.keyboard-visible .route-tabs { bottom:var(--hp-visual-inset,0px); }
+  #remote-result { padding-bottom:220px; }
+  #remote-result .term-scroll { height:min(31dvh,260px); }
+  #remote-input-controls {
+    position:fixed;
+    z-index:49;
+    left:0;
+    right:0;
+    bottom:calc(65px + env(safe-area-inset-bottom) + var(--hp-visual-inset,0px));
+    max-height:min(55dvh,calc(var(--hp-visual-height,100dvh) - 90px));
+    overflow-y:auto;
+    padding:8px 10px;
+    border:1px solid var(--hp-border);
+    border-radius:12px 12px 0 0;
+    box-shadow:0 -5px 20px #0f172a18;
+    overscroll-behavior:contain;
+  }
+  body.keyboard-visible #remote-input-controls { bottom:calc(65px + env(safe-area-inset-bottom) + var(--hp-visual-inset,0px)); }
+  #remote-input-controls h3 { display:none; }
+  #remote-input-controls #remote-input-target,
+  #remote-input-controls #remote-input-status { margin:0 0 5px; font-size:12px; line-height:1.35; overflow-wrap:anywhere; }
+  #remote-input-target { font-weight:700; }
+  #remote-input-controls .remote-mode-actions { grid-template-columns:repeat(6,minmax(0,1fr)); gap:4px; }
+  #remote-input-controls .remote-mode-actions button { min-width:0; min-height:44px; padding:6px 2px; font-size:11px; }
+  #remote-input-controls .remote-mode-actions button[aria-pressed=true] { background:var(--hp-brandSoft); border-color:var(--hp-brandBorder); color:var(--hp-brand); }
+  #remote-input-controls .remote-extra-actions { display:flex; gap:6px; margin-top:6px; }
+  #remote-input-controls[data-mode=observe] #remote-read-paste { display:none; }
+  #remote-input-controls[data-mode=observe] #remote-input-keys,
+  #remote-input-controls[data-mode=draft] #remote-input-keys { display:none; }
+  #remote-input-keys { display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin-top:5px; }
+  #remote-input-keys #remote-modifier-status { order:0; flex-basis:100%; margin:0; font-size:11px; line-height:1.25; }
+  #remote-input-keys .remote-modifier-actions { order:2; display:flex; flex:none; gap:4px; margin:0; }
+  #remote-input-keys .remote-modifier-actions button { min-width:44px; padding:6px; }
+  #remote-input-keys #remote-modifier-cancel:disabled { display:none; }
+  #remote-input-keys .remote-primary-keys { order:1; display:flex; flex:1 1 100%; min-width:0; gap:4px; overflow-x:auto; margin:0; }
+  #remote-input-keys .remote-primary-keys button { flex:none; min-width:44px; padding:6px; }
+  #remote-input-keys .remote-combination-bases,
+  #remote-input-keys .terminal-more-keys { order:4; flex-basis:100%; }
+  #remote-input-keys > button { order:3; min-width:54px; padding:6px; }
+  #remote-input-controls textarea { min-height:64px; margin:4px 0; }
+  #remote-input-preview-text { max-height:100px; }
+}
+@media (max-width:599px) {
+  #tab-workspace { padding-bottom:220px; }
+  #tab-workspace .term-scroll { height:min(31dvh,260px); }
+  .tab-mobile-controls {
+    position:fixed;
+    z-index:49;
+    left:0;
+    right:0;
+    bottom:calc(65px + env(safe-area-inset-bottom) + var(--hp-visual-inset,0px));
+    max-height:min(55dvh,calc(var(--hp-visual-height,100dvh) - 90px));
+    overflow-y:auto;
+    padding:8px 10px;
+    border:1px solid var(--hp-border);
+    border-radius:12px 12px 0 0;
+    background:var(--hp-card);
+    color:var(--hp-textPrimary);
+    box-shadow:0 -5px 20px #0f172a18;
+    overscroll-behavior:contain;
+  }
+  body.keyboard-visible .tab-mobile-controls { bottom:calc(65px + env(safe-area-inset-bottom) + var(--hp-visual-inset,0px)); }
+  .tab-mobile-controls p { margin:0 0 5px; font-size:12px; line-height:1.35; overflow-wrap:anywhere; }
+  .tab-dock-target { font-weight:700; }
+  .tab-mobile-controls .tab-mode-actions { grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; }
+  .tab-mobile-controls .tab-mode-actions button { min-width:0; padding:6px 2px; font-size:11px; }
+  .tab-mobile-controls .tab-draft-field { display:none; }
+  .tab-mobile-controls[data-mode=draft] .tab-draft-field { display:block; min-height:64px; margin:4px 0; }
+  .tab-input-toolbar .tab-primary-keys { display:flex; overflow-x:auto; gap:4px; }
+  .tab-input-toolbar .tab-primary-keys button { flex:none; min-width:44px; padding:6px; }
+  .tab-input-toolbar .tab-modifier-actions { display:flex; gap:4px; }
+  .tab-input-toolbar .tab-modifier-actions button { min-width:44px; padding:6px; }
+}
+@media (max-width:599px) {
+  .tab-connection-details > summary, .tab-board-details > summary {
+    min-height:44px;
+    padding:12px;
+    color:var(--hp-termText);
+    cursor:pointer;
+    font-size:12px;
+    font-weight:700;
+  }
+  .tab-connection-details > p, .tab-connection-details > label { display:block; margin:8px 12px; }
+  .tab-connection-actions[data-state=active] button:disabled { display:none; }
+}
+@media (max-width:599px) {
+  .tab-mobile-controls .tab-mode-actions button[aria-pressed=true] {
+    background:var(--hp-brandSoft);
+    border-color:var(--hp-brandBorder);
+    color:var(--hp-brand);
+  }
+  .tab-mobile-controls:not([data-mode=draft]) .tab-send-button { display:none; }
+}
+@media (max-width:599px) {
+  .tab-input-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:4px; }
+  .tab-input-toolbar > p { flex-basis:100%; margin:0; font-size:11px; }
+  .tab-input-toolbar .tab-modifier-actions { flex:none; margin:0; }
+  .tab-input-toolbar .tab-modifier-actions button:last-child:disabled { display:none; }
+  .tab-input-toolbar .tab-primary-keys { flex:1 1 90px; min-width:0; margin:0; }
+  .tab-input-toolbar > button { flex:none; min-width:54px; padding:6px; }
+  .tab-input-toolbar .remote-combination-bases, .tab-input-toolbar .terminal-more-keys { flex-basis:100%; }
+}
+
+.tab-connection-details label { color:var(--hp-termText); }
+
+/* While the keyboard is open, leave room for the terminal's live output. */
+@media (max-width:599px) {
+  body.keyboard-visible:has(#remote-input-controls:not([hidden])) .route-tabs,
+  body.keyboard-visible:has(.tab-mobile-controls) .route-tabs { display:none; }
+  body.keyboard-visible #remote-input-controls,
+  body.keyboard-visible .tab-mobile-controls {
+    bottom:var(--hp-visual-inset,0px);
+    max-height:calc(var(--hp-visual-height,100dvh) - 160px);
+    padding:4px 8px;
+  }
+  body.keyboard-visible #remote-result .remote-result-heading,
+  body.keyboard-visible #remote-font-diagnostics,
+  body.keyboard-visible #remote-result .terminal-select-button,
+  body.keyboard-visible #tab-workspace > .remote-result-heading,
+  body.keyboard-visible #tab-workspace .terminal-select-button,
+  body.keyboard-visible #tab-workspace .terminal-font-button { display:none; }
+  body.keyboard-visible #remote-read-paste,
+  body.keyboard-visible #remote-keyboard-show,
+  body.keyboard-visible #tab-keyboard-show { display:none; }
+  body.keyboard-visible #remote-input-controls .remote-mode-actions { grid-template-columns:repeat(5,minmax(0,1fr)); }
+  body.keyboard-visible #remote-input-keys #remote-modifier-status { display:none; }
+  body.keyboard-visible #remote-input-keys:has(.remote-modifier-actions [aria-pressed=true]) #remote-modifier-status,
+  body.keyboard-visible #remote-input-keys:has(#remote-modifier-ctrl:disabled) #remote-modifier-status { display:block; }
+  body.keyboard-visible #remote-input-keys .remote-primary-keys { flex:1 1 80px; }
+  body.keyboard-visible #remote-input-keys .remote-modifier-actions { order:0; }
+  body.keyboard-visible #remote-input-controls .remote-extra-actions { margin:0; }
+  body.keyboard-visible .tab-mobile-controls .tab-mode-actions { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  body.keyboard-visible .tab-input-toolbar > p { display:none; }
+  body.keyboard-visible .tab-input-toolbar:has(.tab-modifier-actions [aria-pressed=true]) > p,
+  body.keyboard-visible .tab-input-toolbar:has(.tab-modifier-actions button:first-child:disabled) > p { display:block; }
+}
+
+.network-profile-card h3 { margin:0 0 8px; }
+.network-profile-card > p { margin:5px 0; }
+.network-profile-management { margin-top:10px; }
+.network-profile-management > summary {
+  min-height:44px;
+  padding:12px 0;
+  color:var(--hp-brand);
+  cursor:pointer;
+  font-weight:600;
+}
+.network-profile-management > p { color:var(--hp-textSecondary); font-size:13px; }
+.network-profile-management .saved-host-actions p { flex-basis:100%; margin:4px 0; }
+.network-profile-management .saved-host-actions > button {
+  flex:1 1 110px;
+  white-space:normal;
+}
+@media (max-width:599px) {
+  #home-network:has(#network-panel:not([hidden])) > h2,
+  #home-network:has(#network-panel:not([hidden])) > #network-open { display:none; }
+  #network-panel:not([hidden]) { padding:0; border:0; background:transparent; }
+  #network-panel > h2 { margin:4px 0 8px; }
+  #network-panel > p { margin:6px 0 10px; }
+  .network-profile-card {
+    display:grid;
+    grid-template-columns:minmax(0,1fr) max-content;
+    column-gap:8px;
+    padding:12px;
+    margin:8px 0;
+  }
+  .network-profile-card > h3 { min-width:0; margin:0; overflow-wrap:anywhere; }
+  .network-profile-card > p { grid-column:1 / -1; margin:2px 0; line-height:1.4; overflow-wrap:anywhere; }
+  .network-profile-card > p:first-of-type { grid-column:2; align-self:center; }
+  .network-profile-management { grid-column:1 / -1; margin-top:3px; }
+  .network-profile-management > summary { min-height:44px; padding:12px 0; }
+}
+/* Ordinary SSH owns its PTY; this viewport is independent of xterm content. */
+#home-ssh .ssh-scroll { box-sizing:border-box; min-height:80px; height:min(55dvh, 520px, calc(var(--hp-visual-height,100dvh) - 180px)); }
+#ssh-terminal { width:max-content; min-height:0; }
+@media (max-width:599px) {
+  #home-ssh .ssh-scroll { height:min(45dvh, calc(var(--hp-visual-height,100dvh) - 180px)); }
+  .android-edge-to-edge:has(#host-home:not([hidden]) #home-ssh:not([hidden]) #ssh-key-change[hidden]) #home-ssh .ssh-scroll { height:min(45dvh, calc(var(--hp-visual-height,100dvh) - var(--hp-ssh-sticky-top,0px) - 146px)); }
+}
+/* Tabs sit on the dark terminal surface at every viewport width. */
+#tab-workspace #view-tabs button[aria-pressed=false] { color:var(--hp-termText); }
+#tab-workspace #view-tabs button[aria-pressed=false]:hover:not(:disabled) {
+  color:var(--hp-termText);
+  background:var(--hp-termKeyBg);
+}
+#tab-workspace #view-tabs button:focus-visible { outline-color:var(--hp-brandBorder); }
+.unknown-input-review {
+  margin:12px 0;
+  padding:12px;
+  color:var(--hp-warningText);
+  background:var(--hp-warningSoft);
+  border:1px solid var(--hp-warningBorder);
+  border-radius:12px;
+}
+.unknown-input-review p { margin:6px 0; line-height:1.5; }
+.unknown-input-review pre {
+  max-height:140px;
+  overflow:auto;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  color:var(--hp-textPrimary);
+  background:var(--hp-card);
+  padding:8px;
+  border-radius:8px;
 }

@@ -1,0 +1,579 @@
+{
+  "schemaVersion": 1,
+  "status": "failed",
+  "scope": "owned API35 real AndroidKeyStore and fixed product JNI TS start/status/stop; no GUI, login or application dial",
+  "runnerSource": "0d78f015190cd03ceec478f1beaea40ca6380c4a",
+  "nativeSource": "45ea7dc6f9b99b9bc2fba0f2e53f6e31c7a0ccbf",
+  "hostSource": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
+  "variants": [
+    {
+      "variant": "normal",
+      "diagnosticsLeg": "optin",
+      "status": "failed",
+      "librariesSha256": {
+        "libheeler_easytier.so": "829a3df02dc36b53d18ec914b2f91c5caa2b5c597511cbd353fdf19b7817ecaf",
+        "libhp_tailscale.so": "b61924c6bfeb042e85722085e3a8e6ba1d24201a27d433522de528c8bfee37a3",
+        "libherdr_flutter_network_runtime.so": "bb5e3b7c02abb2a211aac558b201dfeecb786846f68561b2a9c1c44ce2e803a6"
+      },
+      "apkSha256": "8a1ea6cbdf92bdf7edfda7da31778f09581ac913520f5542a135d2b1fefdd85b",
+      "controlBefore": {
+        "event": "ts_diagnostics",
+        "keyRequests": 0,
+        "noiseRequests": 0,
+        "registerRequests": 0,
+        "mapRequests": 1,
+        "tlsHandshakeErrors": 0,
+        "secondClientRegistered": false,
+        "authCompletions": 0
+      },
+      "installedApkSha256": "8a1ea6cbdf92bdf7edfda7da31778f09581ac913520f5542a135d2b1fefdd85b",
+      "abiInstrumentation": {
+        "commandSucceeded": true,
+        "finished": true,
+        "returnCode": "0",
+        "processCrash": true,
+        "instrumentationFailed": false,
+        "crashSignals": [
+          6
+        ],
+        "panicTypes": [],
+        "goFrames": [],
+        "upstreamFrames": [],
+        "signalEvidence": true,
+        "abortThreads": [
+          "Instrumentation  >>> dev.herdr.herdr_flutter_probe <<<"
+        ],
+        "frames": [
+          {
+            "module": "libhp_tailscale.so",
+            "function": "runtime.raise.abi0",
+            "source": "go.go:?"
+          }
+        ]
+      },
+      "abiProbe": "schema-rejected",
+      "abiEvidence": {
+        "diagnose": {
+          "event": "netmon_diagnose",
+          "getterRegistered": true,
+          "getterCalls": 1,
+          "paths": [
+            {
+              "path": "goNet",
+              "ok": false,
+              "errClass": "permission",
+              "interfaces": 0,
+              "addresses": 0
+            },
+            {
+              "path": "getifaddrs",
+              "ok": true,
+              "errClass": "none",
+              "interfaces": 3,
+              "addresses": 7
+            }
+          ],
+          "selected": "getifaddrs",
+          "stateBuilt": true,
+          "stateErrClass": "",
+          "haveV4": true,
+          "haveV6": false,
+          "anyUp": true
+        },
+        "library": {
+          "pathAvailable": true,
+          "digestAvailable": false,
+          "digestMatches": false
+        },
+        "store": {
+          "present": true,
+          "reads": 3,
+          "writes": 0,
+          "startCode": 0
+        },
+        "stages": {
+          "library-mapped": true,
+          "abi-version": true,
+          "node-new": true,
+          "node-status": true,
+          "node-start-entered": true,
+          "node-start-returned": true,
+          "node-status-after-start": true,
+          "node-close-entered": true,
+          "node-close-returned": true,
+          "node-release-entered": true,
+          "node-release-returned": true
+        },
+        "expectedLibrary": {
+          "present": true,
+          "digestMatches": true,
+          "sha256": "b61924c6bfeb042e85722085e3a8e6ba1d24201a27d433522de528c8bfee37a3"
+        }
+      },
+      "abiGoLog": {
+        "available": true,
+        "panicClass": "go-panic",
+        "reason": "unspecified",
+        "appFunction": "none",
+        "firstFrame": "none",
+        "upstreamFrames": []
+      },
+      "instrumentation": {
+        "commandSucceeded": true,
+        "finished": true,
+        "returnCode": "0",
+        "processCrash": true,
+        "instrumentationFailed": false,
+        "crashSignals": [
+          6
+        ],
+        "panicTypes": [],
+        "goFrames": [],
+        "upstreamFrames": [],
+        "signalEvidence": true,
+        "abortThreads": [
+          "Instrumentation  >>> dev.herdr.herdr_flutter_probe <<<"
+        ],
+        "frames": [
+          {
+            "module": "libhp_tailscale.so",
+            "function": "runtime.raise.abi0",
+            "source": "go.go:?"
+          }
+        ]
+      },
+      "goLog": {
+        "available": true,
+        "panicClass": "go-panic",
+        "reason": "unspecified",
+        "appFunction": "none",
+        "firstFrame": "none",
+        "upstreamFrames": []
+      },
+      "currentExit": {
+        "available": false
+      },
+      "stderrEvidence": {
+        "available": false
+      },
+      "probeReport": "valid",
+      "probe": {
+        "schemaVersion": 1,
+        "loginInvoked": false,
+        "dialInvoked": false,
+        "previousExit": {
+          "available": true,
+          "reason": 5,
+          "status": 6,
+          "timestamp": 1794797600311,
+          "importance": 125
+        },
+        "lastStage": "native-start",
+        "passed": false,
+        "diagnosticsLeg": "optin",
+        "librariesLoaded": true,
+        "contextBound": true,
+        "identityCreated": true,
+        "identityReadBack": true,
+        "directories": {
+          "coreDirectoryPrepared": true,
+          "root": {
+            "exists": true,
+            "directory": true,
+            "ownerMatches": true,
+            "permissionBits0700": true,
+            "fullMode0700": true,
+            "setgid": false
+          },
+          "runtime": {
+            "exists": true,
+            "directory": true,
+            "ownerMatches": true,
+            "permissionBits0700": true,
+            "fullMode0700": true,
+            "setgid": false
+          },
+          "identity": {
+            "exists": true,
+            "directory": true,
+            "ownerMatches": true,
+            "permissionBits0700": true,
+            "fullMode0700": true,
+            "setgid": false
+          },
+          "productDirectoryCallbackSucceeded": true
+        },
+        "nativeScopeCreated": true,
+        "availableOk": true,
+        "providerAvailable": true,
+        "javaInterfaces": {
+          "ok": true,
+          "interfaces": 3,
+          "addresses": 7,
+          "errClass": ""
+        },
+        "netmonOptIn": true
+      },
+      "controlAfter": {
+        "event": "ts_diagnostics",
+        "keyRequests": 0,
+        "noiseRequests": 0,
+        "registerRequests": 0,
+        "mapRequests": 1,
+        "tlsHandshakeErrors": 0,
+        "secondClientRegistered": false,
+        "authCompletions": 0
+      },
+      "controlDelta": {
+        "keyRequests": 0,
+        "noiseRequests": 0,
+        "registerRequests": 0,
+        "mapRequests": 0,
+        "tlsHandshakeErrors": 0,
+        "authCompletions": 0
+      },
+      "noNewAuthorizationOrRegistration": true,
+      "noSshAuthentication": true,
+      "packageRemoved": true,
+      "session": {
+        "hostSource": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
+        "deviceApi35Verified": true,
+        "hostReady": true,
+        "relayRoles": 3,
+        "reverseMappings": 3,
+        "udpStunRelayed": false,
+        "deviceUserspaceReachabilityVerified": false,
+        "cleanup": {
+          "reverseRemoved": true,
+          "relayStopped": true,
+          "controllerStopped": true,
+          "namespaceRemoved": true,
+          "hostPrivateDirectoryRemoved": true,
+          "controlReaderStopped": true,
+          "privateFilesRemoved": true
+        },
+        "stage": "ready",
+        "listenerChecks": {
+          "control": {
+            "exactLoopbackListener": true,
+            "expectedPidVisible": true,
+            "exactListenerOwnedByPid": true,
+            "samePortListener": true,
+            "samePortDeviceBoundLoopback": false,
+            "samePortMappedLoopback": false,
+            "samePortWildcard": false,
+            "samePortIPv6Loopback": false
+          },
+          "derp": {
+            "exactLoopbackListener": true,
+            "expectedPidVisible": true,
+            "exactListenerOwnedByPid": true,
+            "samePortListener": true,
+            "samePortDeviceBoundLoopback": false,
+            "samePortMappedLoopback": false,
+            "samePortWildcard": false,
+            "samePortIPv6Loopback": false
+          },
+          "easytier": {
+            "exactLoopbackListener": true,
+            "expectedPidVisible": true,
+            "exactListenerOwnedByPid": true,
+            "samePortListener": true,
+            "samePortDeviceBoundLoopback": true,
+            "samePortMappedLoopback": false,
+            "samePortWildcard": false,
+            "samePortIPv6Loopback": false
+          }
+        },
+        "controllerProcessExited": true,
+        "controllerExitType": "success"
+      }
+    },
+    {
+      "variant": "qa",
+      "diagnosticsLeg": "optin",
+      "status": "failed",
+      "librariesSha256": {
+        "libheeler_easytier.so": "829a3df02dc36b53d18ec914b2f91c5caa2b5c597511cbd353fdf19b7817ecaf",
+        "libhp_tailscale.so": "e996ed31ea51b07369f19e2e4b2ba00b307f37b953631de7f136f2e5bfc1e96f",
+        "libherdr_flutter_network_runtime.so": "bb5e3b7c02abb2a211aac558b201dfeecb786846f68561b2a9c1c44ce2e803a6"
+      },
+      "apkSha256": "a706caebc99b885a40173f38791c605acfe0d50ab9e41bd59d358a9b79c6ebf1",
+      "controlBefore": {
+        "event": "ts_diagnostics",
+        "keyRequests": 0,
+        "noiseRequests": 0,
+        "registerRequests": 0,
+        "mapRequests": 0,
+        "tlsHandshakeErrors": 0,
+        "secondClientRegistered": false,
+        "authCompletions": 0
+      },
+      "installedApkSha256": "a706caebc99b885a40173f38791c605acfe0d50ab9e41bd59d358a9b79c6ebf1",
+      "abiInstrumentation": {
+        "commandSucceeded": true,
+        "finished": true,
+        "returnCode": "0",
+        "processCrash": true,
+        "instrumentationFailed": false,
+        "crashSignals": [
+          6
+        ],
+        "panicTypes": [],
+        "goFrames": [],
+        "upstreamFrames": [],
+        "signalEvidence": true,
+        "abortThreads": [
+          "Instrumentation  >>> dev.herdr.herdr_flutter_probe <<<"
+        ],
+        "frames": [
+          {
+            "module": "libhp_tailscale.so",
+            "function": "runtime.raise.abi0",
+            "source": "go.go:?"
+          }
+        ]
+      },
+      "abiProbe": "schema-rejected",
+      "abiEvidence": {
+        "diagnose": {
+          "event": "netmon_diagnose",
+          "getterRegistered": true,
+          "getterCalls": 1,
+          "paths": [
+            {
+              "path": "goNet",
+              "ok": false,
+              "errClass": "permission",
+              "interfaces": 0,
+              "addresses": 0
+            },
+            {
+              "path": "getifaddrs",
+              "ok": true,
+              "errClass": "none",
+              "interfaces": 3,
+              "addresses": 7
+            }
+          ],
+          "selected": "getifaddrs",
+          "stateBuilt": true,
+          "stateErrClass": "",
+          "haveV4": true,
+          "haveV6": false,
+          "anyUp": true
+        },
+        "library": {
+          "pathAvailable": true,
+          "digestAvailable": false,
+          "digestMatches": false
+        },
+        "store": {
+          "present": true,
+          "reads": 3,
+          "writes": 0,
+          "startCode": 0
+        },
+        "stages": {
+          "library-mapped": true,
+          "abi-version": true,
+          "node-new": true,
+          "node-status": true,
+          "node-start-entered": true,
+          "node-start-returned": true,
+          "node-status-after-start": true,
+          "node-close-entered": true,
+          "node-close-returned": true,
+          "node-release-entered": true,
+          "node-release-returned": true
+        },
+        "expectedLibrary": {
+          "present": true,
+          "digestMatches": true,
+          "sha256": "e996ed31ea51b07369f19e2e4b2ba00b307f37b953631de7f136f2e5bfc1e96f"
+        }
+      },
+      "abiGoLog": {
+        "available": true,
+        "panicClass": "go-panic",
+        "reason": "unspecified",
+        "appFunction": "none",
+        "firstFrame": "none",
+        "upstreamFrames": []
+      },
+      "instrumentation": {
+        "commandSucceeded": true,
+        "finished": true,
+        "returnCode": "0",
+        "processCrash": true,
+        "instrumentationFailed": false,
+        "crashSignals": [
+          6
+        ],
+        "panicTypes": [],
+        "goFrames": [],
+        "upstreamFrames": [],
+        "signalEvidence": true,
+        "abortThreads": [
+          "Thread-5  >>> dev.herdr.herdr_flutter_probe <<<"
+        ],
+        "frames": [
+          {
+            "module": "libhp_tailscale.so",
+            "function": "runtime.raise.abi0",
+            "source": "go.go:?"
+          }
+        ]
+      },
+      "goLog": {
+        "available": true,
+        "panicClass": "go-panic",
+        "reason": "unspecified",
+        "appFunction": "none",
+        "firstFrame": "none",
+        "upstreamFrames": []
+      },
+      "currentExit": {
+        "available": false
+      },
+      "stderrEvidence": {
+        "available": false
+      },
+      "probeReport": "valid",
+      "probe": {
+        "schemaVersion": 1,
+        "loginInvoked": false,
+        "dialInvoked": false,
+        "previousExit": {
+          "available": true,
+          "reason": 5,
+          "status": 6,
+          "timestamp": 1794797661020,
+          "importance": 125
+        },
+        "lastStage": "native-start",
+        "passed": false,
+        "diagnosticsLeg": "optin",
+        "librariesLoaded": true,
+        "contextBound": true,
+        "identityCreated": true,
+        "identityReadBack": true,
+        "directories": {
+          "coreDirectoryPrepared": true,
+          "root": {
+            "exists": true,
+            "directory": true,
+            "ownerMatches": true,
+            "permissionBits0700": true,
+            "fullMode0700": true,
+            "setgid": false
+          },
+          "runtime": {
+            "exists": true,
+            "directory": true,
+            "ownerMatches": true,
+            "permissionBits0700": true,
+            "fullMode0700": true,
+            "setgid": false
+          },
+          "identity": {
+            "exists": true,
+            "directory": true,
+            "ownerMatches": true,
+            "permissionBits0700": true,
+            "fullMode0700": true,
+            "setgid": false
+          },
+          "productDirectoryCallbackSucceeded": true
+        },
+        "nativeScopeCreated": true,
+        "availableOk": true,
+        "providerAvailable": true,
+        "javaInterfaces": {
+          "ok": true,
+          "interfaces": 3,
+          "addresses": 7,
+          "errClass": ""
+        },
+        "netmonOptIn": true
+      },
+      "controlAfter": {
+        "event": "ts_diagnostics",
+        "keyRequests": 0,
+        "noiseRequests": 0,
+        "registerRequests": 0,
+        "mapRequests": 1,
+        "tlsHandshakeErrors": 0,
+        "secondClientRegistered": false,
+        "authCompletions": 0
+      },
+      "controlDelta": {
+        "keyRequests": 0,
+        "noiseRequests": 0,
+        "registerRequests": 0,
+        "mapRequests": 1,
+        "tlsHandshakeErrors": 0,
+        "authCompletions": 0
+      },
+      "noNewAuthorizationOrRegistration": true,
+      "noSshAuthentication": true,
+      "packageRemoved": true,
+      "session": {
+        "hostSource": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
+        "deviceApi35Verified": true,
+        "hostReady": true,
+        "relayRoles": 3,
+        "reverseMappings": 3,
+        "udpStunRelayed": false,
+        "deviceUserspaceReachabilityVerified": false,
+        "cleanup": {
+          "reverseRemoved": true,
+          "relayStopped": true,
+          "controllerStopped": true,
+          "namespaceRemoved": true,
+          "hostPrivateDirectoryRemoved": true,
+          "controlReaderStopped": true,
+          "privateFilesRemoved": true
+        },
+        "stage": "ready",
+        "listenerChecks": {
+          "control": {
+            "exactLoopbackListener": true,
+            "expectedPidVisible": true,
+            "exactListenerOwnedByPid": true,
+            "samePortListener": true,
+            "samePortDeviceBoundLoopback": false,
+            "samePortMappedLoopback": false,
+            "samePortWildcard": false,
+            "samePortIPv6Loopback": false
+          },
+          "derp": {
+            "exactLoopbackListener": true,
+            "expectedPidVisible": true,
+            "exactListenerOwnedByPid": true,
+            "samePortListener": true,
+            "samePortDeviceBoundLoopback": false,
+            "samePortMappedLoopback": false,
+            "samePortWildcard": false,
+            "samePortIPv6Loopback": false
+          },
+          "easytier": {
+            "exactLoopbackListener": true,
+            "expectedPidVisible": true,
+            "exactListenerOwnedByPid": true,
+            "samePortListener": true,
+            "samePortDeviceBoundLoopback": true,
+            "samePortMappedLoopback": false,
+            "samePortWildcard": false,
+            "samePortIPv6Loopback": false
+          }
+        },
+        "controllerProcessExited": true,
+        "controllerExitType": "success"
+      }
+    }
+  ],
+  "netmonDiagnoseCollected": false,
+  "finalNamespaceAbsent": true,
+  "avdWrapperSucceeded": false
+}

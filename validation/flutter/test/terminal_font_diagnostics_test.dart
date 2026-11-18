@@ -7,7 +7,14 @@ import 'package:terminal_view/terminal_view.dart';
 
 import 'remote_input_widget_test.dart' as input;
 
+Future<void> openDisplayTools(WidgetTester tester) async {
+  if (find.byKey(const ValueKey('remote-font-diagnostics-open')).evaluate().isNotEmpty) return;
+  final tools=find.byKey(const ValueKey('remote-display-tools'));
+  await tester.ensureVisible(tools); await tester.tap(tools); await tester.pumpAndSettle();
+}
+
 Future<void> press(WidgetTester tester, String key) async {
+  if (key == 'remote-font-diagnostics-open') await openDisplayTools(tester);
   final opening = key == 'remote-font-diagnostics-open';
   final button = find.byKey(ValueKey(key));
   await tester.ensureVisible(button);
@@ -112,6 +119,7 @@ void main() {
       final calls = adapter.calls;
       final generation = adapter.generation;
 
+      await openDisplayTools(tester);
       final openButton = tester.widget<OutlinedButton>(
         find.byKey(const ValueKey('remote-font-diagnostics-open')),
       );

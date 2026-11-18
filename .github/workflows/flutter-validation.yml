@@ -28,6 +28,8 @@ jobs:
           if test -f pubspec.lock; then flutter pub get --enforce-lockfile; else flutter pub get; fi
           flutter analyze
           flutter test --reporter expanded
+      - name: Exercise isolated ordinary SSH loopback
+        run: python3 validation/flutter/tool/direct_ssh_fixture_runner.py --project "$RUNNER_TEMP/flutter-probe"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:

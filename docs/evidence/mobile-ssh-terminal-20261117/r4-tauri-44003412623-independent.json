@@ -1,0 +1,26 @@
+[
+  [
+    "tauri-direct-evidence/ssh-terminal-android.png",
+    "tauri-direct-evidence/ssh-terminal-android.json",
+    "601f16bdd7cfa95031217302be337d4cb5e4d6fafa46447ed33d63b2d7b08eeb",
+    [
+      66,
+      710,
+      945,
+      967
+    ],
+    "tesseract 5.5.4"
+  ],
+  [
+    "tauri-direct-evidence/ssh-rotation-terminal-android.png",
+    "tauri-direct-evidence/ssh-rotation-terminal-android.json",
+    "fdb2e886b21484045b75905579e56fd2103d8b46d9406e6bbc1da02ce54fd57b",
+    [
+      66,
+      710,
+      945,
+      967
+    ],
+    "tesseract 5.5.4"
+  ]
+]

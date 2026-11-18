@@ -11,9 +11,9 @@ export function createTabInputToolbar({ canSend, send, applicationCursorMode }) 
   status.setAttribute('role', 'status');
   status.setAttribute('aria-live', 'polite');
   const modifierRow = document.createElement('div');
-  modifierRow.className = 'remote-actions';
+  modifierRow.className = 'remote-actions tab-modifier-actions';
   const keyRow = document.createElement('div');
-  keyRow.className = 'remote-actions';
+  keyRow.className = 'remote-actions tab-primary-keys';
   const extraKeys = document.createElement('div');
   extraKeys.className = 'remote-actions terminal-more-keys';
   extraKeys.setAttribute('aria-label', '更多终端键');

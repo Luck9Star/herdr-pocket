@@ -1,0 +1,151 @@
+{
+ "schema": "herdr-pocket.macos-wkwebview.ssh-form-ax.v2",
+ "generated_at_utc": "2026-11-17T11:10:33+00:00",
+ "scope": "本机 macOS 真实 WKWebView（完整 Tauri 原生宿主）中，普通 SSH 表单四项控件的只读 AX 核验。本文件不含任何 iOS 结论。",
+ "platform": "macOS arm64",
+ "host_kind": "完整 Tauri 原生宿主（非浏览器预览、非 iOS XCTest）",
+ "build": {
+  "source_binding": {
+   "git_branch": "codex/tauri-ios-form-identity",
+   "git_head": "a803a3ad1af36867007a9284ec5dbc4e74e47185"
+  },
+  "source_sha256": {
+   "validation/tauri/index.html": "39e809d12cadd7ee11ee9078cad3cd6a52afce95eca1ff100de2bb7b6e92e342",
+   "validation/tauri/src/direct-ssh-ui.js": "229d73521d9e43ee16545dd14946c7454cf0a420f7bf93c7c107fcd79a119e43",
+   "validation/tauri/src/remote.js": "1b7c75f1ed3c1d5769e1a0417ccef73994c56ece8e7195814ab61ce3c145f992"
+  },
+  "frontend_build": "npm ci && npm run build（vite build），输入为当前源码",
+  "frontend_artifact_sha256": {
+   "dist/index.html": "ba78b53caa1b6dc765eb620bd90a05c553fb5db292eb09c7b7e86b11b42c1af0",
+   "dist/assets/index-SlyfqV0Z.js": "fc249551bd3dd6e3f95267c3bdd08cfd102575f5b1d10ad6246b7173bc085a78"
+  },
+  "rust_build": "cargo build --offline --features tauri/custom-protocol",
+  "app_binary_sha256": "bdc4ca781bae3faf1eda7c925a07187b4d03a7b81c0e89dbb6e198fbd3f2bf55",
+  "icon_step": "npm run tauri -- icon icon.svg（生成 gitignore 掉的 src-tauri/icons）",
+  "build_note": "未启用 tauri/custom-protocol 时宿主走 devUrl、窗口空白，不能作为核验宿主。",
+  "frontend_loaded": "由当前源码新构建的前端；工作树内既有的本机 dist 产物字节与之不同，未被本次运行加载。"
+ },
+ "shared_window": {
+  "ax_window_title": "Herdr Pocket",
+  "ax_window_subrole": "AXStandardWindow",
+  "ax_web_area_description": "herdr-pocket · 远端终端原型",
+  "all_four_controls_same_window": true
+ },
+ "controls": [
+  {
+   "visible_name": "主机地址",
+   "source_id": "#ssh-host",
+   "ax_role": "AXTextField",
+   "ax_subrole": null,
+   "ax_identifier_present": false,
+   "editable": true,
+   "same_window": true,
+   "label": {
+    "text": "主机地址",
+    "ax_role": "AXStaticText",
+    "same_window": true
+   },
+   "user_input_changed": true,
+   "read_back_matched": true
+  },
+  {
+   "visible_name": "端口",
+   "source_id": "#ssh-port",
+   "ax_role": "AXTextField",
+   "ax_subrole": null,
+   "ax_identifier_present": false,
+   "editable": true,
+   "same_window": true,
+   "label": {
+    "text": "端口",
+    "ax_role": "AXStaticText",
+    "same_window": true
+   },
+   "stepper": {
+    "ax_role": "AXIncrementor",
+    "ax_identifier_present": false,
+    "relationship": "端口 AXTextField 的子节点",
+    "arrows": [
+     {
+      "ax_role": "AXIncrementorArrow",
+      "ax_subrole": "AXIncrementArrow"
+     },
+     {
+      "ax_role": "AXIncrementorArrow",
+      "ax_subrole": "AXDecrementArrow"
+     }
+    ],
+    "stepper_value_tracks_field": false
+   },
+   "user_input_changed": true,
+   "read_back_matched": true,
+   "input_paths_verified": [
+    "普通用户输入途径",
+    "stepper 箭头动作"
+   ]
+  },
+  {
+   "visible_name": "用户名",
+   "source_id": "#ssh-user",
+   "ax_role": "AXTextField",
+   "ax_subrole": null,
+   "ax_identifier_present": false,
+   "editable": true,
+   "same_window": true,
+   "label": {
+    "text": "用户名",
+    "ax_role": "AXStaticText",
+    "same_window": true
+   },
+   "user_input_changed": true,
+   "read_back_matched": true
+  },
+  {
+   "visible_name": "探测主机指纹",
+   "source_id": "#ssh-probe",
+   "ax_role": "AXButton",
+   "ax_subrole": null,
+   "ax_identifier_present": false,
+   "same_window": true,
+   "enabled": true,
+   "available_actions": [
+    "AXPress"
+   ],
+   "click_performed": true,
+   "click_reached_native_branch": true,
+   "click_feedback": "失败反馈（探测未成功）"
+  }
+ ],
+ "verification_boundaries": {
+  "performed": [
+   "四项控件的原生 AX 身份与形态",
+   "端口经普通用户输入途径改值并独立读回",
+   "stepper 箭头动作改值并独立读回",
+   "探测按钮点击触发原生分支并得到失败反馈"
+  ],
+  "not_performed": [
+   "任何成功的 SSH 握手、认证或会话",
+   "指纹成功路径与主机密钥轮换",
+   "iOS 模拟器／XCTest 复核（本机 macOS 观察不可外推至 iOS）",
+   "密码字段取值"
+  ],
+  "value_handling": "表单写入使用合成占位值并已清除；未接触真实主机、SSH 密钥或个人身份；不保存密码、控件取值或原始 AX 树"
+ },
+ "steps": [
+  "按 SHA256 核对并复制 validation/tauri 源码到独立临时目录",
+  "npm ci && npm run build 生成前端；cargo build --offline --features tauri/custom-protocol 生成原生二进制",
+  "以独立标识与隔离 HOME 启动宿主，经产品入口进入普通 SSH 表单",
+  "用 macOS 原生 AX 读取四项控件及其标签、stepper 与所属窗口",
+  "对端口做普通输入途径与 stepper 两条路径的改值＋独立读回",
+  "点击探测按钮一次，记录原生分支与失败反馈",
+  "退出宿主并清理临时构建树、target 目录、应用封装与日志，仅保留本文件"
+ ],
+ "cleanup": {
+  "host_exited": true,
+  "temp_build_tree_removed": true,
+  "temp_app_removed": true,
+  "repo_existing_dist_untouched": true,
+  "committed": false,
+  "ci_triggered": false
+ }
+}

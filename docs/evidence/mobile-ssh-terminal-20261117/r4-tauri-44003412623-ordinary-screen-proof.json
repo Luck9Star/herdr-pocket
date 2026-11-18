@@ -1,0 +1,224 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "expectedTarget": "fixture@127.0.0.1:44429",
+  "expectedToken": "RACE SAND HUNT HEAT EAST RACE TASK HEAT",
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "captureEngine": "adb exec-out screencap -p",
+  "coordinateEngine": "measured WebView frame or exact CDP/framebuffer pixel registration",
+  "captureAttempts": 1,
+  "geometryBefore": {
+    "viewport": [
+      393,
+      851
+    ],
+    "targetRect": [
+      16,
+      206.9204559326172,
+      361.0909118652344,
+      23.272727966308594
+    ],
+    "terminal": [
+      24,
+      258.19317626953125,
+      344,
+      352
+    ],
+    "visualViewport": [
+      0,
+      0,
+      1
+    ],
+    "dpr": 2.75,
+    "targetVisible": true,
+    "targetMatched": true,
+    "terminalVisible": true,
+    "webViewCandidateBounds": [
+      [
+        0,
+        0,
+        1080,
+        2340
+      ]
+    ],
+    "webViewCandidateCount": 1
+  },
+  "webViewBeforeSha256": "4188a66fece73e44ae6e4172deeeb22b6243e9aae65938ca29bb29ad5acca27c",
+  "imageSha256": "601f16bdd7cfa95031217302be337d4cb5e4d6fafa46447ed33d63b2d7b08eeb",
+  "imageSize": [
+    1080,
+    2340
+  ],
+  "image": "ssh-terminal-android.png",
+  "imageCaptureAttempt": 1,
+  "geometryAfter": {
+    "viewport": [
+      393,
+      851
+    ],
+    "targetRect": [
+      16,
+      206.9204559326172,
+      361.0909118652344,
+      23.272727966308594
+    ],
+    "terminal": [
+      24,
+      258.19317626953125,
+      344,
+      352
+    ],
+    "visualViewport": [
+      0,
+      0,
+      1
+    ],
+    "dpr": 2.75,
+    "targetVisible": true,
+    "targetMatched": true,
+    "terminalVisible": true,
+    "webViewCandidateBounds": [
+      [
+        0,
+        0,
+        1080,
+        2340
+      ]
+    ],
+    "webViewCandidateCount": 1
+  },
+  "coordinateMethod": "uiautomator_full_frame",
+  "terminalBounds": [
+    66,
+    710,
+    945,
+    967
+  ],
+  "headerGeometry": {
+    "nativePx": {
+      "overlapPx": 136,
+      "systemBottomPx": 136,
+      "viewY": 0,
+      "statusPx": 136,
+      "stableStatusPx": 136,
+      "windowTopPx": 0,
+      "cutoutPx": 136,
+      "captionPx": 0,
+      "stableCaptionPx": 0
+    },
+    "viewportCss": [
+      393,
+      851
+    ],
+    "visualViewport": [
+      0,
+      0,
+      1
+    ],
+    "devicePixelRatio": 2.75,
+    "scrollYCss": 39.6363639831543,
+    "appliedTopCss": 49.45454545454545,
+    "webViewOriginPx": [
+      0,
+      0
+    ],
+    "imageSizePx": [
+      1080,
+      2340
+    ],
+    "header": {
+      "rectCss": [
+        0,
+        0,
+        393.0909118652344,
+        120.54545593261719
+      ],
+      "visible": true,
+      "inViewport": true
+    },
+    "title": {
+      "rectCss": [
+        62,
+        65.45454406738281,
+        109.7727279663086,
+        25.81818199157715
+      ],
+      "visible": true,
+      "inViewport": true,
+      "boundsPx": [
+        170,
+        179,
+        303,
+        72
+      ]
+    },
+    "button": {
+      "rectCss": [
+        287.69317626953125,
+        68,
+        89.3977279663086,
+        44
+      ],
+      "visible": true,
+      "inViewport": true,
+      "boundsPx": [
+        791,
+        187,
+        246,
+        121
+      ]
+    },
+    "sshTitle": {
+      "rectCss": [
+        16,
+        112.82386779785156,
+        361.0909118652344,
+        34.90909194946289
+      ],
+      "visible": true,
+      "inViewport": true
+    },
+    "target": {
+      "rectCss": [
+        16,
+        206.9204559326172,
+        361.0909118652344,
+        23.272727966308594
+      ],
+      "visible": true,
+      "inViewport": true,
+      "boundsPx": [
+        44,
+        569,
+        994,
+        65
+      ]
+    },
+    "terminal": {
+      "rectCss": [
+        16,
+        246.1931915283203,
+        361.0909118652344,
+        383.0682067871094
+      ],
+      "visible": true,
+      "inViewport": true
+    },
+    "xterm": {
+      "rectCss": [
+        24,
+        258.19317626953125,
+        344,
+        352
+      ],
+      "visible": true,
+      "inViewport": true
+    }
+  },
+  "markerVisible": true,
+  "tokenVisible": true,
+  "ocrEngine": "tesseract 5.3.4",
+  "ocrAttempts": 1,
+  "ocrPageSegmentationMode": 6,
+  "proofSequenceVisible": true
+}

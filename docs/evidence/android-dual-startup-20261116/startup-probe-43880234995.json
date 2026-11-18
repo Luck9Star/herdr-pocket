@@ -1,0 +1,54 @@
+{
+  "nativeSource": "a9be92d98b8c26b15ccbc7f6faa240ed3d674929",
+  "nativeBuildRun": 43877918495,
+  "nativeDownloadedBundleVerification": "success",
+  "nativeDownloadedBundleAbi": "x86_64",
+  "nativeManifestSha256": "a9f84c1e784a3dcbb8c05f1cfeb768c481bdbfb3fe6d218fc00a7b0199e91697",
+  "probeRun": 43880234995,
+  "probeArtifactId": 14230924293,
+  "runnerSource": "191d85fdcf64e2ff65ff57d8eae6fba9e0306607",
+  "hostSource": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
+  "probeStatus": "passed",
+  "apiLevel": 35,
+  "abi": "x86_64",
+  "variants": [
+    {
+      "variant": "normal",
+      "status": "passed",
+      "startOk": true,
+      "needsLoginReached": true,
+      "states": [
+        "needs-login"
+      ],
+      "stopOk": true,
+      "passed": true,
+      "loginInvoked": false,
+      "dialInvoked": false,
+      "nativeScopeClosed": true,
+      "identityDeleted": true,
+      "privateGoCrashStatus": "empty",
+      "packageRemoved": true,
+      "sessionCleanupPassed": true
+    },
+    {
+      "variant": "qa",
+      "status": "passed",
+      "startOk": true,
+      "needsLoginReached": true,
+      "states": [
+        "needs-login"
+      ],
+      "stopOk": true,
+      "passed": true,
+      "loginInvoked": false,
+      "dialInvoked": false,
+      "nativeScopeClosed": true,
+      "identityDeleted": true,
+      "privateGoCrashStatus": "empty",
+      "packageRemoved": true,
+      "sessionCleanupPassed": true
+    }
+  ],
+  "finalNamespaceAbsent": true,
+  "avdWrapperSucceeded": true
+}

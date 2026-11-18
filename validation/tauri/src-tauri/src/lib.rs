@@ -85,6 +85,7 @@ mod android_keys {
 }
 mod hosts;
 mod remote_sessions;
+mod direct_shell;
 mod dashboard_watch;
 mod remote_tab_commands;
 mod config_document;
@@ -218,18 +219,51 @@ async fn network_node_start(id:String,expected_catalog:String,expected_revision:
      let provider=network_nodes::provider_name(profile.provider)?;let app=app.clone();let key=id.clone();let identity=tauri::async_runtime::spawn_blocking(move||android_keys::network_identity(&app,"networkIdentityStatus",&key,provider,"","")).await.map_err(|_|"network_identity_unavailable")??.ok_or("network_identity_missing")?;
      if identity.handle!=expected_handle{return Err("network_identity_changed".into());}network_identity::validate_runtime_mode(profile.provider,&identity.mode)?;
      reviewed_identity_profile(&hosts,&id,expected_revision,&expected_catalog,&affected)?;
-     {let mut f=flow.lock().map_err(|_|"state_unavailable")?;let mut g=gate.lock().map_err(|_|"state_unavailable")?;f.cancel_affected(&affected,&mut g);}
+     {let mut f=flow.lock().map_err(|_|"state_unavailable")?;if f.tabs.is_stopping(&network_nodes::binding_for(&profile,expected_handle.clone())?) {return Err("mobile_node_stop_pending".into());}let mut g=gate.lock().map_err(|_|"state_unavailable")?;f.cancel_affected(&affected,&mut g);}
      nodes.start(&profile,expected_handle).await}
     #[cfg(not(target_os="android"))]
     {let _=(nodes,app,profile,flow,gate);Err("overlay_provider_unavailable".into())}
 }
+struct NodeStopAdmission {flow:Arc<Mutex<RemoteFlow>>,binding:herdr_readonly_transport::mobile_nodes::Binding,armed:bool}
+impl Drop for NodeStopAdmission {fn drop(&mut self) {if self.armed {if let Ok(mut f)=self.flow.lock() {f.tabs.defer_stop(&self.binding);}}}}
 #[tauri::command]
 async fn network_node_stop(id:String,expected_catalog:String,expected_revision:u32,affected:Vec<String>,binding:herdr_readonly_transport::mobile_nodes::Binding,hosts:State<'_,Hosts>,nodes:State<'_,network_nodes::Nodes>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,gate:State<'_,Mutex<AttemptGate>>)->Result<(),String>{
     reviewed_identity_profile(&hosts,&id,expected_revision,&expected_catalog,&affected)?;
     if binding.profile_id()!=id {return Err("mobile_node_binding_mismatch".into());}
     // Stop may target an older saved binding; never silently substitute the new one.
-    {let mut f=flow.lock().map_err(|_|"state_unavailable")?;f.tabs.cancel_binding(&binding);if f.node_binding.as_ref()==Some(&binding){let mut g=gate.lock().map_err(|_|"state_unavailable")?;f.cancel_affected(&affected,&mut g);}}
-    nodes.stop_exact(&id,binding).await
+    // Capture exact slots while fencing new attempts on this full binding.
+    let plan={
+        let mut f=flow.lock().map_err(|_|"state_unavailable")?;
+        let node=if f.tabs.is_stopping(&binding) {None} else {nodes.prepare_stop(&binding)?};
+        let legacy=if f.node_binding.as_ref()==Some(&binding) {f.owner.zip(f.attempt)} else {None};
+        f.tabs.stop_binding(&binding,node,legacy).map_err(str::to_string)?
+    };
+    let mut admission=NodeStopAdmission {flow:flow.inner().clone(),binding:binding.clone(),armed:true};
+    let targets=plan.targets;let legacy=plan.legacy;
+    let direct={let f=flow.lock().map_err(|_|"state_unavailable")?;if legacy.is_some() && f.owner.zip(f.attempt)==legacy {f.direct.clone()} else {None}};
+    // State listeners may re-enter flow; never notify while holding its lock.
+    for control in plan.controls {control.stop_gracefully();}
+    if let Some(direct)=direct {direct.stop_gracefully();}
+    let settled=||->Result<bool,String>{let f=flow.lock().map_err(|_|"state_unavailable")?;Ok(f.tabs.stop_settled(&targets) && legacy.is_none_or(|slot|f.owner.zip(f.attempt)!=Some(slot)))};
+    let deadline=std::time::Instant::now()+std::time::Duration::from_secs(12);
+    while !settled()? && std::time::Instant::now()<deadline {tokio::time::sleep(std::time::Duration::from_millis(20)).await;}
+    if !settled()? {
+        // Only captured owners may be aborted after the graceful deadline.
+        {
+            let mut f=flow.lock().map_err(|_|"state_unavailable")?;
+            for (tab,owner,generation) in &targets {f.tabs.cancel(tab,*owner,*generation);}
+            if let Some((owner,attempt))=legacy {if f.owner==Some(owner) && f.attempt==Some(attempt) {let mut g=gate.lock().map_err(|_|"state_unavailable")?;f.cancel(owner,&mut g);}}
+        }
+        let deadline=std::time::Instant::now()+std::time::Duration::from_secs(2);
+        while !settled()? && std::time::Instant::now()<deadline {tokio::time::sleep(std::time::Duration::from_millis(20)).await;}
+        // Keep the binding fenced if actual I/O has not retired.
+        if !settled()? {return Err("mobile_node_ssh_retirement_pending".into());}
+    }
+    let result=nodes.stop_prepared(&binding,plan.node).await;
+    let mut f=flow.lock().map_err(|_|"state_unavailable")?;
+    if result.is_ok() {f.tabs.finish_stop(&binding);admission.armed=false;}
+    // Errors are deferred once by the guard, after this lock is released.
+    result
 }
 fn reviewed_login_binding(hosts:&Hosts,id:&str,revision:u32,catalog:&str,affected:&[String],binding:&herdr_readonly_transport::mobile_nodes::Binding)->Result<networks::NetworkProfile,String>{
     let p=reviewed_identity_profile(hosts,id,revision,catalog,affected)?;
@@ -392,6 +426,7 @@ struct RemoteFlow {
     host_id: Option<String>,
     node_binding: Option<herdr_readonly_transport::mobile_nodes::Binding>,
     cancelled_through: u64,
+    attempt: Option<u64>,
     direct: Option<Arc<herdr_readonly_transport::direct_observation::DirectObservation>>,
     recovery: Option<herdr_readonly_transport::input::Recovery>,
 }
@@ -399,7 +434,7 @@ impl RemoteFlow {
     fn begin(&mut self, client_generation:u64, gate:&mut AttemptGate)->Result<(u64,herdr_readonly_transport::Cancellation), &'static str> {
         if client_generation == 0 || client_generation <= self.cancelled_through { return Err("cancelled"); }
         let attempt=gate.begin()?;
-        self.owner=Some(client_generation);
+        self.owner=Some(client_generation);self.attempt=Some(attempt.0);
         Ok(attempt)
     }
     fn cancel(&mut self, client_generation:u64, gate:&mut AttemptGate) {
@@ -408,8 +443,8 @@ impl RemoteFlow {
     }
     fn cancel_affected(&mut self, ids:&[String],gate:&mut AttemptGate) {self.tabs.cancel_hosts(ids);if let Some((owner,id))=self.owner.zip(self.host_id.clone()) {if ids.contains(&id) {self.cancel(owner,gate);}}}
     fn finish(&mut self, client_generation:u64, generation:u64, gate:&mut AttemptGate)->bool {
-        if self.owner!=Some(client_generation) { return false; }
-        if let Some(direct)=self.direct.take() {direct.cancel();} self.owner=None; self.host_id=None; self.node_binding=None;
+        if self.owner!=Some(client_generation) || self.attempt.is_some_and(|attempt|attempt!=generation) { return false; }
+        if let Some(direct)=self.direct.take() {direct.cancel();} self.owner=None; self.attempt=None; self.host_id=None; self.node_binding=None;
         gate.finish(generation)
     }
 }
@@ -492,6 +527,7 @@ async fn remote_observe(mut config:RemoteConfig,canvas:Option<herdr_readonly_tra
         if f.tabs.len()>0 {return Err("connection_active".into());}
         if pairing.restore_required.load(Ordering::SeqCst) {return Err("host_restore_required".into());}
         let mut g=state.lock().map_err(|_|"state_unavailable")?;
+        if node_binding.as_ref().is_some_and(|b|f.tabs.is_stopping(b)) {return Err("mobile_node_stop_pending".into());}
         let attempt = f.begin(client_generation,&mut g).map_err(str::to_string)?;
         f.host_id = host_id.clone(); f.node_binding=node_binding;
         attempt
@@ -593,6 +629,7 @@ pub fn run() {
     #[cfg(target_os="ios")]
     let builder=builder.plugin(ios_keys::init());
     builder
+        .manage(direct_shell::Shells::default())
         .manage(Mutex::new(Streams::default()))
         .manage(Mutex::new(AttemptGate::default()))
         .manage(Hosts::default())
@@ -604,8 +641,41 @@ pub fn run() {
             let flow=RemoteFlow {recovery:Some(recovery),..Default::default()};
             app.manage(Arc::new(Mutex::new(flow))); Ok(())
         })
-        .invoke_handler(tauri::generate_handler![fixture_begin,fixture_next,fixture_ack,fixture_cancel,remote_read_once,remote_tab_reserve,remote_tab_cancel,remote_tab_commands::remote_tab_observe,remote_tab_commands::remote_tab_ack,remote_tab_commands::remote_tab_select,remote_tab_commands::remote_tab_control,remote_tab_commands::remote_tab_visible,remote_tab_commands::remote_tab_input_mode,remote_tab_commands::remote_tab_input_recover,remote_tab_commands::remote_tab_input_send,remote_observe,remote_select,remote_ack,remote_cancel,remote_input_mode,remote_input_recover,remote_input_send,pair_create,pair_copy::pair_copy_request,pair_accept,pair_cancel,pair_reset,pair_scan_response,host_init,host_list,host_save,host_new,host_select,host_restore,host_update,host_remove,host_cleanup_retry,preferences_save,network_list,network_save,network_delete,network_bind,network_identity_status,network_identity_write,zerotier_device_status,zerotier_device_write,network_node_status,network_node_start,network_node_stop,network_node_login,network_node_login_status,network_node_open_auth,
-            mobile_clipboard_read_text,terminal_keyboard::mobile_terminal_keyboard,config_document_platform,config_document_open,config_document_save,config_export,config_preview,config_apply,config_discard])
+        .invoke_handler(tauri::generate_handler![direct_shell::ssh_host_key_probe,direct_shell::ssh_shell_open,direct_shell::ssh_shell_write,direct_shell::ssh_shell_resize,direct_shell::ssh_shell_close,direct_shell::ssh_shell_ack,fixture_begin,fixture_next,fixture_ack,fixture_cancel,remote_read_once,remote_tab_reserve,remote_tab_cancel,remote_tab_commands::remote_tab_observe,remote_tab_commands::remote_tab_ack,remote_tab_commands::remote_tab_select,remote_tab_commands::remote_tab_control,remote_tab_commands::remote_tab_visible,remote_tab_commands::remote_tab_input_mode,remote_tab_commands::remote_tab_input_recover,remote_tab_commands::remote_tab_input_send,remote_observe,remote_select,remote_ack,remote_cancel,remote_input_mode,remote_input_recover,remote_input_send,pair_create,pair_copy::pair_copy_request,pair_accept,pair_cancel,pair_reset,pair_scan_response,host_init,host_list,host_save,host_new,host_select,host_restore,host_update,host_remove,host_cleanup_retry,preferences_save,network_list,network_save,network_delete,network_bind,network_identity_status,network_identity_write,zerotier_device_status,zerotier_device_write,network_node_status,network_node_start,network_node_stop,network_node_login,network_node_login_status,network_node_open_auth,
+            mobile_clipboard_read_text,terminal_keyboard::mobile_terminal_keyboard,terminal_keyboard::mobile_system_top_inset,config_document_platform,config_document_open,config_document_save,config_export,config_preview,config_apply,config_discard])
         .run(tauri::generate_context!())
         .expect("Tauri probe startup failed");
+}
+
+#[cfg(test)]
+mod stop_slot_tests {
+ use super::*;
+ #[test]
+ fn legacy_owner_reuse_cannot_retire_a_new_attempt() {
+  let mut f=RemoteFlow::default();let mut gate=AttemptGate::default();
+  let (old,_)=f.begin(1,&mut gate).unwrap();assert!(f.finish(1,old,&mut gate));
+  let (new,cancel)=f.begin(1,&mut gate).unwrap();assert_ne!(old,new);
+  assert!(!f.finish(1,old,&mut gate));assert_eq!(f.attempt,Some(new));assert!(!cancel.is_cancelled());
+  assert!(f.finish(1,new,&mut gate));
+ }
+}
+
+#[cfg(test)]
+mod stop_admission_tests {
+ use super::*;
+ #[test]
+ fn completed_old_guard_cannot_release_a_new_same_binding_stop() {
+  let binding=herdr_readonly_transport::mobile_nodes::Binding::new("p".into(),1,"qa".into(),"identity".into()).unwrap();
+  let flow=Arc::new(Mutex::new(RemoteFlow::default()));
+  flow.lock().unwrap().tabs.stop_binding(&binding,None,None).unwrap();
+  let mut old=NodeStopAdmission {flow:flow.clone(),binding:binding.clone(),armed:true};
+  {let mut f=flow.lock().unwrap();f.tabs.finish_stop(&binding);old.armed=false;}
+  flow.lock().unwrap().tabs.stop_binding(&binding,None,None).unwrap();
+  drop(old);
+  assert!(matches!(flow.lock().unwrap().tabs.stop_binding(&binding,None,None),Err("mobile_node_stop_pending")));
+  let failed=NodeStopAdmission {flow:flow.clone(),binding:binding.clone(),armed:true};
+  drop(failed); // One error defer permits exactly the next explicit admission.
+  flow.lock().unwrap().tabs.stop_binding(&binding,None,None).unwrap();
+  assert!(flow.lock().unwrap().tabs.stop_binding(&binding,None,None).is_err());
+ }
 }

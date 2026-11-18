@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "imageSha256": "d2e58aab638b83c95eb5fb1392139a82f88176545fd5e74580ad02fc1fefb02c",
+  "imageSize": [
+    828,
+    1792
+  ],
+  "terminalBounds": [
+    0,
+    336,
+    828,
+    758
+  ],
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "expectedToken": "ARCH HUNT KEPT LAMP PAST HARP FACT PART",
+  "markerVisible": true,
+  "tokenVisible": true,
+  "ocrEngine": "tesseract 5.5.4",
+  "ocrAttempts": 2,
+  "ocrPageSegmentationMode": 11,
+  "proofSequenceVisible": true
+}

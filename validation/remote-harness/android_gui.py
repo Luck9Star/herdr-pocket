@@ -48,6 +48,15 @@ def system_keyboard(visible):
         raise failure from None
 
 
+def public_blocked_render_diagnostic(value):
+    """Keep only fixed boolean predicates, never terminal output or identifiers."""
+    allowed=('viewVisible','terminalPresent','terminalVisible','targetMatched','terminalVerified',
+             'modeObserve','readOnly','inputModeNone','notFocused','markerMatched','otherMarkerAbsent')
+    if isinstance(value,dict) and set(value)==set(allowed) and all(type(value[key]) is bool for key in allowed):
+        return {key:value[key] for key in allowed}
+    return None
+
+
 class AndroidProgress:
     """Bounded per-stage evidence survives a later failure; no raw dumps/text."""
     PHASES = {'setup','pairing','canvas_selection','dashboard','board_search','observe_full','observe_delta','canvas_marker','font_diagnostics',
@@ -142,6 +151,8 @@ class AndroidProgress:
         if isinstance(click,dict) and all(isinstance(click.get(part),dict) for part in ('before','after')):
             self.data['counterClickContext']={part:_public_counter_context(click[part])
                                               for part in ('before','after')}
+        blocked=public_blocked_render_diagnostic(getattr(error,'blocked_render_diagnostic',None))
+        if blocked:self.data['blockedRenderDiagnostic']=blocked
         home_status=getattr(error,'home_status',None)
         if isinstance(home_status,str):self.data['homeStatus']=' '.join(home_status.split())[:120]
         self.publish()
@@ -193,7 +204,18 @@ def retry_stage(progress, stage, action, recover=None):
         try:
             return action()
         except GuiFailure as error:
-            if not retryable_failure(error) or attempt == 2:
+            code = str(error)
+            retryable = retryable_failure(error)
+            # Keep the original failure as well as later recovery failures, but
+            # publish only bounded static codes, never exception contents.
+            if retryable and (code in RETRYABLE_ERROR_CODES or
+                    re.fullmatch(r'android_(?:control|text_control)_missing_[a-z0-9_-]{1,80}', code)):
+                progress.data.setdefault('retryFailureCodes', {}).setdefault(stage, []).append(code)
+                diagnostic=public_blocked_render_diagnostic(getattr(error,'blocked_render_diagnostic',None))
+                if diagnostic:
+                    progress.data.setdefault('blockedRenderAttempts', []).append(diagnostic)
+                progress.publish()
+            if not retryable or attempt == 2:
                 raise
         if recover is not None:
             try:
@@ -455,10 +477,23 @@ class AndroidWebView:
           const x=r.left+r.width/2,y=r.top+r.height/2;
           return r.width>0 && r.height>0 && x>=0 && y>=0 && x<innerWidth && y<innerHeight &&
                  e.contains(document.elementFromPoint(x,y)) ? {x:Math.round(x*4),y:Math.round(y*4),w:innerWidth,h:innerHeight}:null})()''' % json.dumps(selector)
-        point = wait_for(lambda: (lambda a, b: {'x': a['x']/4, 'y': a['y']/4} if (a and b and a['x'] == b['x'] and a['y'] == b['y']
-                                                   and a['w'] == b['w'] and a['h'] == b['h']) else None)(
-            self.evaluate(expression), self.evaluate(expression)),
-                 'android_control_missing_'+selector.lstrip('#').replace(' ','_'))
+        try:
+            point = wait_for(lambda: (lambda a, b: {'x': a['x']/4, 'y': a['y']/4} if (a and b and a['x'] == b['x'] and a['y'] == b['y']
+                                                       and a['w'] == b['w'] and a['h'] == b['h']) else None)(
+                self.evaluate(expression), self.evaluate(expression)),
+                     'android_control_missing_'+selector.lstrip('#').replace(' ','_'))
+        except GuiFailure:
+            if trace is not None:
+                try:
+                    diagnostic=self.evaluate('''(()=>{const e=document.querySelector(%s),r=e?.getBoundingClientRect();
+                      const x=r?r.left+r.width/2:0,y=r?r.top+r.height/2:0,v=window.visualViewport;
+                      return {present:!!e,disabled:!!e?.disabled,hidden:!!e?.hidden,
+                        rect:r?{x:Math.round(r.x),y:Math.round(r.y),w:Math.round(r.width),h:Math.round(r.height)}:null,
+                        viewport:{w:innerWidth,h:innerHeight,visualH:Math.round(v?.height||innerHeight)},
+                        centerHit:!!(e&&e.contains(document.elementFromPoint(x,y)))};})()''' % json.dumps(selector))
+                    if isinstance(diagnostic, dict): trace.append(diagnostic)
+                except GuiFailure: pass
+            raise
         if trace is not None:
             # Bounded pointer evidence only: no text, no identifiers, no secrets.
             trace.append(self.evaluate('''(()=>{const e=document.querySelector(%s);const r=e?.getBoundingClientRect?.();
@@ -795,7 +830,26 @@ def exercise_blocked_target(browser,approval,config):
       const otherMarkerAbsent=rows.length>0 && rows.every(line=>!line.includes('POCKET-BLOCKED-A'));
       if(paneId!==expected.paneId || terminalId!==expected.terminalId || !verified || !observing || !markerMatched || !otherMarkerAbsent)return null;
       return {paneId,terminalId,observing,markerMatched,otherMarkerAbsent}})()''' % json.dumps(target)
-    raw=wait_for(lambda:browser.evaluate(measurement),'android_blocked_render_missing',timeout=60)
+    try:
+        raw=wait_for(lambda:browser.evaluate(measurement),'android_blocked_render_missing',timeout=60)
+    except GuiFailure as error:
+        # Capture predicates only; never publish pane names, terminal text or keys.
+        diagnostic=r'''(()=>{const view=document.querySelector('#view-content'),term=view?.querySelector('.terminal-host');
+          const title=[...(view?.children||[])].find(e=>e.tagName==='P')?.textContent.split(' · ') || [];
+          const expected=%s,area=term?.querySelector('.xterm-helper-textarea');
+          const rows=[...(term?.querySelectorAll('.xterm-rows > div')||[])].map(e=>e.textContent.replace(/\u00a0/g,' ').trim());
+          const mode=view?.querySelector('p[aria-live=polite]');
+          return {viewVisible:!!view&&!view.closest('[hidden]'),terminalPresent:!!term,
+            terminalVisible:!!term&&!term.closest('[hidden]')&&!!term.getClientRects().length,
+            targetMatched:title.at(-2)===expected.paneId&&title.at(-1)===expected.terminalId,
+            terminalVerified:view?.querySelector('[data-connection-stage=terminal]')?.dataset.stageState==='verified',
+            modeObserve:mode?.textContent==='观察模式；输入已关闭。',readOnly:!!area&&area.readOnly===true,
+            inputModeNone:!!area&&area.getAttribute('inputmode')==='none',notFocused:!!area&&document.activeElement!==area,
+            markerMatched:rows.some(line=>/^POCKET-BLOCKED-B(?: frame [0-9]+)?$/.test(line)),
+            otherMarkerAbsent:rows.length>0&&rows.every(line=>!line.includes('POCKET-BLOCKED-A'))};})()''' % json.dumps(target)
+        try: error.blocked_render_diagnostic=browser.evaluate(diagnostic)
+        except GuiFailure: pass
+        raise
     if not isinstance(raw,dict):
         raise GuiFailure('android_blocked_target_evidence_invalid')
     raw={**raw,'listedRows':card['listedRows'],'reviewRequired':True}
@@ -817,7 +871,7 @@ def exercise_blocked_target(browser,approval,config):
 def _restore_paired_form(browser,config,targets):
     """Restore the paired identity form that the revocation review needs."""
     card=_blocked_card(browser,targets)
-    browser.click_named(card['selector']+' .saved-host-actions','打开')
+    browser.click_named(card['selector']+' .saved-host-actions','打开主机')
     wait_for(lambda:browser.evaluate("!document.querySelector('#host-restore-panel').hidden"),'android_blocked_original_form_missing')
     for field,key in [('host','host'),('port','port'),('user','username'),('session','session'),('herdr','herdrPath'),('socket','socketPath'),('pin','expectedHostKey')]:
         if browser.read('#remote-'+field,'value')!=str(config[key]):
@@ -962,7 +1016,7 @@ def exercise_board_search(browser, approval, config):
         text_matched = matched
 
         # The stale report belongs to the history bucket and not to the current one.
-        browser.select_option('#host-attention', 'current')
+        browser.click('#host-filter-current')
         snapshot = _board_snapshot(browser, fragment)
         matched, total, current_count, history_count = _board_counts(snapshot)
         if (snapshot['state'] != 'current' or matched != 0 or snapshot['visibleCards'] != 0 or
@@ -970,7 +1024,7 @@ def exercise_board_search(browser, approval, config):
             raise GuiFailure('android_board_search_state_invalid')
 
         # Both conditions together select that blocked host again.
-        browser.select_option('#host-attention', 'history')
+        browser.click('#host-filter-history')
         snapshot = _board_snapshot(browser, fragment)
         matched, total, current_count, history_count = _board_counts(snapshot)
         if (snapshot['state'] != 'history' or matched != snapshot['visibleCards'] or
@@ -1077,16 +1131,25 @@ def _settled_device_review(browser):
     return snapshot if snapshot and _device_class(snapshot) else None
 
 
+def open_network_page(browser):
+    """Use visible navigation and keep an already open network panel open."""
+    if not browser.evaluate("!document.querySelector('#host-home').hidden"):
+        browser.click('#host-return-home')
+        wait_for(lambda: browser.evaluate("!document.querySelector('#host-home').hidden"), 'android_home_not_visible')
+    if not browser.evaluate("!document.querySelector('#home-network').hidden"):
+        browser.click('#nav-network')
+    panel_open = lambda: browser.evaluate(
+        "(()=>{const p=document.querySelector('#network-panel');return !!p&&!p.hidden})()")
+    if not panel_open():
+        browser.click('#network-open')
+    wait_for(panel_open, 'android_device_impact_entry_missing')
+
+
 def exercise_device_impact_review(browser):
     """Review the shared device impact without creating identities or joining a network."""
     browser.install_invoke_counter()
     try:
-        browser.click('#host-return-home')
-        wait_for(lambda: browser.evaluate("!document.querySelector('#host-home').hidden"), 'android_home_not_visible')
-        browser.click('#network-open')
-        wait_for(lambda: browser.evaluate(
-            "(()=>{const p=document.querySelector('#network-panel');return !!p&&!p.hidden})()"),
-            'android_device_impact_entry_missing')
+        open_network_page(browser)
         browser.click_named('#network-panel','审查 ZeroTier 共享设备','android_device_impact_entry_missing')
         snapshot = wait_for(lambda: _settled_device_review(browser), 'android_device_impact_status_invalid', timeout=60)
         state = _device_class(snapshot)
@@ -1445,6 +1508,23 @@ def tui_screen_matches(browser, marker):
     return browser.evaluate(expression) is True
 
 
+def review_receipt_details(browser, receipt):
+    """Review the real visible detail without exporting receipt values."""
+    closed = "(()=>{const e=document.querySelector('#remote-receipt');return !!e&&!e.hidden&&!e.open})()"
+    opened = "(()=>{const e=document.querySelector('#remote-receipt');return !!e&&!e.hidden&&e.open})()"
+    wait_for(lambda: browser.evaluate(closed), 'android_receipt_details_unavailable')
+    browser.click('#remote-receipt summary')
+    wait_for(lambda: browser.evaluate(opened), 'android_receipt_details_not_open')
+    expected = (f"请求 ID：{receipt['requestId']} · pane：{receipt['paneId']} · "
+                f"terminal：{receipt['terminalId']} · 受理 {receipt['acceptedBytes']} 字节。"
+                "主机已受理，命令结果请查看终端。")
+    if browser.read('#remote-receipt-text') != expected:
+        raise GuiFailure('android_receipt_details_mismatch')
+    browser.click('#remote-receipt summary')
+    wait_for(lambda: browser.evaluate(closed), 'android_receipt_details_not_closed')
+    return True
+
+
 def exercise_tui(browser, approval, pane, terminal, previous_receipt, previous_request_ids, progress=None):
     """Drive only the reviewed target with real auxiliary-button clicks."""
     expected_target = f'目标：{pane} · {terminal}'
@@ -1556,6 +1636,7 @@ def run_android(args, root, env, config, approval):
         browser = wait_for(connect, 'android_webview_not_ready', timeout=60)
         progress.phase('pairing')
         browser.click('#host-open-remote')
+        browser.click('#add-herdr')
         browser.fill('#connection-profile-raw', public_profile_json(config))
         browser.click('#connection-profile-preview')
         fingerprint = public_host_fingerprint(config['expectedHostKey'])
@@ -1698,6 +1779,9 @@ def run_android(args, root, env, config, approval):
             if browser.read('#remote-input-draft', 'value'):
                 raise GuiFailure('android_submitted_draft_retained')
             receipts.append(second); progress.mark('draftReceiptVerified'); progress.count('inputReceiptCount',2)
+            review_receipt_details(browser, second)
+            progress.data['receiptDetailsReviewed'] = True
+            progress.publish()
             if getattr(args, 'android_tui', False):
                 approval.verify_ssh('kPocket测'.encode('utf-8'))
                 progress.phase('tui')
@@ -1720,24 +1804,31 @@ def run_android(args, root, env, config, approval):
             if '陈旧' in (browser.read('#remote-captured') or ''):
                 return board  # The first cancel landed late; stale already shows.
             stop_trace = []
-            browser.click('#remote-cancel', trace=stop_trace)
-            # Keep the pre-dispatch geometry as well: the drift between the
-            # press and the release is the evidence this stage needs (0013).
-            progress.data['stopPointerTrace'] = stop_trace[-3:]
-            progress.publish()
+            selector = '#remote-stop-dock' if browser.evaluate("!document.querySelector('#remote-input-controls').hidden") else '#remote-stop-visible'
+            try:
+                browser.click(selector, trace=stop_trace)
+            finally:
+                # Preserve even the first failed hit-test for later diagnosis.
+                attempts=progress.data.setdefault('stopPointerAttempts', [])
+                attempts.append(stop_trace[-3:])
+                del attempts[:-3]
+                progress.publish()
             wait_for(lambda: '陈旧' in (browser.read('#remote-captured') or ''), 'android_stale_marker_missing')
             return board
         progress.phase('stop_observation')
         terminal_board = retry_stage(progress,'stop_observation',stop_observation)
         progress.mark('stoppedStale')
+        # Probe the now-retired focused editor with a real key event. The
+        # independent host capture must retain exactly the earlier inputs.
+        browser.hidden_key_probe()
+        approval.verify_ssh('kPocket测'.encode('utf-8') if guarded else b'')
+        progress.data['postStopInputUnchanged'] = True
+        progress.publish()
         blocked_evidence=None
         board_evidence=None
         device_evidence=None
-        # recover 必须恢复到该阶段第一条交互可执行的状态。blocked_target_entry、
-        # board_search 与 device_impact_review 的第一条交互都是在远端页点击
-        # #host-return-home，所以每个 recover 都必须终于远端页——r5/r6 双模拟器的
-        # 确定性重试失败正是旧的 return_home 把 app 导去了主机看板：重放的第一步
-        # 在看板上点不到该按钮（android_control_missing_host-return-home）。
+        # Blocked-target and board-search replay from the remote page. Device
+        # review also accepts the dashboard/network page, including after revoke.
         def reopen_remote_page():
             # 若失败停在主机看板：先清残留过滤让受阻卡重新可见，再从卡片「打开」
             # 回到远端页。打开只恢复本地表单草稿，不建立连接，无设备副作用。
@@ -1746,7 +1837,7 @@ def run_android(args, root, env, config, approval):
             if browser.evaluate("document.querySelector('#host-filter-reset') && !document.querySelector('#host-filter-reset').hidden"):
                 browser.click('#host-filter-reset')
             card=_blocked_card(browser,checked_targets(approval.blocked_targets))
-            browser.click_named(card['selector']+' .saved-host-actions','打开')
+            browser.click_named(card['selector']+' .saved-host-actions','打开主机')
             wait_for(lambda: browser.evaluate("!document.querySelector('#host-restore-panel').hidden"),'android_blocked_original_form_missing')
         def close_blocked_view():
             if browser.evaluate("document.querySelector('#tab-workspace') && !document.querySelector('#tab-workspace').hidden"):
@@ -1759,7 +1850,6 @@ def run_android(args, root, env, config, approval):
             if browser.evaluate("!!document.querySelector(%s)" % json.dumps(DEVICE_REVIEW_SELECTOR)):
                 browser.click_named(DEVICE_REVIEW_SELECTOR,'关闭','android_device_impact_entry_lost')
                 wait_for(lambda: browser.evaluate("!document.querySelector(%s)" % json.dumps(DEVICE_REVIEW_SELECTOR)),'android_device_impact_entry_lost')
-            reopen_remote_page()
         if not guarded:
             progress.phase('blocked_target_entry')
             blocked_evidence=retry_stage(progress,'blocked_target_entry',

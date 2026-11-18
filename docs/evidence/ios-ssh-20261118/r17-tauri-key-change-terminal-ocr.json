@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "imageSha256": "4f7fb71be1962c30e498f456ad5a5d9949b06a5f069f294c968e5ab0c73542c7",
+  "imageSize": [
+    1320,
+    2868
+  ],
+  "terminalBounds": [
+    48,
+    813,
+    1224,
+    1287
+  ],
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "expectedToken": "FADE LEAF DUSK SEAT LAST LAMP HUNT FACT",
+  "markerVisible": true,
+  "tokenVisible": true,
+  "ocrEngine": "tesseract 5.5.4",
+  "ocrAttempts": 1,
+  "ocrPageSegmentationMode": 6,
+  "proofSequenceVisible": true
+}

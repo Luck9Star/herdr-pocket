@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 
 # Legacy read-only harness runs in a Python without pairing dependencies.
 try:
-    from paired_gui import FixtureApproval, GuiFailure, Host, WebDriver, run_gui, widget_failure
+    from paired_gui import FixtureApproval, GuiFailure, Host, WebDriver, open_host_summary, run_gui, stop_tauri_observation, widget_failure
     from pairing import MemoryKeyStore, PendingPairing, encode
 except ModuleNotFoundError as missing:
     if missing.name != 'cryptography':
@@ -20,6 +20,21 @@ except ModuleNotFoundError as missing:
 
 @unittest.skipIf(FixtureApproval is None, 'pairing requirements are installed in the GUI workflow')
 class GuiFixtureTests(unittest.TestCase):
+    def test_stop_selects_visible_control_once_and_requires_stale_and_input_retirement(self):
+        for selector in ('#remote-stop-dock', '#remote-stop-visible'):
+            with self.subTest(selector=selector):
+                driver = Mock(session='/session/test')
+                driver.call.side_effect = [selector, True]
+                driver.read.return_value = '观察已停止 · 画面陈旧'
+                stop_tauri_observation(driver)
+                driver.click.assert_called_once_with(selector)
+                self.assertIn('remote-input-controls', driver.call.call_args.args[2]['script'])
+        driver = Mock(session='/session/test')
+        driver.call.return_value = '#unexpected'
+        with self.assertRaisesRegex(GuiFailure, 'stop_control_invalid'):
+            stop_tauri_observation(driver)
+        driver.click.assert_not_called()
+
     def test_mobile_guarded_run_requires_an_independent_clipboard_receiver_check(self):
         first = dict(paneId='p', terminalId='term_ab', acceptedBytes=1, requestId='0' * 32)
         second = dict(first, acceptedBytes=9, requestId='1' * 32)
@@ -44,6 +59,46 @@ class GuiFixtureTests(unittest.TestCase):
                         else:
                             self.assertEqual(result['status'], 'failed')
                             self.assertEqual(result['errorCode'], 'mobile_clipboard_receiver_check_missing')
+
+    def test_host_summary_requires_explicit_expansion_before_visible_read(self):
+        driver = Mock()
+        driver.attribute.side_effect = [None, None, 'true']
+        open_host_summary(driver)
+        driver.click.assert_called_once_with('#host-task-details > summary')
+        self.assertEqual(driver.attribute.call_count, 3)
+        driver.attribute.assert_called_with('#host-task-details', 'open')
+
+    def test_host_summary_already_open_is_not_collapsed(self):
+        driver = Mock()
+        driver.attribute.return_value = 'true'
+        open_host_summary(driver)
+        driver.click.assert_not_called()
+        driver.attribute.assert_called_once_with('#host-task-details', 'open')
+
+    def test_read_relocates_only_stale_element_and_bounds_retries(self):
+        driver = WebDriver()
+        driver.element = Mock(side_effect=['/old', '/new'])
+        driver.call = Mock(side_effect=[GuiFailure('webdriver_innerText_stale_element_reference'), 'ready'])
+        self.assertEqual(driver.read('#summary'), 'ready')
+        self.assertEqual(driver.call.call_args_list[1].args, ('GET', '/new/property/innerText'))
+        driver.element = Mock(return_value='/node')
+        driver.call = Mock(side_effect=GuiFailure('webdriver_innerText_stale_element_reference'))
+        with self.assertRaises(GuiFailure): driver.read('#summary')
+        self.assertEqual(driver.call.call_count, 5)
+        driver.call = Mock(side_effect=GuiFailure('webdriver_innerText_invalid_session_id'))
+        with self.assertRaises(GuiFailure): driver.read('#summary')
+        self.assertEqual(driver.call.call_count, 1)
+
+    def test_attribute_relocates_stale_but_click_is_not_replayed(self):
+        driver = WebDriver()
+        driver.element = Mock(side_effect=['/old', '/new'])
+        driver.call = Mock(side_effect=[GuiFailure('webdriver_open_stale_element_reference'), 'true'])
+        self.assertEqual(driver.attribute('#details', 'open'), 'true')
+        driver.wait_control = Mock()
+        driver.element = Mock(return_value='/button')
+        driver.call = Mock(side_effect=GuiFailure('webdriver_click_stale_element_reference'))
+        with self.assertRaises(GuiFailure): driver.click('#button')
+        self.assertEqual(driver.call.call_count, 1)
 
     def test_driver_waits_for_the_native_form_before_sending_keys(self):
         driver = WebDriver()

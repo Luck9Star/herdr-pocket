@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "imageSha256": "7513ccaee78d9852f7c09d3b8efaa53eb78813780b8ef60a6c728a1f2f423777",
+  "imageSize": [
+    1320,
+    2868
+  ],
+  "terminalBounds": [
+    48,
+    984,
+    1224,
+    1287
+  ],
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "expectedToken": "SAND HARP BARN LAMP DECK HUNT DECK HARD",
+  "markerVisible": true,
+  "tokenVisible": true,
+  "ocrEngine": "tesseract 5.5.4",
+  "ocrAttempts": 1,
+  "ocrPageSegmentationMode": 6,
+  "proofSequenceVisible": true
+}

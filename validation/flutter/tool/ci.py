@@ -125,9 +125,19 @@ def prepare(destination):
     marker = 'RegisterGeneratedPlugins(registry: flutterViewController)'
     if marker not in mac_text:
         raise SystemExit('Pinned Flutter macOS registration template changed')
+    awake = '  override func awakeFromNib() {'
+    if mac_text.count(awake) != 1:
+        raise SystemExit('Pinned Flutter macOS window template changed')
+    mac_text = mac_text.replace(awake,
+        '  override func accessibilityChildren() -> [Any]? {\n'
+        '    return herdrSecureAccessibilityChildren(window: self, preserving: super.accessibilityChildren())\n'
+        '  }\n\n' + awake, 1)
     macos.write_text(mac_text.replace(marker, marker + '\n    registerHerdrDeviceKeys(messenger: flutterViewController.engine.binaryMessenger)'
-                                     + '\n    registerHerdrConfigDocuments(messenger: flutterViewController.engine.binaryMessenger)', 1)
-                     + '\n' + shared_apple + '\n' + apple_channel + '\n' + apple_documents, encoding='utf-8')
+                                     + '\n    registerHerdrConfigDocuments(messenger: flutterViewController.engine.binaryMessenger)'
+                                     + '\n    registerHerdrSecureAccessibilityWindow(self)'
+                                     + '\n    registerHerdrSecureCredentialFields(registrar: flutterViewController.registrar(forPlugin: "HerdrSecureCredentialFields"))', 1)
+                     + '\n' + shared_apple + '\n' + apple_channel + '\n' + apple_documents
+                     + '\n' + (source / 'native/apple/SecureCredentialView.swift').read_text(encoding='utf-8'), encoding='utf-8')
 
     shutil.copytree(source / 'diagnostic', destination / 'diagnostic', dirs_exist_ok=True)
     shutil.copytree(source / 'regression', destination / 'regression', dirs_exist_ok=True)

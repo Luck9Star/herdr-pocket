@@ -26,6 +26,13 @@ class GuiFailure(Exception):
     """Static phase codes only; never publish driver, host or widget output."""
 
 
+def retained_host_card_matches(detail, card):
+    """Compare the visible stale card with its independently observed summary."""
+    expected = re.search(r'受阻(?:至少)? \d+(?!\d)', detail)
+    actual = re.search(r'受阻(?:至少)? \d+(?!\d)', card)
+    return bool(expected and actual and expected.group() == actual.group() and '上次快照' in card)
+
+
 def fixture_terminal_id(config):
     # Read back the selected pane from the fixture server independently of the
     # app. Different sessions can both contain w1:p1.
@@ -346,12 +353,56 @@ class WebDriver:
         if self.read(selector,'value') != str(value):
             raise GuiFailure('form_input_mismatch_'+label)
 
+    def _read_element(self, selector, kind, name):
+        # A live dashboard can replace a node between lookup and an idempotent
+        # property read. Relocate only for that exact W3C error; never replay a
+        # click, fill or other state-changing operation.
+        stale = 'webdriver_' + name[:18] + '_stale_element_reference'
+        for attempt in range(5):
+            try:
+                return self.call('GET', self.element(selector)+'/'+kind+'/'+name)
+            except GuiFailure as error:
+                if str(error) != stale or attempt == 4:
+                    raise
+                time.sleep(0.05)
+
     def read(self, selector, prop='innerText'):
-        return self.call('GET', self.element(selector)+'/property/'+prop)
+        return self._read_element(selector, 'property', prop)
+
+    def attribute(self, selector, name):
+        return self._read_element(selector, 'attribute', name)
 
     def close(self):
         if self.session:
             self.call('DELETE', self.session)
+
+
+def open_host_summary(driver):
+    """Expand the visible details with a WebDriver click before reading innerText."""
+    def is_open():
+        return driver.attribute('#host-task-details', 'open')
+    if not is_open():
+        driver.click('#host-task-details > summary')
+        wait_for(is_open, 'host_summary_not_expanded')
+
+
+def stop_tauri_observation(driver):
+    # In the guarded layout the input dock is the reachable stop action;
+    # stock observation has only the separate stop action. Click once only.
+    script = """for (const selector of ['#remote-stop-dock','#remote-stop-visible']) {
+        const e=document.querySelector(selector);
+        if (e && e.getClientRects().length && !e.matches(':disabled') &&
+            getComputedStyle(e).visibility === 'visible') return selector;
+    } return null;"""
+    selector = wait_for(lambda: driver.call('POST', driver.session + '/execute/sync',
+                                           {'script': script, 'args': []}), 'stop_control_unavailable')
+    if selector not in ('#remote-stop-dock', '#remote-stop-visible'):
+        raise GuiFailure('stop_control_invalid')
+    driver.click(selector)
+    wait_for(lambda: '陈旧' in driver.read('#remote-captured'), 'stale_marker_missing')
+    wait_for(lambda: driver.call('POST', driver.session + '/execute/sync',
+        {'script': "return document.querySelector('#remote-input-controls').hidden;", 'args': []}) is True,
+        'input_controls_not_retired_after_stop')
 
 
 def run_tauri(args, root, env, config, approval):
@@ -360,6 +411,7 @@ def run_tauri(args, root, env, config, approval):
         try:
             driver.start(args.tauri_app)
             driver.click('#host-open-remote')
+            driver.click('#add-herdr')
             for field, key in [('host','host'), ('port','port'), ('user','username'), ('session','session'),
                                ('herdr','herdrPath'), ('socket','socketPath'), ('pin','expectedHostKey')]:
                 driver.fill('#remote-'+field, config[key])
@@ -379,19 +431,19 @@ def run_tauri(args, root, env, config, approval):
             button = wait_for(lambda:driver.read(pane_selector), 'pane_dashboard_missing')
             if not button.startswith(config['paneId']+' · '):
                 raise GuiFailure('unexpected_dashboard_pane')
+            open_host_summary(driver)
             summary_selector = '#host-task-board [data-live-host-summary]'
             phase_selector = '#remote-panes [data-dashboard-phase]'
             session_label = f" · 会话 {config['session']} · 受阻"
             def current_board():
-                phase = driver.call('GET', driver.element(phase_selector)+'/attribute/data-dashboard-phase')
+                phase = driver.attribute(phase_selector,'data-dashboard-phase')
                 prefix = {'fresh': '当前快照', 'unavailable': '本次快照（持续更新不可用）'}.get(phase)
                 summary = driver.read(summary_selector)
                 return phase if prefix and prefix + session_label in summary and ' · 同步 ' in summary else None
             initial_board = wait_for(current_board, 'direct_host_summary_missing')
             driver.click(pane_selector)
             def rendered(attr):
-                path = driver.element('#remote-captured')+'/attribute/data-'+attr+'-frames'
-                value = driver.call('GET', path)
+                value = driver.attribute('#remote-captured','data-'+attr+'-frames')
                 return int(value) if value and value.isdigit() else 0
             full = wait_for(lambda:rendered('full'), 'full_render_ack_missing')
             deltas = wait_for(lambda:rendered('delta'), 'delta_render_ack_missing')
@@ -410,15 +462,15 @@ def run_tauri(args, root, env, config, approval):
                 driver.click('#remote-input-confirm')
                 wait_for(lambda: '已接收入队' in driver.read('#remote-input-status'), 'input_ack_missing')
             terminal_board = wait_for(current_board, 'direct_host_summary_expired_during_terminal')
-            driver.click('#remote-cancel')
-            wait_for(lambda:'陈旧' in driver.read('#remote-captured'), 'stale_marker_missing')
+            stop_tauri_observation(driver)
             def stopped_summary():
                 label = driver.read(summary_selector)
                 position = label.find('上次快照（状态已陈旧）' + session_label)
                 return label[position:] if position >= 0 else None
             retained = wait_for(stopped_summary, 'direct_host_summary_not_retained')
             driver.click('#host-return-home')
-            wait_for(lambda: driver.read('#host-list [data-host-task-summary]') == retained,
+            wait_for(lambda: retained_host_card_matches(retained,
+                driver.read('#host-list [data-host-task-summary]')),
                      'retained_home_summary_missing')
             return {'paired':True, 'paneChosen':True, 'fullRendered':True, 'deltaRendered':True,
                     'initialHostBoardPhase':initial_board, 'hostBoardPhaseDuringTerminal':terminal_board,

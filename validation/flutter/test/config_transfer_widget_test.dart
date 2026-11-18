@@ -25,7 +25,9 @@ void main() {
     final tokens = (await tester.runAsync(DesignTokens.load))!;
     await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:HostCatalogPage(tokens:tokens,catalog:catalog,keys:keys,
       offlineBuilder:(_) => const SizedBox()))); await tester.pumpAndSettle();
+    await tester.tap(find.text('设置').last); await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('hosts-transfer')),findsOneWidget);
+    await tester.tap(find.text('看板').last); await tester.pumpAndSettle();
     expect(find.textContaining('导入未配对'),findsOneWidget); expect(keys.creates,0); expect(keys.signCalls,0);
     await tapVisible(tester,'host-open-${imported.id}'); await tester.pumpAndSettle();
     expect(tester.widget<TextField>(find.byKey(const ValueKey('pair-host'))).controller!.text,'fixture.invalid');
@@ -45,6 +47,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:HostCatalogPage(tokens:tokens,catalog:catalog,keys:keys,
       offlineBuilder:(_) => const SizedBox()))); await tester.pumpAndSettle();
     expect(catalog.profiles.single.hasIdentity,isFalse); expect(tester.takeException(),isNull);
+    await tapVisible(tester,'host-management-${imported.id}'); await tester.pumpAndSettle();
     await tapVisible(tester,'host-disable-${imported.id}'); await tester.pumpAndSettle();
     expect(catalog.profiles.single.enabled,isFalse); expect(catalog.profiles.single.hasIdentity,isFalse);
     expect(tester.widget<FilledButton>(find.byKey(ValueKey('host-open-${imported.id}'))).onPressed,isNull);

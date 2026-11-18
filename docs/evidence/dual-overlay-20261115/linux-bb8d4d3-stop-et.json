@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "bb8d4d3e9a67eef8931ff1833fdf8a96958a50fb",
+  "status": "failed",
+  "stage": "fixture",
+  "stopFirst": "et",
+  "loopbackOnlyNamespace": true,
+  "temporaryCredentialsRemoved": true,
+  "ownedProcessesStopped": true,
+  "tsPeerCleanup": false,
+  "binarySha256": {
+    "peer": "4e4b524f3e1c1bc9598a1b9604597868d97fb74b4d237e0d015d03396ff070e5",
+    "ts-fixture": "b17dcfab53a97b0a6947bb7e5a44873229e29dc62b7bd4292c9f6867c0a8ba7f",
+    "probe": "de642302652fd04a4b9daca01c98eb74fd24583f8b8720662f8acb26640a5a2f",
+    "herdr": "8cb39663b4e466006ffb0d68b5efe5be61701446b6c9877bf84cce2c0f762dbc",
+    "lib/libheeler_easytier.so": "b2c019e601231ac66c8d82576909e487e98266c9df277918633de26c1da2592a",
+    "lib/libhp_tailscale.so": "1678a13fb07d1ff24eafe5ed4d02fa98bf261c1ce83b63363aa6a9fa014f6713"
+  },
+  "error": "fixture_ready_timeout"
+}

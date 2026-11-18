@@ -864,7 +864,8 @@ class CleanupGuards(PreparedFixture):
         with patch.object(gui,'read_public',return_value=json.dumps(record).encode()):
             self.exercise(fail_checkpoint='receiver')
         output=json.loads((self.runner/'output/flutter-android-test-failure.json').read_text())
-        self.assertEqual(output,{'sourceSHA':self.env['GITHUB_SHA'],'failure':record})
+        self.assertEqual(output,{'sourceSHA':self.env['GITHUB_SHA'],'failure':record,
+            'checkpointProgress':{'current':gui.KEYBOARD_OBSERVE_CHECKPOINT,'completed':[]}})
 
     def test_finally_rejects_a_resume_failure_with_unapproved_payload(self):
         payload={'stage':'tui_resume_full','errorClass':'TestFailure','line':68,
@@ -872,7 +873,8 @@ class CleanupGuards(PreparedFixture):
         with patch.object(gui,'read_public',return_value=json.dumps(payload).encode()):
             self.exercise(fail_checkpoint='receiver')
         output=json.loads((self.runner/'output/flutter-android-test-failure.json').read_text())
-        self.assertEqual(output,{'sourceSHA':self.env['GITHUB_SHA'],'failure':None})
+        self.assertEqual(output,{'sourceSHA':self.env['GITHUB_SHA'],'failure':None,
+            'checkpointProgress':{'current':gui.KEYBOARD_OBSERVE_CHECKPOINT,'completed':[]}})
         self.assertNotIn('PRIVATE',json.dumps(output))
 
     def test_a_failing_adb_call_reports_only_its_class_and_sizes(self):
@@ -902,7 +904,8 @@ class CleanupGuards(PreparedFixture):
         self.assertEqual(str(caught.exception), 'flutter_android_adb_failed')
         self.assertEqual(run.call_count, 3)
         self.assertEqual(caught.exception.adb_diagnostic,
-                         {'command': 'shell', 'exitCode': 1, 'stdoutBytes': 0, 'stderrBytes': 22})
+                         {'command': 'shell', 'exitCode': 1, 'stdoutBytes': 0, 'stderrBytes': 22, 'operation': 'ime-state',
+                          'retry': {'operation':'ime-state','first':{'exitCode':1,'stdoutBytes':0,'stderrBytes':22},'attempts':3,'recovered':False}})
 
     def test_non_transient_stderr_and_unmarked_calls_never_retry(self):
         with patch.object(gui.subprocess, 'run',
@@ -942,6 +945,10 @@ class CleanupGuards(PreparedFixture):
         self.assertEqual(gui._adb_command_class(('shell', '-T', 'run-as', 'pkg', 'head')), 'shell')
         self.assertEqual(gui._adb_command_class(('exec-out', 'cat', 'file')), 'exec-out')
         self.assertEqual(gui._adb_command_class(('unknown-verb', 'secret-value')), 'other')
+        self.assertEqual(gui._adb_read_operation(('shell','dumpsys','input_method')), 'ime-state')
+        self.assertEqual(gui._adb_read_operation(('shell','dumpsys','window','displays')), 'window-displays')
+        self.assertIsNone(gui._adb_read_operation(('shell','dumpsys','PRIVATE')))
+        self.assertIsNone(gui._adb_read_operation(('shell','dumpsys','input_method','PRIVATE')))
 
     def test_an_adb_failure_is_written_into_the_published_failure_report(self):
         diagnostic={'command':'shell','exitCode':1,'stdoutBytes':0,'stderrBytes':14}
@@ -1189,6 +1196,7 @@ class ClipboardCheckpointGuards(unittest.TestCase):
                     patch.object(gui, 'adb', side_effect=gui.DeviceFailure('flutter_android_adb_failed') if bad == 'ack' else None) as adb:
                 with self.assertRaises(gui.DeviceFailure): state.poll()
                 self.assertEqual(state.completed, [])
+                self.assertEqual(state.current, gui.CLIPBOARD_CHECKPOINTS[0])
                 if bad == 'receiver': adb.assert_not_called()
 
     def test_legacy_wait_can_omit_checkpoints_but_explicit_new_checks_cannot_be_bypassed(self):
@@ -1497,7 +1505,9 @@ class TuiGuards(unittest.TestCase):
         self.assertIn('visibleRemoteScreenCells(terminal,render,',source)
         self.assertIn('!identical(tester.widget<TerminalView>',source)
         self.assertIn('(displayedSequence(tester) ?? -1) > sequence',source)
-        self.assertIn('await tap(tester,button); await accepted',source)
+        self.assertLess(source.index('await tap(tester,button);',source.index('Future<Map<String,Object>> exerciseTui')),
+                        source.index('await accepted(tester,previousRequest:previousRequest)',source.index('Future<Map<String,Object>> exerciseTui')))
+        self.assertIn("stage('tui_finish_receipt')",source)
         self.assertLess(source.index("inputReceipts.add(visibleReceipt(tester,target['paneId'] as String,9))"),source.index('tuiEvidence = await exerciseTui'))
         self.assertIn("'acceptedByteCounts':[1,9]",source)
         for key in ('remote-key-↓','remote-key-Tab',*('remote-function-key-'+name for name in ('backspace','shift-tab','insert','delete','f1','f5','f10'))):
@@ -1640,6 +1650,51 @@ class SystemKeyboardGuards(unittest.TestCase):
                 self.assertEqual(len(back), 0 if failure == 'not-owned' else 1)
                 if failure:
                     self.assertEqual(len(adb.call_args_list), len(back))  # No ACK on unconfirmed hide.
+
+
+class TuiFinishDiagnosticTests(unittest.TestCase):
+    def test_finish_receipt_timeout_exports_only_booleans(self):
+        report={'stage':'tui_finish_receipt','errorClass':'TestFailure','line':595,
+                'untilTimeout':{'receiptPresent':True,'receiptChanged':True,'acceptedNotice':False}}
+        self.assertEqual(gui.safe_test_failure(report),report)
+        for invalid in ({'receiptPresent':'private'}, {'acceptedNotice':1}, {'receiptText':'private'}):
+            with self.subTest(invalid=invalid), self.assertRaises(gui.DeviceFailure):
+                gui.safe_until_timeout(invalid)
+
+
+class ImeReadRetryTests(unittest.TestCase):
+    def test_partial_255_then_success_records_first_without_output(self):
+        failed=subprocess.CompletedProcess([],255,b'PRIVATE PARTIAL',b'')
+        ok=subprocess.CompletedProcess([],0,b'complete',b'')
+        records=[]
+        with patch.object(gui.subprocess,'run',side_effect=[failed,ok]) as run, patch.object(gui.time,'sleep'):
+            result=gui.adb('shell','dumpsys','input_method',transient_retry=True,retry_diagnostics=records)
+        self.assertEqual(result.stdout,b'complete');self.assertEqual(run.call_count,2)
+        self.assertEqual(records,[{'operation':'ime-state','first':{'exitCode':255,'stdoutBytes':15,'stderrBytes':0},'attempts':2,'recovered':True}])
+        self.assertNotIn('PRIVATE',str(records))
+
+    def test_timeout_then_success_and_persistent_failure(self):
+        timed=subprocess.TimeoutExpired('adb',30)
+        ok=subprocess.CompletedProcess([],0,b'complete',b'')
+        records=[]
+        with patch.object(gui.subprocess,'run',side_effect=[timed,ok]), patch.object(gui.time,'sleep'):
+            gui.adb('shell','dumpsys','window','displays',transient_retry=True,retry_diagnostics=records)
+        self.assertEqual(records[0]['first'],{'reason':'timeout','timeoutSeconds':30})
+        self.assertEqual(records[0]['attempts'],2);self.assertTrue(records[0]['recovered'])
+        failed=subprocess.CompletedProcess([],255,b'partial',b'');records=[]
+        with patch.object(gui.subprocess,'run',return_value=failed) as run, patch.object(gui.time,'sleep'):
+            with self.assertRaises(gui.DeviceFailure) as caught:
+                gui.adb('shell','dumpsys','input_method',transient_retry=True,retry_diagnostics=records)
+        self.assertEqual(run.call_count,3);self.assertEqual(records[0]['attempts'],3)
+        self.assertFalse(records[0]['recovered']);self.assertEqual(caught.exception.adb_diagnostic['retry'],records[0])
+
+    def test_input_and_other_queries_never_repeat_partial_or_timeout(self):
+        failed=subprocess.CompletedProcess([],255,b'partial',b'')
+        for args, outcome in [(('shell','input','keyevent','KEYCODE_BACK'),failed),
+                              (('shell','getprop','ro.kernel.qemu'),subprocess.TimeoutExpired('adb',30))]:
+            with self.subTest(args=args), patch.object(gui.subprocess,'run',side_effect=[outcome]) as run, patch.object(gui.time,'sleep'):
+                with self.assertRaises(gui.DeviceFailure): gui.adb(*args,transient_retry=True)
+                self.assertEqual(run.call_count,1)
 
 
 if __name__ == '__main__':

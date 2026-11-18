@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "bc430761b71a470eeba94a01b148f0521343c822",
+  "kind": "flutter-android-ordinary-ssh",
+  "status": "passed",
+  "cleanup": {
+    "reverseRemoved": true,
+    "packageRemoved": true,
+    "ownedForwardsRemoved": true,
+    "fixtureClosed": true,
+    "flutterToolStopped": true,
+    "rawLogsUploaded": false
+  },
+  "physicalImeVerified": false,
+  "peerClosedBeforeDriverExit": true,
+  "device": {
+    "schemaVersion": 1,
+    "platform": "android-api35-emulator",
+    "homepageEntry": true,
+    "fingerprintMatched": true,
+    "explicitTrustRequired": true,
+    "realTerminalView": true,
+    "normalTextInputCommit": true,
+    "remoteEchoVisible": true,
+    "disconnectUiConfirmed": true,
+    "credentialsCleared": true,
+    "physicalImeVerified": false
+  },
+  "protocol": {
+    "authAccepted": true,
+    "ptyRequested": true,
+    "shellRequested": true,
+    "markerReceived": true,
+    "sessionClosed": true,
+    "connections": 2,
+    "connectionsClosed": true,
+    "ptySizes": [
+      [
+        80,
+        24
+      ],
+      [
+        46,
+        43
+      ],
+      [
+        46,
+        45
+      ],
+      [
+        46,
+        25
+      ]
+    ]
+  },
+  "lastPhase": "read_screenshots"
+}

@@ -8,7 +8,7 @@ import 'remote_failure.dart';
 export 'remote_failure.dart';
 import 'remote_input.dart';
 import 'remote_frame_geometry.dart';
-import 'routed_ssh_socket.dart' show RoutedSSHSocket;
+import 'routed_ssh_socket.dart' show RoutedSSHSocket, RetiringSSHSocket, GracefulSSHSocket;
 
 String shellQuote(String value) => "'${value.replaceAll("'", "'\\''")}'";
 
@@ -112,6 +112,21 @@ class RemoteConfig {
 
 }
 
+/// Bounded error categories; never retain a remote description or address.
+String remoteDiagnosticErrorKind(Object error) => error is SSHChannelOpenError ? 'ssh_channel_open'
+    : error is SSHSocketError ? 'ssh_socket' : error is TimeoutException ? 'timeout'
+    : error is RemoteFailure ? 'remote_failure' : error is StateError ? 'state_error'
+    : error is FormatException ? 'format_error' : 'other';
+
+String remoteInitialFailureCode(Object error, String phase, {String? previous}) {
+  if (previous != null) return previous;
+  if (error is SSHChannelOpenError && error.code == 1 && phase == 'snapshot_forward_open') {
+    return 'snapshot_forward_denied';
+  }
+  if (error is SSHAuthFailError) return 'authentication_failed';
+  return 'connection_failed';
+}
+
 /// Retiring a channel waits for its peer CLOSE. Only the observation exec's
 /// CLOSE doubles as the shared SSH transport's liveness proof; the other
 /// channels are transient forwards that retire alone when CLOSE is missed.
@@ -124,6 +139,8 @@ class RemoteEvidence {
   int frameCount = 0, deltaFrames = 0, paneCount = 0, connectionCount = 0, bufferHighWaterBytes = 0;
   int? lastSeq;
   String? errorCode;
+  String diagnosticPhase = 'before_auth', diagnosticErrorKind = 'none';
+  int channelOpenCode = 0;
   // Which channel roles missed their CLOSE deadline; bounded to the enum.
   final Set<String> channelRetireFailures = {};
   // Bounded progress only; never contains an endpoint, frame, or input.
@@ -455,6 +472,7 @@ class _Attempt {
   SSHSocket? socket;
   SSHClient? client;
   Future<void>? clientClosing;
+  bool nativeRetired = true,gracefulRequested = false,gracefulPeerClosed = true;
   SSHForwardChannel? forward;
   SSHForwardChannel? inputForward;
   SSHSession? observe;
@@ -694,12 +712,26 @@ class RemoteReadOnlyAdapter {
     ]) {
       try { destroy(); } catch (_) { a.lateChannelDestroyFailed = true; }
     }
+    final managed = a.socket;
+    if (a.gracefulRequested && managed is GracefulSSHSocket) {
+      // SSHTransport.close cancels its read subscription first. Half-close while
+      // that original reader still exists, before the library can force destroy.
+      a.gracefulPeerClosed = await (managed as GracefulSSHSocket).finishGracefully();
+    }
     try { await a.stderr?.cancel().timeout(const Duration(seconds:2)); } catch (_) { /* discarded remote stream */ }
     try {
       final closing = a.client?.close(); a.clientClosing = closing;
       await closing?.timeout(const Duration(seconds:2));
     } catch (_) { /* socket cleanup below; slot still waits for original future */ }
-    finally { a.socket?.destroy(); }
+    finally {
+      final socket = a.socket;
+      socket?.destroy();
+      if (socket is RetiringSSHSocket) a.nativeRetired = await (socket as RetiringSSHSocket).retired;
+    }
+  }
+  void requestGracefulClose() {
+    final a = _attempt;
+    if (a != null && a.closing == null && a.socket is GracefulSSHSocket) a.gracefulRequested = true;
   }
   Future<void> cancel() async {
     generation++;
@@ -709,6 +741,7 @@ class RemoteReadOnlyAdapter {
     if (!a.cancelled.isCompleted) a.cancelled.complete();
     a.waits.interrupt(const RemoteFailure('cancelled')); a.wakeWatch?.call();
     await _close(a);
+    if (!a.nativeRetired || !a.gracefulPeerClosed) throw const RemoteFailure('network_transport_failed');
   }
 
   /// Revoke input immediately and retire only the observing channel. The SSH
@@ -1021,6 +1054,7 @@ class RemoteReadOnlyAdapter {
       // Consume closure errors in addition to authenticated; no unhandled socket errors escape to logs.
       unawaited(client.done.then<void>((_) {},onError:(Object _,StackTrace __) {}));
       await _wait(a,client.authenticated);
+      e.diagnosticPhase = 'authenticated';
       if (!e.hostKeyChecked || !e.hostKeyMatched) throw const RemoteFailure('host_key_mismatch');
       Future<RemoteDashboard> snapshot({bool observation=false,bool watch=false}) async {
         final previous = a.snapshotTail;
@@ -1035,13 +1069,18 @@ class RemoteReadOnlyAdapter {
               (watch && watchEpoch != a.watchEpoch) ||
               (observation && observationEpoch != a.observationEpoch)) throw const RemoteFailure('observation_paused');
           acquired = true;
+          if (!watch && !observation) e.diagnosticPhase = 'snapshot_forward_open';
           final channel = await _openChannel<SSHForwardChannel>(a,() => client.forwardLocalUnix(config.socketPath),
             (c) => c.destroy(),observation:observation,watch:watch,role:RemoteChannelRole.snapshot);
           if (!watch) a.forward = channel;
+          var snapshotCompleted = false;
           try {
+            if (!watch && !observation) e.diagnosticPhase = 'snapshot_write';
             final id = _requestId();
             channel.sink.add(utf8.encode('${jsonEncode({'id':id,'method':'session.snapshot','params':<String,Object?>{}})}\n'));
+            if (!watch && !observation) e.diagnosticPhase = 'snapshot_read';
             final line = await _wait(a,boundedLines(channel.stream,maxTotal:1048576).first,observation:observation,watch:watch);
+            if (!watch && !observation) e.diagnosticPhase = 'snapshot_decode';
             final rpc = _decodeObject(line);
             if (rpc['id'] != id || rpc['error'] != null || rpc['ok'] == false || rpc['result'] is! Map) {
               throw const RemoteFailure('snapshot_rejected');
@@ -1050,10 +1089,12 @@ class RemoteReadOnlyAdapter {
             // erase that. Rust records it before its binding checks too.
             e.snapshotReceived = true;
             final parsed = parseSnapshotDashboard(config,Map<String,dynamic>.from(rpc['result'] as Map),a.generation);
+            snapshotCompleted = true;
             return RemoteDashboard(parsed.generation,parsed.session,parsed.panes,syncedAt:_clock().toUtc(),
               source:RemoteDashboardSource.connected(config,connectedSocketRoute(socket)),observationEpoch:observationEpoch);
           } finally {
             channel.destroy(); if (identical(a.forward,channel)) a.forward = null;
+            if (!watch && !observation && snapshotCompleted) e.diagnosticPhase = 'snapshot_retire';
             if (_valid(a)) await _retireChannel(a,channel,role:RemoteChannelRole.snapshot);
           }
         } finally {
@@ -1067,13 +1108,16 @@ class RemoteReadOnlyAdapter {
       if (onDashboard != null) {
         // Capability discovery is side-effect-free; stock 0.9.5 replies with an
         // error and remains read-only. This is never inferred from version alone.
+        e.diagnosticPhase = 'capabilities_forward_open';
         final capabilityChannel = await _openChannel<SSHForwardChannel>(a,() => client.forwardLocalUnix(config.socketPath),
           (c) => c.destroy(),role:RemoteChannelRole.snapshot);
         a.forward = capabilityChannel;
         final capabilityId = _requestId();
         capabilityChannel.sink.add(utf8.encode('${jsonEncode({'id':capabilityId,
           'method':'pocket.input.capabilities','params':<String,Object?>{}})}\n'));
+        e.diagnosticPhase = 'capabilities_read';
         final capabilityLine = await _wait(a,boundedLines(capabilityChannel.stream,maxTotal:16384).first);
+        e.diagnosticPhase = 'capabilities_decode';
         final response = _decodeObject(capabilityLine);
         if (response['id'] != capabilityId) throw const RemoteFailure('invalid_response');
         if (response['error'] == null && response['ok'] != false) {
@@ -1254,6 +1298,7 @@ class RemoteReadOnlyAdapter {
         }));
       }
       a.restartWatch = restartWatch;
+      e.diagnosticPhase = 'dashboard_ready';
       phase('snapshot_received');
       RemotePane selected;
       if (onDashboard == null) {
@@ -1370,14 +1415,18 @@ class RemoteReadOnlyAdapter {
         }
 
     } catch (error) {
+      e.diagnosticErrorKind = remoteDiagnosticErrorKind(error);
+      if (error is SSHChannelOpenError && error.code >= 1 && error.code <= 4) e.channelOpenCode = error.code;
       e.observationPhase = 'failed';
-      final failure = a.failure ?? (error is RemoteFailure ? error : RemoteFailure(e.errorCode ??
-        (error is SSHAuthFailError ? 'authentication_failed' : error is SSHAuthAbortError && e.hostKeyMatched ? 'authentication_aborted' : 'connection_failed')));
+      final failure = a.failure ?? (error is RemoteFailure ? error : RemoteFailure(
+        error is SSHAuthAbortError && e.hostKeyMatched && e.errorCode == null
+          ? 'authentication_aborted'
+          : remoteInitialFailureCode(error,e.diagnosticPhase,previous:e.errorCode)));
       e.errorCode ??= failure.code;
       throw failure;
     } finally {
       var closed = false;
-      try { await _close(a); closed = true; }
+      try { await _close(a); closed = a.nativeRetired; }
       finally {
         _activeRead = false;
         final pending = ownedDial;

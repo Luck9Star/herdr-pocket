@@ -83,7 +83,11 @@ jobs:
         id: build
         run: |
           case "$PROBE_PLATFORM" in
-            linux) npm run tauri -- build --bundles deb -- --locked ;;
+            linux)
+              python3 -m unittest discover -s scripts -p 'test_deb_dependencies.py'
+              npm run tauri -- build --bundles deb -- --locked
+              python3 scripts/check-deb-dependencies.py src-tauri/target/release/bundle/deb/*.deb
+              ;;
             windows) npm run tauri -- build --bundles nsis -- --locked ;;
             macos) npm run tauri -- build --bundles app -- --locked ;;
             android)

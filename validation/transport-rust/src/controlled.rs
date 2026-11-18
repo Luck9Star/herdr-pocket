@@ -36,6 +36,7 @@ impl Drop for IoReservation {
 struct OwnedDialer<'a> {
     inner: &'a dyn transport::Dialer,
     io: Arc<OwnedIo>,
+    graceful: Arc<AtomicBool>,
 }
 impl transport::Dialer for OwnedDialer<'_> {
     fn dial(&self, host: String, port: u16, cancel: Cancellation) -> transport::DialFuture<'_> {
@@ -45,6 +46,9 @@ impl transport::Dialer for OwnedDialer<'_> {
                 Box::new(OwnedStream {
                     inner: Some(stream),
                     _reservation: self.io.reserve(),
+                    graceful: self.graceful.clone(),
+                    shutdown: None,
+                    write_closed: false,
                 }) as Box<dyn transport::ByteStream>
             });
             drop(pending);
@@ -53,6 +57,9 @@ impl transport::Dialer for OwnedDialer<'_> {
     }
 }
 struct OwnedStream {
+    graceful: Arc<AtomicBool>,
+    shutdown: Option<Pin<Box<tokio::time::Sleep>>>,
+    write_closed: bool,
     inner: Option<Box<dyn transport::ByteStream>>,
     _reservation: IoReservation,
 }
@@ -97,7 +104,28 @@ impl AsyncWrite for OwnedStream {
         Pin::new(&mut **self.get_mut().inner.as_mut().unwrap()).poll_flush(cx)
     }
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut **self.get_mut().inner.as_mut().unwrap()).poll_shutdown(cx)
+        let this = self.get_mut();
+        if !this.graceful.load(Ordering::SeqCst) {return Pin::new(&mut **this.inner.as_mut().unwrap()).poll_shutdown(cx);}
+        let deadline = this.shutdown.get_or_insert_with(|| Box::pin(tokio::time::sleep(CLOSE_WAIT)));
+        if deadline.as_mut().poll(cx).is_ready() {
+            return Poll::Ready(Err(io::Error::new(io::ErrorKind::TimedOut, "close_timeout")));
+        }
+        if !this.write_closed {
+            match Pin::new(&mut **this.inner.as_mut().unwrap()).poll_shutdown(cx) {
+                Poll::Ready(Ok(())) => this.write_closed = true,
+                other => return other,
+            }
+        }
+        // SSH parsing has ended. Retain the native owner after FIN until peer
+        // EOF, with a deadline; Drop/remove alone does not deliver an ET FIN.
+        let mut bytes = [0; 1024];
+        let mut buf = ReadBuf::new(&mut bytes);
+        match Pin::new(&mut **this.inner.as_mut().unwrap()).poll_read(cx, &mut buf) {
+            Poll::Ready(Ok(())) if buf.filled().is_empty() => Poll::Ready(Ok(())),
+            Poll::Ready(Ok(())) => {cx.waker().wake_by_ref(); Poll::Pending}
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+            Poll::Pending => Poll::Pending,
+        }
     }
 }
 
@@ -147,6 +175,7 @@ struct Gate {
     dashboard: Option<Arc<dyn Fn(session_watch::SessionWatchUpdate) + Send + Sync>>,
 }
 struct ControlInner {
+    graceful_stop: Arc<AtomicBool>,
     gate: Mutex<Gate>,
     changed: Notify,
 }
@@ -166,6 +195,7 @@ impl ObservationControl {
     pub fn new() -> Self {
         Self {
             inner: Arc::new(ControlInner {
+                graceful_stop: Arc::new(AtomicBool::new(false)),
                 gate: Mutex::new(Gate {
                     snapshot: ObservationSnapshot {
                         epoch: 1,
@@ -307,6 +337,16 @@ impl ObservationControl {
         }
         true
     }
+    /// Explicit node stop only; revocation and unknown input still abort.
+    pub fn stop_gracefully(&self) {
+        {
+            let gate = locked(&self.inner.gate);
+            if gate.snapshot.phase == ObservationPhase::Closed {return;}
+            self.inner.graceful_stop.store(gate.input.as_ref().is_none_or(|input| input.retire_for_stop()),Ordering::SeqCst);
+        }
+        self.close_if(None);
+    }
+    fn graceful_stop(&self) -> bool {self.inner.graceful_stop.load(Ordering::SeqCst)}
     fn close(&self) {
         self.close_if(None);
     }
@@ -331,7 +371,7 @@ impl ObservationControl {
             if let Some(pending) = gate.pending.take() {
                 let _ = pending.ack.send(Err("control_closed"));
             }
-            (gate.listener.take(), gate.snapshot, gate.connection.clone())
+            (gate.listener.take(), gate.snapshot, if self.graceful_stop() {None} else {gate.connection.clone()})
         };
         if let Some(cancel) = cancel {
             cancel.cancel();
@@ -518,6 +558,7 @@ where
     let owned = OwnedDialer {
         inner: dialer,
         io: io.clone(),
+        graceful: control.inner.graceful_stop.clone(),
     };
     let result = run_controlled(
         config,
@@ -528,10 +569,13 @@ where
         select,
         frame,
         hooks,
-        control,
+        control.clone(),
         &owned,
     )
     .await;
+    if control.graceful_stop() && !cancel.is_cancelled() {
+        let _ = tokio::time::timeout(CLOSE_WAIT + Duration::from_secs(1), io.settled()).await;
+    }
     cancel.cancel();
     // Keep the frontend's closing slot until owned dial futures and the
     // actual SSH driver's I/O have dropped. Native reservations are separate.
@@ -572,7 +616,7 @@ where
     let (ssh, route) =
         authenticate_observer(&config, &cancel, audit.clone(), &progress, external, dialer).await?;
     let mut target: Option<(String, String)> = None;
-    loop {
+    let result = async {loop {
         if cancel.is_cancelled() {
             return Err("cancelled");
         }
@@ -641,7 +685,11 @@ where
             Ok(()) | Err("observation_paused") => {}
             Err(code) => return Err(code),
         }
+    }}.await;
+    if control.graceful_stop() && !cancel.is_cancelled() {
+        let _ = tokio::time::timeout(Duration::from_secs(1), ssh.disconnect(russh::Disconnect::ByApplication, "node stopped", "")).await;
     }
+    result
 }
 pub(crate) fn current(control: &ObservationControl, epoch: u64) -> bool {
     control.snapshot().epoch == epoch && control.snapshot().phase != ObservationPhase::Closed

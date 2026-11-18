@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "passed": true,
+  "scope": "macOS host-side QA only: two real local OpenSSH/herdr hosts, real testcontrol/DERP/ET peer lifecycle and explicit TS C ABI login; local SSH clients use test-double device keys; no Android, relay, dual product dial or vault claim",
+  "providersLocalhostSandboxed": true,
+  "sshHostsLoopbackOnly": true,
+  "deviceDhcpAddressRequired": false,
+  "deviceTailscaleReachabilityVerified": false,
+  "distinctPublicProfiles": true,
+  "privateMaterialsMode600": true,
+  "implicitTsAuthRejected": true,
+  "explicitTsAuthAndClientCleanup": true,
+  "crossRequestRejected": true,
+  "sameSessionInputAudits": {
+    "et": {
+      "acceptedSessions": 1,
+      "newSessions": 0,
+      "sessions": [
+        {
+          "ordinal": 1,
+          "approvedDevice": true,
+          "active": true,
+          "capturedBytes": 10
+        }
+      ],
+      "capturedBytes": 10,
+      "newInputBytes": 10,
+      "exactBytes": true,
+      "authorizationActive": true,
+      "soleApprovedSession": true,
+      "inputAttributionAmbiguous": false
+    },
+    "ts": {
+      "acceptedSessions": 1,
+      "newSessions": 0,
+      "sessions": [
+        {
+          "ordinal": 1,
+          "approvedDevice": true,
+          "active": true,
+          "capturedBytes": 10
+        }
+      ],
+      "capturedBytes": 10,
+      "newInputBytes": 10,
+      "exactBytes": true,
+      "authorizationActive": true,
+      "soleApprovedSession": true,
+      "inputAttributionAmbiguous": false
+    }
+  },
+  "twoApprovedSshSessionsAlive": true,
+  "sessionClosureIndependentlyObserved": true,
+  "matchingRevocationsReviewed": true,
+  "cleanup": {
+    "tsPeerCleanup": true,
+    "etPeerCleanup": true,
+    "hostContextsClosed": true,
+    "collectorStopped": true,
+    "privateMaterialsRemoved": true,
+    "ownedProcessesStopped": true,
+    "temporaryAuthorizationsCleared": true,
+    "temporaryHostCredentialsRemoved": true
+  },
+  "outerTemporaryCredentialsRemoved": true,
+  "pairingRequestsSigned": false,
+  "devicePossessionProof": "actual OpenSSH public-key authentication with fresh synthetic MemoryKeyStore keys",
+  "sources": {
+    "validation/remote-harness/android_dual_overlay_hosts.py": "b0a7bcdb771976972d029cb197f18708361a2004bda878f14c7c507ea0618db9",
+    "validation/remote-harness/paired_dual_demo.py": "dd27f06439235d91436be269383fa3721b42916495b37ef697d99101385359ad",
+    "validation/remote-harness/easytier_peer.rs": "cf7c975c65fe2a3154fa44c8140e3688cc2b1f51e340d19dc29c3c24d689ed35"
+  },
+  "binaries": {
+    "tsFixtureSha256": "c89d3f6c769dfd01d8e37c3166db48938480a88e3c97811a2fe23258d94b4276",
+    "herdrSha256": "fb77c2232a05a8035421382c894392f4174e4e38a18e48af3dd0290157c3a7e2",
+    "peerSha256": "82ab891dd46400d0648bcb06f51feedb29326b92ff92d9988234f6add86dec7c",
+    "tsClientLibrarySha256": "52944f9ee8b38d6f7f95f8659e1ccac7d5bf867af249c44c7b4602a917a0688e"
+  },
+  "provenanceBoundary": "herdr is local 0.9.5 version/hash only; native peer is locally rebuilt from verified fixed archive/patches; no Linux executable, Android or GUI result",
+  "tsClientProductionSource": "93ca6cd4b9ccdbe8658d5470c8862b26092aa9dc",
+  "tests": {
+    "hostControlUnitTests": 7,
+    "existingPairingFixtureTests": 12,
+    "originalTwoHostPairingDemo": "passed",
+    "optionalPeerLifetimeAndOriginalThreeArguments": "passed"
+  }
+}

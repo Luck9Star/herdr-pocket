@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "imageSha256": "cd3181321c0f64239ad5fa432e63bd8ed897c90b9325958d2d583f9041ebaf53",
+  "imageSize": [
+    828,
+    1792
+  ],
+  "terminalBounds": [
+    0,
+    336,
+    828,
+    758
+  ],
+  "expectedMarker": "POCKET-ANDROID-SSH-OK",
+  "expectedToken": "DUSK HAVE SEAT STAR HEAT PART SALT SAND",
+  "markerVisible": true,
+  "tokenVisible": true,
+  "ocrEngine": "tesseract 5.5.4",
+  "ocrAttempts": 2,
+  "ocrPageSegmentationMode": 11,
+  "proofSequenceVisible": true
+}

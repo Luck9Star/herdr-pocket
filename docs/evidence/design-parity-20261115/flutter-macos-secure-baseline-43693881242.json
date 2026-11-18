@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "93ec6e2074f924e4a351ad6892917ca1fe413538",
+  "platform": "macos-xcuitest",
+  "status": "failed",
+  "scope": "native UI security fields and owned SSH loopback; synthetic values; no physical IME",
+  "embedderFallbackRequested": true,
+  "systemTreeAndSecureFieldsVerified": false,
+  "testExecuted": true,
+  "testPassed": false,
+  "peerAuthenticationPtyShellAndClose": false,
+  "encryptedKeyPeerAuthenticationPtyShellAndClose": false,
+  "passwordInputProven": false,
+  "passphraseInputProven": false,
+  "buildStarted": true,
+  "testStarted": true,
+  "testCounts": {
+    "totalTestCount": 1,
+    "passedTests": 0,
+    "failedTests": 1,
+    "skippedTests": 0
+  },
+  "failureMethod": "testPasswordAndPrivateKeyPassphraseAreSecure",
+  "buildDiagnostics": [],
+  "fixedFailures": [
+    "native secure field missing from system tree"
+  ],
+  "failureCategories": [],
+  "xcresultDetailsAvailable": true,
+  "homeMetrics": {
+    "windows": 1,
+    "nodes": 187,
+    "buttons": 3,
+    "exact": 0,
+    "label": 0
+  },
+  "fallbackHomeMetrics": {},
+  "ordinaryMetrics": [
+    {
+      "nodes": 209,
+      "nonemptyValues": 1,
+      "sentinelObserved": false
+    }
+  ],
+  "secureMetrics": [
+    {
+      "phase": "password",
+      "secure": 0,
+      "text": 4,
+      "other": 0,
+      "id": 0,
+      "label": 1,
+      "secureLabel": 0
+    }
+  ],
+  "progress": {
+    "fixtureReadable": true,
+    "appLaunched": true,
+    "homepage": true
+  },
+  "rawLogsUploaded": false,
+  "errorCode": "secure_field_not_identified"
+}

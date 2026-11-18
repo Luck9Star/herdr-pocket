@@ -57,6 +57,20 @@ def approval():
     return types.SimpleNamespace(blocked_targets=TARGETS,verify_blocked_targets=Mock(return_value=TARGETS),verify_ssh=Mock())
 
 class AndroidBlockedTests(unittest.TestCase):
+    def test_blocked_render_failure_reports_only_bounded_boolean_predicates(self):
+        keys=('viewVisible','terminalPresent','terminalVisible','targetMatched','terminalVerified',
+              'modeObserve','readOnly','inputModeNone','notFocused','markerMatched','otherMarkerAbsent')
+        progress=android.AndroidProgress(types.SimpleNamespace(output=None))
+        error=android.GuiFailure('android_blocked_render_missing')
+        error.blocked_render_diagnostic={key:key!='markerMatched' for key in keys}
+        progress.fail(error)
+        self.assertFalse(progress.data['blockedRenderDiagnostic']['markerMatched'])
+        self.assertEqual(set(progress.data['blockedRenderDiagnostic']),set(keys))
+        progress=android.AndroidProgress(types.SimpleNamespace(output=None))
+        error.blocked_render_diagnostic={**error.blocked_render_diagnostic,'secret':'raw terminal'}
+        progress.fail(error)
+        self.assertNotIn('blockedRenderDiagnostic',progress.data)
+
     def test_primary_pane_selector_never_chooses_first_of_three_or_injects_css(self):
         self.assertEqual(android.primary_pane_selector('w1:p1'),'#remote-panes button[data-pane-id="w1:p1"]')
         for value in ('',None,'p"],button','p\\x','x'*129):
@@ -75,7 +89,7 @@ class AndroidBlockedTests(unittest.TestCase):
         self.assertEqual(browser.actions,[('click','#host-return-home'),
             ('click','#host-list > .saved-host-card:nth-child(1) .blocked-target-list button[data-blocked-target="w3:p1/term_bbb"]'),
             ('click','#view-content input[type=checkbox]'),('named','#view-content','连接'),('named','#view-content','关闭此标签'),
-            ('click','#host-return-home'),('named','#host-list > .saved-host-card:nth-child(1) .saved-host-actions','打开'),
+            ('click','#host-return-home'),('named','#host-list > .saved-host-card:nth-child(1) .saved-host-actions','打开主机'),
             ('click','#host-restore-review'),('click','#host-restore')])
         joined='\n'.join(browser.expressions)
         for forbidden in ('.click(','.onclick','__TAURI','remote_tab_observe','dispatchEvent','POCKET-BLOCKED-A frame'):
@@ -86,7 +100,7 @@ class AndroidBlockedTests(unittest.TestCase):
         for browser in (Browser(same_label=False),Browser(review=False),Browser(measurement={**RECEIPT,'terminalId':'term_aaa'}),Browser(measurement={**RECEIPT,'observing':False}),Browser(measurement={**RECEIPT,'otherMarkerAbsent':False})):
             host=approval()
             with self.subTest(browser=browser),self.assertRaises(android.GuiFailure):android.exercise_blocked_target(browser,host,CONFIG)
-            self.assertFalse(any(action[-1]=='打开' for action in browser.actions));host.verify_ssh.assert_not_called()
+            self.assertFalse(any(action[-1]=='打开主机' for action in browser.actions));host.verify_ssh.assert_not_called()
         host=approval();host.verify_blocked_targets.side_effect=[TARGETS,list(reversed(TARGETS))]
         with self.assertRaises(android.GuiFailure):android.exercise_blocked_target(Browser(),host,CONFIG)
         host.verify_ssh.assert_not_called()
@@ -436,6 +450,28 @@ process.stdout.write(JSON.stringify({sync,asyncError,unknown,removed,reinstalled
                      'android_stale_marker_missing','android_tui_observe_return_missing'):
             self.assertIn(code,android.AndroidProgress.ERROR_CODES)
 
+    def test_device_review_navigation_uses_visible_network_tab_and_safe_reentry(self):
+        class Nav:
+            def __init__(self, home, network, panel):
+                self.home,self.network,self.panel=home,network,panel;self.clicks=[]
+            def evaluate(self,expression):
+                if "#host-home" in expression:return self.home
+                if "#home-network" in expression:return self.network
+                if "#network-panel" in expression:return self.panel
+                raise AssertionError(expression)
+            def click(self,selector):
+                self.clicks.append(selector)
+                if selector=='#host-return-home':self.home=True
+                elif selector=='#nav-network':self.network=True;self.panel=True
+                elif selector=='#network-open':self.panel=True
+                else:raise AssertionError(selector)
+        for initial,expected in [((False,False,False),['#host-return-home','#nav-network']),
+                                 ((True,False,False),['#nav-network']),
+                                 ((True,True,True),[]),
+                                 ((True,True,False),['#network-open'])]:
+            with self.subTest(initial=initial):
+                browser=Nav(*initial);android.open_network_page(browser);self.assertEqual(browser.clicks,expected)
+
     def test_the_review_only_reads_and_never_writes_a_device_identity(self):
         self.assertIn('zerotier_device_write',android.DEVICE_WRITE_COMMANDS)
         self.assertIn('network_identity_write',android.DEVICE_WRITE_COMMANDS)
@@ -484,6 +520,28 @@ class AndroidStageRetryTests(unittest.TestCase):
         self.assertEqual(len(calls),3)
         self.assertEqual(progress.data['retriedStages'],{'stop_observation':2})
         progress.publish.assert_called()
+
+    def test_retry_records_original_and_later_static_failures_without_sensitive_text(self):
+        errors=iter(['android_control_missing_network-open','android_control_missing_host-return-home'])
+        progress=self.progress()
+        def action():raise android.GuiFailure(next(errors))
+        with self.assertRaises(StopIteration):android.retry_stage(progress,'device_impact_review',action)
+        self.assertEqual(progress.data['retryFailureCodes']['device_impact_review'],
+                         ['android_control_missing_network-open','android_control_missing_host-return-home'])
+        progress=self.progress()
+        with self.assertRaises(android.GuiFailure):
+            android.retry_stage(progress,'board_search',lambda: (_ for _ in ()).throw(android.GuiFailure('secret value')))
+        self.assertNotIn('retryFailureCodes',progress.data)
+
+    def test_recovered_blocked_failure_retains_only_boolean_diagnostic(self):
+        keys=('viewVisible','terminalPresent','terminalVisible','targetMatched','terminalVerified',
+              'modeObserve','readOnly','inputModeNone','notFocused','markerMatched','otherMarkerAbsent')
+        diagnostic={key:key!='markerMatched' for key in keys}
+        failure=android.GuiFailure('android_blocked_render_missing');failure.blocked_render_diagnostic=diagnostic
+        action=Mock(side_effect=[failure,'ok']);progress=self.progress()
+        self.assertEqual(android.retry_stage(progress,'blocked_target_entry',action),'ok')
+        self.assertEqual(progress.data['blockedRenderAttempts'],[diagnostic])
+        self.assertEqual(progress.data['retryFailureCodes']['blocked_target_entry'],['android_blocked_render_missing'])
 
     def test_non_whitelisted_codes_never_replay(self):
         for code in ('android_board_search_count_mismatch','android_device_impact_action_enabled',
@@ -555,5 +613,44 @@ class AndroidStageRetryTests(unittest.TestCase):
         source=(HERE/'android_gui.py').read_text()
         self.assertIn("retried = progress.data.setdefault('retriedStages', {})",source)
 
+
+
+class StopHitDiagnosticsTests(unittest.TestCase):
+    def test_failed_stop_hit_records_bounded_geometry_without_dispatch(self):
+        class Browser:
+            def __init__(self): self.calls=[]
+            def evaluate(self,expression):
+                if 'centerHit:' in expression:
+                    return {'present':True,'disabled':False,'hidden':False,
+                            'rect':{'x':0,'y':360,'w':64,'h':44},
+                            'viewport':{'w':320,'h':700,'visualH':400},'centerHit':False}
+                return None
+            def call(self,*args): self.calls.append(args)
+        browser=Browser();trace=[]
+        with self.assertRaisesRegex(android.GuiFailure,'android_control_missing_remote-stop-dock'):
+            android.AndroidWebView.click(browser,'#remote-stop-dock',trace=trace)
+        self.assertEqual(browser.calls,[])
+        self.assertEqual(trace[0]['viewport']['visualH'],400)
+        self.assertFalse(trace[0]['centerHit'])
+
+class ReceiptDetailsTests(unittest.TestCase):
+    def test_actual_expand_compare_and_collapse(self):
+        receipt={'requestId':'a'*32,'paneId':'w1:p1','terminalId':'term_fixture','acceptedBytes':9}
+        class Browser:
+            def __init__(self): self.open=False; self.actions=[]; self.wrong=False
+            def evaluate(self,expression): return self.open if '&&e.open' in expression else not self.open
+            def click(self,selector): self.actions.append(selector);self.open=not self.open
+            def read(self,selector):
+                self.assert_selector=selector
+                return (f"请求 ID：{receipt['requestId']} · pane：{receipt['paneId']} · "
+                        f"terminal：{receipt['terminalId']} · 受理 {8 if self.wrong else 9} 字节。"
+                        "主机已受理，命令结果请查看终端。")
+        browser=Browser();self.assertTrue(android.review_receipt_details(browser,receipt))
+        self.assertEqual(browser.actions,['#remote-receipt summary']*2);self.assertFalse(browser.open)
+        self.assertEqual(browser.assert_selector,'#remote-receipt-text')
+        browser=Browser();browser.wrong=True
+        with self.assertRaisesRegex(android.GuiFailure,'android_receipt_details_mismatch'):
+            android.review_receipt_details(browser,receipt)
+        self.assertEqual(browser.actions,['#remote-receipt summary'])
 
 if __name__=='__main__':unittest.main()

@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "143bb8c298d619759ec3b6ad425b273397aba056",
+  "status": "failed",
+  "stage": "explicit-auth-and-observe",
+  "stopFirst": "ts",
+  "privateLoopbackTransport": true,
+  "isolatedNamespace": true,
+  "testOnlyDummy": true,
+  "noExternalRoutes": true,
+  "temporaryCredentialsRemoved": true,
+  "ownedProcessesStopped": true,
+  "tsPeerCleanup": true,
+  "binarySha256": {
+    "peer": "a043c2b7b1a74759b26050d76fead65afc352e7b70a0d0e13704ea1e7d4bae58",
+    "ts-fixture": "f852d5250daa9aa52fbbbd26605127134d457e0ce06747a161b6f2028884e880",
+    "probe": "cb060343af6901a120f8679bb3169ef120e2c7e2eec351cd991e997b6ada3079",
+    "herdr": "d984a16455e72b5074c929cdda8e5148145eab7fe750ebbfc7e5619d4a38375f",
+    "lib/libheeler_easytier.so": "dcdd460e57a0b54d70e5d486977d1b38abdbeebc65f06c71d93aa412980a6733",
+    "lib/libhp_tailscale.so": "1678a13fb07d1ff24eafe5ed4d02fa98bf261c1ce83b63363aa6a9fa014f6713"
+  },
+  "etLocalHealth": {
+    "sshPinnedAndAuthenticated": true,
+    "snapshot": true,
+    "inputCapability": true
+  },
+  "tsLocalHealth": {
+    "sshPinnedAndAuthenticated": true,
+    "snapshot": true,
+    "inputCapability": true
+  },
+  "etPeerDuringBanner": {
+    "connectedPeerCount": 1,
+    "expectedVirtualRoutePresent": true,
+    "virtualSshListenerActive": true
+  },
+  "etPeerAfterBanner": {
+    "connectedPeerCount": 1,
+    "expectedVirtualRoutePresent": true,
+    "virtualSshListenerActive": true
+  },
+  "client": {
+    "passed": false,
+    "preloginUrlAbsent": true,
+    "preloginNeedsLogin": true,
+    "beginLoginSubmitted": true,
+    "beginLoginSucceeded": true,
+    "preloginDialRejected": true,
+    "etBanner": true,
+    "tsBanner": true,
+    "etFull": true,
+    "tsFull": true,
+    "etFirst": false,
+    "tsFirst": false,
+    "etStopped": false,
+    "etStaleRejected": false,
+    "tsAfterStop": false,
+    "tsStopped": false,
+    "tsStaleRejected": false,
+    "etAfterStop": false,
+    "etObserverJoined": true,
+    "tsObserverJoined": true,
+    "localFallbackRejected": false,
+    "crossRouteRejected": false,
+    "cleanup": true
+  },
+  "clientError": "local_fallback_not_rejected",
+  "observers": {
+    "et": {
+      "stage": "snapshot-received",
+      "error": "watch_ended",
+      "audit": {
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": true
+      }
+    },
+    "ts": {
+      "stage": "snapshot-received",
+      "error": "cancelled",
+      "audit": {
+        "hostKeyChecked": true,
+        "hostKeyMatched": true,
+        "authStarted": true,
+        "snapshotReceived": true,
+        "fullFrameReceived": true
+      }
+    }
+  },
+  "bannerAttempts": {
+    "et": 1,
+    "ts": 1
+  },
+  "bannerConnections": {
+    "et": 1,
+    "ts": 1
+  },
+  "etNodeStateAfterBanner": "engine_started",
+  "lastTsState": "running",
+  "independentExactInput": false,
+  "etPeerStageBeforeStop": "accepting",
+  "etPeer": {
+    "acceptedOverlayStreams": 2,
+    "loopbackTcpConnections": 2,
+    "activeBridgesAfterStop": 0,
+    "loopbackDestinationOnly": true
+  },
+  "tsPeerExitBeforeCleanup": 0,
+  "tsPeerExitedBeforeCleanup": true,
+  "tsPeerPanic": false,
+  "tsPeerTimeout": false,
+  "tsPeerPanicDetail": {
+    "category": "none",
+    "frames": []
+  },
+  "error": "dual_acceptance_failed",
+  "namespaceProcessesBeforeTeardown": 0,
+  "namespaceRemoved": true
+}

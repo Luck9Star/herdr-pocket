@@ -87,10 +87,15 @@ void main() {
       adapterFactory:(p) { final adapter = TabFixtureAdapter(); (adapters[p.id] ??= []).add(adapter); return adapter; },offlineBuilder:(_) => const SizedBox())));
     await tester.pumpAndSettle(); await tapVisible(tester,'host-open-${a.id}'); await tester.pumpAndSettle();
     final aTab = tabs.active!.id,aAdapter = adapters[a.id]!.single;
+    expect(tabs.active!.view.value.frameAt,isNull);
+    expect(tabs.active!.view.value.frameLabel,'尚无终端画面');
     await tapVisible(tester,'pair-connect'); await tester.pumpAndSettle();
     await tapVisible(tester,'remote-canvas-size'); await tester.pumpAndSettle();
     await tester.tap(find.text('120×40').last); await tester.pumpAndSettle();
     await connectTab(tester,aAdapter,cols:120,rows:40);
+    await tester.pump();
+    final firstFrameAt = tabs.find(aTab)!.view.value.frameAt;
+    expect(firstFrameAt,isNotNull);
     expect(aAdapter.config.observationCols,120); expect(aAdapter.config.observationRows,40);
     expect(tester.widget<TerminalView>(find.byType(TerminalView)).terminal.viewWidth,120);
     expect(tester.widget<TerminalView>(find.byType(TerminalView)).terminal.viewHeight,40);
@@ -100,9 +105,13 @@ void main() {
     final oldGeneration = aAdapter.generation;
     await tapVisible(tester,'hosts-board-tab');
     expect(aAdapter.pauses,1); expect(aAdapter.cancels,0);
+    await tester.pump();
+    expect(tabs.find(aTab)!.view.value.frameAt,firstFrameAt);
     aAdapter.frame!(oldGeneration,'w1:p1',const RemoteFrame(1,false,'LATE FROM HIDDEN A'));
     await tapVisible(tester,'host-open-${b.id}'); await tester.pumpAndSettle();
     final bTab = tabs.active!.id,bAdapter = adapters[b.id]!.single;
+    await tester.pump();
+    expect(find.textContaining(tabs.find(aTab)!.view.value.frameLabel),findsOneWidget);
     await tapVisible(tester,'pair-connect'); await tester.pumpAndSettle(); await connectTab(tester,bAdapter);
     expect(bAdapter.config.observationCols,80); expect(bAdapter.config.observationRows,24);
     expect(bAdapter.config.session,'probeB'); expect(aAdapter.config.session,'probeA');
@@ -112,12 +121,14 @@ void main() {
     expect(aAdapter.calls,1); expect(bAdapter.pauses,1); expect(bAdapter.cancels,0);
     expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected,isTrue);
     expect(aAdapter.resumes,0); await tapVisible(tester,'remote-resume');
+    await tester.pump(); expect(tabs.find(aTab)!.view.value.frameAt,firstFrameAt);
     expect(aAdapter.resumes,1); expect(find.textContaining('LATE FROM HIDDEN A'),findsNothing);
     await tapVisible(tester,'hosts-board-tab'); await tapVisible(tester,'host-tab-$aTab');
     expect(aAdapter.pauses,2); await tapVisible(tester,'remote-resume'); expect(aAdapter.resumes,2);
     aAdapter.frame!(aAdapter.generation,'w1:p1',const RemoteFrame(0,true,'LATE OLD FULL',observationEpoch:1)); await tester.pump();
     expect(find.textContaining('LATE OLD FULL'),findsNothing);
     aAdapter.frame!(aAdapter.generation,'w1:p1',const RemoteFrame(0,true,'NEW SAME TARGET FULL',observationEpoch:2)); await tester.pump(); await mode(tester,'draft');
+    expect(tabs.find(aTab)!.view.value.frameAt!.isBefore(firstFrameAt!),isFalse);
     expect(tester.widget<TextField>(draft).controller!.text,'Host A unsent');
     expect(aAdapter.calls,1); expect(bAdapter.calls,1); expect(keys.creates,0); expect(keys.signCalls,0);
     // A terminal full does not refresh the board: the watch publishes its
@@ -127,6 +138,10 @@ void main() {
     final secondATab = tabs.active!.id,secondA = adapters[a.id]!.last;
     expect(secondATab,isNot(aTab)); expect(tabs.forHost(a.id).length,2);
     expect(secondA.calls,0); // Opening a pane view never authenticates automatically.
+    await tapVisible(tester,'host-tab-$bTab'); await tester.pump();
+    expect(tabs.find(secondATab)!.view.value.frameAt,isNull);
+    expect(find.textContaining('尚无终端画面'),findsOneWidget);
+    await tapVisible(tester,'host-tab-$secondATab'); await tester.pump();
     await tapVisible(tester,'pair-connect'); await tester.pumpAndSettle();
     await tapVisible(tester,'remote-review'); await tapVisible(tester,'remote-connect');
     secondA.publish(); await tester.pump();
@@ -143,7 +158,7 @@ void main() {
     // that position need scrolling back into view before they can be found.
     final board = find.byType(ListView);
     expect(board,findsOneWidget);
-    final status = find.byKey(const ValueKey('hosts-status'));
+    final status = find.byKey(const ValueKey('hosts-search'));
     await tester.scrollUntilVisible(status,-300,
       scrollable:find.descendant(of:board,matching:find.byType(Scrollable)).first);
     expect(status,findsOneWidget);

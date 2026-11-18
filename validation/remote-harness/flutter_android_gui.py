@@ -72,7 +72,7 @@ STAGES.update({'blocked_history', 'blocked_list', 'blocked_target_open', 'blocke
                'blocked_ssh_review', 'blocked_observe', 'blocked_marker', 'blocked_return'})
 STAGES.update({'tui_start','tui_resume_full','tui_initial','tui_select_next','tui_focus_detail',
     'tui_erase_character','tui_focus_list','tui_insert_row','tui_delete_row','tui_open_help',
-    'tui_close_help','tui_refresh','tui_finish'})
+    'tui_close_help','tui_refresh','tui_finish','tui_finish_receipt'})
 STAGES.update(label.replace('-', '_') for label in (*KEYBOARD_CHECKPOINTS, KEYBOARD_OBSERVE_CHECKPOINT))
 GUARDED_FIELDS = ('guardedInput', 'directInputAccepted', 'draftInputAccepted', 'hiddenTabStopped',
                   'hiddenTabManualRecovery', 'unsentDraftRestored', 'postStopInputDisabled') + CLIPBOARD_FIELDS
@@ -441,7 +441,8 @@ def safe_until_timeout(value):
     invalid = 'flutter_android_until_timeout_invalid'
     if not isinstance(value, dict):
         raise DeviceFailure(invalid)
-    keys = {'key', 'buttonCount', 'imeBlockedNotice', 'inputStatus'}
+    keys = {'key', 'buttonCount', 'imeBlockedNotice', 'inputStatus',
+            'receiptPresent', 'receiptChanged', 'acceptedNotice'}
     if not set(value) <= keys:
         raise DeviceFailure(invalid)
     key = value.get('key')
@@ -449,6 +450,9 @@ def safe_until_timeout(value):
         raise DeviceFailure(invalid)
     for num in ('buttonCount', 'imeBlockedNotice'):
         if num in value and (type(value[num]) is not int or not 0 <= value[num] <= 16):
+            raise DeviceFailure(invalid)
+    for flag in ('receiptPresent', 'receiptChanged', 'acceptedNotice'):
+        if flag in value and type(value[flag]) is not bool:
             raise DeviceFailure(invalid)
     status = value.get('inputStatus')
     if status is not None and (not isinstance(status, str) or len(status) > 200):
@@ -696,38 +700,51 @@ ADB_TRANSIENT_STDERR = ('error: device offline', 'error: closed', 'error: timeou
 ADB_TRANSIENT_RETRY_DELAYS = (2.0, 5.0)
 
 
-def adb(*args, check=True, data=None, timeout=30, transient_retry=False):
-    # transient_retry 是白名单式标注，只给只读 shell 调用点（getprop/dumpsys/
-    # pm list/settings get 等）。input/am/tee/mv/settings put 等写命令重复执行
-    # 有副作用，绝不标注，也绝不在这里按 argv 猜测命令是否只读。
+def adb(*args, check=True, data=None, timeout=30, transient_retry=False, retry_diagnostics=None):
+    # Retry only explicitly opted-in reads. The extra 255/timeout case is
+    # restricted to the two fixed IME/window queries and never replays input.
+    operation = _adb_read_operation(args)
+    ime_read = transient_retry and check and data is None and operation in ('ime-state', 'window-displays')
+    first = None
+    def record(attempts, recovered):
+        if first is None or not ime_read:
+            return None
+        evidence = {'operation': operation, 'first': first, 'attempts': attempts, 'recovered': recovered}
+        if retry_diagnostics is not None:
+            retry_diagnostics.append(evidence)
+            del retry_diagnostics[:-16]
+        return evidence
     for attempt in range(3):
         try:
             result = subprocess.run(['adb', '-s', SERIAL, *map(str, args)], input=data,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=timeout)
         except (OSError, subprocess.TimeoutExpired) as exc:
-            # A device that disappeared mid-run most often surfaces as a hung adb
-            # call, not as a non-zero exit status. Classify that path too, so the
-            # report still names the verb and the reason without leaking output.
+            reason = 'timeout' if isinstance(exc, subprocess.TimeoutExpired) else 'oserror'
+            current = {'reason': reason, 'timeoutSeconds': int(timeout)}
+            if ime_read and reason == 'timeout' and attempt < 2:
+                if first is None: first = current
+                time.sleep(ADB_TRANSIENT_RETRY_DELAYS[attempt]); continue
             failure = DeviceFailure('flutter_android_adb_unavailable')
-            failure.adb_diagnostic = {'command': _adb_command_class(args),
-                                       'reason': 'timeout' if isinstance(exc, subprocess.TimeoutExpired) else 'oserror',
-                                       'timeoutSeconds': int(timeout)}
+            failure.adb_diagnostic = {'command': _adb_command_class(args), **current}
+            evidence = record(attempt + 1, False)
+            if evidence: failure.adb_diagnostic['retry'] = evidence
             raise failure from None
         if len(result.stdout) > 1_048_576 or len(result.stderr) > 1_048_576:
             raise DeviceFailure('flutter_android_adb_output_limit')
         if check and result.returncode:
-            if (transient_retry and attempt < 2 and
-                    result.stderr.decode('utf-8', errors='replace').strip() in ADB_TRANSIENT_STDERR):
-                time.sleep(ADB_TRANSIENT_RETRY_DELAYS[attempt])
-                continue
-            # Classify the failing call without ever leaving the device: only the
-            # adb verb, the exit status and the output sizes may be published.
+            current = {'exitCode': int(result.returncode), 'stdoutBytes': len(result.stdout), 'stderrBytes': len(result.stderr)}
+            known = result.stderr.decode('utf-8', errors='replace').strip() in ADB_TRANSIENT_STDERR
+            partial_255 = ime_read and result.returncode == 255 and bool(result.stdout) and not result.stderr
+            if transient_retry and attempt < 2 and (known or partial_255):
+                if ime_read and first is None: first = current
+                time.sleep(ADB_TRANSIENT_RETRY_DELAYS[attempt]); continue
             failure = DeviceFailure('flutter_android_adb_failed')
-            failure.adb_diagnostic = {'command': _adb_command_class(args),
-                                       'exitCode': int(result.returncode),
-                                       'stdoutBytes': len(result.stdout),
-                                       'stderrBytes': len(result.stderr)}
+            failure.adb_diagnostic = {'command': _adb_command_class(args), **current}
+            if operation is not None: failure.adb_diagnostic['operation'] = operation
+            evidence = record(attempt + 1, False)
+            if evidence: failure.adb_diagnostic['retry'] = evidence
             raise failure
+        record(attempt + 1, True)
         return result
 
 
@@ -742,6 +759,17 @@ def _adb_command_class(args):
         if name.startswith('shell'):
             return 'shell'
     return 'other'
+
+
+def _adb_read_operation(args):
+    """Fixed public labels only; never return arbitrary command arguments."""
+    words = tuple(map(str, args))
+    known = {
+        ('shell', 'dumpsys', 'input_method'): 'ime-state',
+        ('shell', 'dumpsys', 'window', 'displays'): 'window-displays',
+        ('shell', 'pm', 'list', 'packages', PACKAGE): 'package-presence',
+    }
+    return known.get(words)
 
 
 def text(*args, **kwargs):
@@ -927,6 +955,7 @@ class ClipboardCheckpoints:
         self.relative = relative_directory
         self.approval = approval
         self.completed = []
+        self.current = None
         self.expected = ((KEYBOARD_CHECKPOINTS + CLIPBOARD_CHECKPOINTS if guarded else
                           (KEYBOARD_OBSERVE_CHECKPOINT,)) if keyboard else CLIPBOARD_CHECKPOINTS)
         if tui and (not guarded or config is None):
@@ -936,12 +965,13 @@ class ClipboardCheckpoints:
         self.config = config
         self.tui_attempted = False
         self.keyboard_evidence = []
+        self.adb_read_retries = []
         self.ime_failure_output = ime_failure_output
 
     def system_ime(self, label, visible, *, after_system_back=False):
         try:
-            return wait_system_ime(lambda: (text('shell', 'dumpsys', 'input_method', transient_retry=True),
-                text('shell', 'dumpsys', 'window', 'displays', transient_retry=True)), PACKAGE, visible)
+            return wait_system_ime(lambda: (text('shell', 'dumpsys', 'input_method', transient_retry=True, retry_diagnostics=self.adb_read_retries),
+                text('shell', 'dumpsys', 'window', 'displays', transient_retry=True, retry_diagnostics=self.adb_read_retries)), PACKAGE, visible)
         except SystemImeFailure as error:
             # Persist before unwinding the owned Flutter tool/app. The original
             # failure still propagates, including if evidence cannot be written.
@@ -973,6 +1003,7 @@ class ClipboardCheckpoints:
             return  # The same atomic request may remain visible while Dart resumes.
         if len(self.completed) >= len(self.expected) or label != self.expected[len(self.completed)]:
             raise DeviceFailure('flutter_android_clipboard_checkpoint_order_invalid')
+        self.current = label
         system = None
         if label == TUI_CHECKPOINT:
             if self.tui_attempted:
@@ -1140,6 +1171,7 @@ def _run(args, root, env, config, approval, owned_process):
                'ownedForwardsRemoved': False, 'flutterToolStopped': False, 'rawLogsUploaded': False}
     primary_failure = None
     adb_diagnostic = None
+    checkpoints = None
     try:
         adb('reverse', reverse, reverse); reverse_added = True
         with owned_process(command, cwd=app, env=env, log=root / 'flutter-android-private.log') as process:
@@ -1191,6 +1223,12 @@ def _run(args, root, env, config, approval, owned_process):
         report = {'sourceSHA': env['GITHUB_SHA'], 'failure': failure}
         if isinstance(adb_diagnostic, dict):
             report['adbDiagnostic'] = adb_diagnostic
+        if checkpoints is not None and checkpoints.adb_read_retries:
+            report['adbReadRetries'] = checkpoints.adb_read_retries
+        if primary_failure is not None and checkpoints is not None:
+            report['checkpointProgress'] = {
+                'current': checkpoints.current, 'completed': list(checkpoints.completed),
+            }
         (output / 'flutter-android-test-failure.json').write_text(
             json.dumps(report, indent=2) + '\n', encoding='utf-8')
         if signer_evidence['stage'] != 'complete':

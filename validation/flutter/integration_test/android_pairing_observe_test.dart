@@ -207,6 +207,7 @@ Future<void> tapPopupOption(WidgetTester tester,Finder item) =>
 /// marker; keep the actual reading even when a candidate disagrees with the
 /// expected column. The remote terminal can contain private output.
 Future<({List<int> markers,Map<String,Map<String,int>> themes})> readFontDiagnostic(WidgetTester tester) async {
+  await tapKey(tester,'remote-display-tools');
   await tapKey(tester,'remote-font-diagnostics-open');
   final preview = find.byKey(const ValueKey('terminal-font-diagnostics-view'));
   await until(tester,() => preview.evaluate().length == 1);
@@ -388,12 +389,19 @@ Map<String,Object> visibleReceipt(WidgetTester tester, String paneId, int count)
     'terminalId':match.group(3)!,'acceptedBytes':count};
 }
 
-Future<void> accepted(WidgetTester tester, {String? previousRequest}) => until(tester,() {
-  final control = find.byKey(const ValueKey('remote-input-receipt'));
-  return control.evaluate().length == 1 &&
-    !(tester.widget<Text>(control).data ?? '').contains(previousRequest ?? 'never-a-request') &&
-    find.textContaining('服务端已接收 · 仅确认队列受理').evaluate().isNotEmpty;
-});
+Future<void> accepted(WidgetTester tester, {String? previousRequest}) {
+  Map<String,Object?> evidence() {
+    final control=find.byKey(const ValueKey('remote-input-receipt'));
+    final present=control.evaluate().length == 1;
+    return {'receiptPresent':present,
+      'receiptChanged':present && !(tester.widget<Text>(control).data ?? '').contains(previousRequest ?? 'never-a-request'),
+      'acceptedNotice':find.textContaining('服务端已接收 · 仅确认队列受理').evaluate().isNotEmpty};
+  }
+  return until(tester,() {
+    final state=evidence();
+    return state.values.every((value)=>value == true);
+  },onTimeout:evidence);
+}
 
 // Only the self-created curses fixture's exact current screen is read. Never
 // search accumulated ANSI or scrollback, and never export terminal contents.
@@ -591,7 +599,9 @@ Future<Map<String,Object>> exerciseTui(WidgetTester tester,Directory exchange,
           'inputStatus':tester.widget<Text>(find.byKey(const ValueKey('remote-input-status'))).data ?? '',
         });
     // Exactly one visible tap, with no retry after an unknown result.
-    await tap(tester,button); await accepted(tester,previousRequest:previousRequest);
+    await tap(tester,button);
+    if (marker == null) stage('tui_finish_receipt');
+    await accepted(tester,previousRequest:previousRequest);
     final receipt = visibleReceipt(tester,target['paneId'] as String,size);
     expect(receipt['terminalId'],terminalId); expect(seen.add(receipt['requestId']),isTrue);
     receipts.add(receipt); previousRequest = receipt['requestId'] as String;
@@ -606,6 +616,18 @@ Future<Map<String,Object>> exerciseTui(WidgetTester tester,Directory exchange,
 /// The visible production count line. Both numbers come from the widget, not
 /// from a value this test recomputed.
 ({int shown,int total}) boardCounts(WidgetTester tester) {
+  if (find.byKey(const ValueKey('hosts-filter-count')).evaluate().isEmpty) {
+    final all=tester.widget<ChoiceChip>(find.byKey(const ValueKey('hosts-filter-all')));
+    final search=tester.widget<TextField>(find.byKey(const ValueKey('hosts-search')));
+    final total=RegExp(r'^全部 ([0-9]+)$').firstMatch((all.label as Text).data ?? '');
+    if (!all.selected || (search.controller?.text ?? '').isNotEmpty || total == null ||
+        find.byWidgetPredicate((w) => w is Card && w.key is ValueKey<String> &&
+          (w.key! as ValueKey<String>).value.startsWith('host-card-')).evaluate().isEmpty) {
+      throw StateError('board_unfiltered_count_unreadable');
+    }
+    final value=int.parse(total.group(1)!);
+    return (shown:value,total:value);
+  }
   final match=RegExp(r'^显示 ([0-9]+) / ([0-9]+) 台主机$')
     .firstMatch(tester.widget<Text>(find.byKey(const ValueKey('hosts-filter-count'))).data ?? '');
   if (match == null) throw StateError('board_filter_count_unreadable');
@@ -614,11 +636,12 @@ Future<Map<String,Object>> exerciseTui(WidgetTester tester,Directory exchange,
 
 /// The production selector label, which carries its own host count.
 String taskFilterLabel(WidgetTester tester,HostTaskFilter value) {
-  final items=tester.widget<DropdownButton<HostTaskFilter>>(find.byKey(const ValueKey('hosts-task-filter'))).items!;
-  return (items.singleWhere((item) => item.value == value).child as Text).data ?? '';
+  final chip=tester.widget<ChoiceChip>(find.byKey(ValueKey('hosts-filter-${value.name}')));
+  return (chip.label as Text).data ?? '';
+
 }
 int taskFilterCount(String label) {
-  final match=RegExp(r'（([0-9]+)）$').firstMatch(label);
+  final match=RegExp(r' ([0-9]+)$').firstMatch(label);
   if (match == null) throw StateError('board_task_filter_count_unreadable');
   return int.parse(match.group(1)!);
 }
@@ -674,9 +697,10 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
   final historyLabel=taskFilterLabel(tester,HostTaskFilter.history);
   final historyCount=taskFilterCount(historyLabel);
   if (historyCount < 1) throw StateError('board_search_history_empty');
-  await tapStablePointer(tester,filter);
-  await tapPopupOption(tester,find.text(historyLabel));
-  await until(tester,() => tester.widget<DropdownButton<HostTaskFilter>>(filter).value == HostTaskFilter.history);
+  final historyChip=find.byKey(const ValueKey('hosts-filter-history'));
+  await tester.ensureVisible(historyChip); await tester.pump();
+  await tapStablePointer(tester,historyChip);
+  await until(tester,() => tester.widget<ChoiceChip>(historyChip).selected);
   stage('board_search_count');
   final counts=boardCounts(tester);
   if (counts.shown < 1 || counts.shown > counts.total) throw StateError('board_search_count_invalid');
@@ -731,7 +755,7 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
   // re-resolves a hit-testable target on every poll and taps once.
   await tapStablePointer(tester,clearButton);
   final cleared=boardCounts(tester);
-  final clearedKeptState=tester.widget<DropdownButton<HostTaskFilter>>(filter).value == HostTaskFilter.history &&
+  final clearedKeptState=tester.widget<ChoiceChip>(find.byKey(const ValueKey('hosts-filter-history'))).selected &&
     cleared.shown == historyCount;
   boardSearchFailureProbe = <String,Object>{
     'textMatched':textMatched,'dualConditionCount':counts.shown,'totalHosts':counts.total,
@@ -754,7 +778,7 @@ Future<Map<String,Object>> exerciseBoardSearch(WidgetTester tester,String sessio
   stage('board_search_clear_reset_tap');
   await tapStablePointer(tester,resetControl);
   final restored=boardCounts(tester);
-  final resetRestoredList=tester.widget<DropdownButton<HostTaskFilter>>(filter).value == HostTaskFilter.all &&
+  final resetRestoredList=tester.widget<ChoiceChip>(find.byKey(const ValueKey('hosts-filter-all'))).selected &&
     (tester.widget<TextField>(search).controller?.text ?? '') == '' && restored.shown == restored.total;
   boardSearchFailureProbe = <String,Object>{
     'textMatched':textMatched,'dualConditionCount':counts.shown,'totalHosts':counts.total,
@@ -807,14 +831,8 @@ int enabledIdentityActions(WidgetTester tester) {
 /// identity is created, changed or removed.
 Future<Map<String,Object>> exerciseDeviceImpact(WidgetTester tester,void Function(String) stage) async {
   stage('device_impact_enter');
-  // The board search group scrolled the host card to the top, evicting the
-  // header controls (hosts-networks included) from the lazy list viewport.
-  // Scroll back up until they are mounted again, matching the search-phase
-  // scrollUntilVisible pattern (proven by test_deep_scroll_device_delete).
+  // The network destination remains available while the board is scrolled.
   final board=find.byKey(const ValueKey('host-catalog-list'));
-  await tester.scrollUntilVisible(find.byKey(const ValueKey('hosts-networks')),-300,
-    scrollable:find.descendant(of:board,matching:find.byType(Scrollable)).first);
-  await until(tester,() => find.byKey(const ValueKey('hosts-networks')).evaluate().length == 1);
   await tapKey(tester,'hosts-networks');
   final entry=find.byKey(const ValueKey('networks-zerotier-device'));
   await until(tester,() => entry.evaluate().length == 1 &&
@@ -858,7 +876,7 @@ Future<Map<String,Object>> exerciseDeviceImpact(WidgetTester tester,void Functio
   if (enabledIdentityActions(tester) != actions) throw StateError('device_impact_reentry_changed_actions');
   await tapKey(tester,'zt-device-close');
   await until(tester,() => find.byKey(const ValueKey('zt-device-list')).evaluate().isEmpty);
-  await tester.pageBack(); await tester.pump(const Duration(milliseconds:400));
+  await tap(tester,find.text('看板').last); await tester.pump(const Duration(milliseconds:400));
   // The board stays scrolled where the search group left it, so hosts-add is
   // still recycled out of the lazy viewport; bring it back before waiting.
   await tester.scrollUntilVisible(find.byKey(const ValueKey('hosts-add')),-300,
@@ -1482,6 +1500,9 @@ void main() {
     // the lazy viewport (proven by test_deep_scroll_device_delete).
     final deleteBoard=find.byKey(const ValueKey('host-catalog-list'));
     final deleteScrollable=find.descendant(of:deleteBoard,matching:find.byType(Scrollable)).first;
+    final management=find.byKey(ValueKey('host-management-$id'));
+    await tester.scrollUntilVisible(management,300,scrollable:deleteScrollable);
+    await tapStablePointer(tester,management);
     await tester.scrollUntilVisible(find.byKey(ValueKey('host-delete-$id')),300,scrollable:deleteScrollable);
     await until(tester,() => find.byKey(ValueKey('host-delete-$id')).evaluate().length == 1);
     await tapKey(tester,'host-delete-$id');

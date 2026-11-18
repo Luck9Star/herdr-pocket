@@ -181,11 +181,14 @@ h1 { font-size:18px; margin:0}
 .ssh-key-change { margin-top:12px; padding:16px; border-radius:14px; overflow-wrap:anywhere; background:var(--hp-cardSubtle); }
 /* Review hides the app header, so the review page must keep its own top inset. */
 #host-home:has(#home-ssh:not([hidden]) #ssh-key-change:not([hidden])) {
-  padding-top:calc(12px + max(var(--hp-system-top-inset,0px),env(safe-area-inset-top,0px),var(--hp-ssh-review-top-fallback,0px)));
+  padding-top:calc(12px + max(var(--hp-system-top-inset,0px),env(safe-area-inset-top,0px),var(--hp-ios-status-bar-fallback,0px)));
 }
 @media (max-width:599px) and (orientation:portrait) {
   /* A native iOS WebView can extend behind the status bar with a zero CSS top inset. */
-  .ios-edge-to-edge { --hp-ssh-review-top-fallback:64px; }
+  .ios-edge-to-edge { --hp-ios-status-bar-fallback:64px; }
+  .ios-edge-to-edge:has(#host-home:not([hidden]) #home-ssh:not([hidden]) #ssh-live:not([hidden])) .app-header {
+    padding-top:calc(16px + max(var(--hp-system-top-inset,0px),env(safe-area-inset-top,0px),var(--hp-ios-status-bar-fallback)));
+  }
 }
 .ssh-key-change-heading { margin:0 0 12px; font-size:20px; font-weight:700; color:var(--hp-textPrimary); }
 .ssh-key-change-warning { padding:12px; border-radius:12px; border:1px solid var(--hp-dangerBorder); background:var(--hp-dangerSoft); }

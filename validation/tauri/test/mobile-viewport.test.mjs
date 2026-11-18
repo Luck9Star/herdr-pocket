@@ -14,8 +14,20 @@ test('header and SSH target union native and CSS safe-area insets without adding
 
 test('S10 keeps its top safe area when the header is hidden',()=>{
   const css=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
-  assert.match(css, /#host-home:has\(#home-ssh:not\(\[hidden\]\) #ssh-key-change:not\(\[hidden\]\)\)\s*\{\s*padding-top:calc\(12px \+ max\(var\(--hp-system-top-inset,0px\),env\(safe-area-inset-top,0px\),var\(--hp-ssh-review-top-fallback,0px\)\)\)/);
-  assert.match(css, /@media \(max-width:599px\) and \(orientation:portrait\) \{[^}]*\.ios-edge-to-edge \{ --hp-ssh-review-top-fallback:64px;/);
+  assert.match(css, /#host-home:has\(#home-ssh:not\(\[hidden\]\) #ssh-key-change:not\(\[hidden\]\)\)\s*\{\s*padding-top:calc\(12px \+ max\(var\(--hp-system-top-inset,0px\),env\(safe-area-inset-top,0px\),var\(--hp-ios-status-bar-fallback,0px\)\)\)/);
+});
+
+test('the active ordinary SSH header uses the shared status bar inset on compact portrait iOS',()=>{
+  const css=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
+  const activeHeader='.ios-edge-to-edge:has(#host-home:not([hidden]) #home-ssh:not([hidden]) #ssh-live:not([hidden])) .app-header';
+  const inset='max(var(--hp-system-top-inset,0px),env(safe-area-inset-top,0px),var(--hp-ios-status-bar-fallback))';
+  assert.ok(css.includes(`@media (max-width:599px) and (orientation:portrait) {
+  /* A native iOS WebView can extend behind the status bar with a zero CSS top inset. */
+  .ios-edge-to-edge { --hp-ios-status-bar-fallback:64px; }
+  ${activeHeader} {
+    padding-top:calc(16px + ${inset});
+  }
+}`));
 });
 
 function fixture() {

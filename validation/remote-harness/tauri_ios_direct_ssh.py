@@ -74,7 +74,9 @@ NATIVE_FAILURES = frozenset((
     'native_home_identity_unproven', 'native_home_retry_unsafe', 'native_ssh_form_unproven',
     'native_home_navigation_failed', 'native_control_owner_unproven', 'native_scroll_owner_unproven',
     'native_form_control_unproven', 'native_form_control_changed', 'native_terminal_keyboard_visible',
-    'native_terminal_header_unproven', 'native_mobile_setup_unproven'))
+    'native_terminal_header_unproven', 'native_mobile_setup_unproven',
+    'native_mobile_confirmation_owner_unproven', 'native_mobile_password_owner_unproven',
+    'native_mobile_submit_owner_unproven', 'native_mobile_return_owner_unproven'))
 HOME_MEMBERS = frozenset(('brand', 'headerAdd', 'emptyAdd', 'homeHeading', 'emptyHeading',
                          'zeroHosts', 'ordinaryShortcut', 'addHeading', 'sshOption'))
 COMPACT_HOME_MEMBERS = {'emptyDescription', 'compactShortcut'}

@@ -234,6 +234,11 @@ precondition(verify([fact("", "添加连接", "staticText")] + Array(choice.suff
 let heading: [(String?, String, Bool)] = [("ssh-page-heading", "普通 SSH 终端", false)]
 precondition(verify([home[3], fact("", "普通 SSH 终端", "staticText")], heading,
     paths: [[0, 0, 0], [0, 0, 0, 1]]) == nil)
+let wrapper = [fact("ssh-page-heading", "", "other"), fact("", "普通 SSH 终端", "staticText")]
+let wrapperPaths = [[0, 0, 0], [0, 0, 0, 1, 0]]
+precondition(verify(wrapper, heading, paths: wrapperPaths) == [0])
+precondition(NativeControlPolicy.pageWitness(wrapper, paths: wrapperPaths, windows: [[0], [0]],
+    webs: [[0, 0], [0, 0, 0, 1]], targets: heading) == nil)
 ''')
 
     def test_mobile_trust_uses_full_target_algorithm_and_fingerprint_in_one_owner(self):
@@ -401,6 +406,11 @@ final class XCUIElement {
     var inputValue: String?
     var forcedReadback: String?
     var exists = false
+    var descendantsByRole: [ElementType: [XCUIElement]] = [:]
+    var identity: [String: String] = [:]
+    func descendants(matching role: ElementType) -> Query {
+        Query(allElementsBoundByIndex: descendantsByRole[role] ?? [])
+    }
     func coordinate(withNormalizedOffset: CGVector) -> XCUICoordinate {
         XCUICoordinate(element: self, offset: withNormalizedOffset)
     }
@@ -464,8 +474,11 @@ struct RevealedControl {
     let web: Observed
 }
 struct Query {
-    let allElementsBoundByIndex: [XCUIElement] = []
+    var allElementsBoundByIndex: [XCUIElement] = []
     var firstMatch: XCUIElement { XCUIElement() }
+    func matching(_ predicate: NSPredicate) -> Query {
+        Query(allElementsBoundByIndex: allElementsBoundByIndex.filter { predicate.evaluate(with: $0.identity) })
+    }
 }
 struct App {
     let frame: CGRect
@@ -501,6 +514,7 @@ final class Observations {
     var resolved: [Observed] = []
     var checkpoints: [(String, [String: Any])] = []
     var reviewActionChecks = 0
+    var beforeTree: (() -> Void)?
     let webSurface = Element()
     init(_ trees: [[Observed]], liveSnapshots: [Snapshot] = [], occlusionSamples: [[CGRect]] = [],
          hittableSamples: [Bool] = []) {
@@ -510,7 +524,8 @@ final class Observations {
         self.hittableSamples = hittableSamples
     }
     func next(_ fallback: [Observed]) -> [Observed] {
-        trees.isEmpty ? fallback : trees.removeFirst()
+        beforeTree?()
+        return trees.isEmpty ? fallback : trees.removeFirst()
     }
     func live(_ fallback: LiveControl) -> LiveControl {
         liveReads += 1
@@ -579,7 +594,13 @@ struct Adapter {
                                 isEnabled: live.snapshot.isEnabled, value: value)
         return LiveControl(snapshot: snapshot, hittable: live.hittable, element: live.element)
     }
-    func liveControl(_ element: XCUIElement) -> LiveControl? { observations?.live(current) ?? current }
+    func liveControl(_ element: XCUIElement) -> LiveControl? {
+        guard element === current.element else { return nil }
+        return observations?.live(current) ?? current
+    }
+    func uniqueElement(_ query: Query) -> XCUIElement {
+        query.allElementsBoundByIndex.count == 1 ? query.allElementsBoundByIndex[0] : XCUIElement()
+    }
     func owner(_ snapshot: Snapshot, _ rows: [Observed]) -> Observed? {
         let scopes = rows.filter { $0.window != nil && !$0.webs.isEmpty }.flatMap { row in
             [Observed(snapshot: Snapshot(identifier: "", label: "", elementType: .window, frame: row.window!),
@@ -592,6 +613,16 @@ struct Adapter {
     func tapPort() throws { _ = try tapForm("port") }
     func port() throws -> LiveControl { try formControl("port").live }
     func revealCurrent() throws -> LiveControl { try reveal(current.element).live }
+    func tapMobile(_ anchor: Observed) throws {
+        let failure = "native_mobile_confirmation_owner_unproven"
+        try tapMobileButton(try mobileControl(anchor, rows, failure), failure)
+    }
+    func bindMobile(_ anchor: Observed) throws -> RevealedControl {
+        try mobileControl(anchor, rows, "native_mobile_password_owner_unproven")
+    }
+    func sameMobileOwner(_ lhs: RevealedControl, _ rhs: RevealedControl) -> Bool {
+        sameControlScope(lhs, rhs)
+    }
     func button(_ label: String) -> XCUIElement { current.element }
     func submit(_ attempt: NativeConnectPolicy.Attempt, expected: String) throws { try submitConnection(attempt, waitingFor: expected) }
     func fillCurrent(_ text: String) throws { try fillPassword(current.element, text) }
@@ -610,6 +641,8 @@ struct Adapter {
             "func passwordGeometryDetail(_ viewport:", "func scrollToControl(_ owner:",
             "func controlIdentityRows(_ current:", "func controlOwner(_ current:",
             "func reveal(_ item:", "func tapForm(_ name:",
+            "func mobileLiveControl(_ owner:", "func sameControlScope(_ lhs:",
+            "func mobileControl(_ anchor:", "func tapMobileButton(_ control:",
             "func controlGeometry(_ owner:", "func routeTabsOcclusion(_ owner:",
             "func reportFormGeometry(_ failure:", "func failControlGeometry(_ failure:",
             "func tap(_ item:", "func fillPassword(_ item:",
@@ -675,6 +708,63 @@ check(adapter.owner(snapshot(label: ""), [row(snapshot(label: ""))]) == nil,
       "an empty identity cannot authorize a control")
 check(adapter.owner(snapshot(), [row(snapshot(), eligible: false)]) == nil,
       "a typed identity without WebView ownership cannot authorize a control")
+func mobileCase(_ type: XCUIElement.ElementType, id: String, label: String,
+                raw: [[Int]] = [], queries: Int = 1, hits: Bool = true, enabled: Bool = true,
+                queriedFrame: CGRect = oldFrame, changeOwner: Bool = false,
+                pathAlias: Bool = false) -> (Adapter, Observed, Element) {
+    let live = Element()
+    live.identity = ["identifier": id, "label": label]
+    let liveSnapshot = Snapshot(identifier: id, label: label, elementType: type, frame: queriedFrame, isEnabled: enabled)
+    let action = row(Snapshot(identifier: id, label: label, elementType: type, frame: oldFrame,
+                              isEnabled: enabled), path: [0, 0, 4, 0])
+    let alternate = raw.map { path in row(action.snapshot, path: path, window: [path[0]], web: Array(path.prefix(2))) }
+    let base = Array(formRows(snapshot()).suffix(2))
+    let distinctOwner = [row(base[0].snapshot, path: [1]), row(base[1].snapshot, path: [1, 0])] +
+        [row(action.snapshot, path: [1, 0, 4, 0], window: [1], web: [1, 0])]
+    let observations = Observations(changeOwner ? [distinctOwner] : [])
+    observations.webSurface.descendantsByRole[type] = Array(repeating: live, count: queries)
+    let current = LiveControl(snapshot: liveSnapshot, hittable: hits, element: live)
+    let wrong = pathAlias ? snapshot(type, frame: movedFrame, identifier: id, label: label) : snapshot(.other, label: "proxy wrapper")
+    let unrelated = LiveControl(snapshot: wrong, hittable: true, element: Element())
+    return (Adapter(app: App(frame: screen), current: current, rows: base + [action] + alternate, blockers: [],
+                    observations: observations, pathControls: [action.path: unrelated]), action, live)
+}
+for id in ["ssh-trust-confirm", ""] {
+    let (candidate, anchor, live) = mobileCase(.button, id: id, label: "指纹一致，确认继续")
+    check((try? candidate.revealCurrent()) == nil, "the legacy raw path alone cannot bind a flattened child")
+    do { try candidate.tapMobile(anchor) } catch { failures.append("a flattened AX child must keep its owned typed action: \(error)") }
+    check(live.taps == 1, "an exact live action under the proven WebView must be tapped exactly once")
+}
+let (aliasCandidate, aliasAnchor, scoped) = mobileCase(.button, id: "ssh-trust-confirm", label: "指纹一致，确认继续", pathAlias: true)
+try aliasCandidate.tapMobile(aliasAnchor)
+check(scoped.taps == 1 && aliasCandidate.pathControls[aliasAnchor.path]?.element.taps == 0,
+      "a same-name index alias with a different frame must never replace the scoped live action")
+for (candidate, anchor, live) in [mobileCase(.button, id: "", label: "指纹一致，确认继续", raw: [[1, 0, 2]]),
+    mobileCase(.button, id: "", label: "指纹一致，确认继续", raw: [[0, 0, 5]]),
+    mobileCase(.button, id: "ssh-trust-confirm", label: "指纹一致，确认继续", queries: 2),
+    mobileCase(.button, id: "ssh-trust-confirm", label: "指纹一致，确认继续", queriedFrame: movedFrame),
+    mobileCase(.button, id: "ssh-trust-confirm", label: "指纹一致，确认继续", changeOwner: true),
+    mobileCase(.button, id: "ssh-trust-confirm", label: "指纹一致，确认继续", hits: false),
+    mobileCase(.button, id: "ssh-trust-confirm", label: "指纹一致，确认继续", enabled: false)] {
+    var rejected = false
+    do { try candidate.tapMobile(anchor) } catch { rejected = true }
+    check(rejected && live.taps == 0, "duplicate, moved, hidden, or disabled live actions must never be tapped")
+}
+let (becameAmbiguous, ambiguousAnchor, ambiguousLive) = mobileCase(.button, id: "ssh-trust-confirm", label: "指纹一致，确认继续")
+weak var webSurface = becameAmbiguous.observations?.webSurface
+becameAmbiguous.observations?.beforeTree = { webSurface?.descendantsByRole[.button] = [ambiguousLive, ambiguousLive] }
+do { try becameAmbiguous.tapMobile(ambiguousAnchor); failures.append("a fresh duplicate must fail before tapping") } catch { }
+check(ambiguousLive.taps == 0, "a unique initial query is not permission to tap an ambiguous later query")
+let (authCandidate, fieldAnchor, liveField) = mobileCase(.secureTextField, id: "", label: "密码（仅本次使用）")
+let passwordControl = try authCandidate.bindMobile(fieldAnchor)
+check(passwordControl.live.element === liveField && liveField.taps == 0,
+      "password proof must bind the actual typed secure field in its WebView without editing")
+let confirmation = try aliasCandidate.bindMobile(aliasAnchor)
+check(authCandidate.sameMobileOwner(confirmation, passwordControl), "credential proof may keep the review window and WebView")
+let replacedView = row(passwordControl.web.snapshot, path: [0, 1])
+let replacedAuthOwner = RevealedControl(live: passwordControl.live, owner: passwordControl.owner,
+    window: passwordControl.window, web: replacedView)
+check(!authCandidate.sameMobileOwner(confirmation, replacedAuthOwner), "an otherwise equal auth control in a different WebView must fail")
 func expectTap(_ frame: CGRect, treeFrame: CGRect? = nil, blockers: [CGRect],
                appFrame: CGRect = screen, windowFrame: CGRect = screen, webAncestors: [CGRect] = [screen],
                hittable: Bool = true, diagnostic: String? = nil, samples: Int = 1, reason: String) {

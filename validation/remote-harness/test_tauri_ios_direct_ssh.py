@@ -1773,6 +1773,12 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         self.assertEqual(self.result['nativeCheckpoint'], 'ordinary_password')
         self.assertEqual(self.result['nativeFailureCode'], 'native_control_not_visible')
         self.assertEqual(self.state.failure, 'tauri_ios_native_check_failed')
+        for phase, control in (('ordinary_fingerprint', 'confirmation'), ('ordinary_fingerprint', 'password'),
+                               ('key_change_new_fingerprint', 'submit'), ('ordinary_return_home', 'return')):
+            state = ios.Checkpoints(None, None, self.directory.name, {})
+            code = f'native_mobile_{control}_owner_unproven'
+            state.accept({'stage': 'native_failure', 'nativeCheckpoint': phase, 'nativeFailureCode': code})
+            self.assertEqual(state.result, {'nativeCheckpoint': phase, 'nativeFailureCode': code})
         for bad in ({'nativeCheckpoint': self.ordinary.password, 'nativeFailureCode': 'native_control_missing'},
                     {'nativeCheckpoint': 'ordinary_password', 'nativeFailureCode': self.ordinary.password}):
             state = ios.Checkpoints(None, None, self.directory.name, {})

@@ -1385,7 +1385,7 @@ if !failures.isEmpty {
                                         check=True, timeout=10).stdout
                 self.assertEqual(hashlib.sha256(source).hexdigest(), digest, name)
         controls = evidence["controls"]
-        self.assert_current_form_markup(repo, controls)
+        desktop_password, mobile_password = self.assert_current_form_markup(repo, controls)
         self.assertEqual([row["ax_role"] for row in controls], ["AXTextField"] * 3 + ["AXButton"])
         self.assertTrue(all(not row["ax_identifier_present"] and row["same_window"] for row in controls))
         self.assertTrue(all(row.get("editable") for row in controls[:3]))
@@ -1399,7 +1399,17 @@ if !failures.isEmpty {
             samples.extend([f'F(identifier: "", label: {label}, role: "staticText", value: nil)',
                             f'F(identifier: "", label: {label}, role: "{role}", value: nil)'])
         program = "import Foundation\nimport CoreGraphics\ntypealias F = NativeControlPolicy.Fact\nlet observed = [\n" + ",\n".join(samples) + "]\n"
+        program += f"let desktopPassword = {json.dumps(desktop_password, ensure_ascii=False)}\n"
+        program += f"let mobilePassword = {json.dumps(mobile_password, ensure_ascii=False)}\n"
         program += r'''
+precondition(NativeControlPolicy.desktopPasswordLabel == desktopPassword)
+precondition(NativeControlPolicy.mobilePasswordLabel == mobilePassword)
+for label in [desktopPassword, mobilePassword] {
+    precondition(NativeControlPolicy.isPasswordField(identifier: "", label: label))
+}
+precondition(NativeControlPolicy.isPasswordField(identifier: "ssh-password", label: ""))
+precondition(!NativeControlPolicy.isPasswordField(identifier: "", label: "请填写密码"))
+
 let edit: Set<String> = ["textField", "textView", "searchField"]
 func verdict(_ rows: [F], _ paths: [[Int]], _ label: String, _ roles: Set<String>, _ id: String? = nil)
   -> (index: Int?, role: String, reason: String, matches: Int) {
@@ -1472,6 +1482,7 @@ precondition(verdict(moved, [[0, 1], [0, 0]], "主机地址", edit).index == 0,
         class SSHMarkup(HTMLParser):
             inside_form = False
             label = None
+            label_variant = None
             probe = None
 
             def __init__(self):
@@ -1488,14 +1499,21 @@ precondition(verdict(moved, [[0, 1], [0, 0]], "主机地址", edit).index == 0,
                     return
                 if tag == "label":
                     self.label = []
+                elif tag == "span" and self.label is not None:
+                    classes = attrs.get("class", "").split()
+                    self.label_variant = next((name for name in classes if name in ("ssh-mobile-only", "ssh-desktop-only")), None)
                 elif tag == "input" and self.label is not None:
-                    self.fields.setdefault(identifier, []).append((attrs.get("type", "text"), "".join(self.label).strip()))
+                    desktop, mobile = (
+                        "".join(text for variant, text in self.label if variant in (None, layout)).strip()
+                        for layout in ("ssh-desktop-only", "ssh-mobile-only")
+                    )
+                    self.fields.setdefault(identifier, []).append((attrs.get("type", "text"), desktop, mobile))
                 elif tag == "button" and identifier == "ssh-probe":
                     self.probe = (attrs.get("type"), [])
 
             def handle_data(self, text):
                 if self.label is not None:
-                    self.label.append(text)
+                    self.label.append((self.label_variant, text))
                 if self.probe is not None:
                     self.probe[1].append(text)
 
@@ -1504,6 +1522,9 @@ precondition(verdict(moved, [[0, 1], [0, 0]], "主机地址", edit).index == 0,
                     self.inside_form = False
                 elif tag == "label":
                     self.label = None
+                    self.label_variant = None
+                elif tag == "span":
+                    self.label_variant = None
                 elif tag == "button" and self.probe is not None:
                     kind, text = self.probe
                     self.probes.append((kind, "".join(text).strip()))
@@ -1512,9 +1533,12 @@ precondition(verdict(moved, [[0, 1], [0, 0]], "主机地址", edit).index == 0,
         markup = SSHMarkup()
         markup.feed((repo / "validation/tauri/index.html").read_text())
         for identifier, kind, control in zip(("ssh-host", "ssh-port", "ssh-user"), ("text", "number", "text"), controls):
-            self.assertEqual(markup.fields.get(identifier), [(kind, control["visible_name"])], identifier)
-        self.assertEqual(markup.fields.get("ssh-password"), [("password", "密码")])
+            name = control["visible_name"]
+            self.assertEqual(markup.fields.get(identifier), [(kind, name, name)], identifier)
+        password = markup.fields.get("ssh-password")
+        self.assertEqual(password, [("password", "密码", "密码（仅本次使用）")])
         self.assertEqual(markup.probes, [("button", controls[3]["visible_name"])])
+        return password[0][1:]
 
     def test_real_label_samples_and_ambiguity(self):
         program = r'''

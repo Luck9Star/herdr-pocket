@@ -275,6 +275,13 @@ enum NativeViewPolicy {
     }
 }
 enum NativeControlPolicy {
+    static let desktopPasswordLabel = "密码"
+    static let mobilePasswordLabel = "密码（仅本次使用）"
+
+    static func isPasswordField(identifier: String, label: String) -> Bool {
+        identifier == "ssh-password" || label == desktopPasswordLabel || label == mobilePasswordLabel
+    }
+
     struct Fact {
         let identifier: String
         let label: String
@@ -915,7 +922,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     @MainActor
     private func password() -> XCUIElement {
         resolveControl(app.secureTextFields, app.secureTextFields, identifier: "ssh-password",
-            label: mobileFlow ? "密码（仅本次使用）" : "密码", requireTypedID: true)
+            label: mobileFlow ? NativeControlPolicy.mobilePasswordLabel : NativeControlPolicy.desktopPasswordLabel, requireTypedID: true)
     }
     @MainActor
     private func review() -> XCUIElement {
@@ -1301,7 +1308,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     @MainActor
     private func assertCredentialsInactive(_ page: Observed, _ rows: [Observed]) throws {
         let visible = try safeFrame([page])
-        for (identifier, label) in [("ssh-password", mobileFlow ? "密码（仅本次使用）" : "密码"),
+        for (identifier, label) in [("ssh-password", mobileFlow ? NativeControlPolicy.mobilePasswordLabel : NativeControlPolicy.desktopPasswordLabel),
             ("ssh-key", mobileFlow ? "私钥 PEM（仅本次使用）" : "私钥"),
             ("ssh-passphrase", mobileFlow ? "私钥口令（加密私钥需要）" : "私钥口令（可选）")] {
             let query = app.descendants(matching: .any).matching(NSPredicate(format:
@@ -1922,7 +1929,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         if choice, let ssh = (mobileChoice ?? legacyChoice)?.last { pageButtons["sshChoice"] = ssh }
         let title = witness([("ssh-page-heading", "普通 SSH 终端", false)]) != nil
         let passwords = tree.filter { $0.snapshot.elementType == .secureTextField &&
-            ($0.snapshot.identifier == "ssh-password" || $0.snapshot.label == "密码") }
+            NativeControlPolicy.isPasswordField(identifier: $0.snapshot.identifier, label: $0.snapshot.label) }
         let credentialsEmpty = passwords.allSatisfy { NativeControlPolicy.credentialEmpty($0.snapshot.value, placeholder: $0.snapshot.placeholderValue) }
         return ["page": page, "appForeground": home["appForeground"]!, "inputCount": home["inputCount"]!,
             "windowCount": home["windowCount"]!, "webViewCount": home["webViewCount"]!,

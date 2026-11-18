@@ -107,11 +107,30 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     for (const id of ['ssh-password','ssh-key','ssh-passphrase','ssh-auth-method']) $(id).disabled = locked;
     $('ssh-form').querySelectorAll('button[type=submit]').forEach(button => { button.disabled = locked; });
   }
+  function revealAuthField() {
+    const view = globalThis.window;
+    const field = $($('ssh-auth-method').value === 'key' ? 'ssh-key' : 'ssh-password');
+    if (!view?.scrollBy || field.disabled || !$('ssh-review').checked || $('ssh-setup').hidden) return;
+    const box = field.getBoundingClientRect();
+    if (!box.height) return;
+    const top = view.visualViewport?.offsetTop ?? 0;
+    let bottom = top + (view.visualViewport?.height ?? view.innerHeight);
+    const nav = document.querySelector('.route-tabs');
+    if (nav && !nav.hidden && view.getComputedStyle(nav).position === 'fixed') {
+      const navBox = nav.getBoundingClientRect();
+      if (navBox.height > 0 && navBox.bottom > top) bottom = Math.min(bottom, navBox.top);
+    }
+    if (bottom > top && (box.top < top || box.bottom > bottom)) {
+      // Reveal the control without moving focus or opening the keyboard.
+      view.scrollBy(0, (box.top + box.bottom - top - bottom) / 2);
+    }
+  }
   // The review checkbox is the user's own confirmation of the probed fingerprint;
   // only then may the credential entries be used again.
   $('ssh-review').addEventListener('change', () => {
     if (controller.isReady() || controller.isBlocked()) return;
     setEntryLock(!$('ssh-review').checked);
+    revealAuthField();
   });
   // The blocked view keeps the pin that was in effect and, only when the refused handshake
   // carried one, the public key fingerprint that handshake actually presented.
@@ -130,6 +149,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     const key = $('ssh-auth-method').value === 'key';
     $('ssh-password-fields').hidden = key;
     $('ssh-key-fields').hidden = !key;
+    revealAuthField();
   });
   for (const id of ['ssh-host','ssh-port']) $(id).addEventListener('input', () => {
     controller.resetTargetBlock(); void controller.close(); $('ssh-review').checked = false; $('ssh-fingerprint').textContent = '请先探测并独立核对主机指纹。';

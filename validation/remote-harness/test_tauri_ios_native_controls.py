@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from html.parser import HTMLParser
 
 
 @unittest.skipUnless(sys.platform == "darwin" and shutil.which("swiftc"), "requires macOS Swift and Foundation")
@@ -167,7 +168,7 @@ final class XCUIElement {
     enum ElementType: UInt {
         case textField = 91, textView = 17, searchField = 42, button = 6
         case stepper = 73, staticText = 12, other = 99, keyboard = 24, alert = 33
-        case window = 3, webView = 4, scrollView = 5, secureTextField = 87
+        case window = 3, webView = 4, scrollView = 5, group = 13, checkBox = 14, `switch` = 15, toggle = 16, secureTextField = 87
     }
     var taps = 0
     var drags: [(CGVector, CGVector)] = []
@@ -337,7 +338,8 @@ struct Adapter {
 ''' + "\n".join(self.production_method(signature) for signature in (
             "func formTargets(_ tree:", "func formSelection(_ tree:", "func formControl(_ name:",
             "func sameIdentity(_ lhs:", "func liveOnPath(_ row:", "func controlScope(_ row:",
-            "func scrollDirection(_ frames:", "func scrollToControl(_ owner:",
+            "func scrollDirection(_ frames:", "func edgeScrollDirection(_ frames:",
+            "func passwordGeometryDetail(_ viewport:", "func scrollToControl(_ owner:",
             "func controlIdentityRows(_ current:", "func controlOwner(_ current:",
             "func reveal(_ item:", "func tapForm(_ name:",
             "func controlGeometry(_ owner:", "func routeTabsOcclusion(_ owner:",
@@ -624,18 +626,22 @@ let otherScroller = passwordRow(snapshot(.scrollView, frame: passwordScreen, lab
 let tabDefinitions = [("show-remote", "看板"), ("nav-terminal", "终端"), ("nav-network", "网络"), ("nav-settings", "设置")]
 let routeButtons = tabDefinitions.enumerated().map { index, definition in
     let frame = CGRect(x: CGFloat(8 + index * 108), y: 896, width: 100, height: 60)
-    return passwordRow(snapshot(.button, frame: frame, identifier: definition.0, label: definition.1), [0, 0, 8, index])
+    let role: XCUIElement.ElementType = [.checkBox, .switch, .toggle, .button][index]
+    return passwordRow(snapshot(role, frame: frame, label: definition.1), [0, 0, 8, index])
 }
-let routeLandmark = passwordRow(snapshot(.other, frame: routeFrame, label: "主导航"), [0, 0, 8])
-func exercisePassword(webHittable: Bool, provenScroller: Bool, routeVisible: Bool = true, initiallyHittable: Bool = false,
-                      phase: String, expected: [String], succeeds: Bool) {
+let routeLandmark = passwordRow(snapshot(.group, frame: routeFrame, label: "主导航"), [0, 0, 8])
+func exercisePassword(webHittable: Bool, provenScroller: Bool, showLandmark: Bool = true, showTabs: Bool = true,
+                      initialHits: (Bool, Bool) = (false, false), initialFrame: CGRect = passwordBehindTabs.frame,
+                      initialEnabled: Bool = true, phase: String, expected: [String], succeeds: Bool,
+                      dragged: Bool = false, direction: String = "none", failureCode: String = "native_control_not_visible") {
     let typed = "fixture-input"
     let element = Element()
     let webElement = Element()
     let scrollElement = Element()
     let unrelatedElement = Element()
     var scopes = [passwordWindow, passwordWeb, otherScroller]
-    if routeVisible { scopes += [routeLandmark] + routeButtons }
+    if showLandmark { scopes.append(routeLandmark) }
+    if showTabs { scopes += routeButtons }
     if provenScroller { scopes.append(formScroller) }
     let controls = Dictionary(uniqueKeysWithValues: (routeButtons + [routeLandmark]).map {
         ($0.path, LiveControl(snapshot: $0.snapshot, hittable: true, element: Element()))
@@ -644,11 +650,14 @@ func exercisePassword(webHittable: Bool, provenScroller: Bool, routeVisible: Boo
         formScroller.path: LiveControl(snapshot: formScroller.snapshot, hittable: true, element: scrollElement),
         otherScroller.path: LiveControl(snapshot: otherScroller.snapshot, hittable: true, element: unrelatedElement),
     ]) { _, new in new }
-    let hidden = scopes + [passwordRow(passwordBehindTabs, [0, 0, 2, 1])]
+    var initial = snapshot(.secureTextField, frame: initialFrame, identifier: "ssh-password", label: "密码")
+    initial.isEnabled = initialEnabled
+    let hidden = scopes + [passwordRow(initial, [0, 0, 2, 1])]
     let visible = scopes + [passwordRow(revealedPassword, [0, 0, 2, 1])]
-    let samples = succeeds ? Observations([hidden], liveSnapshots: [passwordBehindTabs, passwordBehindTabs, revealedPassword, revealedPassword],
-                                          hittableSamples: [initiallyHittable, initiallyHittable, true, true]) : Observations([])
-    let fallback = LiveControl(snapshot: succeeds ? revealedPassword : passwordBehindTabs,
+    let samples = succeeds ? Observations([hidden], liveSnapshots: [initial, initial, revealedPassword, revealedPassword],
+                                          hittableSamples: [initialHits.0, initialHits.1, true, true]) :
+        Observations([], hittableSamples: Array(repeating: [initialHits.0, initialHits.1], count: 10).flatMap { $0 })
+    let fallback = LiveControl(snapshot: succeeds ? revealedPassword : initial,
                                hittable: succeeds, element: element)
     let app = App(frame: passwordScreen)
     let candidate = Adapter(app: app, current: fallback, rows: succeeds ? visible : hidden,
@@ -657,36 +666,68 @@ func exercisePassword(webHittable: Bool, provenScroller: Bool, routeVisible: Boo
     do { try candidate.fillCurrent(typed) } catch let rejected as Rejected { error = rejected.reason } catch { }
     let diagnostics = samples.checkpoints.compactMap { $0.1["geometryReason"] as? String }
     let roles = samples.checkpoints.compactMap { $0.1["nativeInputRole"] as? String }
+    let details = samples.checkpoints.compactMap { $0.1["geometryDetail"] as? [String: Any] }
     check(diagnostics == expected && samples.checkpoints.allSatisfy { topic, payload in
         topic == "native_progress" && payload["nativeCheckpoint"] as? String == phase &&
-            (Set(payload.keys) == ["nativeCheckpoint", "geometryReason"] || Set(payload.keys) == ["nativeCheckpoint", "nativeInputRole"])
+            (Set(payload.keys) == ["nativeCheckpoint", "geometryReason"] || Set(payload.keys) == ["nativeCheckpoint", "nativeInputRole"] ||
+             Set(payload.keys) == ["nativeCheckpoint", "geometryReason", "geometryDetail"])
     }, "password progress must include only phase and bounded geometry or role data")
-    if succeeds {
-        let target = webHittable ? webElement : scrollElement
-        let targetFrame = webHittable ? passwordScreen : formScroller.snapshot.frame
-        check(error == nil && element.inputs == [typed] && app.input.inputs.isEmpty && samples.liveReads == 6 &&
-              element.taps == 1 && roles == ["secureTextField"],
-              "after scrolling, the bound password field receives one input with no app-wide typing or secret readback")
-        check(target.drags.count == 1 && target.drags.first.map { from, to in
+    let target = webHittable ? webElement : scrollElement
+    let targetFrame = webHittable ? passwordScreen : formScroller.snapshot.frame
+    let didDrag = succeeds || dragged
+    check(target.drags.count == (didDrag ? 1 : 0), "a password focus operation must never repeat the same drag without progress")
+    if didDrag {
+        check(target.drags.first.map { from, to in
             let start = targetFrame.minY + from.dy * targetFrame.height
             let end = targetFrame.minY + to.dy * targetFrame.height
-            return passwordStatusBar.maxY < end && end < start && start < routeFrame.minY
-        } == true, "the upward drag must keep both endpoints away from the fixed tabs and status bar")
+            let down = direction == "swipe_down"
+            return passwordStatusBar.maxY < min(start, end) && max(start, end) < routeFrame.minY && (down ? end > start : end < start)
+        } == true, "the drag must move the field toward the center and keep both endpoints in the safe band")
+    }
+    if succeeds {
+        check(error == nil && element.inputs == [typed] && app.input.inputs.isEmpty && samples.liveReads == 6 &&
+              element.taps == 1 && roles == ["secureTextField"] && details.isEmpty,
+              "after scrolling, the bound password field receives one input with no app-wide typing or secret readback")
     } else {
-        check(error == "native_control_not_visible" && roles.isEmpty && app.input.inputs.isEmpty && element.inputs.isEmpty && element.taps == 0 &&
-              webElement.drags.isEmpty && scrollElement.drags.isEmpty,
+        check(error == failureCode && roles.isEmpty && app.input.inputs.isEmpty && element.inputs.isEmpty && element.taps == 0,
               "unproven password geometry or a missing scroll target must never tap or type")
+        let expectedRect = [initialFrame.minX, initialFrame.minY, initialFrame.width, initialFrame.height].map { Int($0.rounded()) }
+        check(details.count == 1 && details.first.map { detail in
+            Set(detail.keys) == ["viewport", "usable", "owner", "query", "bound", "queryEnabled", "boundEnabled",
+                                 "queryHittable", "boundHittable", "scrollAttempted", "scrollDirection"] &&
+                detail["viewport"] as? [Int] == [0, 0, 440, 956] &&
+                detail["usable"] as? [Int] == [0, 62, 440, (showLandmark ? 891 : showTabs ? 896 : 956) - 62] &&
+                detail["owner"] as? [Int] == expectedRect && detail["query"] as? [Int] == expectedRect &&
+                detail["bound"] as? [Int] == expectedRect && detail["queryEnabled"] as? Bool == initialEnabled &&
+                detail["boundEnabled"] as? Bool == initialEnabled && detail["queryHittable"] as? Bool == initialHits.0 &&
+                detail["boundHittable"] as? Bool == initialHits.1 && detail["scrollAttempted"] as? Bool == dragged &&
+                detail["scrollDirection"] as? String == direction
+        } == true, "only the final failure shows bounded layout, both hit states and the attempted scroll direction")
     }
     check(unrelatedElement.drags.isEmpty, "a visible sibling ScrollView must never authorize the password drag")
 }
 exercisePassword(webHittable: true, provenScroller: false, phase: "ordinary_password", expected: ["field_occluded"], succeeds: true)
-exercisePassword(webHittable: true, provenScroller: false, initiallyHittable: true,
+exercisePassword(webHittable: true, provenScroller: false, showTabs: false, initialHits: (true, true),
+                 phase: "ordinary_password", expected: ["field_occluded"], succeeds: true)
+exercisePassword(webHittable: true, provenScroller: false, showLandmark: false,
                  phase: "ordinary_password", expected: ["field_occluded"], succeeds: true)
 exercisePassword(webHittable: false, provenScroller: true, phase: "ordinary_password", expected: ["field_occluded"], succeeds: true)
 exercisePassword(webHittable: false, provenScroller: false, phase: "key_change_password",
-                 expected: ["field_occluded", "scroll_surface_unhittable"], succeeds: false)
-exercisePassword(webHittable: true, provenScroller: false, routeVisible: false, phase: "ordinary_password",
-                 expected: Array(repeating: "field_unhittable", count: 10), succeeds: false)
+                 expected: ["field_occluded", "scroll_surface_unhittable"], succeeds: false, direction: "swipe_up")
+exercisePassword(webHittable: true, provenScroller: false, showLandmark: false, showTabs: false, phase: "ordinary_password",
+                 expected: ["field_unhittable"], succeeds: true)
+exercisePassword(webHittable: true, provenScroller: false, showLandmark: false, showTabs: false, initialHits: (false, true),
+                 phase: "key_change_password", expected: ["queried_unhittable", "queried_unhittable", "scroll_no_progress"],
+                 succeeds: false, dragged: true, direction: "swipe_up")
+exercisePassword(webHittable: true, provenScroller: false, showLandmark: false, showTabs: false, initialHits: (true, false),
+                 initialFrame: revealedPassword.frame, phase: "ordinary_password", expected: Array(repeating: "bound_unhittable", count: 3),
+                 succeeds: false)
+exercisePassword(webHittable: true, provenScroller: false, showLandmark: false, showTabs: false, initialEnabled: false,
+                 phase: "ordinary_password", expected: ["field_unhittable"], succeeds: false, direction: "swipe_up",
+                 failureCode: "native_control_disabled")
+exercisePassword(webHittable: true, provenScroller: false, showLandmark: false, showTabs: false,
+                 initialFrame: CGRect(x: 16, y: 65, width: 408, height: 46), phase: "ordinary_password",
+                 expected: ["field_unhittable"], succeeds: true, direction: "swipe_down")
 let changedPassword = snapshot(.secureTextField, frame: revealedPassword.frame, identifier: "ssh-replacement", label: "密码")
 let focused = Observations([[passwordWindow, passwordWeb, passwordRow(revealedPassword, [0, 0, 1])]],
                            liveSnapshots: [revealedPassword, revealedPassword, changedPassword, changedPassword])
@@ -748,9 +789,21 @@ if !failures.isEmpty {
     def test_source_bound_form_roles_and_reselection(self):
         repo = pathlib.Path(__file__).resolve().parents[2]
         evidence = json.loads((repo / "docs/evidence/ios-ssh-20261117/local-macos-form-identity.json").read_text())
+        revision = evidence["build"]["source_binding"]["git_head"]
+        self.assertRegex(revision, r"\A[0-9a-f]{40}\Z")
+        # The observation belongs to the recorded source tree. Source archives
+        # and shallow checkouts can still run the current HTML contract below.
+        history_available = shutil.which("git") and (repo / ".git").exists() and subprocess.run(
+            ["git", "cat-file", "-e", f"{revision}^{{commit}}"], cwd=repo, capture_output=True, timeout=10,
+        ).returncode == 0
         for name, digest in evidence["build"]["source_sha256"].items():
-            self.assertEqual(hashlib.sha256((repo / name).read_bytes()).hexdigest(), digest, name)
+            self.assertRegex(digest, r"\A[0-9a-f]{64}\Z")
+            if history_available:
+                source = subprocess.run(["git", "show", f"{revision}:{name}"], cwd=repo, capture_output=True,
+                                        check=True, timeout=10).stdout
+                self.assertEqual(hashlib.sha256(source).hexdigest(), digest, name)
         controls = evidence["controls"]
+        self.assert_current_form_markup(repo, controls)
         self.assertEqual([row["ax_role"] for row in controls], ["AXTextField"] * 3 + ["AXButton"])
         self.assertTrue(all(not row["ax_identifier_present"] and row["same_window"] for row in controls))
         self.assertTrue(all(row.get("editable") for row in controls[:3]))
@@ -832,6 +885,54 @@ precondition(verdict(moved, [[0, 1], [0, 0]], "主机地址", edit).index == 0,
              "action must re-resolve the current snapshot rather than reuse the diagnostic row index")
 '''
         self.compile_and_run(program)
+
+    def assert_current_form_markup(self, repo, controls):
+        class SSHMarkup(HTMLParser):
+            inside_form = False
+            label = None
+            probe = None
+
+            def __init__(self):
+                super().__init__()
+                self.fields = {}
+                self.probes = []
+
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                identifier = attrs.get("id")
+                if tag == "form":
+                    self.inside_form = identifier == "ssh-form"
+                if not self.inside_form:
+                    return
+                if tag == "label":
+                    self.label = []
+                elif tag == "input" and self.label is not None:
+                    self.fields.setdefault(identifier, []).append((attrs.get("type", "text"), "".join(self.label).strip()))
+                elif tag == "button" and identifier == "ssh-probe":
+                    self.probe = (attrs.get("type"), [])
+
+            def handle_data(self, text):
+                if self.label is not None:
+                    self.label.append(text)
+                if self.probe is not None:
+                    self.probe[1].append(text)
+
+            def handle_endtag(self, tag):
+                if tag == "form":
+                    self.inside_form = False
+                elif tag == "label":
+                    self.label = None
+                elif tag == "button" and self.probe is not None:
+                    kind, text = self.probe
+                    self.probes.append((kind, "".join(text).strip()))
+                    self.probe = None
+
+        markup = SSHMarkup()
+        markup.feed((repo / "validation/tauri/index.html").read_text())
+        for identifier, kind, control in zip(("ssh-host", "ssh-port", "ssh-user"), ("text", "number", "text"), controls):
+            self.assertEqual(markup.fields.get(identifier), [(kind, control["visible_name"])], identifier)
+        self.assertEqual(markup.fields.get("ssh-password"), [("password", "密码")])
+        self.assertEqual(markup.probes, [("button", controls[3]["visible_name"])])
 
     def test_real_label_samples_and_ambiguity(self):
         program = r'''

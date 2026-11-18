@@ -5,7 +5,7 @@ import UIKit
 
 // BEGIN NATIVE FRAME POLICY -- real Foundation/CoreGraphics, no UI substitutes.
 enum NativeFramePolicy {
-    enum ScrollDirection { case swipeUp, swipeDown }
+    enum ScrollDirection: String { case swipeUp = "swipe_up", swipeDown = "swipe_down" }
 
     enum GeometryFailure: String, Error {
         case windowInvalid = "window_invalid"
@@ -16,11 +16,14 @@ enum NativeFramePolicy {
         case fieldOutside = "field_outside"
         case fieldOccluded = "field_occluded"
         case fieldUnhittable = "field_unhittable"
+        case queriedUnhittable = "queried_unhittable"
+        case boundUnhittable = "bound_unhittable"
         case scrollDirectionUnproven = "scroll_direction_unproven"
         case scrollSurfaceUnhittable = "scroll_surface_unhittable"
+        case scrollNoProgress = "scroll_no_progress"
 
         var canRetryTap: Bool {
-            self == .fieldOutside || self == .fieldOccluded || self == .fieldUnhittable
+            [.fieldOutside, .fieldOccluded, .fieldUnhittable, .queriedUnhittable, .boundUnhittable].contains(self)
         }
     }
 
@@ -574,12 +577,12 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func controlGeometry(_ owner: Observed, _ controls: [LiveControl], scrolling: Bool = false,
+    private func controlGeometry(_ owner: Observed, _ controls: [LiveControl], measureScrollBand: Bool = false,
                                  scrollOcclusion: ((CGRect, Bool) -> CGRect?)? = nil)
-        -> (failure: NativeFramePolicy.GeometryFailure?, scrollFrame: CGRect?) {
+        -> (failure: NativeFramePolicy.GeometryFailure?, viewport: CGRect?, scrollFrame: CGRect?) {
         let viewport: CGRect
         switch NativeFramePolicy.viewport(window: owner.window, screen: app.frame, webAncestors: owner.webs) {
-        case .failure(let failure): return (failure, nil)
+        case .failure(let failure): return (failure, nil, nil)
         case .success(let frame): viewport = frame
         }
         var occlusions = nativeOcclusions()
@@ -591,9 +594,9 @@ final class TauriDirectSSHUITests: XCTestCase {
             occlusions.append(blocker)
             failure = NativeFramePolicy.interactionFailure(frames, in: viewport, occlusions: occlusions, hittable: hittable)
         }
-        let scrollFrame = scrolling && failure?.canRetryTap == true
+        let scrollFrame = measureScrollBand && failure?.canRetryTap == true
             ? NativeFramePolicy.scrollBand(in: viewport, occlusions: occlusions) : nil
-        return (failure, scrollFrame)
+        return (failure, viewport, scrollFrame)
     }
 
     @MainActor
@@ -601,40 +604,46 @@ final class TauriDirectSSHUITests: XCTestCase {
                                     _ controls: [CGRect], scrolling: Bool) -> CGRect? {
         // The product's route navigation is a fixed overlay in the narrow layout.
         guard viewport.width <= 599 else { return nil }
-        let sameWeb = rows.filter { $0.windowPath == owner.windowPath && $0.webPath == owner.webPath }
+        let sameWeb = rows.filter { $0.windowPath == owner.windowPath && $0.webPath == owner.webPath &&
+            $0.path.count > owner.webPath.count }
+        func relevant(_ frame: CGRect) -> Bool {
+            NativeFramePolicy.valid(frame) && (scrolling || controls.contains { NativeFramePolicy.valid($0.intersection(frame)) })
+        }
+        let landmarks = sameWeb.filter {
+            $0.snapshot.label == "主导航" && [.group, .other].contains($0.snapshot.elementType)
+        }
+        if landmarks.count == 1, let landmark = landmarks.first, relevant(landmark.snapshot.frame),
+           let live = liveOnPath(landmark), NativeFramePolicy.valid(live.snapshot.frame),
+           live.snapshot.frame.minX <= viewport.minX, live.snapshot.frame.maxX >= viewport.maxX,
+           live.snapshot.frame.midY > viewport.midY {
+            return live.snapshot.frame
+        }
         let definitions = [("show-remote", "看板"), ("nav-terminal", "终端"), ("nav-network", "网络"), ("nav-settings", "设置")]
+        let roles: Set<XCUIElement.ElementType> = [.button, .checkBox, .switch, .toggle]
         var tabs: [Observed] = []
         for (id, label) in definitions {
             let identified = sameWeb.filter { $0.snapshot.identifier == id }
             let matches = identified.isEmpty ? sameWeb.filter { $0.snapshot.identifier.isEmpty && $0.snapshot.label == label &&
-                $0.snapshot.elementType == .button } : identified
-            guard matches.count == 1, let tab = matches.first, tab.snapshot.elementType == .button,
+                roles.contains($0.snapshot.elementType) } : identified
+            guard matches.count == 1, let tab = matches.first, roles.contains(tab.snapshot.elementType),
                   NativeFramePolicy.valid(tab.snapshot.frame) else { return nil }
             tabs.append(tab)
         }
-        let landmarks = sameWeb.filter { row in
-            row.snapshot.label == "主导航" && tabs.allSatisfy { $0.path.count > row.path.count && $0.path.starts(with: row.path) }
-        }
         let observedButtons = tabs.reduce(CGRect.null) { $0.union($1.snapshot.frame) }
-        let observedBar = landmarks.count == 1 && landmarks[0].snapshot.frame.contains(observedButtons)
-            ? landmarks[0].snapshot.frame : observedButtons
-        guard scrolling || controls.contains(where: { NativeFramePolicy.valid($0.intersection(observedBar)) }) else { return nil }
+        guard relevant(observedButtons) else { return nil }
         let live = tabs.compactMap(liveOnPath)
         guard live.count == tabs.count, live.allSatisfy({ $0.hittable && NativeFramePolicy.valid($0.snapshot.frame) }) else { return nil }
         let frames = live.map { $0.snapshot.frame }
         guard zip(frames, frames.dropFirst()).allSatisfy({ $0.0.maxX <= $0.1.minX }),
               let upper = frames.map(\.minY).max(), let lower = frames.map(\.maxY).min(), upper < lower else { return nil }
-        let buttons = frames.reduce(CGRect.null) { $0.union($1) }
-        if landmarks.count == 1, let landmark = landmarks.first.flatMap(liveOnPath),
-           NativeFramePolicy.valid(landmark.snapshot.frame), landmark.snapshot.frame.contains(buttons) {
-            return landmark.snapshot.frame
-        }
-        return buttons
+        return frames.reduce(CGRect.null) { $0.union($1) }
     }
 
     @MainActor
-    private func reportFormGeometry(_ failure: NativeFramePolicy.GeometryFailure) throws {
-        try post("native_progress", ["nativeCheckpoint": nativePhase, "geometryReason": failure.rawValue])
+    private func reportFormGeometry(_ failure: NativeFramePolicy.GeometryFailure, detail: [String: Any]? = nil) throws {
+        var payload: [String: Any] = ["nativeCheckpoint": nativePhase, "geometryReason": failure.rawValue]
+        if let detail = detail { payload["geometryDetail"] = detail }
+        try post("native_progress", payload)
     }
 
     @MainActor
@@ -654,7 +663,7 @@ final class TauriDirectSSHUITests: XCTestCase {
             expected = form
             let (current, owner) = (form.live, form.owner)
             try require(current.snapshot.isEnabled && owner.snapshot.isEnabled, "native_control_disabled")
-            let geometry = controlGeometry(owner, [current], scrolling: true)
+            let geometry = controlGeometry(owner, [current], measureScrollBand: true)
             guard let failure = geometry.failure else {
                 current.element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
                 return form
@@ -757,11 +766,39 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
+    private func edgeScrollDirection(_ frames: [CGRect], _ visible: CGRect) -> NativeFramePolicy.ScrollDirection? {
+        guard frames.allSatisfy(visible.contains) else { return nil }
+        // Use the actual field height to bound how close it must be to an edge.
+        let above = frames.allSatisfy { $0.midY < visible.midY && $0.minY - visible.minY <= $0.height }
+        let below = frames.allSatisfy { $0.midY > visible.midY && visible.maxY - $0.maxY <= $0.height }
+        guard above != below else { return nil }
+        return above ? .swipeDown : .swipeUp
+    }
+
+    @MainActor
+    private func passwordGeometryDetail(_ viewport: CGRect?, _ usable: CGRect?, _ owner: Observed,
+                                        _ query: LiveControl, _ bound: LiveControl, scrollAttempted: Bool,
+                                        direction: NativeFramePolicy.ScrollDirection?) -> [String: Any] {
+        func rounded(_ frame: CGRect?) -> Any {
+            guard let frame = frame else { return NSNull() }
+            let values = [frame.minX, frame.minY, frame.width, frame.height]
+            guard values.allSatisfy({ $0.isFinite && abs($0) <= 10000 }), frame.width >= 0, frame.height >= 0 else {
+                return NSNull()
+            }
+            return values.map { Int($0.rounded()) }
+        }
+        return ["viewport": rounded(viewport), "usable": rounded(usable), "owner": rounded(owner.snapshot.frame),
+            "query": rounded(query.snapshot.frame), "bound": rounded(bound.snapshot.frame), "queryEnabled": query.snapshot.isEnabled,
+            "boundEnabled": bound.snapshot.isEnabled, "queryHittable": query.hittable, "boundHittable": bound.hittable,
+            "scrollAttempted": scrollAttempted, "scrollDirection": direction?.rawValue ?? "none"]
+    }
+
+    @MainActor
     private func scrollToControl(_ owner: Observed, _ window: Observed, _ web: Observed, _ visible: CGRect,
                                  _ direction: NativeFramePolicy.ScrollDirection, rows: [Observed] = [],
-                                 formFailure: NativeFramePolicy.GeometryFailure? = nil, passwordDiagnostics: Bool = false) throws {
+                                 formFailure: NativeFramePolicy.GeometryFailure? = nil, geometryDetail: [String: Any]? = nil) throws {
         guard liveOnPath(window) != nil, let surface = liveOnPath(web) else {
-            if let failure = formFailure { try reportFormGeometry(failure) }
+            if let failure = formFailure { try reportFormGeometry(failure, detail: geometryDetail) }
             try require(false, "native_scroll_owner_unproven")
             throw NSError(domain: "native_scroll_owner_unproven", code: 1)
         }
@@ -770,7 +807,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         if !frameValid {
             if let failure = formFailure {
                 try reportFormGeometry(failure)
-                try reportFormGeometry(.webAncestorInvalid)
+                try reportFormGeometry(.webAncestorInvalid, detail: geometryDetail)
             }
             try failControlGeometry(.webAncestorInvalid)
         }
@@ -796,7 +833,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         }
         if !target.hittable, let failure = formFailure {
             try reportFormGeometry(failure)
-            if passwordDiagnostics { try reportFormGeometry(.scrollSurfaceUnhittable) }
+            if let detail = geometryDetail { try reportFormGeometry(.scrollSurfaceUnhittable, detail: detail) }
             try failControlGeometry(failure)
         }
         try require(target.hittable, "native_control_not_visible")
@@ -817,6 +854,9 @@ final class TauriDirectSSHUITests: XCTestCase {
         let passwordDiagnostics = nativePhase == "ordinary_password" || nativePhase == "key_change_password"
         let attempts = scrolling ? 10 : 3
         var prior = expected
+        var lastScroll: (frames: [CGRect], direction: NativeFramePolicy.ScrollDirection)?
+        var retriedMotionSample = false
+        var triedEdgeScroll = false
         for attempt in 0..<attempts {
             guard let current = liveControl(item) else {
                 try require(false, "native_control_missing")
@@ -836,21 +876,62 @@ final class TauriDirectSSHUITests: XCTestCase {
             let resolved = RevealedControl(live: bound, owner: owner, window: scope.window, web: scope.web)
             prior = resolved
             let frames = [owner.snapshot.frame, current.snapshot.frame, bound.snapshot.frame]
-            let geometry = controlGeometry(owner, [current, bound], scrolling: scrolling) { viewport, failed in
+            let geometry = controlGeometry(owner, [current, bound], measureScrollBand: scrolling || passwordDiagnostics) { viewport, failed in
                 guard failed || passwordDiagnostics else { return nil }
                 return self.routeTabsOcclusion(owner, rows, viewport, frames, scrolling: scrolling && failed)
             }
             guard let failure = geometry.failure else { return resolved }
-            if let visible = geometry.scrollFrame, let direction = scrollDirection(frames, visible) {
-                try scrollToControl(owner, scope.window, scope.web, visible, direction, rows: rows,
-                    formFailure: passwordDiagnostics ? failure : nil, passwordDiagnostics: passwordDiagnostics)
-            } else if passwordDiagnostics && scrolling && attempt == attempts - 1 && (failure == .fieldOutside || failure == .fieldOccluded) {
-                try reportFormGeometry(failure)
-                try reportFormGeometry(.scrollDirectionUnproven)
+            var reason = failure
+            if failure == .fieldUnhittable && current.hittable != bound.hittable {
+                reason = current.hittable ? .boundUnhittable : .queriedUnhittable
+            }
+            func detail(_ direction: NativeFramePolicy.ScrollDirection?) -> [String: Any]? {
+                guard passwordDiagnostics else { return nil }
+                return passwordGeometryDetail(geometry.viewport, geometry.scrollFrame, owner, current, bound,
+                    scrollAttempted: lastScroll != nil, direction: direction ?? lastScroll?.direction)
+            }
+            guard failure.canRetryTap else {
+                if passwordDiagnostics { try reportFormGeometry(reason, detail: detail(nil)) }
+                try failControlGeometry(failure)
+            }
+            let lastAttempt = attempt == attempts - 1
+            if let previous = lastScroll, !zip(previous.frames, frames).allSatisfy({ before, after in
+                previous.direction == .swipeUp ? after.midY < before.midY : after.midY > before.midY
+            }) {
+                if retriedMotionSample || lastAttempt {
+                    if passwordDiagnostics { try reportFormGeometry(.scrollNoProgress, detail: detail(nil)) }
+                    break
+                }
+                retriedMotionSample = true
+                if passwordDiagnostics { try reportFormGeometry(reason) }
+                Thread.sleep(forTimeInterval: 0.15)
+                continue
+            }
+            if scrolling, !lastAttempt, let visible = geometry.scrollFrame {
+                let regular = scrollDirection(frames, visible)
+                let edge = failure == .fieldUnhittable && !triedEdgeScroll ? edgeScrollDirection(frames, visible) : nil
+                if let direction = regular ?? edge {
+                    let enabled = owner.snapshot.isEnabled && current.snapshot.isEnabled && bound.snapshot.isEnabled
+                    if !enabled && passwordDiagnostics { try reportFormGeometry(reason, detail: detail(direction)) }
+                    try require(enabled, "native_control_disabled")
+                    try scrollToControl(owner, scope.window, scope.web, visible, direction, rows: rows,
+                        formFailure: passwordDiagnostics ? reason : nil, geometryDetail: detail(direction))
+                    lastScroll = (frames, direction)
+                    retriedMotionSample = false
+                    if regular == nil { triedEdgeScroll = true }
+                    if passwordDiagnostics { try reportFormGeometry(reason) }
+                    continue
+                }
+            }
+            if lastAttempt || (scrolling && failure == .fieldUnhittable && attempt >= 2) {
+                if passwordDiagnostics {
+                    let direction = geometry.scrollFrame.flatMap { scrollDirection(frames, $0) }
+                    let unproven = scrolling && direction == nil && failure != .fieldUnhittable
+                    try reportFormGeometry(unproven ? .scrollDirectionUnproven : reason, detail: detail(direction))
+                }
                 break
             }
-            if passwordDiagnostics { try reportFormGeometry(failure) }
-            guard failure.canRetryTap else { try failControlGeometry(failure) }
+            if passwordDiagnostics { try reportFormGeometry(reason) }
         }
         try require(false, "native_control_not_visible")
         throw NSError(domain: "native_control_not_visible", code: 1)

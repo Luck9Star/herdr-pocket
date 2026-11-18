@@ -51,7 +51,8 @@ GEOMETRY_PHASES = frozenset(
 GEOMETRY_REASONS = frozenset((
     'window_invalid', 'screen_invalid', 'web_ancestor_invalid', 'viewport_empty',
     'field_invalid', 'field_outside', 'field_occluded', 'field_unhittable',
-    'scroll_direction_unproven', 'scroll_surface_unhittable'))
+    'scroll_direction_unproven', 'scroll_surface_unhittable', 'queried_unhittable',
+    'bound_unhittable', 'scroll_no_progress'))
 MAX_GEOMETRY_REASONS_PER_CHECKPOINT = 24
 NATIVE_FAILURES = frozenset((
     'native_tree_limit', 'native_expected_text_missing', 'native_control_missing',
@@ -82,6 +83,28 @@ HOME_ROLES = frozenset(('button', 'staticText', 'webView', 'textField', 'secureT
 FORM_CONTROL_NAMES = frozenset(('host', 'port', 'user', 'probe'))
 FORM_CONTROL_ROLES = frozenset(('textField', 'textView', 'inputWrapper', 'button', 'other', 'none'))
 FORM_CONTROL_REASONS = frozenset(('matched', 'missing', 'ambiguous', 'wrongRole', 'ownerUnproven'))
+
+
+def public_geometry_detail(value):
+    """Fixed geometry and state only; never export accessibility text or values."""
+    rectangles = {'viewport', 'usable', 'owner', 'query', 'bound'}
+    flags = {'queryEnabled', 'boundEnabled', 'queryHittable', 'boundHittable', 'scrollAttempted'}
+    require(isinstance(value, dict) and set(value) == rectangles | flags | {'scrollDirection'},
+            'tauri_ios_native_diagnostic_invalid')
+    for key in rectangles:
+        rect = value[key]
+        require(rect is None or (isinstance(rect, list) and len(rect) == 4
+                and all(type(n) is int for n in rect)
+                and all(-10000 <= n <= 10000 for n in rect[:2])
+                and all(0 <= n <= 10000 for n in rect[2:])),
+                'tauri_ios_native_diagnostic_invalid')
+    require(all(type(value[key]) is bool for key in flags)
+            and type(value['scrollDirection']) is str
+            and value['scrollDirection'] in ('none', 'swipe_up', 'swipe_down')
+            and (not value['scrollAttempted'] or value['scrollDirection'] != 'none'),
+            'tauri_ios_native_diagnostic_invalid')
+    return {key: (list(value[key]) if key in rectangles and value[key] is not None else value[key])
+            for key in rectangles | flags | {'scrollDirection'}}
 
 
 def public_home_diagnostic(value):
@@ -714,6 +737,13 @@ class Checkpoints:
         if stage in ('native_progress', 'native_failure'):
             phase = payload.get('nativeCheckpoint')
             require(self.failure is None and phase in NATIVE_PHASES, 'tauri_ios_native_diagnostic_invalid')
+            detail = None
+            if 'geometryDetail' in payload:
+                require(stage == 'native_progress' and phase in ('ordinary_password', 'key_change_password')
+                        and 'geometryReason' in payload, 'tauri_ios_native_diagnostic_invalid')
+                detail = public_geometry_detail(payload['geometryDetail'])
+                require(len(self.result.get('geometryFailureDetails', {}).get(phase, [])) < 2,
+                        'tauri_ios_native_diagnostic_invalid')
             if 'geometryReason' in payload:
                 reason = payload['geometryReason']
                 require(stage == 'native_progress' and phase in GEOMETRY_PHASES
@@ -723,6 +753,9 @@ class Checkpoints:
                 require(len(trace) < MAX_GEOMETRY_REASONS_PER_CHECKPOINT,
                         'tauri_ios_native_diagnostic_invalid')
                 self.result.setdefault('geometryReasonTrace', {}).setdefault(phase, []).append(reason)
+                if detail is not None:
+                    self.result.setdefault('geometryFailureDetails', {}).setdefault(phase, []).append(
+                        {'reason': reason, **detail})
             self.result['nativeCheckpoint'] = phase
             if 'nativePortType' in payload:
                 require(phase.endswith('_port') and payload['nativePortType'] in ('textField', 'stepperTextField', 'other'),

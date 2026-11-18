@@ -16,6 +16,8 @@ class Element {
     this.dataset = {};
     this.listeners = {};
     this.children = [];
+    this.position = "static";
+    this.rect = { top: 0, bottom: 0, height: 0 };
   }
   addEventListener(type, fn) {
     this.listeners[type] = fn;
@@ -26,6 +28,9 @@ class Element {
   }
   querySelectorAll() {
     return this.children;
+  }
+  getBoundingClientRect() {
+    return this.rect;
   }
   setAttribute() {}
   closest() {
@@ -39,7 +44,9 @@ function setup() {
     "ssh-port",
     "ssh-user",
     "ssh-password",
+    "ssh-password-fields",
     "ssh-key",
+    "ssh-key-fields",
     "ssh-passphrase",
     "ssh-auth-method",
     "ssh-review",
@@ -77,6 +84,7 @@ function setup() {
   nodes["ssh-terminal"].parentElement = new Element();
   const original = {
     document: globalThis.document,
+    window: globalThis.window,
     requestAnimationFrame: globalThis.requestAnimationFrame,
     cancelAnimationFrame: globalThis.cancelAnimationFrame,
     ResizeObserver: globalThis.ResizeObserver,
@@ -91,7 +99,14 @@ function setup() {
   };
   const navGroups = { ".app-header": new Element(), ".route-tabs": new Element() };
   document.querySelector = (selector) => navGroups[selector] || null;
+  const scrolls = [];
+  const view = {
+    innerHeight: 956,
+    getComputedStyle: (element) => ({ position: element.position }),
+    scrollBy: (x, y) => scrolls.push([x, y]),
+  };
   globalThis.document = document;
+  globalThis.window = view;
   globalThis.requestAnimationFrame = () => 1;
   globalThis.cancelAnimationFrame = () => {};
   globalThis.ResizeObserver = undefined;
@@ -152,6 +167,8 @@ function setup() {
     nodes,
     calls,
     document,
+    scrolls,
+    view,
     navGroups,
     probe,
     connect,
@@ -170,12 +187,71 @@ function setup() {
     },
     restore: () => {
       globalThis.document = original.document;
+      globalThis.window = original.window;
       globalThis.requestAnimationFrame = original.requestAnimationFrame;
       globalThis.cancelAnimationFrame = original.cancelAnimationFrame;
       globalThis.ResizeObserver = original.ResizeObserver;
     },
   };
 }
+
+test("confirming the fingerprint reveals the obscured password without focusing or connecting", async () => {
+  const h = setup();
+  try {
+    const password = h.nodes["ssh-password"];
+    const review = h.nodes["ssh-review"];
+    password.rect = { top: 890, bottom: 936, height: 46 };
+    Object.assign(h.navGroups[".route-tabs"], {
+      position: "fixed", rect: { top: 891, bottom: 956, height: 65 },
+    });
+    await h.probe();
+    h.document.activeElement = review;
+    assert.equal(password.disabled, true);
+    assert.deepEqual(h.scrolls, []);
+
+    review.checked = true;
+    review.dispatchEvent({ type: "change" });
+    assert.equal(password.disabled, false);
+    assert.equal(h.scrolls.length, 1);
+    assert.ok(password.rect.bottom - h.scrolls[0][1] < h.navGroups[".route-tabs"].rect.top);
+    assert.equal(h.document.activeElement, review);
+    assert.equal(password.value, "");
+    assert.equal(h.openCalls().length, 0);
+
+    review.checked = false;
+    review.dispatchEvent({ type: "change" });
+    assert.equal(password.disabled, true);
+    assert.equal(h.scrolls.length, 1);
+  } finally {
+    h.restore();
+  }
+});
+
+test("a visible desktop password stays put and key selection uses the visual viewport", async () => {
+  const h = setup();
+  try {
+    h.nodes["ssh-password"].rect = { top: 560, bottom: 606, height: 46 };
+    h.navGroups[".route-tabs"].rect = { top: 60, bottom: 124, height: 64 };
+    await h.probe();
+    h.nodes["ssh-review"].checked = true;
+    h.nodes["ssh-review"].dispatchEvent({ type: "change" });
+    assert.deepEqual(h.scrolls, []);
+
+    const key = h.nodes["ssh-key"];
+    key.rect = { top: 610, bottom: 710, height: 100 };
+    h.view.visualViewport = { offsetTop: 70, height: 550 };
+    h.nodes["ssh-auth-method"].value = "key";
+    h.nodes["ssh-auth-method"].dispatchEvent({ type: "change" });
+    assert.equal(h.nodes["ssh-password-fields"].hidden, true);
+    assert.equal(h.nodes["ssh-key-fields"].hidden, false);
+    assert.equal(h.scrolls.length, 1);
+    assert.ok(key.rect.bottom - h.scrolls[0][1] < 620);
+    assert.equal(h.document.activeElement, null);
+    assert.equal(h.openCalls().length, 0);
+  } finally {
+    h.restore();
+  }
+});
 
 test("a changed host key refuses the connection, blocks input and returns to the review step", async () => {
   const h = setup();
@@ -267,6 +343,7 @@ test("without a presented key the review says a fresh probe is pending", async (
 test("cancelling the review returns to the same target form and keeps every entry locked", async () => {
   const h = setup();
   try {
+    h.nodes["ssh-password"].rect = { top: 980, bottom: 1026, height: 46 };
     await h.probe();
     await h.connect();
     assert.equal(h.nodes["ssh-key-change"].hidden, false);
@@ -287,6 +364,7 @@ test("cancelling the review returns to the same target form and keeps every entr
     assert.equal(h.nodes["ssh-key"].disabled, true);
     assert.equal(h.nodes["ssh-passphrase"].disabled, true);
     assert.equal(h.nodes["ssh-auth-method"].disabled, true);
+    assert.deepEqual(h.scrolls, []);
     assert.equal(h.nodes["ssh-form"].children.every((button) => button.disabled), true);
     // A retry without a re-probe is refused before any session is opened.
     h.nodes["ssh-review"].checked = true;
@@ -298,10 +376,13 @@ test("cancelling the review returns to the same target form and keeps every entr
     // The next re-probe of the same target releases the entries again.
     await h.probe();
     assert.equal(h.nodes["ssh-review"].disabled, false);
+    assert.deepEqual(h.scrolls, []);
     h.nodes["ssh-review"].checked = true;
     h.nodes["ssh-review"].dispatchEvent({ type: "change" });
     assert.equal(h.nodes["ssh-password"].disabled, false);
     assert.equal(h.nodes["ssh-auth-method"].disabled, false);
+    assert.equal(h.scrolls.length, 1);
+    assert.equal(h.openCalls().length, 1);
   } finally {
     h.restore();
   }

@@ -478,6 +478,44 @@ class GeometryReasonTests(unittest.TestCase):
             self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': phase, 'geometryReason': reason})
         self.assertEqual(self.result['geometryReasonTrace'][phase], first + second)
 
+    def test_password_failure_geometry_publication_and_bounds(self):
+        detail = {'viewport': [0, 0, 440, 956], 'usable': [0, 50, 440, 700],
+                  'owner': [0, 100, 440, 800], 'query': [10, 700, 400, 44], 'bound': None,
+                  'queryEnabled': True, 'boundEnabled': True, 'queryHittable': False,
+                  'boundHittable': False, 'scrollAttempted': True, 'scrollDirection': 'swipe_up'}
+        payload = {'stage': 'native_progress', 'nativeCheckpoint': 'key_change_password',
+                   'geometryReason': 'queried_unhittable', 'geometryDetail': detail}
+        self.state.accept(payload)
+        detail['query'][0] = 999
+        published = json.loads(json.dumps(self.result))
+        self.assertEqual(published['geometryFailureDetails']['key_change_password'][0]['query'][0], 10)
+        self.assertEqual(published['geometryFailureDetails']['key_change_password'][0]['reason'], 'queried_unhittable')
+        self.state.accept(payload)
+        before = copy.deepcopy(self.result)
+        with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+            self.state.accept(payload)
+        self.assertEqual(self.result, before)
+
+    def test_password_failure_geometry_rejects_unknown_text_invalid_values_and_scope(self):
+        detail = {'viewport': [0, 0, 440, 956], 'usable': None, 'owner': None,
+                  'query': None, 'bound': None, 'queryEnabled': True, 'boundEnabled': False,
+                  'queryHittable': False, 'boundHittable': False, 'scrollAttempted': False,
+                  'scrollDirection': 'none'}
+        base = {'stage': 'native_progress', 'nativeCheckpoint': 'ordinary_password',
+                'geometryReason': 'field_invalid', 'geometryDetail': detail}
+        variants = [dict(detail, text='fixture-secret-must-not-escape'), dict(detail, query=[0, 0, True, 2]),
+                    dict(detail, query=[0, 0, 10001, 2]), dict(detail, viewport=[0, float('nan'), 1, 2]),
+                    dict(detail, scrollAttempted=True), dict(detail, scrollDirection='secret')]
+        payloads = [dict(base, geometryDetail=value) for value in variants]
+        payloads += [dict(base, nativeCheckpoint='ordinary_host'), dict(base, stage='native_failure'),
+                     {k: v for k, v in base.items() if k != 'geometryReason'}]
+        for payload in payloads:
+            with self.subTest(payload=payload):
+                state = ios.Checkpoints(None, None, self.directory.name, {})
+                with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                    state.accept(payload)
+                self.assertEqual(state.result, {})
+
     def test_geometry_reason_rejects_secrets_invalid_types_phases_and_failure_events(self):
         for stage, phase, reason in [
             ('native_progress', 'ordinary_host', 'fixture-secret-must-not-escape'),

@@ -26,9 +26,19 @@ gh workflow run tauri-android-direct-ssh.yml --ref 'codex/<分支>' -f scenario=
 
 手填 R8 沿用 R7 的产品。驱动记录对可命中的首页入口执行一次点击，随后仍报告紧凑空首页，添加方式页和普通 SSH 表单均未获确认。作业停在 `encrypted_key_open_add / native_home_navigation_failed`。报告的 `encrypted_key_form` 检查点发于打开表单之前。此轮未进入主机输入，新增的 AX 缺值／空串分类和局部 OCR 均未产生结果。清理前后对端都为零连接，模拟器、夹具、私有文件和合成秘密的清理通过。 [手填 R8 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44622775619/job/135908548761) · [工件 14578119753](https://github.com/Luck9Star/herdr-pocket/actions/runs/44622775619/artifacts/14578119753) · [首页导航判据](https://github.com/Luck9Star/herdr-pocket/blob/8b05e1cc1f82b3d110815e151a941026f15f40ee/validation/remote-harness/tauri_ios_direct_ssh.swift#L2815-L2839) · [表单阶段顺序](https://github.com/Luck9Star/herdr-pocket/blob/8b05e1cc1f82b3d110815e151a941026f15f40ee/validation/remote-harness/tauri_ios_direct_ssh.swift#L3172-L3178)
 
+手填 R9 以 #51 后的主线 `5ffbbf7` 产品为基线，只改 iOS 验收工作流和驱动／测试。原生报告识别到紧凑空首页并记录 `ready`，随后在点击前报 `native_encrypted_key_home_shortcut_unproven`。报告没有可归属的点击或导航记录，未到普通 SSH 表单、主机字段读回、OCR 或 SSH，对端零连接。快捷入口与添加页选项的同名分类可命中同一节点，计数可重叠。作业结束时四项临时资源均已清理。 [手填 R9 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44628431596/job/135928338818) · [工件 14580874796](https://github.com/Luck9Star/herdr-pocket/actions/runs/44628431596/artifacts/14580874796) · [分类计数](https://github.com/Luck9Star/herdr-pocket/blob/3bf931305cf6808fb783130bea8b52a146ec7aa2/validation/remote-harness/tauri_ios_direct_ssh.swift#L2543-L2559) · [点击前置判据](https://github.com/Luck9Star/herdr-pocket/blob/3bf931305cf6808fb783130bea8b52a146ec7aa2/validation/remote-harness/tauri_ios_direct_ssh.swift#L2747-L2797)
+
+独立本机 WebKit 26.5 用 440×956 视口加载与 R9 同源的 Tauri 前端，以合成 IPC 提供空主机列表。在正式紧凑首页点击 `home-open-ssh` 一次，浏览器记录受信任事件。添加页和同名 `add-ssh` 选项保持隐藏，普通 SSH 的目标表单可见，合成 IPC 未记录 SSH 调用。这个浏览器结果只覆盖前端路由，原生 XCTest 中的控件归属和点击仍待验证。 [本机脱敏测量](ios-r9-local-webkit-shortcut.json)
+
+下次复跑前，先只读辨认可见的首页快捷入口，核对它在同一 App 窗口和 WebView 内的归属、启用、可命中及点击前置条件，再运行定向作业。输入结果未知时保留证据并停止，避免重放输入。
+
+手填 R10 经 workflow_dispatch 手动触发，源码 `e9811be` 在 R9 基线上仅改 iOS 验收驱动的快捷入口尺寸与角色分类。原生报告识别紧凑空首页并记录 `ready`，随后在点击前报 `native_encrypted_key_home_shortcut_unproven`，诊断分类 `button_size_or_role`：快捷候选框与实时框均量得 163×22pt，间距 5pt。这组尺寸是原生点击前的脱敏测量，不能由此断言为产品的实际点击框。报告没有可归属的点击或导航记录，未到普通 SSH 表单、主机输入、OCR 或 SSH，清理前后对端均为零连接。模拟器、夹具、私有文件和合成秘密清理均获确认，原始日志与截图未上传。普通密码和换钥在该作业未运行。 [手填 R10 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44633057494/job/135944465338) · [工件 14584020355](https://github.com/Luck9Star/herdr-pocket/actions/runs/44633057494/artifacts/14584020355) · [尺寸判据](https://github.com/Luck9Star/herdr-pocket/blob/e9811becd8b4d69eee3075c73f19b5fba69f6269/validation/remote-harness/tauri_ios_direct_ssh.swift#L741-L770) · [诊断注入](https://github.com/Luck9Star/herdr-pocket/blob/e9811becd8b4d69eee3075c73f19b5fba69f6269/validation/remote-harness/tauri_ios_direct_ssh.swift#L946-L956)
+
+手填 R11 待验证，尚无结果可报告。
+
 ## 证据留存
 
-固定字段摘要保留运行、作业、源码、工件 ID、到期时间、ZIP SHA-256 和所核验成员的 SHA-256。工件到期后可从仓库复核所存计数、状态和摘要哈希。原 ZIP 及原报告的完整字段须另有原工件才能重验。这些工件均未收录截图。 [脱敏摘要](official-summary.json) · [校验清单](SHA256SUMS)
+固定字段摘要保留运行、作业、源码、工件 ID、到期时间、ZIP SHA-256 和所核验成员的 SHA-256。工件到期后可从仓库复核所存计数、状态和摘要哈希。原 ZIP 及原报告的完整字段须另有原工件才能重验。这些工件均未收录截图。校验清单也覆盖独立本机测量。 [脱敏摘要](official-summary.json) · [校验清单](SHA256SUMS)
 
 工件当前到期时间（UTC）
 
@@ -41,6 +51,8 @@ gh workflow run tauri-android-direct-ssh.yml --ref 'codex/<分支>' -f scenario=
 | iOS 手填 R6 · 14573950954 | 2027-02-17 20:33:52 |
 | iOS 手填 R7 · 14576158322 | 2027-02-17 21:14:56 |
 | iOS 手填 R8 · 14578119753 | 2027-02-17 21:50:27 |
+| iOS 手填 R9 · 14580874796 | 2027-02-17 22:25:09 |
+| iOS 手填 R10 · 14584020355 | 2027-02-17 22:55:23 |
 
 ```sh
 shasum -a 256 -c SHA256SUMS

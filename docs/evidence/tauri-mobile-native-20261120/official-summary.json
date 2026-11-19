@@ -433,6 +433,174 @@
           }
         }
       }
+    },
+    "R9": {
+      "runId": 44628431596,
+      "jobId": 135928338818,
+      "sourceSHA": "3bf931305cf6808fb783130bea8b52a146ec7aa2",
+      "jobConclusion": "failure",
+      "artifact": {
+        "id": 14580874796,
+        "expiresAtUtc": "2027-02-17T22:25:09Z",
+        "zipSha256": "d06af272bf164c1971e5260b6d802cbc958383bbaf7fef1df56dab2c424c0ce7",
+        "memberSha256": {
+          "result.json": "598f916ee04228cc2f202f26999bb68c692adc42f319ab9bef5217deff661155"
+        }
+      },
+      "facts": {
+        "platform": "ios-simulator",
+        "scope": "owned_loopback_ordinary_ssh_encrypted_key_manual",
+        "status": "failed",
+        "lastCompletedStage": "encrypted_key_form",
+        "nativeCheckpoint": "encrypted_key_open_add",
+        "nativeFailureCode": "native_encrypted_key_home_shortcut_unproven",
+        "cleanup": {
+          "simulatorDeleted": true,
+          "fixturesClosed": true,
+          "privateFilesRemoved": true,
+          "encryptedSecretsCleared": true,
+          "rawLogsUploaded": false
+        },
+        "cases": {
+          "ordinary": "not_run",
+          "keyChange": "not_run",
+          "encryptedKey": "failed"
+        },
+        "homeReadiness": {
+          "outcome": "ready",
+          "strictSamples": 3,
+          "waitCalls": 2
+        },
+        "homeDiagnostics": {
+          "appForeground": true,
+          "compactEmptyHome": true,
+          "inputCount": 0,
+          "memberClassifications": {
+            "ordinaryShortcut": {
+              "count": 0,
+              "roles": []
+            },
+            "compactShortcut": {
+              "count": 1,
+              "roles": [
+                "button"
+              ]
+            },
+            "sshOption": {
+              "count": 1,
+              "roles": [
+                "button"
+              ]
+            }
+          }
+        },
+        "navigationTraceReported": false,
+        "homeEntryReported": false,
+        "manualHostEntryReported": false,
+        "inputReadbackReported": false,
+        "peerBeforeAndAfterCleanup": {
+          "beforeCleanup": {
+            "connections": 0,
+            "connectionsClosed": true
+          },
+          "afterCleanup": {
+            "connections": 0,
+            "connectionsClosed": true
+          }
+        }
+      }
+    },
+    "R10": {
+      "runId": 44633057494,
+      "jobId": 135944465338,
+      "sourceSHA": "e9811becd8b4d69eee3075c73f19b5fba69f6269",
+      "jobConclusion": "failure",
+      "artifact": {
+        "id": 14584020355,
+        "expiresAtUtc": "2027-02-17T22:55:23Z",
+        "zipSha256": "d8fa28c8328e92ccceee927707664350bbb1ff6ea3a993128109798eab0383e3",
+        "memberSha256": {
+          "result.json": "6be33c5a28f42a95d7cc354fafdc11ac5cb224e4eb0cf1bf2343039af5ac284c"
+        }
+      },
+      "facts": {
+        "platform": "ios-simulator",
+        "scope": "owned_loopback_ordinary_ssh_encrypted_key_manual",
+        "status": "failed",
+        "lastCompletedStage": "encrypted_key_form",
+        "nativeCheckpoint": "encrypted_key_open_add",
+        "nativeFailureCode": "native_encrypted_key_home_shortcut_unproven",
+        "cleanup": {
+          "simulatorDeleted": true,
+          "fixturesClosed": true,
+          "privateFilesRemoved": true,
+          "encryptedSecretsCleared": true,
+          "rawLogsUploaded": false
+        },
+        "cases": {
+          "ordinary": "not_run",
+          "keyChange": "not_run",
+          "encryptedKey": "failed"
+        },
+        "homeReadiness": {
+          "outcome": "ready",
+          "elapsedMs": 4771,
+          "strictSamples": 2,
+          "waitCalls": 1
+        },
+        "homeDiagnostics": {
+          "appForeground": true,
+          "compactEmptyHome": true,
+          "inputCount": 0,
+          "memberClassifications": {
+            "ordinaryShortcut": {
+              "count": 0,
+              "roles": []
+            },
+            "compactShortcut": {
+              "count": 1,
+              "roles": [
+                "button"
+              ]
+            },
+            "sshOption": {
+              "count": 1,
+              "roles": [
+                "button"
+              ]
+            }
+          }
+        },
+        "shortcutDiagnostic": {
+          "reason": "button_size_or_role",
+          "candidateSizePt": [
+            163,
+            22
+          ],
+          "liveSizePt": [
+            163,
+            22
+          ],
+          "buttonGapPt": 5,
+          "visibleCandidates": 1,
+          "visibleAddMarkers": 0
+        },
+        "navigationTraceReported": false,
+        "homeEntryReported": false,
+        "manualHostEntryReported": false,
+        "inputReadbackReported": false,
+        "measurementLimit": "pre-tap native measurement; does not assert the product's actual tap target",
+        "peerBeforeAndAfterCleanup": {
+          "beforeCleanup": {
+            "connections": 0,
+            "connectionsClosed": true
+          },
+          "afterCleanup": {
+            "connections": 0,
+            "connectionsClosed": true
+          }
+        }
+      }
     }
   }
 }

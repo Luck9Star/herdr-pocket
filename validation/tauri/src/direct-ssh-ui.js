@@ -1,6 +1,6 @@
 import { createDirectSsh } from './direct-ssh.js';
 
-export function initDirectSshUI({native, invoke, channelFactory, terminalFactory, clipboardRead, onBack}) {
+export function initDirectSshUI({native, invoke, channelFactory, terminalFactory, terminalCursor, clipboardRead, keyboardRequest, onBack}) {
   const $ = id => document.getElementById(id);
   const hideKeyboard = $('ssh-hide-keyboard');
   const compactLayout = globalThis.window?.matchMedia?.('(max-width:599px)');
@@ -20,6 +20,10 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   let resizeWatch = null;
   let outputSubscription = null;
   let visibilityEpoch = 0;
+  const terminalAppearance = () => ({
+    lineHeight: compact() ? 1.25 : 1,
+    theme: {background:'#0B0F17', foreground:'#E6EDF3', cursor:compact() ? terminalCursor : undefined},
+  });
   const helperKeys = {
     esc: '\u001b',
     tab: '\t',
@@ -50,7 +54,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     }
   }
   function revealFocusedTerminal() {
-    if (!document.documentElement.classList.contains('android-edge-to-edge') || !controller.isReady() || document.activeElement !== terminal?.textarea) return;
+    if (compact() || !document.documentElement.classList.contains('android-edge-to-edge') || !controller.isReady() || document.activeElement !== terminal?.textarea) return;
     requestAnimationFrame(() => {
       if (document.activeElement !== terminal?.textarea || !controller.isReady()) return;
       const targetBox = $('ssh-target').getBoundingClientRect();
@@ -98,12 +102,19 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       if (ready) {
         retainedTrust = false;
         disconnected = false;
-        const t = details.target;
-        $('ssh-target').textContent = `${targetText(t)} · SSH 已连接`;
+        const endpoint = targetText(details.target);
+        $('ssh-live-endpoint').textContent = endpoint;
+        $('ssh-settings-endpoint').textContent = endpoint;
+        if (!mobileSection.hidden && !$('host-home').hidden) scrollToStep();
         globalThis.window?.visualViewport?.addEventListener('resize', revealFocusedTerminal);
         resizer.start(); requestAnimationFrame(resizer.request);
         alignHeadingBelowHeader();
-      } else { globalThis.window?.visualViewport?.removeEventListener('resize', revealFocusedTerminal); $('ssh-target').textContent = ''; resizer.stop(); }
+      } else {
+        globalThis.window?.visualViewport?.removeEventListener('resize', revealFocusedTerminal);
+        $('ssh-live-endpoint').textContent = '';
+        $('ssh-settings-endpoint').textContent = '';
+        resizer.stop();
+      }
     },
     onData: (bytes, acknowledge) => terminal?.write(bytes, acknowledge),
   });
@@ -183,6 +194,8 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     if (blocked && focused && setup.contains(focused)) focused.blur();
     setup.hidden = ready || blocked;
     $('ssh-live').hidden = !ready;
+    $('ssh-settings-active').hidden = !ready;
+    $('ssh-settings-target').hidden = !ready;
     $('ssh-key-change').hidden = !blocked;
     // While the change review is open, its own heading is the first heading and the
     // generic status line would repeat the same failure.
@@ -243,7 +256,11 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     revealAuthField();
   });
   if (compactLayout) {
-    compactLayout.addEventListener('change', () => { refreshStep(); applyLock(); });
+    compactLayout.addEventListener('change', () => {
+      if (terminal) Object.assign(terminal.options, terminalAppearance());
+      refreshStep();
+      applyLock();
+    });
     $('ssh-trust-confirm').onclick = () => {
       if (!reviewMatches() || controller.isBlocked() || probing || submitting) return;
       $('ssh-review').checked = true;
@@ -427,7 +444,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     // the old instance's subscriptions and renderer.
     outputSubscription?.dispose(); outputSubscription = null;
     terminal?.dispose();
-    terminal = terminalFactory({cols:80, rows:24, fontSize:14, cursorBlink:true, theme:{background:'#0B0F17',foreground:'#E6EDF3'}});
+    terminal = terminalFactory({cols:80, rows:24, fontSize:14, cursorBlink:true, ...terminalAppearance()});
     terminal.open($('ssh-terminal'));
     bindTerminal(terminal);
     terminal.textarea?.addEventListener('focus', revealFocusedTerminal);
@@ -478,9 +495,22 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     showSetupNotice(!compact());
     scrollToStep();
   };
-  $('ssh-focus').onclick = () => terminal?.focus();
+  function requestAndroidKeyboard(action) {
+    if (!compact() || !document.documentElement?.classList?.contains('android-edge-to-edge')) return;
+    const source = terminal, epoch = visibilityEpoch;
+    if (source && eligible(source, epoch)) keyboardRequest?.(action, source.textarea, () => eligible(source, epoch));
+  }
+  $('ssh-focus').onclick = () => {
+    terminal?.focus();
+    requestAndroidKeyboard('show');
+  };
   if (hideKeyboard) hideKeyboard.onclick = () => {
-    if (controller.isReady()) { terminal?.textarea?.blur(); alignHeadingBelowHeader(); }
+    if (controller.isReady()) {
+      terminal?.textarea?.blur();
+      requestAndroidKeyboard('hide');
+      if (compact()) scrollToStep();
+      alignHeadingBelowHeader();
+    }
   };
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
@@ -492,6 +522,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   return {close:disconnect, isReady:controller.isReady, isActive:controller.isActive,
     hide: () => {
       visibilityEpoch++;
+      if (document.activeElement === terminal?.textarea) terminal?.textarea?.blur();
       clearSecrets();
       if (compact() && !controller.isActive()) {
         disconnectRequested = false;
@@ -500,7 +531,15 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       }
       refreshStep();
       applyLock();
-    }, show:()=>{ if(terminal) bindTerminal(terminal); if(controller.isReady()) requestAnimationFrame(resizer.request); }};
+    },
+    show: () => {
+      if (terminal) bindTerminal(terminal);
+      if (controller.isReady()) {
+        scrollToStep();
+        requestAnimationFrame(resizer.request);
+      }
+    },
+  };
 }
 
 

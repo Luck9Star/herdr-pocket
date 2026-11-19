@@ -1,0 +1,305 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "cffe85c7b650f45ea5fe1f2b63063bc66a377e3f",
+  "sourceResultSha256": "7cb8e60dbe694281a01bbbeba53fbe984b7406f27d4f99698adf58c6ced08906",
+  "status": "passed",
+  "run": 44457386191,
+  "job": 135335614812,
+  "artifact": 14499051205,
+  "zipSha256": "31f85feb10eb306acb2c563b42df09b1f451cad7bbc66e4bf66b9bf1809ee403",
+  "avd": {
+    "preset": "pixel_5",
+    "apiLevel": 35,
+    "abi": "x86_64",
+    "imageTag": "google_apis",
+    "imageRevision": 9,
+    "framebufferPixels": [
+      1080,
+      2340
+    ]
+  },
+  "ordinary": {
+    "checkpoints": {
+      "keyboard_shown": {
+        "id": 2,
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 0,
+        "markerReceived": false,
+        "closed": false
+      },
+      "keyboard_hidden": {
+        "id": 2,
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 0,
+        "markerReceived": false,
+        "closed": false
+      },
+      "board_visible": {
+        "id": 2,
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 0,
+        "markerReceived": false,
+        "closed": false
+      },
+      "board_returned": {
+        "id": 2,
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 0,
+        "markerReceived": false,
+        "closed": false
+      },
+      "network_visible": {
+        "id": 2,
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 0,
+        "markerReceived": false,
+        "closed": false
+      },
+      "network_returned": {
+        "id": 2,
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 0,
+        "markerReceived": false,
+        "closed": false
+      },
+      "settings_visible": {
+        "id": 2,
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 0,
+        "markerReceived": false,
+        "closed": false
+      },
+      "settings_returned": {
+        "id": 2,
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 0,
+        "markerReceived": false,
+        "closed": false
+      }
+    },
+    "connections": [
+      {
+        "id": 1,
+        "hostKey": "A",
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "markerReceived": false,
+        "sessionClosed": false,
+        "closed": true
+      },
+      {
+        "id": 2,
+        "hostKey": "A",
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 9,
+        "outputBytes": 102,
+        "markerReceived": true,
+        "sessionClosed": true,
+        "closed": true
+      }
+    ],
+    "explicitDisconnect": true,
+    "temporaryCredentialsCleared": true
+  },
+  "keyChange": {
+    "checkpoints": [
+      "rejected",
+      "cancelled",
+      "reprobed",
+      "complete"
+    ],
+    "connections": [
+      {
+        "id": 1,
+        "hostKey": "A",
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "markerReceived": false,
+        "sessionClosed": false,
+        "closed": true
+      },
+      {
+        "id": 2,
+        "hostKey": "B",
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "markerReceived": false,
+        "sessionClosed": false,
+        "closed": true
+      },
+      {
+        "id": 3,
+        "hostKey": "B",
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "markerReceived": false,
+        "sessionClosed": false,
+        "closed": true
+      },
+      {
+        "id": 4,
+        "hostKey": "B",
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 9,
+        "outputBytes": 102,
+        "markerReceived": true,
+        "sessionClosed": true,
+        "closed": true
+      }
+    ],
+    "cancelKeptTrust": true,
+    "freshFingerprintConfirmed": true,
+    "explicitDisconnect": true,
+    "terminalNavigationCheckpointsCaptured": false
+  },
+  "deviceScreenProofs": {
+    "ordinary": {
+      "officialFile": "direct-ssh-public/connected-device.png",
+      "officialSha256": "88f40051f3d581eae4acce4c78c7b6b51ecf331fb112da534f8fe75724dcc721",
+      "framebufferPixels": [
+        1080,
+        2340
+      ],
+      "ocrFile": "direct-ssh-public/ordinary-screen-proof.json",
+      "ocrSha256": "72adc2560c2d9de3e596ed63829c10f45414406018b21e730e712062240713a8",
+      "originalTerminalBoundsPx": [
+        66,
+        465,
+        948,
+        1479
+      ],
+      "ocrEngine": "tesseract 5.3.4",
+      "ocrAttempts": 1,
+      "markerVisible": true,
+      "tokenVisible": true,
+      "proofSequenceVisible": true
+    },
+    "keyChange": {
+      "officialFile": "direct-ssh-public/rotation-connected-device.png",
+      "officialSha256": "9d5dcc73be6735a26717fb30b222fb8cc610a9136da0220d0cd73a6689727c94",
+      "framebufferPixels": [
+        1080,
+        2340
+      ],
+      "ocrFile": "direct-ssh-public/key-rotation-screen-proof.json",
+      "ocrSha256": "8f7a62104c021ba1bb8d438e6aa23596bd0dadb7c7d0a4855eb89ecc48db5ee5",
+      "originalTerminalBoundsPx": [
+        66,
+        465,
+        948,
+        866
+      ],
+      "ocrEngine": "tesseract 5.3.4",
+      "ocrAttempts": 1,
+      "markerVisible": true,
+      "tokenVisible": true,
+      "proofSequenceVisible": true,
+      "archive": {
+        "path": "rotation-terminal-after.png",
+        "sha256": "9d5dcc73be6735a26717fb30b222fb8cc610a9136da0220d0cd73a6689727c94",
+        "decodedPixelSha256": "93245fc1946ae0fe9143dd2cae40c0f83d401af601c0b3b43b28b7421f160765",
+        "removedChunks": []
+      }
+    }
+  },
+  "cleanup": {
+    "reverseRemoved": true,
+    "packageRemoved": true,
+    "ownedForwardsRemoved": true,
+    "fixtureClosed": true,
+    "flutterToolStopped": true,
+    "rawLogsUploaded": false,
+    "ownedEmulatorRemoved": true
+  },
+  "physicalImeVerified": false,
+  "scope": "Android API 35 模拟器，受控回环密码认证及驱动文本输入",
+  "matchedComparison": {
+    "case": "keyChange",
+    "keyboard": "visible",
+    "sourceSHA": "bda3c59c7f6b4e5a4da119f26838bf511fbda780",
+    "run": 44415430480,
+    "job": 135194350049,
+    "artifact": 14480096265,
+    "zipSha256": "65a6ae5e7410db187c04ca9006fa4ba4827bc1fb517114ec054bb4f9c513db64",
+    "before": {
+      "officialFile": "direct-ssh-public/rotation-connected-device.png",
+      "officialSha256": "1b5f2771acb7dd5cf4b7d6781984550cf24c181bca992b3e673e3ef930047055",
+      "framebufferPixels": [
+        1080,
+        2340
+      ],
+      "ocrFile": "direct-ssh-public/key-rotation-screen-proof.json",
+      "ocrSha256": "d9a21e71fd7f963fd2939b7ce441440f4df45df4eea2a311330a8fcc5cbce295",
+      "originalTerminalBoundsPx": [
+        0,
+        468,
+        1080,
+        907
+      ],
+      "ocrEngine": "tesseract 5.3.4",
+      "ocrAttempts": 2,
+      "markerVisible": true,
+      "tokenVisible": true,
+      "proofSequenceVisible": true,
+      "archive": {
+        "path": "rotation-terminal-before.png",
+        "sha256": "1b5f2771acb7dd5cf4b7d6781984550cf24c181bca992b3e673e3ef930047055",
+        "decodedPixelSha256": "8d0e483eacba5407d339196b599492b5b9c7dc1e41de08aadd1a8d185adf956e",
+        "removedChunks": []
+      }
+    }
+  },
+  "openGaps": [
+    "实体设备",
+    "系统输入法组词",
+    "真实跨网",
+    "换钥案中的八项导航检查点",
+    "原生画面逐锚 2 pt 验收"
+  ]
+}

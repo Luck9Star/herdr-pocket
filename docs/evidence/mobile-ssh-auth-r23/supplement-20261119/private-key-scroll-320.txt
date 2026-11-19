@@ -1,0 +1,4 @@
+00:00 +0: loading /private/tmp/herdr-r23-private-scroll-20261119/flutter/test/auth_visual_probe_test.dart
+00:00 +0: 320 private key hint remains reachable (variant: TargetPlatform.iOS)
+SCROLL_EVIDENCE {"before":[16.0,607.0,288.0,17.0],"after":[16.0,575.0,288.0,17.0],"form":[0.0,80.0,320.0,536.0],"connect":[16.0,511.0,288.0,48.0],"connectEnabled":false,"back":[8.0,30.0,44.0,44.0],"backCenterHit":true}
+00:01 +1: All tests passed!

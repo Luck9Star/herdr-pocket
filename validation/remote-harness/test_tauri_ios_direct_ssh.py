@@ -396,9 +396,9 @@ class ScreenshotContractTests(unittest.TestCase):
         return data, {'screenSize': [440, 956], 'safeFrame': [0, 60, 440, 850],
                       'terminalFrame': [20, 200, 400, 300], 'targetFrame': [20, 160, 400, 30],
                       'identityVerified': True, 'noCredentialsVisible': True,
-                      'headerBounds': {'brandFrame':[16,60,100,40], 'addFrame':[300,60,100,40],
-                                       'headingFrame':[16,112,200,28], 'headerBottom':106,
-                                       'statusBarFrames':[[0,0,440,54]], 'sameOwner':True},
+                      'activeHeaderBounds': {'titleFrame':[16,70,160,30], 'disconnectFrame':[330,60,90,44],
+                                             'statusBarFrames':[[0,0,440,54]], 'sameOwner':True,
+                                             'disconnectHittable':True},
                       'pngBase64': base64.b64encode(data).decode(),
                       'nativeOwner': {'windowFrame': [0,0,440,956], 'webFrames': [[0,0,440,956]] * 3,
                                       'webWrapperCount': 3, 'uniqueWebBoundsCount': 1}}
@@ -435,35 +435,33 @@ class ScreenshotContractTests(unittest.TestCase):
 
     def test_terminal_header_required_and_occluded_or_unowned_rejected(self):
         _, payload = self.screenshot()
-        for change in ('missing', 'missing_heading', 'missing_bottom', 'occluded_brand', 'occluded_add', 'duplicate_bar',
-                       'outside', 'unowned', 'heading_under_header', 'heading_past_target', 'short_header', 'invalid_bottom'):
+        for change in ('missing', 'old_header', 'missing_title', 'occluded_title', 'occluded_action', 'duplicate_bar',
+                       'outside', 'unowned', 'unhittable', 'controls_overlap', 'controls_misaligned', 'target_overlap'):
             candidate = copy.deepcopy(payload)
-            header = candidate['headerBounds']
-            if change == 'missing': candidate.pop('headerBounds')
-            elif change == 'missing_heading': header.pop('headingFrame')
-            elif change == 'missing_bottom': header.pop('headerBottom')
-            elif change == 'occluded_brand': header['brandFrame'][1] = 40
-            elif change == 'occluded_add': header['addFrame'][1] = 40
+            header = candidate['activeHeaderBounds']
+            if change == 'missing': candidate.pop('activeHeaderBounds')
+            elif change == 'old_header':
+                candidate.pop('activeHeaderBounds')
+                candidate['headerBounds'] = {'brandFrame':[16,60,100,40], 'addFrame':[300,60,100,40],
+                                             'headingFrame':[16,112,200,28], 'headerBottom':106,
+                                             'statusBarFrames':[[0,0,440,54]], 'sameOwner':True}
+                self.assertIn('headerBounds', ios.measured_bounds(candidate, (440,956)))
+            elif change == 'missing_title': header.pop('titleFrame')
+            elif change == 'occluded_title': header['titleFrame'][1] = 40
+            elif change == 'occluded_action': header['disconnectFrame'][1] = 40
             elif change == 'duplicate_bar': header['statusBarFrames'].append([0,0,440,54])
-            elif change == 'outside': header['addFrame'][0] = 400
-            elif change == 'heading_under_header': header['headingFrame'][1] = 105
-            elif change == 'heading_past_target': header['headingFrame'][3] = 50
-            elif change == 'short_header': header['headerBottom'] = 105
-            elif change == 'invalid_bottom': header['headerBottom'] = float('inf')
-            else: header['sameOwner'] = False
+            elif change == 'outside': header['disconnectFrame'][0] = 400
+            elif change == 'unowned': header['sameOwner'] = False
+            elif change == 'unhittable': header['disconnectHittable'] = False
+            elif change == 'controls_overlap': header['disconnectFrame'][0] = 100
+            elif change == 'controls_misaligned': header['disconnectFrame'][1] = 105
+            else: candidate['targetFrame'][1] = 95
             for stage in ('ordinary_terminal', 'key_change_terminal'):
                 with self.subTest(change=change, stage=stage), tempfile.TemporaryDirectory() as directory:
                     state = ios.Checkpoints(None, None, directory, copy.deepcopy(self.result))
                     with self.assertRaisesRegex(ios.Failure, 'capture_header_invalid'):
                         state.capture(stage, candidate, self.fixture)
                     self.assertEqual(list(Path(directory).iterdir()), [])
-        # The standalone geometry reader remains compatible with older artifacts.
-        legacy = payload['headerBounds']
-        legacy.pop('headingFrame')
-        legacy.pop('headerBottom')
-        self.assertEqual(ios.measured_bounds(payload, (440,956))['headerBounds'], legacy)
-        payload.pop('headerBounds')
-        self.assertNotIn('headerBounds', ios.measured_bounds(payload, (440,956)))
 
     def test_ocr_failure_keeps_safe_original_and_gate_diagnostics_without_text(self):
         data, payload = self.screenshot()
@@ -480,6 +478,7 @@ class ScreenshotContractTests(unittest.TestCase):
         data, payload = self.screenshot()
         payload.pop('terminalFrame')
         payload.pop('targetFrame')
+        payload.pop('activeHeaderBounds')
         payload['reviewFrames'] = [[20, 80 + i * 100, 400, 50] for i in range(7)]
         with tempfile.TemporaryDirectory() as directory:
             state = ios.Checkpoints(None, None, directory, self.result)
@@ -579,13 +578,12 @@ class TerminalFallbackTests(unittest.TestCase):
     def payload(self, image):
         stream = io.BytesIO()
         image.save(stream, format='PNG')
-        return {'screenSize':[440,956], 'safeFrame':[0,54,440,850], 'targetFrame':[20,106,400,12],
+        return {'screenSize':[440,956], 'safeFrame':[0,54,440,850], 'targetFrame':[95,129,250,30],
                 'terminalFrame':[0,170,440,430], 'identityVerified':True, 'noCredentialsVisible':True,
                 'boundSource':'terminal_control_bounds',
-                'headerBounds':{'brandFrame':[16,54,100,20], 'addFrame':[300,54,100,20],
-                                'headingFrame':[16,82,200,20], 'headerBottom':80,
-                                'statusBarFrames':[[0,0,440,54]], 'sameOwner':True},
-                'controlBounds':{'dismissFrame':[20,120,100,50], 'helperFrames':[[20+i*55,600,50,44] for i in range(4)], 'sameOwner':True},
+                'activeHeaderBounds':{'titleFrame':[16,65,170,24], 'disconnectFrame':[330,59,90,44],
+                                      'statusBarFrames':[[0,0,440,54]], 'sameOwner':True, 'disconnectHittable':True},
+                'controlBounds':{'keyboardFrame':[350,120,74,50], 'helperFrames':[[20+i*55,600,50,44] for i in range(4)], 'sameOwner':True},
                 'nativeOwner':{'windowFrame':[0,0,440,956], 'webFrames':[[0,0,440,956]],
                                'webWrapperCount':1, 'uniqueWebBoundsCount':1},
                 'pngBase64':base64.b64encode(stream.getvalue()).decode()}
@@ -640,12 +638,13 @@ class TerminalFallbackTests(unittest.TestCase):
     def test_reject_false_or_overlapping_control_proofs(self):
         base=self.payload(self.image([(20,190,419,549)]))
         cases=[]
-        for change in ('owner','order','candidate','target'):
+        for change in ('owner','order','candidate','target','target_not_in_keyboard_row'):
             payload=copy.deepcopy(base)
             if change == 'owner': payload['controlBounds']['sameOwner']=False
             elif change == 'order': payload['controlBounds']['helperFrames'][1][0]=25
             elif change == 'candidate': payload['terminalFrame']=[0,171,440,429]
-            else: payload['targetFrame']=[20,180,400,30]
+            elif change == 'target': payload['targetFrame']=[20,180,400,30]
+            else: payload['targetFrame']=[95,105,250,12]
             cases.append(payload)
         for payload in cases:
             with self.subTest(payload=payload), self.assertRaises(ios.Failure): ios.measured_bounds(payload,(440,956))
@@ -683,11 +682,18 @@ class CaseLifecycleTests(unittest.TestCase):
                     self.assertFalse(predicate({**facts, 'connectionEvents': [{'markerReceived': True}] +
                                                 [{'markerReceived': False}] * (count-1)}))
                     return facts
-                with patch.object(ios, 'wait_peer', side_effect=verify_peer): state.accept({'stage': stage})
+                recorded = {}
+                with patch.object(ios, 'wait_peer', side_effect=verify_peer), patch.object(ios, 'ordinary_evidence') as ordinary_peer:
+                    if name == 'ordinary':
+                        recorded['activeFlow'] = [{'step': step} for step in ios.ORDINARY_ACTIVE_STEPS]
+                        result['cases'][name].update(recorded)
+                    state.accept({'stage': stage})
+                    if name == 'ordinary': ordinary_peer.assert_called_once_with(self.ordinary, closed=False)
+                    else: ordinary_peer.assert_not_called()
                 state.accept({'stage': 'native_failure', 'nativeCheckpoint': stage.replace('_input', '_terminal_capture'),
                               'nativeFailureCode': 'native_geometry_ambiguous'})
                 state.finalize_cases()
-                self.assertEqual(result['cases'][name], {'status': 'failed', 'terminalInputReceived': True})
+                self.assertEqual(result['cases'][name], dict(recorded, status='failed', terminalInputReceived=True))
                 self.assertNotIn('peer', result['cases'][name])
 
 
@@ -1330,6 +1336,21 @@ let inner = CGRect(x:0,y:59,width:440,height:897)
 let visible = NativeFramePolicy.visible(window:screen,screen:screen,webAncestors:[screen,screen,inner],
     occlusions:[CGRect(x:0,y:0,width:440,height:62),CGRect(x:0,y:656,width:440,height:300)])!
 check(visible == CGRect(x:0,y:62,width:440,height:594))
+let statusBar = CGRect(x: 0, y: 0, width: 440, height: 62)
+let docked = CGRect(x: 0, y: 656, width: 440, height: 266)
+check(NativeFramePolicy.visible(window: screen, screen: screen, webAncestors: [inner],
+                               occlusions: [statusBar, docked]) == nil)
+func active(_ keyboards: [CGRect], web: CGRect = inner, bars: [CGRect] = [statusBar], shown: Bool = true)
+                -> NativeFramePolicy.ActiveViewport {
+    NativeFramePolicy.activeViewport(window: screen, screen: screen, webAncestors: [web],
+                                    statusBars: bars, keyboardPresent: shown, keyboardFrames: keyboards)
+}
+check(active([docked, docked]).visible == visible)
+check(active([docked], web: CGRect(x: 0, y: 59, width: 440, height: 590)).visible?.maxY == 649)
+check(active([docked], web: CGRect(x: 0, y: 680, width: 440, height: 240)).reason == "keyboard_covers_viewport")
+check(active([docked, docked.offsetBy(dx: 0, dy: 1)]).reason == "keyboard_frame_unproven")
+check(active([docked], bars: [CGRect(x: 0, y: 120, width: 440, height: 62)]).reason == "status_bar_viewport_invalid")
+check(active([docked], shown: false).reason == "keyboard_state_changed")
 check(NativeFramePolicy.unique([screen,screen,inner]).count == 2)
 check(NativeFramePolicy.visible(window:screen,screen:screen,webAncestors:[],occlusions:[]) == nil)
 let parent=CGRect(x:10,y:100,width:420,height:100), leaf=CGRect(x:20,y:120,width:400,height:40)
@@ -1379,6 +1400,53 @@ print("native geometry cases passed")
 
 
 class NativeDiagnosticPublishingTests(unittest.TestCase):
+    def test_active_geometry_failure_publishes_only_fixed_phase_and_bounded_shapes(self):
+        from ios_direct_ssh_batch import publish_evidence
+        phase = 'ordinary_active_flow'
+        detail = {'context': 'keyboard_open_after', 'page': 'terminal', 'reason': 'keyboard_frame_unproven',
+                  'keyboardVisible': True, 'screen': [0, 0, 440, 956], 'viewport': [0, 59, 440, 897],
+                  'visible': None, 'statusBars': [[0, 0, 440, 62]], 'keyboards': [[60, 646, 320, 276]],
+                  'frames': [[372, 130, 44, 44]]}
+        payload = {'stage': 'native_active_diagnostic', 'nativeCheckpoint': phase, 'detail': detail}
+        sha = 'a' * 40
+        with tempfile.TemporaryDirectory() as output:
+            work = Path(output)
+            def checkpoint(index='ordinary_input', native_phase=phase):
+                report = {'status': 'failed', 'sourceSHA': sha, 'artifacts': {}}
+                state = ios.Checkpoints(None, None, output, report)
+                state.index = ios.STAGES.index(index)
+                state.accept({'stage': 'native_progress', 'nativeCheckpoint': native_phase})
+                return state, report
+
+            state, report = checkpoint()
+            state.accept(payload)
+            with self.assertRaisesRegex(ios.Failure, 'active_diagnostic_invalid'):
+                state.accept(payload)
+            state.accept({'stage': 'native_failure', 'nativeCheckpoint': phase,
+                          'nativeFailureCode': 'native_visible_frame_invalid'})
+            self.assertEqual(report['activeDiagnostic'], {'nativeCheckpoint': phase, **detail})
+            public = work / 'public'
+            public.mkdir()
+            ios.write_json(public / 'result.json', report)
+            self.assertEqual(publish_evidence(public, work / 'verified', shell='tauri', source_sha=sha), {'result.json'})
+            self.assertEqual(json.loads((work / 'verified/result.json').read_text()), report)
+
+            for change in ({'text': 'synthetic secret'}, {'reason': 'synthetic secret'}, {'context': []},
+                           {'page': 'network'}, {'keyboardVisible': 1}, {'screen': [0, 0, 440, True]},
+                           {'viewport': [0, 0, 440, -1]}, {'keyboards': [[10001, 0, 440, 200]]},
+                           {'frames': [{'rawLabel': 'synthetic secret'}]}, {'statusBars': [None] * 5}):
+                with self.subTest(change=change), self.assertRaisesRegex(ios.Failure, 'active_diagnostic_invalid'):
+                    checkpoint()[0].accept({**payload, 'detail': {**detail, **change}})
+            for state, value in (
+                (checkpoint(index='ordinary_password')[0], payload),
+                (checkpoint(native_phase='ordinary_port')[0], {**payload, 'nativeCheckpoint': 'ordinary_port'}),
+                (checkpoint()[0], {**payload, 'arbitrary': 'synthetic secret'}),
+                (checkpoint()[0], {**payload, 'nativeCheckpoint': 'key_change_terminal_focus'}),
+            ):
+                with self.assertRaisesRegex(ios.Failure, 'active_diagnostic_invalid'):
+                    state.accept(value)
+                self.assertNotIn('activeDiagnostic', state.result)
+
     def test_password_observation_redacts_and_survives_ci_publication(self):
         from ios_direct_ssh_batch import publish_evidence
         raw = {'role': 'secureTextField', 'owner': 'sameWeb', 'idKind': 'empty', 'labelKind': 'spaced',
@@ -1628,13 +1696,35 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         ios.ordinary_evidence(self.ordinary, closed=True)
         self.assertEqual(self.ordinary.snapshot()['connectionEvents'][-1]['closeReason'], 'peer_eof')
 
-    def test_complete_native_checkpoint_order_against_real_aabb_and_abbb_peers(self):
+    @staticmethod
+    def active_step(step):
+        action = {'frame': [15, 90, 90, 50], 'visibleFrame': [0, 54, 440, 600], 'screenFrame': [0, 0, 440, 956],
+                  'statusBarFrames': [[0, 0, 440, 54]], 'role': 'button', 'enabled': True, 'hittable': True,
+                  'ownerResolved': True, 'centerVisible': True, 'fullyVisible': True}
+        return dict(stage='ordinary_active', step=step, keyboardVisible=step == 'keyboard_opened', action=action)
+
+    def ordinary_ready(self):
         self.accept('ordinary_form')
         self.probe(self.ordinary)
         self.accept('ordinary_probe')
         self.accept('ordinary_password')
         self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': 'ordinary_connect'})
-        peer, channel = self.session(self.ordinary)
+        return self.session(self.ordinary, marker=False)
+
+    def test_complete_native_checkpoint_order_against_real_aabb_and_abbb_peers(self):
+        peer, channel = self.ordinary_ready()
+        steps = ('keyboard_opened', 'keyboard_closed', 'board', 'terminal_from_board',
+                 'network', 'terminal_from_network', 'settings', 'terminal_from_settings')
+        for step in steps:
+            self.state.accept(self.active_step(step))
+        trace = self.result['cases']['ordinary']['activeFlow']
+        self.assertEqual(tuple(step['step'] for step in trace), steps)
+        expected_peer = {'id': 2, 'hostKey': 'A', 'authAttempts': 1, 'authSuccesses': 1, 'ptyRequests': 1,
+                         'shellRequests': 1, 'inputBytes': 0, 'closed': False}
+        self.assertTrue(all(step['peer'] == expected_peer for step in trace))
+        before = self.ordinary.snapshot()['connectionEvents'][-1]['outputBytes']
+        channel.sendall((self.ordinary.marker + '\r').encode())
+        self.wait_for_reply(self.ordinary, channel, before)
         self.accept('ordinary_input')
         # Images in this protocol test are deliberately mocked, not device proof.
         with patch.object(self.state, 'capture'):
@@ -1682,6 +1772,60 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         for secret in [self.ordinary.password, self.rotation.password,
                        self.rotation.public_key, self.rotation.rotated_public_key]:
             self.assertNotIn(secret, encoded)
+
+    def test_active_steps_reject_order_keyboard_geometry_and_unexpected_fields(self):
+        self.ordinary_ready()
+        with self.assertRaisesRegex(ios.Failure, 'active_flow_incomplete'):
+            self.accept('ordinary_input')
+        first = self.active_step('keyboard_opened')
+        for update, error in (
+            ({'step':'keyboard_closed'}, 'active_order_invalid'),
+            ({'keyboardVisible':False}, 'active_order_invalid'),
+            ({'keyboardVisible':1}, 'active_order_invalid'),
+            ({'unexpected':'private'}, 'active_order_invalid'),
+            ({'action':dict(first['action'], frame=[15, 30, 90, 50])}, 'active_action_invalid'),
+            ({'action':dict(first['action'], frame=[400, 90, 90, 50])}, 'active_action_invalid'),
+            ({'action':dict(first['action'], ownerResolved=False)}, 'active_action_invalid'),
+            ({'action':dict(first['action'], role='otherNative')}, 'active_action_invalid'),
+            ({'action':dict(first['action'], hittable=False)}, 'active_action_invalid'),
+            ({'action':dict(first['action'], extra='private')}, 'navigation_diagnostic_invalid'),
+        ):
+            with self.subTest(update=update), self.assertRaisesRegex(ios.Failure, error):
+                self.state.accept(dict(first, **update))
+            self.assertNotIn('activeFlow', self.result['cases']['ordinary'])
+        self.state.accept(first)
+        with self.assertRaisesRegex(ios.Failure, 'active_order_invalid'):
+            self.state.accept(first)
+        self.assertEqual(len(self.result['cases']['ordinary']['activeFlow']), 1)
+
+    def test_real_early_channel_byte_disqualifies_the_active_step(self):
+        _, channel = self.ordinary_ready()
+        channel.sendall(b'x')
+        ios.wait_peer(self.ordinary, lambda f: f['connectionEvents'][-1]['inputBytes'] == 1,
+                      'fixture_byte_not_recorded', timeout=5)
+        with self.assertRaisesRegex(ios.Failure, 'active_peer_changed'):
+            self.state.accept(self.active_step('keyboard_opened'))
+        self.assertNotIn('activeFlow', self.result['cases']['ordinary'])
+
+    def test_replacement_transport_disqualifies_the_active_step(self):
+        peer, channel = self.ordinary_ready()
+        self.state.accept(self.active_step('keyboard_opened'))
+        self.close_protocol(self.ordinary, peer, channel)
+        with self.assertRaisesRegex(ios.Failure, 'active_peer_changed'):
+            self.state.accept(self.active_step('keyboard_closed'))
+        self.session(self.ordinary, marker=False)
+        with self.assertRaisesRegex(ios.Failure, 'ordinary_connection_count_invalid'):
+            self.state.accept(self.active_step('keyboard_closed'))
+
+    def test_crlf_is_not_the_original_nine_byte_marker(self):
+        _, channel = self.ordinary_ready()
+        for step in ios.ORDINARY_ACTIVE_STEPS:
+            self.state.accept(self.active_step(step))
+        channel.sendall((self.ordinary.marker + '\r\n').encode())
+        ios.wait_peer(self.ordinary, lambda f: f['connectionEvents'][-1]['inputBytes'] == 10,
+                      'fixture_bytes_not_recorded', timeout=5)
+        with self.assertRaisesRegex(ios.Failure, 'ordinary_session_incomplete'):
+            self.accept('ordinary_input')
 
     def test_authenticated_early_peer_cannot_pass_refusal_or_cancel_checkpoint(self):
         self.state.index = ios.STAGES.index('key_change_review')

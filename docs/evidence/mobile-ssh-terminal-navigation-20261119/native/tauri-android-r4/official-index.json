@@ -1,0 +1,340 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "b11e2b94c18ca5b11e876fc93fc71c9c806b6e7d",
+  "sourceResultSha256": "a8ddd750330f4a5edcc9fd2806c50d5e94a7852d4994a124d6b13185d3c2e282",
+  "status": "passed",
+  "run": 44468343239,
+  "job": 135371456594,
+  "artifact": 14504020837,
+  "zipSha256": "8995e13387eb8e3bf0fabdf43fba903a328f223c93fff605c64ad64bc68b4de1",
+  "avd": {
+    "preset": "pixel_5",
+    "apiLevel": 35,
+    "abi": "x86_64",
+    "imageTag": "google_apis",
+    "imageRevision": 9,
+    "framebufferPixels": [
+      1080,
+      2340
+    ],
+    "emulatorVersion": "Android emulator version 37.2.13.0 (build_id 16740729) (CL:N/A)"
+  },
+  "apkSha256": "83dc55f1e0ea01a13f52f1bdcad27d84131644ee7b4a12f5512243f14d7e8d4b",
+  "ordinary": {
+    "activity": {
+      "keyboardOpened": true,
+      "keyboardClosed": true,
+      "board": true,
+      "terminalFromBoard": true,
+      "network": true,
+      "terminalFromNetwork": true,
+      "settings": true,
+      "terminalFromSettings": true,
+      "singleAuthenticatedShellWithoutInput": true
+    },
+    "imeChecks": [
+      {
+        "formatVersion": 1,
+        "serviceCount": 1,
+        "displayCount": 1,
+        "focusCount": 1,
+        "editorBlockCount": 1,
+        "editorPackageCount": 1,
+        "imeInsetsCount": 1,
+        "attempts": 2,
+        "expectedVisible": false,
+        "reason": "owned_hidden",
+        "focusOwner": "owned",
+        "editorOwner": "owned",
+        "imeInsetsState": "hidden",
+        "visibility": "hidden"
+      },
+      {
+        "formatVersion": 1,
+        "serviceCount": 1,
+        "displayCount": 1,
+        "focusCount": 1,
+        "editorBlockCount": 1,
+        "editorPackageCount": 1,
+        "imeInsetsCount": 1,
+        "attempts": 3,
+        "expectedVisible": true,
+        "reason": "owned_visible",
+        "focusOwner": "owned",
+        "editorOwner": "owned",
+        "imeInsetsState": "visible",
+        "visibility": "visible"
+      },
+      {
+        "formatVersion": 1,
+        "serviceCount": 1,
+        "displayCount": 1,
+        "focusCount": 1,
+        "editorBlockCount": 1,
+        "editorPackageCount": 1,
+        "imeInsetsCount": 1,
+        "attempts": 2,
+        "expectedVisible": true,
+        "reason": "owned_visible",
+        "focusOwner": "owned",
+        "editorOwner": "owned",
+        "imeInsetsState": "visible",
+        "visibility": "visible"
+      },
+      {
+        "formatVersion": 1,
+        "serviceCount": 1,
+        "displayCount": 1,
+        "focusCount": 1,
+        "editorBlockCount": 1,
+        "editorPackageCount": 1,
+        "imeInsetsCount": 1,
+        "attempts": 2,
+        "expectedVisible": false,
+        "reason": "owned_hidden",
+        "focusOwner": "owned",
+        "editorOwner": "owned",
+        "imeInsetsState": "hidden",
+        "visibility": "hidden"
+      },
+      {
+        "formatVersion": 1,
+        "serviceCount": 1,
+        "displayCount": 1,
+        "focusCount": 1,
+        "editorBlockCount": 1,
+        "editorPackageCount": 1,
+        "imeInsetsCount": 1,
+        "attempts": 2,
+        "expectedVisible": false,
+        "reason": "owned_hidden",
+        "focusOwner": "owned",
+        "editorOwner": "owned",
+        "imeInsetsState": "hidden",
+        "visibility": "hidden"
+      }
+    ],
+    "imeSamplesInOrder": [
+      "beforeOpen",
+      "afterOpen",
+      "beforeClose",
+      "afterClose",
+      "beforeLeavingTerminal"
+    ],
+    "fingerprintReviewed": true,
+    "credentialReviewPreserved": true,
+    "terminalInputReceived": true,
+    "terminalEchoRendered": true,
+    "disconnected": true,
+    "passwordCleared": true,
+    "returnedHome": true,
+    "helperKeysExact": true,
+    "peer": {
+      "authAccepted": true,
+      "ptyRequested": true,
+      "shellRequested": true,
+      "markerReceived": true,
+      "sessionClosed": true
+    }
+  },
+  "keyChange": {
+    "verifiedClosedStages": [
+      2,
+      3,
+      4
+    ],
+    "connections": [
+      {
+        "id": 1,
+        "hostKey": "A",
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "markerReceived": false,
+        "sessionClosed": false,
+        "closed": true
+      },
+      {
+        "id": 2,
+        "hostKey": "B",
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "markerReceived": false,
+        "sessionClosed": false,
+        "closed": true
+      },
+      {
+        "id": 3,
+        "hostKey": "B",
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "markerReceived": false,
+        "sessionClosed": false,
+        "closed": true
+      },
+      {
+        "id": 4,
+        "hostKey": "B",
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 9,
+        "outputBytes": 102,
+        "markerReceived": true,
+        "sessionClosed": true,
+        "closed": true
+      }
+    ],
+    "refusalBlocked": true,
+    "reviewNoExits": true,
+    "cancelKeptTrust": true,
+    "reprobePresented": true,
+    "terminalEchoRendered": true,
+    "disconnected": true,
+    "passwordCleared": true,
+    "s10Screenshot": true
+  },
+  "encryptedKey": {
+    "status": "passed",
+    "fingerprintReviewed": true,
+    "credentialReviewPreserved": true,
+    "connected": true,
+    "terminalInputReceived": true,
+    "terminalEchoRendered": true,
+    "disconnected": true,
+    "passwordCleared": true,
+    "returnedHome": true,
+    "peer": {
+      "authAccepted": true,
+      "ptyRequested": true,
+      "shellRequested": true,
+      "markerReceived": true,
+      "sessionClosed": true
+    },
+    "cleanup": {
+      "browser": true,
+      "application": true,
+      "forward": true,
+      "reverse": true,
+      "fixtureConnections": true
+    }
+  },
+  "cleanup": {
+    "ordinary": {
+      "browser": true,
+      "application": true,
+      "forward": true,
+      "reverse": true,
+      "fixtureConnections": true
+    },
+    "keyChange": {
+      "browser": true,
+      "application": true,
+      "forward": true,
+      "reverse": true,
+      "fixtureConnections": true
+    },
+    "encryptedKey": {
+      "browser": true,
+      "application": true,
+      "forward": true,
+      "reverse": true,
+      "fixtureConnections": true
+    },
+    "emulatorRemoved": true
+  },
+  "scope": "synthetic loopback SSH and owned API35 Android WebView; CDP input is not real IME composition",
+  "screens": {
+    "ordinary": {
+      "scene": "post-input terminal echo",
+      "imageFile": "ssh-terminal-android.png",
+      "sourceFile": "tauri-direct-evidence/ssh-terminal-android.png",
+      "imageSha256": "74627750aceb1e7aefec507aeb8ab49bb7c3011422d5c86b137fd63dd0254b40",
+      "criteriaFile": "tauri-direct-evidence/ssh-terminal-android.json",
+      "criteriaSha256": "d8471e59695473afb9ffa53613c2dc9f89d6ead48ada1b1190d2d82772deac34",
+      "archiveSha256": "74627750aceb1e7aefec507aeb8ab49bb7c3011422d5c86b137fd63dd0254b40",
+      "pixelSha256": "822f00d3787b3a8d0f919bc04e6263e6b15d6a65ed645bafebe4672c4307ef76",
+      "pixelEncoding": "RGBA8",
+      "removedChunks": [],
+      "framebufferPixels": [
+        1080,
+        2340
+      ],
+      "terminalBounds": [
+        99,
+        500,
+        875,
+        769
+      ],
+      "ocrEngine": "tesseract 5.3.4",
+      "markerVisible": true,
+      "tokenVisible": true,
+      "proofSequenceVisible": true,
+      "captureEngine": "adb exec-out screencap -p",
+      "coordinateMethod": "uiautomator_full_frame"
+    },
+    "keyChange": {
+      "scene": "post-input terminal echo",
+      "imageFile": "ssh-rotation-terminal-android.png",
+      "sourceFile": "tauri-direct-evidence/ssh-rotation-terminal-android.png",
+      "imageSha256": "63ed7ebbe858b7a6ca8fa033d28546a98a33c62d18689de520ce893ef0f9c950",
+      "criteriaFile": "tauri-direct-evidence/ssh-rotation-terminal-android.json",
+      "criteriaSha256": "1f988bad6d1b480937e1f0403ba61193c775e38cdf0a3e6eb5d9f5090e19bee3",
+      "archiveSha256": "63ed7ebbe858b7a6ca8fa033d28546a98a33c62d18689de520ce893ef0f9c950",
+      "pixelSha256": "907b58b5ab65b4feb99773a39117eaab00f4e6f5f28f903d162e8495f70f64f3",
+      "pixelEncoding": "RGBA8",
+      "removedChunks": [],
+      "framebufferPixels": [
+        1080,
+        2340
+      ],
+      "terminalBounds": [
+        99,
+        500,
+        875,
+        769
+      ],
+      "ocrEngine": "tesseract 5.3.4",
+      "markerVisible": true,
+      "tokenVisible": true,
+      "proofSequenceVisible": true,
+      "captureEngine": "adb exec-out screencap -p",
+      "coordinateMethod": "uiautomator_full_frame"
+    }
+  },
+  "otherOfficialImages": [
+    {
+      "sourceFile": "tauri-direct-evidence/s10-host-key-change-android.png",
+      "imageSha256": "231e810af183a47d5862b68a98532f3d59cc905f6a8c62b486e207b5aab68054",
+      "scene": "S10 host-key change review"
+    },
+    {
+      "sourceFile": "tauri-direct-evidence/ssh-rotation-terminal-android-webview-before.png",
+      "imageSha256": "4863f5a03a465b82d81da8b89f08a1122997bc98411a3e0205fbb698e28f8859",
+      "scene": "pre-framebuffer WebView capture during the post-input terminal check"
+    },
+    {
+      "sourceFile": "tauri-direct-evidence/ssh-terminal-android-webview-before.png",
+      "imageSha256": "f0654573edfc4d7554471a84aa2f943a72a293ef3f59fcb0b36aa691dbdf6d94",
+      "scene": "pre-framebuffer WebView capture during the post-input terminal check"
+    }
+  ],
+  "unverified": [
+    "system IME composition",
+    "native keyboard-open checkpoint images",
+    "physical devices",
+    "external network"
+  ]
+}

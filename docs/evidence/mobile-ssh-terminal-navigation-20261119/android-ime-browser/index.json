@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 1,
+  "commits": {
+    "before": "9825bffdf8d6be0dadb6655a2ab22964812dd248",
+    "after": "b11e2b94c18ca5b11e876fc93fc71c9c806b6e7d"
+  },
+  "browser": "Chromium 157.0.8103.79",
+  "dpr": 1,
+  "phaseEvidence": {
+    "before": {
+      "path": "before-ime.json",
+      "originalSha256": "bdf59a726039ce3dfa71b0d50cf4921aa2b33b56e937cbbff11bff33eed17056",
+      "dataRows": 9
+    },
+    "after": {
+      "path": "after-ime.json",
+      "originalSha256": "7f3f90393764615c81a169867fb958ea853bbbc7d1f4d5c506a67ce0f1392aa4",
+      "dataRows": 25
+    }
+  },
+  "screens": [
+    {
+      "path": "before-320x640-unchanged-opened.png",
+      "phase": "before",
+      "viewportMode": "unchanged",
+      "testViewport": [
+        320,
+        640
+      ],
+      "imagePixels": [
+        320,
+        640
+      ],
+      "originalSha256": "6f38aeb84ab0e0894563f0dcb5995dfebc492322b425011b8c934f87a2aa367f",
+      "archiveSha256": "6f38aeb84ab0e0894563f0dcb5995dfebc492322b425011b8c934f87a2aa367f",
+      "pixelSha256": "056494551e9923a301b2edd491cb40cf543b4f7897c65552d08b2d7577edbaeb",
+      "removedChunks": []
+    },
+    {
+      "path": "before-390x844-unchanged-opened.png",
+      "phase": "before",
+      "viewportMode": "unchanged",
+      "testViewport": [
+        390,
+        844
+      ],
+      "imagePixels": [
+        390,
+        844
+      ],
+      "originalSha256": "eab507f43a08fa2830420f70cba109fb3e2652f35a42d403c826d05f7f309c15",
+      "archiveSha256": "eab507f43a08fa2830420f70cba109fb3e2652f35a42d403c826d05f7f309c15",
+      "pixelSha256": "33078e7852657cce0febb35c862496957c1edd29d5a58daa961827e84a52aae6",
+      "removedChunks": []
+    },
+    {
+      "path": "before-393x851-unchanged-opened.png",
+      "phase": "before",
+      "viewportMode": "unchanged",
+      "testViewport": [
+        393,
+        851
+      ],
+      "imagePixels": [
+        393,
+        851
+      ],
+      "originalSha256": "d337ce9b1e089107dfae1423928243a22da11d408aea16d460d10e5ff7c518a9",
+      "archiveSha256": "d337ce9b1e089107dfae1423928243a22da11d408aea16d460d10e5ff7c518a9",
+      "pixelSha256": "320a965582c694ce7f373544a169c61c40f12be2d95330c06d12f89c87734d30",
+      "removedChunks": []
+    },
+    {
+      "path": "after-320x640-unchanged-opened.png",
+      "phase": "after",
+      "viewportMode": "unchanged",
+      "testViewport": [
+        320,
+        640
+      ],
+      "imagePixels": [
+        320,
+        640
+      ],
+      "originalSha256": "7f7aea1a0e4eed03d9a8b94e9b3e20b896d86b00a5b8ef800655a17f70524f47",
+      "archiveSha256": "7f7aea1a0e4eed03d9a8b94e9b3e20b896d86b00a5b8ef800655a17f70524f47",
+      "pixelSha256": "db7ca2c3a99f4a6c25740f3fd767eaf2f6fbb75014f73e8c392126424ec0c69c",
+      "removedChunks": []
+    },
+    {
+      "path": "after-390x844-unchanged-opened.png",
+      "phase": "after",
+      "viewportMode": "unchanged",
+      "testViewport": [
+        390,
+        844
+      ],
+      "imagePixels": [
+        390,
+        844
+      ],
+      "originalSha256": "3b92a1b06848a5a2593b7626d0c361f90573434e03986a1586b728db8453a764",
+      "archiveSha256": "3b92a1b06848a5a2593b7626d0c361f90573434e03986a1586b728db8453a764",
+      "pixelSha256": "ec437d591cb432c911a004eab379bb01b2819b868ad463d4edf72d5713c9ae0d",
+      "removedChunks": []
+    },
+    {
+      "path": "after-393x851-unchanged-opened.png",
+      "phase": "after",
+      "viewportMode": "unchanged",
+      "testViewport": [
+        393,
+        851
+      ],
+      "imagePixels": [
+        393,
+        851
+      ],
+      "originalSha256": "094de5536dbf1a858a1b8245270b6c134b39430d0c5cd8c5adbfaa5270286c7b",
+      "archiveSha256": "094de5536dbf1a858a1b8245270b6c134b39430d0c5cd8c5adbfaa5270286c7b",
+      "pixelSha256": "1d97febbf511636aa27a6724449206b7a3179cbeca20908edf814446816d96a0",
+      "removedChunks": []
+    },
+    {
+      "path": "after-393x851-visual-opened.png",
+      "phase": "after",
+      "viewportMode": "visual",
+      "testViewport": [
+        393,
+        851
+      ],
+      "imagePixels": [
+        393,
+        851
+      ],
+      "originalSha256": "a67f5c4e37dc42752847870ede51ff7b7160ca2491fcb038ef142c47a29c2edf",
+      "archiveSha256": "a67f5c4e37dc42752847870ede51ff7b7160ca2491fcb038ef142c47a29c2edf",
+      "pixelSha256": "f91ae3fbae1d286a6fded59b5532885132aad84cc906c816785a6c23269cdea8",
+      "removedChunks": []
+    },
+    {
+      "path": "after-393x851-native-opened.png",
+      "phase": "after",
+      "viewportMode": "native",
+      "testViewport": [
+        393,
+        851
+      ],
+      "imagePixels": [
+        393,
+        551
+      ],
+      "originalSha256": "6922e372b6a2643a0bef78f8a0a7159ef8baadc60145dc00af66c1164ba8323f",
+      "archiveSha256": "6922e372b6a2643a0bef78f8a0a7159ef8baadc60145dc00af66c1164ba8323f",
+      "pixelSha256": "b5a22f004d4db27badf35cfe2a01bc73add110d86aa456364fade1a09f7080ea",
+      "removedChunks": []
+    }
+  ],
+  "sourceCheckScriptSha256": "f300a56f23578def227a81922274ab99ac66842cae4879d1163d667401e25395",
+  "sourceReadmeSha256": "710af8d14ed40d99cf42acd9a5e1b718dd58d7add8329ad503f8d2d2bd30f0ae",
+  "conditions": {
+    "simulatedSystemIME": true,
+    "rendersSystemKeyboard": false,
+    "controlledSystemBack": true,
+    "actualProductRustSsh": true,
+    "isolatedParamikoLoopback": true
+  },
+  "nativeAndroidAfterFixVerified": false
+}

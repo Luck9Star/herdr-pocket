@@ -24,7 +24,8 @@ SERIAL = 'emulator-5554'
 TARGET = 'integration_test/android_direct_ssh_test.dart'
 PUBLIC_FIELDS = {'schemaVersion', 'platform', 'homepageEntry', 'fingerprintMatched', 'explicitTrustRequired',
                  'realTerminalView', 'normalTextInputCommit', 'remoteEchoVisible', 'disconnectUiConfirmed',
-                 'credentialsCleared', 'physicalImeVerified'}
+                 'credentialsCleared', 'physicalImeVerified', 'platformKeyboardOpenedAndClosed',
+                 'boardNetworkSettingsReturnedToSameTerminal'}
 ROTATION_PUBLIC_FIELDS = {'schemaVersion', 'platform', 'homepageEntry', 'sameTarget',
     'oldFingerprintMatchedIndependentA', 'changedFingerprintMatchedIndependentB',
     'rejectedBeforeAuthentication', 'reviewNavigationBlocked', 'cancelKeepsOldTrust',
@@ -32,6 +33,8 @@ ROTATION_PUBLIC_FIELDS = {'schemaVersion', 'platform', 'homepageEntry', 'sameTar
     'explicitRotatedTrustRequired', 'realTerminalView', 'normalTextInputCommit',
     'remoteEchoVisible', 'disconnectUiConfirmed', 'credentialsCleared', 'physicalImeVerified'}
 ROTATION_PHASES = {'rejected': 2, 'cancelled': 2, 'reprobed': 3, 'complete': 4}
+ORDINARY_MOBILE_PHASES = ('keyboard_shown', 'keyboard_hidden', 'board_visible', 'board_returned',
+                         'network_visible', 'network_returned', 'settings_visible', 'settings_returned')
 
 
 class Failure(ValueError):
@@ -58,11 +61,68 @@ def safe_result(raw):
         result = json.loads(raw)
     except (ValueError, UnicodeError):
         raise Failure('direct_android_device_result_not_json') from None
-    if not isinstance(result, dict) or set(result) != PUBLIC_FIELDS or result['schemaVersion'] != 1 or result['platform'] != 'android-api35-emulator':
+    if (not isinstance(result, dict) or set(result) != PUBLIC_FIELDS or
+            type(result['schemaVersion']) is not int or result['schemaVersion'] != 1 or
+            result['platform'] != 'android-api35-emulator'):
         raise Failure('direct_android_invalid_device_result')
     if result['physicalImeVerified'] is not False or any(result[key] is not True for key in PUBLIC_FIELDS - {'schemaVersion', 'platform', 'physicalImeVerified'}):
         raise Failure('direct_android_incomplete_device_result')
     return result
+
+
+def ordinary_session_evidence(fixture, *, closed, await_initial_output=False):
+    counts = dict(authAttempts=1, authSuccesses=1, ptyRequests=1, shellRequests=1, inputBytes=9 if closed else 0)
+    probe = dict.fromkeys(counts, 0)
+    probe.update(id=1, hostKey='A', outputBytes=0, authAccepted=False, markerReceived=False,
+                 sessionClosed=False)
+    # The first transport's cleanup bookkeeping can lag the next handshake.
+    if closed:
+        probe['closed'] = True
+    session = counts.copy()
+    session.update(id=2, hostKey='A', authAccepted=True, markerReceived=closed,
+                   sessionClosed=closed, closed=closed)
+    # The client can receive the banner before sendall's counter is published.
+    # Only that zero counter at the first live checkpoint can be in flight.
+    deadline = time.monotonic() + 1.0 if await_initial_output and not closed else None
+    while True:
+        facts = fixture.snapshot()
+        events = facts['connectionEvents']
+        if (type(facts['connections']) is not int or facts['connections'] != 2
+                or facts['connectionsClosed'] is not closed or len(events) != 2
+                or any(type(event.get(key)) is not type(value) or event[key] != value
+                       for event, expected in zip(events, (probe, session)) for key, value in expected.items())):
+            break
+        output_bytes = events[1].get('outputBytes')
+        if type(output_bytes) is not int or output_bytes < 0:
+            break
+        if output_bytes > 0:
+            return {key: events[1][key] for key in ('id', *counts, 'markerReceived', 'closed')}
+        if deadline is None:
+            break
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(.02, remaining))
+        if time.monotonic() >= deadline:
+            break
+    raise Failure('direct_ssh_ordinary_session_evidence_invalid')
+
+
+def ordinary_mobile_checkpoint(fixture, value, completed):
+    if (not isinstance(value, dict) or set(value) != {'phase'} or
+            type(value['phase']) is not str or value['phase'] not in ORDINARY_MOBILE_PHASES):
+        raise Failure('direct_ssh_mobile_stage_invalid')
+    phase = value['phase']
+    if completed and phase == next(reversed(completed)):
+        return None
+    if len(completed) >= len(ORDINARY_MOBILE_PHASES) or phase != ORDINARY_MOBILE_PHASES[len(completed)]:
+        raise Failure('direct_ssh_mobile_stage_out_of_order')
+    return phase, ordinary_session_evidence(fixture, closed=False, await_initial_output=not completed)
+
+
+def require_ordinary_mobile_checkpoints(completed):
+    if tuple(completed) != ORDINARY_MOBILE_PHASES:
+        raise Failure('direct_ssh_mobile_checkpoints_incomplete')
 
 
 def safe_rotation_result(raw):
@@ -170,7 +230,8 @@ def checked_public_reply(reply, relative, limit):
 
 
 def read_public_json(relative, limit=4096):
-    if not re.fullmatch(r'cache/herdr-direct-ssh-[0-9]+/(?:(?:rotation-)?(?:result|stage)|failure|screen-request)\.json', relative):
+    if not re.fullmatch(r'cache/herdr-direct-ssh-[0-9]+/(?:(?:rotation-)?(?:result|stage)|'
+                        r'ordinary-mobile-stage|failure|screen-request)\.json', relative):
         raise Failure('direct_android_public_path_invalid')
     if not package_present():
         return None
@@ -316,10 +377,15 @@ def run(args, env):
     screens = {}
     rotation = {'checkpoints': {}}
     report['rotation'] = rotation
+    mobile = report['ordinaryMobileCheckpoints'] = {}
     reverses = []
     process = None
     private = None
     try:
+        phase = 'software_keyboard_setup'
+        adb('shell', 'settings', 'put', 'secure', 'show_ime_with_hard_keyboard', '1')
+        if text('shell', 'settings', 'get', 'secure', 'show_ime_with_hard_keyboard') != '1':
+            raise Failure('direct_android_software_keyboard_setup_failed')
         with fixture, rotation_fixture:
             phase = 'reverse_setup'
             for peer in (fixture, rotation_fixture):
@@ -375,16 +441,32 @@ def run(args, env):
                             adb('shell', '-T', 'run-as', PACKAGE, 'tee', pending, data=reply)
                             adb('shell', 'run-as', PACKAGE, 'mv', pending,
                                 relative + '/rotation-' + phase_name + '-confirmed.json')
+                    mobile_stage = read_public_json(relative + '/ordinary-mobile-stage.json')
+                    if mobile_stage is not None:
+                        checkpoint = ordinary_mobile_checkpoint(fixture, mobile_stage, mobile)
+                        if checkpoint is not None:
+                            phase_name, evidence = checkpoint
+                            phase = 'ordinary_mobile_' + phase_name
+                            if process.poll() is not None:
+                                raise Failure('direct_android_driver_exited_before_mobile_confirmation')
+                            mobile[phase_name] = evidence
+                            reply = json.dumps({'phase': phase_name, 'serverEvidenceAccepted': True}).encode()
+                            pending = relative + '/ordinary-mobile-' + phase_name + '-confirmed'
+                            adb('shell', '-T', 'run-as', PACKAGE, 'tee', pending + '.new', data=reply)
+                            adb('shell', 'run-as', PACKAGE, 'mv', pending + '.new', pending + '.json')
                     public = read_public_json(relative + '/result.json')
                     if public is not None:
                         safe_result(json.dumps(public))
+                        require_ordinary_mobile_checkpoints(mobile)
                         if set(screens) != {'ordinary', 'key-rotation'} or not all(x['accepted'] for x in screens.values()):
                             raise Failure('direct_android_screen_proof_missing')
                         if 'device' not in rotation or set(rotation['checkpoints']) != set(ROTATION_PHASES):
                             raise Failure('direct_android_rotation_confirmation_missing')
                         phase = 'peer_close_confirmation'
-                        if not fixture.wait_for('markerReceived') or not fixture.wait_for('sessionClosed'):
+                        if (not fixture.wait_for('markerReceived') or not fixture.wait_for('sessionClosed')
+                                or not fixture.wait_for_connections_closed(2)):
                             raise Failure('direct_android_remote_input_or_close_missing')
+                        ordinary_session_evidence(fixture, closed=True)
                         if process.poll() is not None:
                             raise Failure('direct_android_driver_exited_before_peer_confirmation')
                         # The device test is still alive and waiting here, so
@@ -429,6 +511,7 @@ def run(args, env):
             evidence = fixture.snapshot()
             if not all(evidence[name] for name in ('authAccepted', 'ptyRequested', 'shellRequested', 'markerReceived', 'sessionClosed')):
                 raise Failure('direct_android_protocol_evidence_incomplete')
+            ordinary_session_evidence(fixture, closed=True)
             report['protocol'] = evidence
             phase = 'read_screenshots'
             for name in ('home', 'connected', 'disconnected', 'rotation-rejected', 'rotation-connected'):

@@ -25,6 +25,9 @@ pub struct SystemTopInset {
     cutout_px: Option<u32>,
     caption_px: Option<u32>,
     stable_caption_px: Option<u32>,
+    ime_visible: Option<bool>,
+    ime_overlap_px: Option<u32>,
+    view_height_px: Option<u32>,
 }
 
 #[tauri::command]

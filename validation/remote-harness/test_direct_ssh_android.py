@@ -4,6 +4,8 @@ import json
 import os
 from pathlib import Path
 import tempfile
+from threading import Event
+import time
 import sys
 import types
 import struct
@@ -158,6 +160,8 @@ class GuardTests(unittest.TestCase):
                         return '35'
                     if args == ('shell', 'am', 'get-current-user'):
                         return '0'
+                    if args == ('shell', 'settings', 'get', 'secure', 'show_ime_with_hard_keyboard'):
+                        return '1'
                     return ''
                 env = {'GITHUB_SHA': 'a' * 40, 'GITHUB_RUN_ID': '123', 'RUNNER_TEMP': temp}
                 args = types.SimpleNamespace(project=app, output=output)
@@ -205,9 +209,79 @@ class GuardTests(unittest.TestCase):
         result = {key: True for key in runner.PUBLIC_FIELDS}
         result.update(schemaVersion=1, platform='android-api35-emulator', physicalImeVerified=False)
         self.assertEqual(runner.safe_result(json.dumps(result)), result)
-        for change in ({'remoteEchoVisible': False}, {'physicalImeVerified': True}, {'password': 'must-not-export'}):
+        for change in ({'remoteEchoVisible': False}, {'physicalImeVerified': True}, {'password': 'must-not-export'},
+                       {'platformKeyboardOpenedAndClosed': 1}, {'boardNetworkSettingsReturnedToSameTerminal': False},
+                       {'schemaVersion': True}):
             with self.subTest(change=tuple(change)), self.assertRaises(runner.Failure):
                 runner.safe_result(json.dumps({**result, **change}))
+        del result['platformKeyboardOpenedAndClosed']
+        with self.assertRaises(runner.Failure):
+            runner.safe_result(json.dumps(result))
+
+    def test_mobile_checkpoints_reject_missing_alien_skipped_and_replayed_phases(self):
+        fixture = Mock()
+        for value in ([], {'phase': 'board_visible'}, {'phase': 'keyboard_shown', 'password': 'secret'},
+                      {'phase': ['keyboard_shown']}, {'phase': 'unrecognized'}):
+            with self.subTest(value_type=type(value).__name__), self.assertRaises(runner.Failure):
+                runner.ordinary_mobile_checkpoint(fixture, value, {})
+        for completed in ({}, {'keyboard_shown': {}}, {phase: {} for phase in reversed(runner.ORDINARY_MOBILE_PHASES)}):
+            with self.assertRaisesRegex(runner.Failure, '^direct_ssh_mobile_checkpoints_incomplete$'):
+                runner.require_ordinary_mobile_checkpoints(completed)
+        with self.assertRaisesRegex(runner.Failure, '^direct_ssh_mobile_stage_out_of_order$'):
+            runner.ordinary_mobile_checkpoint(fixture, {'phase': 'keyboard_shown'},
+                                              {'keyboard_shown': {}, 'keyboard_hidden': {}})
+        self.assertIsNone(runner.ordinary_mobile_checkpoint(fixture, {'phase': 'keyboard_hidden'},
+                          {'keyboard_shown': {}, 'keyboard_hidden': {}}))
+        fixture.snapshot.assert_not_called()
+
+    def test_mobile_waits_only_for_first_valid_peer_output_publication(self):
+        probe = dict(id=1, hostKey='A', authAttempts=0, authSuccesses=0, ptyRequests=0, shellRequests=0,
+                     inputBytes=0, outputBytes=0, authAccepted=False, markerReceived=False, sessionClosed=False)
+        shell = dict(id=2, hostKey='A', authAttempts=1, authSuccesses=1, ptyRequests=1, shellRequests=1,
+                     inputBytes=0, outputBytes=0, authAccepted=True, markerReceived=False, sessionClosed=False,
+                     closed=False)
+
+        def facts(**session):
+            return dict(connections=2, connectionsClosed=False, connectionEvents=[probe, dict(shell, **session)])
+
+        failure = '^direct_ssh_ordinary_session_evidence_invalid$'
+        first = {'phase': 'keyboard_shown'}
+        for change in (dict(inputBytes=1), dict(authAttempts=2), dict(ptyRequests=2), dict(shellRequests=2),
+                       dict(closed=True), dict(id=3), dict(outputBytes=-1), dict(outputBytes=True)):
+            for sample in (1, 2):
+                with self.subTest(change=change, sample=sample), patch.object(runner, 'time') as clock:
+                    samples = [facts()] * (sample - 1) + [facts(**change), facts(outputBytes=24)]
+                    fixture = Mock(snapshot=Mock(side_effect=samples))
+                    clock.monotonic.return_value = 1
+                    with self.assertRaisesRegex(runner.Failure, failure):
+                        runner.ordinary_mobile_checkpoint(fixture, first, {})
+                    self.assertEqual(fixture.snapshot.call_count, sample)
+                    self.assertEqual(clock.sleep.call_count, sample - 1)
+
+        with patch.object(runner, 'time') as clock:
+            fixture = Mock(snapshot=Mock(side_effect=[facts(), facts(outputBytes=24)]))
+            clock.monotonic.side_effect = [0, 0, 5]
+            with self.assertRaisesRegex(runner.Failure, failure):
+                runner.ordinary_mobile_checkpoint(fixture, first, {})
+            fixture.snapshot.assert_called_once()
+            clock.sleep.assert_called_once()
+
+        with patch.object(runner, 'time') as clock:
+            fixture = Mock(snapshot=Mock(side_effect=[facts(), facts(outputBytes=24)]))
+            with self.assertRaisesRegex(runner.Failure, failure):
+                runner.ordinary_mobile_checkpoint(fixture, {'phase': 'keyboard_hidden'}, {'keyboard_shown': {}})
+            fixture.snapshot.assert_called_once()
+            clock.sleep.assert_not_called()
+
+        with patch.object(runner, 'time') as clock:
+            closed = facts(inputBytes=9, markerReceived=True, sessionClosed=True, closed=True)
+            closed['connectionEvents'][0] = dict(probe, closed=True)
+            closed['connectionsClosed'] = True
+            fixture = Mock(snapshot=Mock(return_value=closed))
+            with self.assertRaisesRegex(runner.Failure, failure):
+                runner.ordinary_session_evidence(fixture, closed=True)
+            fixture.snapshot.assert_called_once()
+            clock.sleep.assert_not_called()
 
     def test_rotation_public_result_requires_every_boolean_and_rejects_extra_data(self):
         result = {key: True for key in runner.ROTATION_PUBLIC_FIELDS}
@@ -253,11 +327,12 @@ class GuardTests(unittest.TestCase):
         with self.assertRaisesRegex(runner.Failure, '^direct_android_rotation_server_evidence_invalid$'):
             runner.rotation_checkpoint(fixture, {'phase': 'rejected', 'stage': 2}, {})
 
-    def test_rotation_exchange_allows_only_fixed_public_filenames(self):
+    def test_exchange_allows_only_fixed_public_filenames(self):
         with patch.object(runner, 'package_present', return_value=False):
-            for name in ('rotation-stage.json', 'rotation-result.json'):
+            for name in ('rotation-stage.json', 'rotation-result.json', 'ordinary-mobile-stage.json'):
                 self.assertIsNone(runner.read_public_json('cache/herdr-direct-ssh-123/' + name))
-            for name in ('../defines.json', 'rotation-rejected-confirmed.json', 'rotation-secret.json'):
+            for name in ('../defines.json', 'rotation-rejected-confirmed.json', 'rotation-secret.json',
+                         'ordinary-mobile-keyboard_shown-confirmed.json', 'ordinary-mobile-result.json'):
                 with self.subTest(name=name), self.assertRaises(runner.Failure):
                     runner.read_public_json('cache/herdr-direct-ssh-123/' + name)
 
@@ -315,10 +390,31 @@ class GuardTests(unittest.TestCase):
 
 @unittest.skipUnless(importlib.util.find_spec('paramiko') is not None, 'Paramiko is unavailable; loopback protocol test is optional in this environment')
 class LoopbackTests(unittest.TestCase):
-    def test_shared_peer_requires_auth_pty_shell_marker_and_peer_close_then_cleans(self):
+    def test_shared_peer_stays_on_one_session_for_mobile_checkpoints_then_receives_one_marker_and_closes(self):
+        for deadline in (None, time.monotonic() + 60):
+            with self.subTest(shared_deadline=deadline is not None):
+                self.assert_ordinary_mobile_session(deadline)
+
+    def assert_ordinary_mobile_session(self, deadline):
         import paramiko
         from direct_ssh_fixture import DirectSshFixture
-        with DirectSshFixture() as fixture:
+        first_output_sent, publish_ready = Event(), Event()
+
+        class DelayedReadyPublication(DirectSshFixture):
+            def _connection_increment(self, transport, field, amount=1):
+                if field == 'outputBytes' and not first_output_sent.is_set():
+                    first_output_sent.set()
+                    publish_ready.wait(5)
+                super()._connection_increment(transport, field, amount)
+
+        with DelayedReadyPublication(screen_proof=True, channel_deadline=deadline) as fixture:
+            probe = paramiko.Transport(('127.0.0.1', fixture.port))
+            try:
+                probe.start_client(timeout=5)
+                self.assertEqual(probe.get_remote_server_key().get_base64(), fixture.public_key.split()[1])
+            finally:
+                probe.close()
+            self.assertTrue(fixture.wait_for_connections_closed(1))
             transport = paramiko.Transport(('127.0.0.1', fixture.port))
             try:
                 transport.start_client(timeout=5)
@@ -328,6 +424,38 @@ class LoopbackTests(unittest.TestCase):
                 channel.get_pty(term='xterm-256color', width=80, height=24)
                 channel.invoke_shell()
                 channel.settimeout(5)
+                self.assertIn(b'POCKET-ANDROID-READY', channel.recv(4096))
+                self.assertTrue(first_output_sent.wait(5))
+                snapshot = fixture.snapshot
+
+                def release_after_first_snapshot():
+                    facts = snapshot()
+                    if not publish_ready.is_set():
+                        self.assertEqual(facts['connectionEvents'][1]['outputBytes'], 0)
+                        publish_ready.set()
+                    return facts
+
+                completed = {}
+                for phase in runner.ORDINARY_MOBILE_PHASES:
+                    with patch.object(fixture, 'snapshot', side_effect=release_after_first_snapshot):
+                        name, evidence = runner.ordinary_mobile_checkpoint(fixture, {'phase': phase}, completed)
+                    self.assertEqual(name, phase)
+                    self.assertEqual(evidence, {'id': 2, 'authAttempts': 1, 'authSuccesses': 1, 'ptyRequests': 1,
+                                                'shellRequests': 1, 'inputBytes': 0, 'markerReceived': False, 'closed': False})
+                    completed[name] = evidence
+                runner.require_ordinary_mobile_checkpoints(completed)
+                pending_probe_cleanup = fixture.snapshot()
+                pending_probe_cleanup['connectionEvents'][0]['closed'] = False
+                with patch.object(fixture, 'snapshot', return_value=pending_probe_cleanup):
+                    self.assertEqual(runner.ordinary_session_evidence(fixture, closed=False), evidence)
+                for index, field, value in ((0, 'authAttempts', 1), (1, 'id', 3), (1, 'authAttempts', 2),
+                                            (1, 'ptyRequests', 2), (1, 'shellRequests', 2), (1, 'inputBytes', 1),
+                                            (1, 'closed', True)):
+                    drift = fixture.snapshot()
+                    drift['connectionEvents'][index][field] = value
+                    with patch.object(fixture, 'snapshot', return_value=drift), self.assertRaisesRegex(
+                            runner.Failure, '^direct_ssh_ordinary_session_evidence_invalid$'):
+                        runner.ordinary_session_evidence(fixture, closed=False)
                 channel.sendall((fixture.marker + '\r').encode())
                 received = b''
                 while fixture.echo_marker.encode() not in received:
@@ -335,8 +463,18 @@ class LoopbackTests(unittest.TestCase):
                 self.assertIn(b'\x1b[32m' + fixture.echo_marker.encode(), received)
                 channel.close()
             finally:
+                publish_ready.set()
                 transport.close()
-            self.assertTrue(fixture.wait_for('sessionClosed'))
+            self.assertTrue(fixture.wait_for_connections_closed(2))
+            evidence = runner.ordinary_session_evidence(fixture, closed=True)
+            self.assertEqual(evidence['inputBytes'], 9)
+            self.assertTrue(evidence['closed'])
+            self.assertTrue(evidence['markerReceived'])
+            pending_probe_cleanup = fixture.snapshot()
+            pending_probe_cleanup['connectionEvents'][0]['closed'] = False
+            with patch.object(fixture, 'snapshot', return_value=pending_probe_cleanup), self.assertRaisesRegex(
+                    runner.Failure, '^direct_ssh_ordinary_session_evidence_invalid$'):
+                runner.ordinary_session_evidence(fixture, closed=True)
             facts = fixture.snapshot()
             self.assertTrue(all(facts[k] for k in ('authAccepted', 'ptyRequested', 'shellRequested', 'markerReceived')))
             self.assertIn([80, 24], facts['ptySizes'])

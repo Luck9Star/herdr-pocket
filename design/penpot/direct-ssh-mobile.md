@@ -62,4 +62,4 @@ node design/penpot/direct-ssh-mobile.mjs \
 
 ## 产品验收索引
 
-[2026-11-18 本地验收记录](../evidence/direct-ssh-mobile-20261118/README.md)提供固定画板对应的两壳 15 状态前测，以及空首页、接入选择两种尺寸的修前／修后图和逐锚实测。首批两页的 52 项应用锚点达到 2 pt 阈值。其余 13 页保留前测及待修状态，原生设备证据单独认定。
+[2026-11-18 本地验收记录](../evidence/direct-ssh-mobile-20261118/README.md)提供固定画板对应的两壳 15 状态前测，以及空首页、接入选择两种尺寸的修前／修后图和逐锚实测。首批两页的 52 项应用锚点达到 2 pt 阈值；该历史记录中其余 13 页为前测状态。后续认证状态见 [R23 验收与补测](../../docs/evidence/mobile-ssh-auth-r23/README.md)，活动终端和设置见 [docs/73](../../docs/73-mobile-ssh-terminal-navigation.md)。原生设备证据单独认定。

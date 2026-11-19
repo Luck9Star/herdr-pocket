@@ -186,10 +186,6 @@ h1 { font-size:18px; margin:0}
 @media (max-width:599px) and (orientation:portrait) {
   /* A native iOS WebView can extend behind the status bar with a zero CSS top inset. */
   .ios-edge-to-edge { --hp-ios-status-bar-fallback:64px; }
-  .ios-edge-to-edge:has(#host-home:not([hidden]) #home-ssh:not([hidden]) #ssh-live:not([hidden])) .app-header {
-    position:sticky; top:0; z-index:10; background:var(--hp-canvas);
-    padding-top:calc(16px + max(var(--hp-system-top-inset,0px),env(safe-area-inset-top,0px),var(--hp-ios-status-bar-fallback)));
-  }
 }
 .ssh-key-change-heading { margin:0 0 12px; font-size:20px; font-weight:700; color:var(--hp-textPrimary); }
 .ssh-key-change-warning { padding:12px; border-radius:12px; border:1px solid var(--hp-dangerBorder); background:var(--hp-dangerSoft); }
@@ -496,12 +492,6 @@ h1 { font-size:18px; margin:0}
 @media (max-width:599px) {
   #home-ssh .ssh-scroll { height:min(45dvh, calc(var(--hp-visual-height,100dvh) - 180px)); }
   .android-edge-to-edge:has(#host-home:not([hidden]) #home-ssh:not([hidden]) #ssh-key-change[hidden]) #home-ssh .ssh-scroll { height:min(45dvh, calc(var(--hp-visual-height,100dvh) - var(--hp-ssh-sticky-top,0px) - 146px)); }
-}
-@media (max-width:599px) and (orientation:portrait) {
-  .ios-edge-to-edge body:not(.keyboard-visible) #home-ssh .ssh-scroll {
-    /* Keep a usable canvas on short screens and let the page scroll to its actions. */
-    height:min(45dvh, calc(var(--hp-visual-height,100dvh) - 180px), max(192px, var(--hp-ssh-terminal-max-height,100dvh)));
-  }
 }
 /* Tabs sit on the dark terminal surface at every viewport width. */
 #tab-workspace #view-tabs button[aria-pressed=false] { color:var(--hp-termText); }

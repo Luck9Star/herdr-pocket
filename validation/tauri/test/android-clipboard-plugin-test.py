@@ -35,11 +35,11 @@ sources.update({
     'android/os/Build.java': 'package android.os; public class Build {public static class VERSION {public static int SDK_INT=35;}}',
     'android/util/DisplayMetrics.java': 'package android.util; public class DisplayMetrics {public float density=2;}',
     'android/content/res/Resources.java': 'package android.content.res; public class Resources {public android.util.DisplayMetrics metrics=new android.util.DisplayMetrics();public android.util.DisplayMetrics getDisplayMetrics(){return metrics;}}',
-    'android/graphics/Insets.java': 'package android.graphics; public class Insets {public int top;public Insets(int top){this.top=top;}}',
-    'android/graphics/Rect.java': 'package android.graphics; public class Rect {public int top;}',
+    'android/graphics/Insets.java': 'package android.graphics; public class Insets {public int top,bottom;public Insets(int top,int bottom){this.top=top;this.bottom=bottom;}}',
+    'android/graphics/Rect.java': 'package android.graphics; public class Rect {public int top,bottom;public int height(){return bottom-top;}}',
     'android/view/WindowMetrics.java': 'package android.view; public class WindowMetrics {public android.graphics.Rect bounds=new android.graphics.Rect();public android.graphics.Rect getBounds(){return bounds;}}',
     'android/view/WindowManager.java': 'package android.view; public class WindowManager {public WindowMetrics metrics=new WindowMetrics();public WindowMetrics getCurrentWindowMetrics(){return metrics;}}',
-    'android/view/WindowInsets.java': 'package android.view; public class WindowInsets {public int top;public android.graphics.Insets getInsets(int types){return new android.graphics.Insets(top);}public android.graphics.Insets getInsetsIgnoringVisibility(int types){return new android.graphics.Insets(top);}public int getSystemWindowInsetTop(){return top;}public int getStableInsetTop(){return top;}public static class Type {public static int statusBars(){return 1;}public static int displayCutout(){return 2;}public static int captionBar(){return 4;}}}',
+    'android/view/WindowInsets.java': 'package android.view; public class WindowInsets {public int top,imeBottom;public boolean imeVisible;public boolean isVisible(int type){return type==Type.ime()&&imeVisible;}public android.graphics.Insets getInsets(int type){return type==Type.ime()?new android.graphics.Insets(0,imeBottom):new android.graphics.Insets(top,0);}public android.graphics.Insets getInsetsIgnoringVisibility(int type){if(type==Type.ime())throw new IllegalArgumentException();return new android.graphics.Insets(top,0);}public int getSystemWindowInsetTop(){return top;}public int getStableInsetTop(){return top;}public static class Type {public static int statusBars(){return 1;}public static int displayCutout(){return 2;}public static int captionBar(){return 4;}public static int ime(){return 8;}}}',
     'android/os/IBinder.java': 'package android.os; public interface IBinder {}',
     'android/webkit/ValueCallback.java': 'package android.webkit; public interface ValueCallback<T> {void onReceiveValue(T value);}',
     'android/webkit/WebView.java': '''package android.webkit;
@@ -52,9 +52,9 @@ sources.update({
     'android/view/View.java': '''package android.view;
         public class View {
             public boolean focus=true,windowFocus=true,attached=true;
-            public int y; public View root=this; public WindowInsets insets=new WindowInsets();
+            public int y,height=2340; public View root=this; public WindowInsets insets=new WindowInsets();
             public int visibleTop; public void getWindowVisibleDisplayFrame(android.graphics.Rect out){out.top=visibleTop;}
-            public int getWidth(){return 1080;} public int getHeight(){return 2340;}
+            public int getWidth(){return 1080;} public int getHeight(){return height;}
             public android.content.res.Resources resources=new android.content.res.Resources();
             public WindowInsets getRootWindowInsets(){return insets;}
             public View getRootView(){return root;}

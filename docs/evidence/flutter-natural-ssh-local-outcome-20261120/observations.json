@@ -1,0 +1,827 @@
+{
+  "schemaVersion": 1,
+  "renderer": "Flutter 3.47.9 Widget renderer, devicePixelRatio=1, RenderRepaintBoundary.toImage",
+  "revisions": {
+    "baseline": "a1af87473bcf939664943108761cb215a7bdde42",
+    "historicalParentFamily": "c5aa64a0c9703d0494f5694ec0028018f7f2a0b8",
+    "fix": "3efed917af321a9c13946d6ff95b88a1fd5fd8a4",
+    "integratedFix": "3676a43acba31877f9551937b08335017cddd722"
+  },
+  "sourceVerification": {
+    "baselinePageGitBlob": "591b65c2a4336affc8011d73c5c1d0e070b91416",
+    "baselinePageSha256": "684c40f74cd7c413fe04054bdace4c3e830c8c0fc63d6bda02cb73793977149f",
+    "fixedPageGitBlob": "fa1c52919a299282ee7420e5b8b03723416ecf0b",
+    "fixedPageSha256": "3f5ada3bc79e249d806759a33709d3bc80c638a9f6d9960e5ffbf47d5f44ccc1",
+    "fixedAndIntegratedProductionTree": "6ce0937754ccc17fb5a5691531531d30570ad3d5",
+    "sameProductionDartFiles": 45,
+    "resultHarnessSha256AtArchive": "8633393bee29ff3343652ba805e04ca6c5587fde4537c91c69f86eba14b8c5c4",
+    "peerHarnessSha256AtArchive": "a147968df53821f1261666481d0c5c2b584d29c0d6fc9273c4cd8397d002fffa",
+    "originalFixedBatchSummarySha256": "7ee7a0649e54d2a7ad5e08007f189f4559ac3daef19fbc12e9141ec1caf62de2"
+  },
+  "cases": [
+    {
+      "group": "comparison",
+      "case": "before-390-silent",
+      "originalDirectory": "old-exact-390-unreported",
+      "sourceCommit": "a1af87473bcf939664943108761cb215a7bdde42",
+      "viewport": [
+        390,
+        844
+      ],
+      "platformVariant": "Android",
+      "channelCloseInitiator": "peer",
+      "viewBeforeClose": "terminal",
+      "visibleCloseText": [
+        "远端 shell 已结束（退出码 未知）。"
+      ],
+      "widgetRunPassed": false,
+      "peer": {
+        "passwordAuthenticationCallbacks": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "ptySizes": [
+          [
+            80,
+            24
+          ],
+          [
+            22,
+            24
+          ]
+        ],
+        "inputBytes": 0,
+        "serverClosedChannel": true,
+        "clientTransportInactiveBeforeFixtureCleanup": true,
+        "serverCleanupLogged": true,
+        "exitStatusSent": null,
+        "exitSignalSent": null
+      },
+      "frames": {
+        "close": {
+          "png": "comparison/before-390-silent-close.png",
+          "sha256": "1ed6a5e42e83eceb3f4896991daae90beaddc735b1025d45afa2f5c6099c0ba0",
+          "widgetRects": {
+            "feedback": {
+              "rect": [
+                24.0,
+                258.0,
+                342.0,
+                20.0
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "group": "comparison",
+      "case": "after-390-silent",
+      "originalDirectory": "new-exact-390-unreported",
+      "sourceCommit": "3efed917af321a9c13946d6ff95b88a1fd5fd8a4",
+      "viewport": [
+        390,
+        844
+      ],
+      "platformVariant": "Android",
+      "channelCloseInitiator": "peer",
+      "viewBeforeClose": "terminal",
+      "visibleCloseText": [
+        "本机已断开"
+      ],
+      "widgetRunPassed": true,
+      "peer": {
+        "passwordAuthenticationCallbacks": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "ptySizes": [
+          [
+            80,
+            24
+          ],
+          [
+            22,
+            24
+          ]
+        ],
+        "inputBytes": 0,
+        "serverClosedChannel": true,
+        "clientTransportInactiveBeforeFixtureCleanup": true,
+        "serverCleanupLogged": true,
+        "exitStatusSent": null,
+        "exitSignalSent": null
+      },
+      "frames": {
+        "close": {
+          "png": "comparison/after-390-silent-close.png",
+          "sha256": "7960ac35549bbd6d5e11d66a31bfa57cd28631740e7ea8fac53d3fbcb04e62a5",
+          "widgetRects": {
+            "feedback": {
+              "rect": [
+                37.0,
+                134.0,
+                71.25,
+                20.0
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "group": "historical",
+      "case": "390-silent",
+      "originalDirectory": "unreported",
+      "sourceCommit": null,
+      "viewport": [
+        390,
+        844
+      ],
+      "platformVariant": "Android",
+      "channelCloseInitiator": "peer",
+      "viewBeforeClose": "terminal",
+      "visibleCloseText": [
+        "远端 shell 已结束（退出码 未知）。"
+      ],
+      "widgetRunPassed": true,
+      "peer": {
+        "passwordAuthenticationCallbacks": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "ptySizes": [
+          [
+            80,
+            24
+          ],
+          [
+            37,
+            24
+          ]
+        ],
+        "inputBytes": null,
+        "serverClosedChannel": true,
+        "clientTransportInactiveBeforeFixtureCleanup": null,
+        "serverCleanupLogged": null,
+        "exitStatusSent": null,
+        "exitSignalSent": null
+      },
+      "frames": {
+        "close": {
+          "png": "historical/390-silent-close.png",
+          "sha256": "cf188050b8ff5941de35756d8ca4ceefe9cb27bcebecb9987ac2d27f45e137a1",
+          "widgetRects": {
+            "feedback": {
+              "rect": [
+                24.0,
+                239.0,
+                342.0,
+                20.0
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "group": "historical",
+      "case": "390-exit-status",
+      "originalDirectory": "reported",
+      "sourceCommit": null,
+      "viewport": [
+        390,
+        844
+      ],
+      "platformVariant": "Android",
+      "channelCloseInitiator": "peer",
+      "viewBeforeClose": "terminal",
+      "visibleCloseText": [
+        "远端 shell 已结束（退出码 0）。"
+      ],
+      "widgetRunPassed": true,
+      "peer": {
+        "passwordAuthenticationCallbacks": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "ptySizes": [
+          [
+            80,
+            24
+          ],
+          [
+            37,
+            24
+          ]
+        ],
+        "inputBytes": null,
+        "serverClosedChannel": true,
+        "clientTransportInactiveBeforeFixtureCleanup": null,
+        "serverCleanupLogged": null,
+        "exitStatusSent": 0,
+        "exitSignalSent": null
+      },
+      "frames": {
+        "close": {
+          "png": "historical/390-exit-status-close.png",
+          "sha256": "c9c136d90939b3d7d31a9a0586ff4db5c852d6b3c9bfd7f3c465baeadb4998d0",
+          "widgetRects": {
+            "feedback": {
+              "rect": [
+                24.0,
+                239.0,
+                342.0,
+                20.0
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "group": "fixed",
+      "case": "320-silent",
+      "originalDirectory": "evidence-320-unreported",
+      "sourceCommit": "3efed917af321a9c13946d6ff95b88a1fd5fd8a4",
+      "viewport": [
+        320,
+        640
+      ],
+      "platformVariant": "Android",
+      "channelCloseInitiator": "peer",
+      "viewBeforeClose": "terminal",
+      "visibleCloseText": [
+        "本机已断开",
+        "凭据已清空，重连时请重新填写。"
+      ],
+      "widgetRunPassed": true,
+      "peer": {
+        "passwordAuthenticationCallbacks": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "ptySizes": [
+          [
+            80,
+            24
+          ],
+          [
+            31,
+            14
+          ]
+        ],
+        "inputBytes": 0,
+        "serverClosedChannel": true,
+        "clientTransportInactiveBeforeFixtureCleanup": true,
+        "serverCleanupLogged": true,
+        "exitStatusSent": null,
+        "exitSignalSent": null
+      },
+      "frames": {
+        "close": {
+          "png": "fixed/320-silent-close.png",
+          "sha256": "788d586e8b8f5483950ae445db9451d5853698f5c72d8355c9a80b7ea1efde5e",
+          "widgetRects": {
+            "feedback": {
+              "rect": [
+                29.0,
+                111.0,
+                71.25,
+                20.0
+              ]
+            },
+            "return": {
+              "rect": [
+                16.0,
+                476.0,
+                288.0,
+                48.0
+              ],
+              "hits": [
+                true,
+                true,
+                true,
+                true,
+                true
+              ]
+            }
+          }
+        },
+        "returned": {
+          "png": "fixed/320-silent-returned.png",
+          "sha256": "c3377047665581d1fb858ba1b631de31d5c5f9877281a61927ac55eface98dee",
+          "widgetRects": {
+            "feedback": {
+              "rect": [
+                16.0,
+                96.0,
+                288.0,
+                44.0
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "group": "fixed",
+      "case": "390-silent",
+      "originalDirectory": "evidence-390-unreported",
+      "sourceCommit": "3efed917af321a9c13946d6ff95b88a1fd5fd8a4",
+      "viewport": [
+        390,
+        844
+      ],
+      "platformVariant": "Android",
+      "channelCloseInitiator": "peer",
+      "viewBeforeClose": "terminal",
+      "visibleCloseText": [
+        "本机已断开",
+        "凭据已清空，重连时请重新填写。"
+      ],
+      "widgetRunPassed": true,
+      "peer": {
+        "passwordAuthenticationCallbacks": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "ptySizes": [
+          [
+            80,
+            24
+          ],
+          [
+            37,
+            24
+          ]
+        ],
+        "inputBytes": 0,
+        "serverClosedChannel": true,
+        "clientTransportInactiveBeforeFixtureCleanup": true,
+        "serverCleanupLogged": true,
+        "exitStatusSent": null,
+        "exitSignalSent": null
+      },
+      "frames": {
+        "close": {
+          "png": "fixed/390-silent-close.png",
+          "sha256": "a5756edf96ec50813eeb3d7bf87ac785d2a1636ea3ca55723846bc18706e09a1",
+          "widgetRects": {
+            "feedback": {
+              "rect": [
+                37.0,
+                134.0,
+                71.25,
+                20.0
+              ]
+            },
+            "return": {
+              "rect": [
+                24.0,
+                499.0,
+                342.0,
+                48.0
+              ],
+              "hits": [
+                true,
+                true,
+                true,
+                true,
+                true
+              ]
+            }
+          }
+        },
+        "returned": {
+          "png": "fixed/390-silent-returned.png",
+          "sha256": "1cd7845ad8a3dd3b76d50a980f678bd8bac94971899f9440375b3ea9011a8125",
+          "widgetRects": {
+            "feedback": {
+              "rect": [
+                24.0,
+                119.0,
+                342.0,
+                44.0
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "group": "fixed",
+      "case": "390-exit-status",
+      "originalDirectory": "evidence-390-reported",
+      "sourceCommit": "3efed917af321a9c13946d6ff95b88a1fd5fd8a4",
+      "viewport": [
+        390,
+        844
+      ],
+      "platformVariant": "Android",
+      "channelCloseInitiator": "peer",
+      "viewBeforeClose": "terminal",
+      "visibleCloseText": [
+        "本机已断开",
+        "远端已报告结束，凭据已清空。重连时请重新填写。"
+      ],
+      "widgetRunPassed": true,
+      "peer": {
+        "passwordAuthenticationCallbacks": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "ptySizes": [
+          [
+            80,
+            24
+          ],
+          [
+            37,
+            24
+          ]
+        ],
+        "inputBytes": 0,
+        "serverClosedChannel": true,
+        "clientTransportInactiveBeforeFixtureCleanup": true,
+        "serverCleanupLogged": true,
+        "exitStatusSent": 0,
+        "exitSignalSent": null
+      },
+      "frames": {
+        "close": {
+          "png": "fixed/390-exit-status-close.png",
+          "sha256": "0ea9eb0f49a018d2c33a462c0204b05777bf2ef1a7855bef5ceae42ac4686db4",
+          "widgetRects": {
+            "feedback": {
+              "rect": [
+                37.0,
+                134.0,
+                71.25,
+                20.0
+              ]
+            },
+            "return": {
+              "rect": [
+                24.0,
+                499.0,
+                342.0,
+                48.0
+              ],
+              "hits": [
+                true,
+                true,
+                true,
+                true,
+                true
+              ]
+            }
+          }
+        },
+        "returned": {
+          "png": "fixed/390-exit-status-returned.png",
+          "sha256": "1cd7845ad8a3dd3b76d50a980f678bd8bac94971899f9440375b3ea9011a8125",
+          "widgetRects": {
+            "feedback": {
+              "rect": [
+                24.0,
+                119.0,
+                342.0,
+                44.0
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "group": "fixed",
+      "case": "390-dashboard-silent",
+      "originalDirectory": "evidence-390-unreported-board",
+      "sourceCommit": "3efed917af321a9c13946d6ff95b88a1fd5fd8a4",
+      "viewport": [
+        390,
+        844
+      ],
+      "platformVariant": "Android",
+      "channelCloseInitiator": "peer",
+      "viewBeforeClose": "dashboard",
+      "visibleCloseText": [
+        "本机已断开",
+        "凭据已清空，重连时请重新填写。"
+      ],
+      "widgetRunPassed": true,
+      "peer": {
+        "passwordAuthenticationCallbacks": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "ptySizes": [
+          [
+            80,
+            24
+          ],
+          [
+            37,
+            24
+          ]
+        ],
+        "inputBytes": 0,
+        "serverClosedChannel": true,
+        "clientTransportInactiveBeforeFixtureCleanup": true,
+        "serverCleanupLogged": true,
+        "exitStatusSent": null,
+        "exitSignalSent": null
+      },
+      "frames": {
+        "close": {
+          "png": "fixed/390-dashboard-silent-close.png",
+          "sha256": "06eac3ee2c8f6774f8ce8cefd19a9402c9bbc478c749f43da3e7f4d78cf79215",
+          "widgetRects": {
+            "feedback": {
+              "rect": [
+                37.0,
+                134.0,
+                71.25,
+                20.0
+              ]
+            },
+            "return": {
+              "rect": [
+                24.0,
+                499.0,
+                342.0,
+                48.0
+              ],
+              "hits": [
+                true,
+                true,
+                true,
+                true,
+                true
+              ]
+            }
+          }
+        },
+        "returned": {
+          "png": "fixed/390-dashboard-silent-returned.png",
+          "sha256": "1cd7845ad8a3dd3b76d50a980f678bd8bac94971899f9440375b3ea9011a8125",
+          "widgetRects": {
+            "feedback": {
+              "rect": [
+                24.0,
+                119.0,
+                342.0,
+                44.0
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "group": "fixed",
+      "case": "980-exit-signal",
+      "originalDirectory": "evidence-980-signal",
+      "sourceCommit": "3efed917af321a9c13946d6ff95b88a1fd5fd8a4",
+      "viewport": [
+        980,
+        780
+      ],
+      "platformVariant": "Linux",
+      "channelCloseInitiator": "peer",
+      "viewBeforeClose": "terminal",
+      "visibleCloseText": [
+        "本机已断开",
+        "远端已报告结束，凭据已清空。重连时请重新填写。"
+      ],
+      "widgetRunPassed": true,
+      "peer": {
+        "passwordAuthenticationCallbacks": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "ptySizes": [
+          [
+            80,
+            24
+          ],
+          [
+            77,
+            31
+          ]
+        ],
+        "inputBytes": 0,
+        "serverClosedChannel": true,
+        "clientTransportInactiveBeforeFixtureCleanup": true,
+        "serverCleanupLogged": true,
+        "exitStatusSent": null,
+        "exitSignalSent": "TERM"
+      },
+      "frames": {
+        "close": {
+          "png": "fixed/980-exit-signal-close.png",
+          "sha256": "f0d3c45f17ded3a7c5f8dd7d4e924b54ab33e187fc26a50c275bbf2627dad245",
+          "widgetRects": {
+            "feedback": {
+              "rect": [
+                277.0,
+                87.0,
+                71.25,
+                20.0
+              ]
+            },
+            "return": {
+              "rect": [
+                264.0,
+                452.0,
+                560.0,
+                48.0
+              ],
+              "hits": [
+                true,
+                true,
+                true,
+                true,
+                true
+              ]
+            }
+          }
+        },
+        "returned": {
+          "png": "fixed/980-exit-signal-returned.png",
+          "sha256": "ce20b0e9c8df6d5761e8f269471db2ec2695c9f3b8068b970b396ec35f07180f",
+          "widgetRects": {
+            "feedback": {
+              "rect": [
+                264.0,
+                62.0,
+                560.0,
+                44.0
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "group": "independent-recheck",
+      "case": "390-silent",
+      "originalDirectory": "parent-r4-390-unreported",
+      "sourceCommit": "3efed917af321a9c13946d6ff95b88a1fd5fd8a4",
+      "viewport": [
+        390,
+        844
+      ],
+      "platformVariant": "Android",
+      "channelCloseInitiator": "peer",
+      "viewBeforeClose": "terminal",
+      "visibleCloseText": [
+        "本机已断开",
+        "凭据已清空，重连时请重新填写。"
+      ],
+      "widgetRunPassed": true,
+      "peer": {
+        "passwordAuthenticationCallbacks": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "ptySizes": [
+          [
+            80,
+            24
+          ],
+          [
+            22,
+            24
+          ]
+        ],
+        "inputBytes": 0,
+        "serverClosedChannel": true,
+        "clientTransportInactiveBeforeFixtureCleanup": true,
+        "serverCleanupLogged": true,
+        "exitStatusSent": null,
+        "exitSignalSent": null
+      },
+      "frames": {
+        "close": {
+          "png": "independent-recheck/390-silent-close.png",
+          "sha256": "956e897c515f9f35e942138ba9753c3f1b1d0fa5c58745fa67b08d3c382a9373",
+          "widgetRects": {
+            "feedback": {
+              "rect": [
+                37.0,
+                134.0,
+                71.25,
+                20.0
+              ]
+            },
+            "return": {
+              "rect": [
+                24.0,
+                499.0,
+                342.0,
+                48.0
+              ],
+              "hits": [
+                true,
+                true,
+                true,
+                true,
+                true
+              ]
+            }
+          }
+        },
+        "returned": {
+          "png": "independent-recheck/390-silent-returned.png",
+          "sha256": "3f322966a1946491f3c19631f63ceaf5a26eda6c5625a96fade38f910b67532b",
+          "widgetRects": {
+            "feedback": {
+              "rect": [
+                24.0,
+                119.0,
+                342.0,
+                44.0
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "group": "independent-recheck",
+      "case": "980-exit-signal",
+      "originalDirectory": "parent-r4-980-signal",
+      "sourceCommit": "3efed917af321a9c13946d6ff95b88a1fd5fd8a4",
+      "viewport": [
+        980,
+        780
+      ],
+      "platformVariant": "Linux",
+      "channelCloseInitiator": "peer",
+      "viewBeforeClose": "terminal",
+      "visibleCloseText": [
+        "本机已断开",
+        "远端已报告结束，凭据已清空。重连时请重新填写。"
+      ],
+      "widgetRunPassed": true,
+      "peer": {
+        "passwordAuthenticationCallbacks": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "ptySizes": [
+          [
+            80,
+            24
+          ],
+          [
+            46,
+            31
+          ]
+        ],
+        "inputBytes": 0,
+        "serverClosedChannel": true,
+        "clientTransportInactiveBeforeFixtureCleanup": true,
+        "serverCleanupLogged": true,
+        "exitStatusSent": null,
+        "exitSignalSent": "TERM"
+      },
+      "frames": {
+        "close": {
+          "png": "independent-recheck/980-exit-signal-close.png",
+          "sha256": "81f62300d811a69cb8657eda31f32bbb0a00e9e1b619819619c91948473e2624",
+          "widgetRects": {
+            "feedback": {
+              "rect": [
+                277.0,
+                87.0,
+                71.25,
+                20.0
+              ]
+            },
+            "return": {
+              "rect": [
+                264.0,
+                452.0,
+                560.0,
+                48.0
+              ],
+              "hits": [
+                true,
+                true,
+                true,
+                true,
+                true
+              ]
+            }
+          }
+        },
+        "returned": {
+          "png": "independent-recheck/980-exit-signal-returned.png",
+          "sha256": "4ff2e420fd1908c5e2b116607d336f67a0f9ecfbc3d88a8d60441154af6b1c85",
+          "widgetRects": {
+            "feedback": {
+              "rect": [
+                264.0,
+                62.0,
+                560.0,
+                44.0
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

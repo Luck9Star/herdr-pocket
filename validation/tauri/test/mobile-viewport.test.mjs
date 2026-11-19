@@ -195,8 +195,9 @@ test('late Android IME confirmation after the wake window still updates the page
   const stop = observeAndroidSshIme(f.view,doc,()=>next,{getEditor:()=>editor});
   t.after(stop);
   await settle();
-  const hit = {target:{closest:()=>true}};
+  const hit = {target:{closest:sel=>sel.includes('#ssh-focus')?{}:null}};
   f.callbacks.get('d:pointerdown')(hit);
+  await settle();
   // 2s window expires with IME still closed; editor keeps focus
   await tick(2000);
   assert.equal(f.classes.has('ssh-ime-visible'),false,'window expired with IME still closed');
@@ -206,12 +207,76 @@ test('late Android IME confirmation after the wake window still updates the page
   assert.equal(f.classes.has('ssh-ime-visible'),true,'late IME confirmation adopted');
   assert.equal(f.props.get('--hp-ssh-ime-height'),'551px');
   assert.equal(f.props.get('--hp-ssh-ime-inset'),'300px');
-  // focus leaving the editor stops the slow watch
-  doc.activeElement = null;
+  // confirmed visible for THIS intent: cycle closes with focus retained —
+  // system Back shape — and must not keep a 500ms watch alive
+  doc.activeElement = editor;
   next = {imeVisible:false};
   await tick(600);
   assert.equal(f.classes.has('ssh-ime-visible'),false);
-  assert.equal(timers.size,0,'watch ends when the editor loses focus');
+  assert.equal(timers.size,0,'watch ends once this open cycle proved closed');
+  // a new explicit open intent may hold the slow watch again
+  next = {imeVisible:false};
+  f.callbacks.get('d:pointerdown')({target:{closest:sel=>sel.includes('#ssh-focus')?{}:null}});
+  await settle();
+  next = {imeVisible:true,viewHeightPx:1702,imeOverlapPx:600};
+  await tick(2100);
+  assert.equal(f.classes.has('ssh-ime-visible'),true,'second intent adopted late');
+});
+
+test('wake treats DOM Event objects and inactive pages as plain wakes', async t=>{
+  // Regression for the fresh-flag trap: DOM listeners pass a truthy Event and
+  // must not reset scope as if a new open intent arrived.
+  const f = fixture(), timers = new Map(), nodes = ['host-home', 'home-ssh', 'ssh-live'].map(()=>({hidden:false}));
+  const ids = Object.fromEntries(['host-home', 'home-ssh', 'ssh-live'].map((id,index)=>[id,nodes[index]]));
+  let now = 0, focused = true, nextTimer = 0, reads = 0;
+  let next = {imeVisible:false};
+  const old = globalThis.MutationObserver;
+  globalThis.MutationObserver = class {observe() {} disconnect() {}};
+  t.after(()=> {globalThis.MutationObserver=old;});
+  const editor = {isConnected:true};
+  const doc = {documentElement:f.root, body:f.body, hidden:false, hasFocus:()=>focused, activeElement:editor,
+    getElementById:id=>ids[id], addEventListener:(name,fn)=>f.callbacks.set('d:'+name,fn),
+    removeEventListener:name=>f.callbacks.delete('d:'+name)};
+  Object.assign(f.view, {innerWidth:393,innerHeight:851,devicePixelRatio:2,performance:{now:()=>now},
+    setTimeout:fn=>{timers.set(++nextTimer,fn);return nextTimer;},clearTimeout:id=>timers.delete(id)});
+  Object.assign(f.viewport, {height:851,offsetTop:0,scale:1});
+  const settle = async()=>{await Promise.resolve(); await Promise.resolve();};
+  const tick = async(delta=160)=>{
+    now+=delta; const entry = timers.entries().next();
+    if (entry.done) return;
+    const [id,fn] = entry.value;
+    timers.delete(id); fn(); await settle();
+  };
+  const stop = observeAndroidSshIme(f.view,doc,()=>{reads++;return next;},{getEditor:()=>editor});
+  t.after(stop);
+  await settle();
+  // open intent, then the 2s window expires closed: slow watch holds
+  f.callbacks.get('d:pointerdown')({target:{closest:sel=>sel.includes('#ssh-focus')?{}:null}});
+  await settle();
+  await tick(2200);
+  assert.equal(timers.size,1,'awaitingOpen keeps exactly the slow watch');
+  // a resize Event (truthy object) must extend the same scope, not reset it
+  f.callbacks.get('w:resize')({type:'resize'});
+  await settle();
+  await tick(2200);
+  assert.equal(timers.size,1,'truthy Event does not restart the watch as a new intent');
+  // page loses focus: reset clears state; a resize while inactive must not
+  // touch scope.awaitingOpen (the old code read it after an early return)
+  focused = false;
+  f.callbacks.get('w:blur')({type:'blur'});
+  assert.equal(f.classes.has('ssh-ime-known'),false);
+  f.callbacks.get('w:resize')({type:'resize'});
+  assert.equal(timers.size,0,'inactive resize neither throws nor restarts sampling');
+  // wide Android window: no wake at all
+  focused = true; f.view.innerWidth = 900;
+  f.callbacks.get('w:resize')({type:'resize'});
+  assert.equal(timers.size,0,'wide viewport ignores resize wakes');
+  f.view.innerWidth = 393;
+  // open intent on an inactive-focus page still must not throw
+  focused = false;
+  f.callbacks.get('d:pointerdown')({target:{closest:sel=>sel.includes('#ssh-focus')?{}:null}});
+  assert.equal(timers.size,0,'inactive open intent resets without sampling');
+  assert.equal(f.classes.has('ssh-ime-known'),false);
 });
 
 test('Android SSH header scroll tracking stops during review and outside the route',()=>{

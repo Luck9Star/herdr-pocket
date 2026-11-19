@@ -87,10 +87,8 @@ export function observeAndroidSshIme(view, doc, readInsets, options = {}) {
     try { value = await readInsets(); } catch { /* Without a system sample use the existing web viewport. */ }
     if (scope !== current) return;
     if (!active()) { reset(); return; }
-    current.pending = false;
-    current.sample = value;
-    paint();
-    // A fixed WebView emits no resize when the IME finally shows. While the
+    current.sample = value; paint();
+    if (value?.imeVisible === true) current.awaitingOpen = false;
     // terminal editor still owns focus, keep a slow watch after the wake window
     // so a late IME confirmation is adopted; focus/route/blur still stop it.
     const editor = typeof options.getEditor === 'function' ? options.getEditor() : null;
@@ -101,7 +99,10 @@ export function observeAndroidSshIme(view, doc, readInsets, options = {}) {
         if (scope === current && active()) void sample(current);
         else if (scope === current) reset();
       }, 160);
-    } else if (editorHeld) {
+    } else if (editorHeld && current.awaitingOpen) {
+      // Only a fresh open intent that has not yet been answered keeps the slow
+      // watch; an explicit hide, a confirmed-closed sample, blur, or route exit
+      // ends it, so system Back with retained DOM focus cannot poll forever.
       current.timer = view.setTimeout(() => {
         current.timer = undefined;
         if (scope === current && active() && doc.activeElement === editor) void sample(current);
@@ -109,15 +110,26 @@ export function observeAndroidSshIme(view, doc, readInsets, options = {}) {
       }, 500);
     }
   }
-  const wake = () => {
+  // `fresh === true` only: DOM listeners pass a truthy Event that must not
+  // count as an open intent, and an inactive page must not touch scope.
+  const wake = (fresh = false) => {
+    const reopen = fresh === true;
     if (!active()) { reset(); return; }
+    if (reopen) { if (scope?.timer !== undefined) view.clearTimeout(scope.timer); scope = undefined; }
     scope ??= {};
+    if (reopen) scope.awaitingOpen = true;
     scope.until = view.performance.now() + 2000;
     paint();
     if (!scope.pending && scope.timer === undefined) void sample(scope);
   };
   const intent = event => {
-    if (event.target.closest?.('#ssh-focus,#ssh-hide-keyboard,#ssh-terminal')) wake();
+    const target = event.target;
+    if (!target.closest?.('#ssh-focus,#ssh-hide-keyboard,#ssh-terminal')) return;
+    // Only a fresh open intent may hold the slow watch; a hide tap is an
+    // explicit close and must never (re)start polling for a visible IME.
+    if (target.closest?.('#ssh-focus')) { wake(true); return; }
+    if (target.closest?.('#ssh-hide-keyboard') && scope) scope.awaitingOpen = false;
+    wake();
   };
   const visibility = new MutationObserver(() => { reset(); wake(); });
   for (const node of nodes) visibility.observe(node, {attributes:true, attributeFilter:['hidden']});

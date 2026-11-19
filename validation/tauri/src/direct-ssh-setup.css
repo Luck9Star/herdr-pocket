@@ -1,19 +1,33 @@
-.ssh-mobile-only { display:none; }
+.ssh-mobile-only, #sidebar-toggle { display:none; }
 
 @media (min-width:600px) {
-  body:has(#host-home:not([hidden]) #home-ssh[data-ssh-close]:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-ssh-disconnected:not([hidden]) ~ #host-empty:not([hidden])) {
+  body:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) {
     --outcome-sidebar:224px;
     .app-header { display:none; }
+    &:has(#home-dashboard:not([hidden]) #host-empty[hidden]) {
+      .app-header { display:block; position:absolute; top:4px; right:40px; z-index:2; padding:0; }
+      .brand-lockup { display:none; }
+      #host-board-intro { padding-right:112px; }
+    }
     .route-tabs { position:fixed; z-index:4; inset:0 auto 0 0; display:flex; flex-direction:column; align-items:stretch; width:var(--outcome-sidebar); max-width:none; margin:0; padding:68px 8px 0; gap:8px; background:var(--hp-card); border-right:1px solid var(--hp-border); }
+    .route-tabs #sidebar-toggle { display:grid; place-items:center; border:0; background:transparent; position:absolute; top:8px; left:8px; width:44px; height:44px; padding:10px; }
+    .route-tabs button:not(#sidebar-toggle) { width:208px; }
     .route-tabs button { display:flex; align-items:center; justify-content:flex-start; flex:none; min-height:44px; padding:10px; text-align:left; font-size:0.875rem; }
+    .route-tabs #sidebar-toggle svg { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; }
     .route-tabs button span { display:none; }
     .route-tabs .empty-route-icon { display:block; flex:none; width:24px; height:24px; margin-right:10px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
     #host-home { max-width:none; margin:0 0 0 var(--outcome-sidebar); padding:0 40px 40px; }
-    #host-home-status { display:none; }
-    #home-dashboard { position:relative; padding-top:62px; }
-    #host-board-intro { position:absolute; top:326px; left:16px; width:min(528px,calc(100% - 32px)); }
-    #host-board-intro h2 { display:none; }
-    #host-board-intro #home-open-ssh { width:100%; min-height:48px; font-size:14px; }
+    #home-dashboard:has(#host-empty:not([hidden])) #host-home-status { display:none; }
+    #home-dashboard:has(#host-empty:not([hidden])) { position:relative; padding-top:78px; }
+    #home-dashboard:has(#host-empty:not([hidden])):has(#host-ssh-disconnected:not([hidden])),
+    #home-dashboard:has(#host-empty:not([hidden])):has(#ssh-board-active:not([hidden])) { padding-top:62px; }
+    #home-dashboard:has(#host-empty:not([hidden])) #host-board-intro { position:absolute; top:282px; left:16px; width:min(528px,calc(100% - 32px)); }
+    #home-dashboard:has(#host-empty:not([hidden])):has(#host-ssh-disconnected:not([hidden])) #host-board-intro { top:326px; }
+    #home-dashboard:has(#host-empty:not([hidden])):has(#ssh-board-active:not([hidden])) #host-board-intro { top:348px; }
+    #home-dashboard:has(#host-empty:not([hidden])) #host-board-intro h2 { position:absolute; top:-258px; left:-16px; margin:0; font-size:22px; line-height:26px; }
+    #home-dashboard:has(#host-empty:not([hidden])):has(#host-ssh-disconnected:not([hidden])) #host-board-intro h2 { top:-302px; }
+    #home-dashboard:has(#host-empty:not([hidden])):has(#ssh-board-active:not([hidden])) #host-board-intro h2 { top:-324px; }
+    #home-dashboard:has(#host-empty:not([hidden])) #host-board-intro #home-open-ssh { width:100%; min-height:48px; font-size:14px; }
     #host-empty { max-width:560px; min-height:268px; padding:15px; text-align:start; border-radius:var(--hp-radius-card); }
     #host-empty .empty-terminal-icon { display:grid; place-items:center; width:44px; height:44px; border-radius:10px; color:var(--hp-brand); background:var(--hp-brandSoft); }
     #host-empty .connection-icon { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
@@ -22,40 +36,42 @@
     #host-empty button { display:block; width:100%; min-height:48px; font-size:14px; }
     #host-empty #home-open-ssh { margin-top:12px; }
   }
-  @media (max-width:899px) {
-    body:has(#host-home:not([hidden]) #home-ssh[data-ssh-close]:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-ssh-disconnected:not([hidden]) ~ #host-empty:not([hidden])) {
+  @media (max-width:959px) {
+    body:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) {
       --outcome-sidebar:64px;
       .route-tabs { padding-inline:10px; }
+      .route-tabs #sidebar-toggle { left:10px; }
       .route-tabs button { justify-content:center; font-size:0; padding:10px; }
+      .route-tabs button:not(#sidebar-toggle) { width:44px; }
       .route-tabs .empty-route-icon { margin:0; }
     }
   }
-  #home-ssh[data-ssh-close] #ssh-page-heading { display:none; }
-  #home-ssh[data-ssh-close] #ssh-setup .ssh-step-header { display:flex; align-items:center; height:56px; margin:0 -32px; gap:8px; }
-  #home-ssh[data-ssh-close] #ssh-step-back { display:grid; place-items:center; width:44px; height:44px; padding:0; border:0; background:transparent; }
-  #home-ssh[data-ssh-close] #ssh-step-back svg { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
-  #home-ssh[data-ssh-close] #ssh-step-title { margin:0; font-size:1.125rem; font-weight:600; }
-  #home-ssh[data-ssh-close] #ssh-form { padding-top:20px; }
-  #home-ssh[data-ssh-close] #ssh-page-heading { margin:0 0 20px; }
-  #home-ssh[data-ssh-close] #ssh-status { display:none; }
-  #home-ssh[data-ssh-close] #ssh-form { max-width:560px; }
-  #home-ssh[data-ssh-close] :is(#ssh-setup > p, #ssh-fingerprint, .review-check, #ssh-credentials) { display:none; }
-  #home-ssh[data-ssh-close] :is(#ssh-closed-feedback, #ssh-target-fields h3, #ssh-target-fields .ssh-step-note, #ssh-return-home):not([hidden]) { display:block; }
-  #home-ssh[data-ssh-close] #ssh-closed-feedback { min-height:66px; padding:8px 11px; margin-bottom:16px; border:1px solid var(--hp-brandBorder); border-radius:10px; background:var(--hp-brandSoft); }
-  #home-ssh[data-ssh-close] #ssh-closed-feedback p { margin:0; line-height:1.375rem; font-size:0.8125rem; }
-  #home-ssh[data-ssh-close] #ssh-closed-feedback p:first-child { color:var(--hp-brand); font-weight:600; font-size:0.875rem; }
-  #home-ssh[data-ssh-close] #ssh-target-fields h3 { font-size:1.375rem; font-weight:600; line-height:1.625rem; margin:0 0 10px; }
-  #home-ssh[data-ssh-close] #ssh-target-fields .remote-fields-grid { grid-template-columns:minmax(0,1fr) 84px; gap:14px 12px; margin:0; }
-  #home-ssh[data-ssh-close] .ssh-host-field { grid-column:1 / -1; }
-  #home-ssh[data-ssh-close] #ssh-target-fields label { display:block; margin:0; font-size:0.8125rem; font-weight:600; line-height:1.125rem; }
-  #home-ssh[data-ssh-close] #ssh-target-fields input { display:block; width:100%; min-height:48px; margin:4px 0 0; padding:10px 12px; font-size:1rem; font-weight:400; line-height:1.25rem; }
-  #home-ssh[data-ssh-close] #ssh-port { appearance:textfield; }
-  #home-ssh[data-ssh-close] #ssh-port::-webkit-outer-spin-button,
-  #home-ssh[data-ssh-close] #ssh-port::-webkit-inner-spin-button { appearance:none; margin:0; }
-  #home-ssh[data-ssh-close] :is(#ssh-probe, #ssh-return-home:not([hidden])) { display:block; width:100%; min-height:48px; font-size:0.875rem; }
-  #home-ssh[data-ssh-close] #ssh-probe { margin-top:20px; }
-  #home-ssh[data-ssh-close] .ssh-step-note { color:var(--hp-textMutedReadable); margin:8px 0 0; font-size:0.75rem; line-height:1.125rem; }
-  #home-ssh[data-ssh-close] #ssh-return-home { margin-top:10px; }
+  body[data-entry-sidebar="expanded"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) { --outcome-sidebar:224px !important; }
+  body[data-entry-sidebar="expanded"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs #sidebar-toggle { left:8px; }
+  body[data-entry-sidebar="expanded"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs { padding-inline:8px; }
+  body[data-entry-sidebar="expanded"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs button:not(#sidebar-toggle) { width:208px; justify-content:flex-start; font-size:0.875rem; }
+  body[data-entry-sidebar="expanded"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs .empty-route-icon { margin-right:10px; }
+  body[data-entry-sidebar="collapsed"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) { --outcome-sidebar:64px !important; }
+  body[data-entry-sidebar="collapsed"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs { padding-inline:10px; }
+  body[data-entry-sidebar="collapsed"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs #sidebar-toggle { left:10px; }
+  body[data-entry-sidebar="collapsed"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs button:not(#sidebar-toggle) { width:44px; justify-content:center; font-size:0; }
+  body[data-entry-sidebar="collapsed"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs .empty-route-icon { margin:0; }
+  body:has(#host-home:not([hidden]) #home-add:not([hidden])) {
+    .connection-choice-header { display:flex; align-items:center; height:56px; margin:0 -32px; gap:8px; font-size:18px; font-weight:600; }
+    #add-back { display:grid; place-items:center; width:44px; height:44px; padding:0; border:0; background:transparent; }
+    .connection-icon { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linejoin:round; stroke-linecap:round; }
+    .connection-choice-body { max-width:560px; padding-top:24px; }
+    .connection-choice-desktop { display:none; }
+    #add-choice-heading { display:block; margin:0 0 18px; font-size:22px; line-height:26px; font-weight:600; }
+    #home-add .ssh-options { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; margin:0; }
+    .connection-choice { display:flex; flex-direction:column; gap:8px; align-items:stretch; width:100%; min-height:100px; padding:13px; text-align:start; border-radius:var(--hp-radius-card); border-color:var(--hp-border); }
+    #add-ssh { border-color:var(--hp-brandBorder); }
+    .connection-choice-row { display:grid; grid-template-columns:40px minmax(0,1fr) 24px; align-items:center; gap:12px; color:var(--hp-textPrimary); font-size:16px; line-height:20px; }
+    .connection-choice-icon { display:grid; place-items:center; width:40px; height:40px; border-radius:10px; color:var(--hp-textSecondary); background:var(--hp-cardSubtle); }
+    #add-ssh .connection-choice-icon { color:var(--hp-brand); background:var(--hp-brandSoft); }
+    .connection-choice-arrow { display:block; color:var(--hp-textSecondary); }
+    .connection-choice-detail { display:block; color:var(--hp-textSecondary); font-size:13px; line-height:18px; font-weight:400; }
+  }
   #host-ssh-disconnected:not([hidden]) { display:block; max-width:560px; min-height:44px; margin:0 0 16px; padding:10px 11px; border:1px solid var(--hp-brandBorder); border-radius:10px; background:var(--hp-brandSoft); color:var(--hp-brand); font-size:0.875rem; font-weight:600; line-height:1.375rem; }
 
 }
@@ -68,6 +84,87 @@
     #ssh-status:not([data-setup-notice]) { display:none; }
     #ssh-status { margin:12px var(--hp-connection-margin); }
   }
+
+
+}
+
+@media (max-width:599px) {
+  #host-ssh-disconnected:not([hidden]) {
+    display:block;
+    min-height:44px;
+    margin:0 0 16px;
+    padding:10px 11px;
+    border:1px solid var(--hp-brandBorder);
+    border-radius:10px;
+    background:var(--hp-brandSoft);
+    color:var(--hp-brand);
+    font-size:0.875rem;
+    font-weight:600;
+    line-height:1.375rem;
+  }
+  #host-home:not([hidden]):has(#home-dashboard:not([hidden]) #host-ssh-disconnected:not([hidden]) ~ #host-empty[data-compact]:not([hidden])) {
+    padding-top:12px;
+  }
+  body:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-key-change:not([hidden])) {
+    padding-bottom:env(safe-area-inset-bottom,0px);
+    #host-home { padding:var(--hp-connection-top) 0 24px; }
+    #ssh-key-change {
+      padding:0;
+      margin:0;
+      border-radius:0;
+      background:var(--hp-canvas);
+    }
+    .ssh-key-change-heading {
+      display:flex;
+      align-items:center;
+      min-height:56px;
+      margin:0;
+      padding:0 var(--hp-connection-margin);
+      border-bottom:1px solid var(--hp-border);
+      font-size:1.125rem;
+      font-weight:600;
+    }
+    .ssh-key-change-content { margin:20px var(--hp-connection-margin) 0; }
+    #ssh-key-change .ssh-mobile-only { display:revert; }
+    #ssh-key-change .ssh-desktop-only { display:none; }
+    .ssh-key-change-warning { min-height:84px; padding:9px 11px; border-radius:10px; }
+    .ssh-key-change-warning p { margin:0; }
+    .ssh-key-change-warning .ssh-key-change-warning-title { font-size:0.875rem; line-height:1.375rem; margin-bottom:3px; }
+    .ssh-key-change-warning-detail p { font-size:0.8125rem; line-height:1.125rem; color:var(--hp-textSecondary); }
+    #ssh-key-change-target-card {
+      min-height:52px;
+      margin:12px 0;
+      padding:4px 11px;
+      border:1px solid var(--hp-border);
+      border-radius:10px;
+      background:var(--hp-card);
+    }
+    #ssh-key-change-target-card p { margin:0; }
+    #ssh-key-change-target-card p:first-child { font-size:0.75rem; line-height:1.125rem; color:var(--hp-textSecondary); }
+    #ssh-key-change p#ssh-key-change-endpoint,
+    #ssh-key-change-old, #ssh-key-change-new {
+      overflow-wrap:anywhere;
+      font-family:ProbeNerd, ui-monospace, monospace;
+    }
+    #ssh-key-change p#ssh-key-change-endpoint { font-size:0.875rem; line-height:1.125rem; }
+    .ssh-key-change-card { min-height:167px; margin:0; padding:7px 11px; }
+    .ssh-key-change-card p { margin:0; }
+    #ssh-key-change-algorithms { font-size:0.8125rem; line-height:1.25rem; font-weight:600; }
+    .ssh-changed-old-label, .ssh-changed-new-label { font-size:0.75rem; line-height:1.125rem; }
+    .ssh-key-change-card .ssh-changed-old-label { margin-top:7px; color:var(--hp-textSecondary); }
+    .ssh-key-change-card .ssh-changed-new-label { margin-top:6px; padding-top:13px; border-top:1px solid var(--hp-border); color:var(--hp-dangerText); }
+    .ssh-key-change-card #ssh-key-change-old, .ssh-key-change-card #ssh-key-change-new {
+      min-height:34px;
+      font-size:0.8125rem;
+      line-height:1.0625rem;
+      word-break:break-all;
+    }
+    .ssh-key-change-actions { gap:12px; }
+    .ssh-key-change-actions button { min-height:48px; font-size:0.875rem; }
+  }
+}
+
+
 
   #home-ssh[data-ssh-step] #ssh-setup {
     .ssh-mobile-only { display:revert; }
@@ -219,86 +316,20 @@
     }
   }
 
-  @media (max-width:359px) {
-    #home-ssh[data-ssh-step] #ssh-setup #ssh-approved-note { margin-bottom:12px; }
-    #home-ssh[data-ssh-step] #ssh-setup #ssh-key { height:68px; }
-  }
+
+@media (min-width:600px) {
+  #home-ssh[data-ssh-step]:has(#ssh-setup:not([hidden])) #ssh-page-heading { display:none; }
+  #home-ssh[data-ssh-step] #ssh-setup #ssh-form .ssh-desktop-only { display:none; }
+  #home-ssh[data-ssh-step] #ssh-setup .ssh-step-header { position:static; min-height:56px; padding:0; margin:0 -32px; border:0; }
+  #home-ssh[data-ssh-step] #ssh-setup .ssh-step-header svg { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+  #home-ssh[data-ssh-step] #ssh-setup #ssh-form { max-width:560px; padding:20px 0 0; }
+  #home-ssh[data-ssh-step]:has(#ssh-setup:not([hidden])) #ssh-status:not([data-setup-notice]) { display:none; }
+  #home-ssh[data-ssh-step]:has(#ssh-setup:not([hidden])) #ssh-status { max-width:560px; margin:12px 0; }
 }
 
-@media (max-width:599px) {
-  #host-ssh-disconnected:not([hidden]) {
-    display:block;
-    min-height:44px;
-    margin:0 0 16px;
-    padding:10px 11px;
-    border:1px solid var(--hp-brandBorder);
-    border-radius:10px;
-    background:var(--hp-brandSoft);
-    color:var(--hp-brand);
-    font-size:0.875rem;
-    font-weight:600;
-    line-height:1.375rem;
-  }
-  #host-home:not([hidden]):has(#home-dashboard:not([hidden]) #host-ssh-disconnected:not([hidden]) ~ #host-empty[data-compact]:not([hidden])) {
-    padding-top:12px;
-  }
-  body:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-key-change:not([hidden])) {
-    padding-bottom:env(safe-area-inset-bottom,0px);
-    #host-home { padding:var(--hp-connection-top) 0 24px; }
-    #ssh-key-change {
-      padding:0;
-      margin:0;
-      border-radius:0;
-      background:var(--hp-canvas);
-    }
-    .ssh-key-change-heading {
-      display:flex;
-      align-items:center;
-      min-height:56px;
-      margin:0;
-      padding:0 var(--hp-connection-margin);
-      border-bottom:1px solid var(--hp-border);
-      font-size:1.125rem;
-      font-weight:600;
-    }
-    .ssh-key-change-content { margin:20px var(--hp-connection-margin) 0; }
-    #ssh-key-change .ssh-mobile-only { display:revert; }
-    #ssh-key-change .ssh-desktop-only { display:none; }
-    .ssh-key-change-warning { min-height:84px; padding:9px 11px; border-radius:10px; }
-    .ssh-key-change-warning p { margin:0; }
-    .ssh-key-change-warning .ssh-key-change-warning-title { font-size:0.875rem; line-height:1.375rem; margin-bottom:3px; }
-    .ssh-key-change-warning-detail p { font-size:0.8125rem; line-height:1.125rem; color:var(--hp-textSecondary); }
-    #ssh-key-change-target-card {
-      min-height:52px;
-      margin:12px 0;
-      padding:4px 11px;
-      border:1px solid var(--hp-border);
-      border-radius:10px;
-      background:var(--hp-card);
-    }
-    #ssh-key-change-target-card p { margin:0; }
-    #ssh-key-change-target-card p:first-child { font-size:0.75rem; line-height:1.125rem; color:var(--hp-textSecondary); }
-    #ssh-key-change p#ssh-key-change-endpoint,
-    #ssh-key-change-old, #ssh-key-change-new {
-      overflow-wrap:anywhere;
-      font-family:ProbeNerd, ui-monospace, monospace;
-    }
-    #ssh-key-change p#ssh-key-change-endpoint { font-size:0.875rem; line-height:1.125rem; }
-    .ssh-key-change-card { min-height:167px; margin:0; padding:7px 11px; }
-    .ssh-key-change-card p { margin:0; }
-    #ssh-key-change-algorithms { font-size:0.8125rem; line-height:1.25rem; font-weight:600; }
-    .ssh-changed-old-label, .ssh-changed-new-label { font-size:0.75rem; line-height:1.125rem; }
-    .ssh-key-change-card .ssh-changed-old-label { margin-top:7px; color:var(--hp-textSecondary); }
-    .ssh-key-change-card .ssh-changed-new-label { margin-top:6px; padding-top:13px; border-top:1px solid var(--hp-border); color:var(--hp-dangerText); }
-    .ssh-key-change-card #ssh-key-change-old, .ssh-key-change-card #ssh-key-change-new {
-      min-height:34px;
-      font-size:0.8125rem;
-      line-height:1.0625rem;
-      word-break:break-all;
-    }
-    .ssh-key-change-actions { gap:12px; }
-    .ssh-key-change-actions button { min-height:48px; font-size:0.875rem; }
-  }
+@media (max-width:359px) {
+  #home-ssh[data-ssh-step] #ssh-setup #ssh-approved-note { margin-bottom:12px; }
+  #home-ssh[data-ssh-step] #ssh-setup #ssh-key { height:68px; }
 }
 
 #home-ssh #ssh-setup #ssh-closed-feedback[data-phase="failed"], #host-ssh-disconnected[data-phase="failed"] { border-color:var(--hp-dangerBorder); background:var(--hp-dangerSoft); color:var(--hp-dangerText); }

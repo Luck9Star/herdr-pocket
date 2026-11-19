@@ -27,6 +27,7 @@ class Element {
   close() { this.open=false; this.previousFocus?.focus(); }
   replaceChildren(...nodes) { this.children = [...nodes]; }
   setAttribute(key, value) { this.attrs[key] = value; }
+  getAttribute(key) { return this.attrs[key] ?? null; }
   addEventListener(name, fn) { (this.events[name] ??= []).push(fn); }
   dispatch(name, event = {}) {
     for (const fn of this.events[name] || []) {
@@ -113,6 +114,7 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scan
       node.tagName = tag;
       return node;
     },
+    createElementNS: (_ns, tag) => { const node = new Element(); node.tagName = tag; return node; },
     addEventListener(name,fn) { (documentEvents[name] ??= []).push(fn); },
   };
   globalThis.window = { addEventListener(name,fn) { (windowEvents[name] ??= []).push(fn); }, confirm: () => true };
@@ -1947,11 +1949,11 @@ test('SSH authentication selection clears abandoned secrets and sends only the c
     n['ssh-auth-method'].value='key';n['ssh-auth-method'].dispatch('change');
     assert.equal(n['ssh-password'].value,'');assert.equal(n['ssh-password-fields'].hidden,true);
     assert.equal(n['ssh-key-fields'].hidden,false);assert.equal(n['ssh-review'].checked,true);
-    n['ssh-key'].value='-----BEGIN OPENSSH PRIVATE KEY-----\nfixture\n-----END OPENSSH PRIVATE KEY-----';
+    n['ssh-key'].value='-----BEGIN PRIVATE KEY-----\nQUJDREVGR0hJSktM\n-----END PRIVATE KEY-----';
     n['ssh-passphrase'].value='passphrase fixture';
     await n['ssh-form'].onsubmit({preventDefault(){}});
     const keyConfig=h.calls.filter(c=>c.name==='ssh_shell_open').at(-1).args.config;
-    assert.match(keyConfig.privateKeyPem,/\nfixture\n/);assert.equal(keyConfig.privateKeyPassphrase,'passphrase fixture');assert.equal('password' in keyConfig,false);
+    assert.match(keyConfig.privateKeyPem,/\nQUJDREVGR0hJSktM\n/);assert.equal(keyConfig.privateKeyPassphrase,'passphrase fixture');assert.equal('password' in keyConfig,false);
     assert.equal(n['ssh-key'].value,'');assert.equal(n['ssh-passphrase'].value,'');
     n['ssh-cancel'].click();await flush();
     n['ssh-key'].value='unused key';n['ssh-passphrase'].value='unused phrase';
@@ -1986,6 +1988,31 @@ async function openOrdinary(h, id, host = 'fixture.invalid') {
   assert.equal(n['ssh-disconnect'].disabled, false);
   return channel;
 }
+
+test('entry sidebar toggle changes and restores its real expanded state', async () => {
+  const h = await setup(), button = h.nodes['sidebar-toggle'];
+  try {
+    const initial = button.getAttribute('aria-expanded');
+    button.click();
+    assert.notEqual(button.getAttribute('aria-expanded'), initial);
+    assert.equal(document.body.dataset.entrySidebar, initial === 'true' ? 'collapsed' : 'expanded');
+    button.click();
+    assert.equal(button.getAttribute('aria-expanded'), initial);
+    assert.equal(document.body.dataset.entrySidebar, initial === 'true' ? 'expanded' : 'collapsed');
+  } finally { h.restore(); }
+});
+
+test('active ordinary SSH advertises its session on the board, network and sidebar only while ready', async () => {
+  const h = await setup({compactEntry:{matches:false, addEventListener(){}}, sshInvoke:name => name === 'ssh_shell_open' ? 's1' : null});
+  const n = h.nodes;
+  try {
+    await openOrdinary(h, 's1');
+    for (const id of ['ssh-board-active', 'ssh-network-active', 'ssh-nav-live']) assert.equal(n[id].hidden, false);
+    n['ssh-disconnect'].click();
+    await flush();
+    for (const id of ['ssh-board-active', 'ssh-network-active', 'ssh-nav-live']) assert.equal(n[id].hidden, true);
+  } finally { h.restore(); }
+});
 
 test('ordinary SSH natural exit shows confirmed local retirement and genuine remote evidence', async () => {
   let finishClose;

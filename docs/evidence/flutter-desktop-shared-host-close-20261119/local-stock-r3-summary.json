@@ -1,0 +1,64 @@
+{
+  "scope": "local macOS Flutter 3.47.9 Widget, stock herdr and isolated loopback OpenSSH; temporary signer, catalog and journal",
+  "oldControl": {
+    "remoteSourceSHA": "85bfcfa10660f5de2db6e6da9c82d737c78b8644",
+    "localRunWithDiagnostics": true,
+    "localFinishReadPhase": "peer_eof",
+    "localError": "network_transport_failed",
+    "asyncTeardownObservationLogSha256": "bb8dfb55a1c76ef72bf259b41f8d34d30d6743d46e56b68a32204aff571e76ba",
+    "explicitAwaitFailureLogSha256": "93d12a6fa53d14b92cb353272fa4d62ae2556fcf52645cddae928cd1cf6f5e28"
+  },
+  "fixedSourceSHA": "2cd636f40b07928d31b1f487c653dbd0dbe4f380",
+  "verifiedWidgetAndProductSourceFiles": {
+    "lib/remote_adapter.dart": "ef9f4c8631fdf27186c7e559f34bfea143c9202c8a5cb95cffbe4a20beca6280",
+    "lib/remote_page.dart": "799b60d8da36e329f1e498447ec2828faf77c479d0df3e0c3f3f07c88ae387aa",
+    "lib/host_tabs.dart": "6c788b45c583a466a833c12ffe11125bcc164fc24721d19fc21216b4507597a5",
+    "test/s06_real_ssh_test.dart": "54d4dcfb42bfb6db633ebd5660e7af94c180cf77737664be18210cd451490fa5"
+  },
+  "fixedRuns": [
+    {
+      "trial": 1,
+      "sourceLogSha256": "a31e39761afe20a407afafd83f5f770bad82c4fc28a778918e6529a2033beabd"
+    },
+    {
+      "trial": 2,
+      "sourceLogSha256": "161a9f3c7e7e0c754db8fc54c41dc6aae5a08e936a03282325ae7eace8477b60"
+    },
+    {
+      "trial": 3,
+      "sourceLogSha256": "0f1d6ba90d844f8931f5f8584be66bc3f4cc10dba0eb6528ae66b5b2ce74c7fa"
+    },
+    {
+      "trial": 4,
+      "sourceLogSha256": "2ccc7c7337f25dc7cb4c5871110423e9c5a3146ab5e6d5d9efed61a1db87ae9f"
+    },
+    {
+      "trial": 5,
+      "sourceLogSha256": "587290a7dbabd6927b8a5cbb0c8b37c25cec148a90ecc810eaa3660a936c78ad"
+    }
+  ],
+  "allFixedRuns": {
+    "authenticatedConnectionsPerPeer": [
+      1,
+      1
+    ],
+    "peerCloseAfterClosingFocusedA": [
+      true,
+      false
+    ],
+    "survivorAdvancedOnOriginalConnection": true,
+    "peerCloseBeforeDriverExit": [
+      true,
+      true
+    ],
+    "peerCloseAfterDriverExit": [
+      true,
+      true
+    ],
+    "exactPeerInputBytes": [
+      0,
+      0
+    ],
+    "driverPassed": true
+  }
+}

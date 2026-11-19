@@ -1,11 +1,11 @@
 # Tauri GTK 分屏键盘与窗口验收 R7
 
-2026-11-19，stock R7 在 Ubuntu 24.04 x86_64 的原生 GTK WebView 完成两条真实回环 OpenSSH/herdr 连接和实际窗口往返。公开快照使用 `5e50a4d5a7b688b36adda16b970486b18986b274`。A、B 各用一个进程内测试身份连接不同的命名会话。两个会话的 pane 名均为 `w1:p1`，稳定终端 ID 各不相同。[验收汇总](../../74-desktop-split-resize.md#tauri-分屏键盘退出与窗口变化) · [冻结工作流](https://github.com/Luck9Star/herdr-pocket/blob/5e50a4d5a7b688b36adda16b970486b18986b274/.github/workflows/paired-gui-validation.yml)
+2026-11-19，两轮 R7 在 Ubuntu 24.04 x86_64 的原生 GTK WebView 各完成两条真实回环 OpenSSH/herdr 连接。两轮使用 `5e50a4d5a7b688b36adda16b970486b18986b274`。A、B 各用一个进程内测试身份连接不同的命名会话。两个会话的 pane 名均为 `w1:p1`，稳定终端 ID 各不相同。[验收汇总](../../74-desktop-split-resize.md#tauri-分屏键盘退出与窗口变化) · [冻结工作流](https://github.com/Luck9Star/herdr-pocket/blob/5e50a4d5a7b688b36adda16b970486b18986b274/.github/workflows/paired-gui-validation.yml)
 
 | 模式 | 结果 | 作业与原件 |
 | --- | --- | --- |
 | stock，原版 herdr 0.9.5 | 通过，原生窗口 1440 → 700 → 1440，原 SSH 对端 A／B 分别收到 0／0 字节 | [作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44533698168/job/135593449788) · [工件 14533849813](https://github.com/Luck9Star/herdr-pocket/actions/runs/44533698168/artifacts/14533849813) · [原 ZIP](stock-r7-actions-14533849813.zip) |
-| guarded，同源码的隔离受保护输入扩展 | R7 结果待工件复核。固定宽屏的原生 D1 结论来自 R6 | [R7 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44533705204/job/135596416871) · [R6 逐键退出原件](../tauri-gtk-focus-resize-r6-20261119/README.md#guarded-的逐键退出) |
+| guarded，同源码的隔离受保护输入扩展 | 通过，固定 1440 × 1200 原生窗口，原 SSH 对端 A／B 分别收到 9／1 字节 | [作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44533705204/job/135596416871) · [工件 14536696752](https://github.com/Luck9Star/herdr-pocket/actions/runs/44533705204/artifacts/14536696752) · [原 ZIP](guarded-r7-actions-14536696752.zip) |
 
 ## Stock 原生窗口与双 SSH
 
@@ -14,6 +14,12 @@
 回宽时 A 在同一目标取得新完整帧。可见终端取证计数 A／B 由 339／339，经窄窗 B 的 346，推进至回宽后的 392／392。驱动实际点击「返回主机看板」并等两侧均暂停，随后点击「终端」返回原分屏并收起配对资料。第二轮收窄和回宽后，两边仍暂停且旧画面保持 400／399。驱动点击「设为输入焦点」选中 A，随后点击「恢复观察」。只有 A 恢复，取得新完整帧且推进至 416，B 保持暂停及旧画面 399。截图和计数在各阶段分别采集。[stock ZIP 中的 manifest.json](stock-r7-actions-14533849813.zip)
 
 原 SSH 对端各只认证一次，各接收零字节，分别在 WebDriver 退出前确认关闭。A／B 的远端 PTY 每 50 ms 采样，共 1682／1680 次，均保持 119 × 40，记录中无尺寸变化或 `SIGWINCH` 通知。临时授权已撤销，所属进程已停止，临时密钥已移除，用户授权文件未改动。应用的 80 × 24 本地观察画布独立于远端 PTY。[stock ZIP 中的 manifest.json](stock-r7-actions-14533849813.zip)
+
+## Guarded 原生逐键退出
+
+固定 1440 × 1200 窗口中，B 先主动输入 1 字节，再以真实 WebDriver 键盘按一次 `Ctrl+Shift+F6`。`guardedDirectEscape` 六项均为真。应用消费可信组合键，DOM 焦点移至 A 原有的「设为输入焦点」按钮，选中的目标仍是 B，原目标与两条原 SSH 均保留，双侧处于只读观察，SSH 对端未收到额外字节。随后 A 显式发送草稿，A／B 最终收到且逐字节匹配 9／1 字节。每侧只认证一次，驱动退出前两条 SSH 均关闭。两个 PTY 每 50 ms 采样 1597／1590 次，均保持 119 × 40，临时授权、进程及密钥清理通过。[guarded ZIP 中的 manifest.json](guarded-r7-actions-14536696752.zip)
+
+ZIP 中的 `s06-tauri-connected.png` 是开启逐键输入前的双侧工作台原图，退出时的焦点、观察状态及对端字节由 manifest 和驱动验证。[guarded 原 ZIP](guarded-r7-actions-14536696752.zip)
 
 ## 修前与修后的原图
 
@@ -42,7 +48,7 @@ node --test --test-name-pattern='split frame acknowledgement failure' test/deskt
 
 ## 校验原件
 
-Actions ZIP 保留原字节。stock 的 13 个成员已逐一校验 CRC，内部 11 项 SHA-256 一致。五张 PNG 为未裁切的原生视口原图，逐张解码核对尺寸。ZIP 内只有脱敏 manifest、公开契约、依赖锁、布局测量、字体版本与夹具画面。画面中的终端文本由隔离夹具生成。私钥、实际会话内容和原始对端日志未归档。成员校验清单同时覆盖 Actions 的内置 `SHA256SUMS` 和后来附入的 GTK 字体记录。[ZIP SHA-256](SHA256SUMS) · [成员 SHA-256](SHA256SUMS.members)
+Actions ZIP 保留原字节。stock／guarded 的 13／9 个成员已逐一校验 CRC，内部 11／7 项 SHA-256 一致。六张 PNG 为未裁切的原生视口原图，逐张解码核对尺寸。ZIP 内只有脱敏 manifest、公开契约、依赖锁、布局测量、字体版本与夹具画面。画面中的终端文本由隔离夹具生成。私钥、实际会话内容和原始对端日志未归档。成员校验清单同时覆盖 Actions 的内置 `SHA256SUMS` 和后来附入的 GTK 字体记录。[ZIP SHA-256](SHA256SUMS) · [成员 SHA-256](SHA256SUMS.members)
 
 在本目录核验并解开原件。解开的 PNG 可直接用于上表对照。
 
@@ -54,5 +60,8 @@ proof="$(mktemp -d)"
 unzip -t stock-r7-actions-14533849813.zip
 unzip -q stock-r7-actions-14533849813.zip -d "$proof/stock"
 (cd "$proof/stock" && shasum -a 256 -c SHA256SUMS)
+unzip -t guarded-r7-actions-14536696752.zip
+unzip -q guarded-r7-actions-14536696752.zip -d "$proof/guarded"
+(cd "$proof/guarded" && shasum -a 256 -c SHA256SUMS)
 (cd "$proof" && shasum -a 256 -c "$archive_dir/SHA256SUMS.members")
 ```

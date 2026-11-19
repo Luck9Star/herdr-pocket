@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "e267f40aab0855634064f05daf4609382728c8d5",
+  "platform": "Linux Tauri GTK / Xvfb",
+  "authentication": "password",
+  "scope": "native application and isolated loopback SSH",
+  "status": "passed",
+  "stage": "complete",
+  "target": {
+    "host": "127.0.0.1",
+    "port": 54523,
+    "username": "fixture",
+    "algorithm": "ssh-rsa",
+    "fingerprint": "SHA256:T6gef0pK5LshY1Stih/lu35gR/H663T+O1LPX+thuTE"
+  },
+  "fingerprintReviewed": true,
+  "terminal": {
+    "schemaVersion": 1,
+    "imageSha256": "5c460902fc8cf0975209138b980aa26a37daf18eb09f08a1e2128e9943d2cdf1",
+    "imageSize": [
+      1440,
+      1200
+    ],
+    "terminalBounds": [
+      272,
+      353,
+      896,
+      479
+    ],
+    "expectedMarker": "POCKET-ANDROID-SSH-OK",
+    "expectedToken": "DUSK RACE HEAT DUSK HAVE FADE HAVE LAND",
+    "markerVisible": true,
+    "tokenVisible": true,
+    "ocrEngine": "tesseract 5.3.4",
+    "ocrAttempts": 2,
+    "ocrPageSegmentationMode": 11,
+    "proofSequenceVisible": true,
+    "captureAttempt": 1,
+    "capture": "native WebKitGTK WebDriver viewport",
+    "targetBounds": [
+      260,
+      258.8125,
+      221,
+      19
+    ]
+  },
+  "disconnectOutcome": {
+    "imageSha256": "b945a832f9b857c88c6435a8669b518b7db4bb9526a1c31476989fc137f8e573",
+    "imageSize": [
+      1440,
+      1200
+    ],
+    "bounds": [
+      264,
+      76,
+      560,
+      66
+    ],
+    "capture": "native WebKitGTK WebDriver viewport"
+  },
+  "homeOutcome": {
+    "imageSha256": "6df8c72c749c31b2b4ba7a217813278edc96c5b97fdd31742fdfd56fba55e625",
+    "imageSize": [
+      1440,
+      1200
+    ],
+    "bounds": [
+      264,
+      62,
+      560,
+      44
+    ],
+    "capture": "native WebKitGTK WebDriver viewport"
+  },
+  "returnedHome": true,
+  "credentialFieldsCleared": true,
+  "peer": {
+    "authAccepted": true,
+    "ptyRequested": true,
+    "shellRequested": true,
+    "markerReceived": true,
+    "sessionClosed": true,
+    "connections": 2,
+    "connectionsClosed": true,
+    "ptySizes": [
+      [
+        80,
+        24
+      ],
+      [
+        112,
+        30
+      ]
+    ],
+    "connectionEvents": [
+      {
+        "id": 1,
+        "hostKey": "A",
+        "handshakeCompleted": false,
+        "authAttempts": 0,
+        "authAccepted": false,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "markerReceived": false,
+        "sessionClosed": false,
+        "closed": true,
+        "phase": "handshake",
+        "closeReason": "peer_eof",
+        "handshakeMs": null,
+        "firstAuthMs": null,
+        "closedMs": 5,
+        "hostKeyAlgorithm": "unknown",
+        "clientCipher": "unknown",
+        "serverCipher": "unknown",
+        "socketErrorKind": null,
+        "socketErrno": null
+      },
+      {
+        "id": 2,
+        "hostKey": "A",
+        "handshakeCompleted": true,
+        "authAttempts": 1,
+        "authAccepted": true,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 9,
+        "outputBytes": 102,
+        "markerReceived": true,
+        "sessionClosed": true,
+        "closed": true,
+        "phase": "shell",
+        "closeReason": "peer_eof",
+        "handshakeMs": 2,
+        "firstAuthMs": 2,
+        "closedMs": 492,
+        "hostKeyAlgorithm": "rsa-sha2-512",
+        "clientCipher": "aes256-gcm@openssh.com",
+        "serverCipher": "aes256-gcm@openssh.com",
+        "socketErrorKind": null,
+        "socketErrno": null
+      }
+    ]
+  },
+  "cleanup": {
+    "peerListenerReleased": true,
+    "fixturePasswordCleared": true,
+    "webdriverProcessStopped": true,
+    "webdriverPortsReleased": true,
+    "privateDirectoryRemoved": true
+  }
+}

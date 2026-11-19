@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "e267f40aab0855634064f05daf4609382728c8d5",
+  "platform": "Linux Tauri GTK / Xvfb",
+  "authentication": "password",
+  "scope": "native application and isolated loopback SSH",
+  "status": "failed",
+  "stage": "target",
+  "peer": {
+    "authAccepted": false,
+    "ptyRequested": false,
+    "shellRequested": false,
+    "markerReceived": false,
+    "sessionClosed": false,
+    "connections": 0,
+    "connectionsClosed": true,
+    "ptySizes": [],
+    "connectionEvents": []
+  },
+  "errorCode": "linux_direct_ssh_runner_failed"
+}

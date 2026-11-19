@@ -143,6 +143,65 @@
           "transportAbsentAtAttempt": 1
         }
       }
+    },
+    "R6": {
+      "runId": 44625071232,
+      "jobId": 135916604524,
+      "sourceSHA": "db49c57ed06385fa21b16b93962572525bf5250c",
+      "jobConclusion": "success",
+      "artifact": {
+        "id": 14580355474,
+        "expiresAtUtc": "2026-12-03T22:16:04Z",
+        "zipSha256": "841542d02d3d4b64268a15b37632192a02057b9a7b6d1b6b7da0979b7999cbba",
+        "memberSha256": {
+          "tauri-config-document-evidence/manifest.json": "130267cbaecb55f095e2535ed13449c00afa8a0415f94dd697274509c833ec08",
+          "tauri-config-document-avd-evidence/lifecycle.txt": "4382732c658b78c67d310b55b97b392cb5ba40328ced42755e6b6a43514cf003"
+        }
+      },
+      "facts": {
+        "androidApi": 35,
+        "scenario": "preferences-only-system-documents-ui",
+        "status": "passed",
+        "stage": "complete",
+        "pickerStep": "app_foreground",
+        "pickerOpens": 5,
+        "pickerCancelledUnchanged": true,
+        "wrong_passphrase": true,
+        "tampered_file": true,
+        "previewUnchanged": true,
+        "confirmationAttempts": 1,
+        "confirmationClicks": 1,
+        "restoredPreference": 19,
+        "cleanup": {
+          "application": true,
+          "debugConnection": true,
+          "debugForward": true,
+          "downloadFolder": true,
+          "hierarchyFile": true
+        },
+        "archive": {
+          "bytes": 126,
+          "version": 2
+        },
+        "preferenceSave": {
+          "dispatch": "returned",
+          "probe": "observed",
+          "click": "target",
+          "pointerDown": "target",
+          "pointerUp": "target",
+          "viewportAtPress": "full",
+          "catalog": "expected",
+          "receipt": "same_success"
+        },
+        "avdLifecycle": {
+          "preflightNoExistingDevice": true,
+          "ownedDeviceStarted": true,
+          "driverExitStatus": 0,
+          "processAliveOnCleanupEntry": true,
+          "processExitStatus": 0,
+          "transportAbsentAtAttempt": 1
+        }
+      }
     }
   },
   "iosManualEncryptedKey": {

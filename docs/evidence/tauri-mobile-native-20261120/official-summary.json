@@ -509,6 +509,98 @@
           }
         }
       }
+    },
+    "R10": {
+      "runId": 44633057494,
+      "jobId": 135944465338,
+      "sourceSHA": "e9811becd8b4d69eee3075c73f19b5fba69f6269",
+      "jobConclusion": "failure",
+      "artifact": {
+        "id": 14584020355,
+        "expiresAtUtc": "2027-02-17T22:55:23Z",
+        "zipSha256": "d8fa28c8328e92ccceee927707664350bbb1ff6ea3a993128109798eab0383e3",
+        "memberSha256": {
+          "result.json": "6be33c5a28f42a95d7cc354fafdc11ac5cb224e4eb0cf1bf2343039af5ac284c"
+        }
+      },
+      "facts": {
+        "platform": "ios-simulator",
+        "scope": "owned_loopback_ordinary_ssh_encrypted_key_manual",
+        "status": "failed",
+        "lastCompletedStage": "encrypted_key_form",
+        "nativeCheckpoint": "encrypted_key_open_add",
+        "nativeFailureCode": "native_encrypted_key_home_shortcut_unproven",
+        "cleanup": {
+          "simulatorDeleted": true,
+          "fixturesClosed": true,
+          "privateFilesRemoved": true,
+          "encryptedSecretsCleared": true,
+          "rawLogsUploaded": false
+        },
+        "cases": {
+          "ordinary": "not_run",
+          "keyChange": "not_run",
+          "encryptedKey": "failed"
+        },
+        "homeReadiness": {
+          "outcome": "ready",
+          "elapsedMs": 4771,
+          "strictSamples": 2,
+          "waitCalls": 1
+        },
+        "homeDiagnostics": {
+          "appForeground": true,
+          "compactEmptyHome": true,
+          "inputCount": 0,
+          "memberClassifications": {
+            "ordinaryShortcut": {
+              "count": 0,
+              "roles": []
+            },
+            "compactShortcut": {
+              "count": 1,
+              "roles": [
+                "button"
+              ]
+            },
+            "sshOption": {
+              "count": 1,
+              "roles": [
+                "button"
+              ]
+            }
+          }
+        },
+        "shortcutDiagnostic": {
+          "reason": "button_size_or_role",
+          "candidateSizePt": [
+            163,
+            22
+          ],
+          "liveSizePt": [
+            163,
+            22
+          ],
+          "buttonGapPt": 5,
+          "visibleCandidates": 1,
+          "visibleAddMarkers": 0
+        },
+        "navigationTraceReported": false,
+        "homeEntryReported": false,
+        "manualHostEntryReported": false,
+        "inputReadbackReported": false,
+        "measurementLimit": "pre-tap native measurement; does not assert the product's actual tap target",
+        "peerBeforeAndAfterCleanup": {
+          "beforeCleanup": {
+            "connections": 0,
+            "connectionsClosed": true
+          },
+          "afterCleanup": {
+            "connections": 0,
+            "connectionsClosed": true
+          }
+        }
+      }
     }
   }
 }

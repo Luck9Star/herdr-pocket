@@ -438,6 +438,8 @@ protocol XCUIElementSnapshot {
     var elementType: XCUIElement.ElementType { get }
     var frame: CGRect { get }
     var isEnabled: Bool { get }
+    var value: String? { get }
+    var hasFocus: Bool { get }
 }
 struct Snapshot: XCUIElementSnapshot {
     let identifier: String
@@ -447,6 +449,7 @@ struct Snapshot: XCUIElementSnapshot {
     var isEnabled: Bool = true
     var value: String? = nil
     var placeholderValue: String? = nil
+    var hasFocus: Bool = false
 }
 struct Observed {
     let snapshot: Snapshot
@@ -468,6 +471,7 @@ struct FormControl {
     let window: Observed
     let web: Observed
     let identified: Bool
+    let adjacentFields: [String: any XCUIElementSnapshot]
 }
 struct RevealedControl {
     let live: LiveControl
@@ -706,7 +710,8 @@ final class Adapter {
             "func waitForCaptureKeyboardToHide(reviewSample:", "func stableCaptureLayout(_ before:",
             "func terminalCaptureFrame(_ anchors:", "struct TerminalHeader {", "func terminalHeader(_ title:", "func screenshot(_ stage:",
             "func connectionRows(_ rows:", "func connectionStatus(_ rows:", "func submitConnection(_ attempt:",
-            "func fillForm(_ name:", "func pageScope(_ item:", "func keyboardFrames()", "struct ActiveLayout {",
+            "func fillForm(_ name:", "func manualHostKeyboard()", "func inputReadback(_ value:",
+            "func reportManualHostEntry(_ form:", "func pageScope(_ item:", "func keyboardFrames()", "struct ActiveLayout {",
             "func activeLayout()", "func activeDiagnostic(_ context:", "func activePage(_ page:",
             "func activeAction(_ action:", "func activeRoute(from source:", "func activeKeyboard(open:", "func activeFlow(port:")) + r'''
 }
@@ -1833,6 +1838,36 @@ var readbackRejected = false
 do { try unread.fillPort("2222") } catch { readbackRejected = true }
 check(readbackRejected && failedReadback.inputs == ["2222"],
       "the actual fill entry must fail a wrong readback without replaying typeText")
+let manualHost = snapshot(frame: movedFrame, identifier: "ssh-host", label: "主机地址")
+let manualApp = App(frame: screen, keyboardFrame: CGRect(x: 0, y: 500, width: 390, height: 300))
+let manualElement = Element()
+manualElement.forcedReadback = ""
+let manualSamples = Observations([])
+var manualPort = moved
+manualPort.hasFocus = true
+manualPort.value = "22"
+let manualRows = formRows(manualPort, host: manualHost)
+manualSamples.beforeTree = {
+    guard !manualElement.inputs.isEmpty else { return }
+    var changedPort = manualPort
+    changedPort.value = "127"
+    manualSamples.trees = [formRows(changedPort, host: manualHost)]
+}
+manualApp.keyboard.exists = true
+let manual = Adapter(app: manualApp, current: LiveControl(snapshot: manualHost, hittable: true, element: manualElement),
+                     rows: manualRows, blockers: [], observations: manualSamples, nativePhase: "encrypted_key_host")
+var manualFailure: String?
+do { try manual.fillField("host", "127.0.0.1") } catch let e as Rejected { manualFailure = e.reason }
+let manualTrace = manualSamples.checkpoints.compactMap { $0.1["manualHostEntry"] as? [String: Any] }
+check(manualFailure == "native_input_value_invalid" && manualElement.inputs == ["127.0.0.1"],
+      "native manual host must fail closed after one input on an empty readback")
+check(manualTrace.count == 2 &&
+      manualTrace[0]["sample"] as? String == "afterTap" && manualTrace[0]["keyboard"] as? String == "visible" &&
+      manualTrace[0]["formUIFocus"] as? String == "port" && manualTrace[0]["portReadback"] as? String == "notCompared" &&
+      manualTrace[1]["sample"] as? String == "afterInput" && manualTrace[1]["treeHostReadback"] as? String == "empty" &&
+      manualTrace[1]["liveHostReadback"] as? String == "empty" && manualTrace[1]["portReadback"] as? String == "changed" &&
+      manualTrace[1]["userReadback"] as? String == "unchanged",
+      "manual host diagnostics report only classified keyboard, focus, and same-owner readback")
 let page = formRows(moved)[1]
 for (live, stored) in [(snapshot(identifier: "ssh-password", label: "密码"), snapshot(label: "密码")),
                        (snapshot(identifier: "ssh-password", label: "密码"), snapshot(identifier: "changed", label: "密码")),

@@ -703,6 +703,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         let window: Observed
         let web: Observed
         let identified: Bool
+        let adjacentFields: [String: any XCUIElementSnapshot]
     }
     private struct RevealedControl {
         let live: LiveControl
@@ -937,11 +938,18 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func formControl(_ name: String, matching expected: FormControl? = nil) throws -> FormControl {
-        func select(_ rows: [Observed]) -> (owner: Observed, window: Observed, web: Observed, identified: Bool)? {
+        func select(_ rows: [Observed]) -> (owner: Observed, window: Observed, web: Observed, identified: Bool,
+                                          adjacentFields: [String: any XCUIElementSnapshot])? {
             let selection = formSelection(rows)
             guard selection.ownerResolved, let verdict = selection.controls[name], verdict.reason == "matched",
                   let index = verdict.index, let scope = controlScope(rows[index], rows) else { return nil }
-            return (rows[index], scope.window, scope.web, verdict.identified)
+            var adjacentFields: [String: any XCUIElementSnapshot] = [:]
+            if name == "host" && nativePhase == "encrypted_key_host" {
+                for name in ["port", "user"] {
+                    if let index = selection.controls[name]?.index { adjacentFields[name] = rows[index].snapshot }
+                }
+            }
+            return (rows[index], scope.window, scope.web, verdict.identified, adjacentFields)
         }
         guard let original = try select(observedNodes()) else {
             try require(false, "native_form_control_unproven")
@@ -962,7 +970,8 @@ final class TauriDirectSSHUITests: XCTestCase {
             try require(false, "native_form_control_changed")
             throw NSError(domain: "native_form_control_changed", code: 1)
         }
-        return FormControl(live: current, owner: fresh.owner, window: fresh.window, web: fresh.web, identified: fresh.identified)
+        return FormControl(live: current, owner: fresh.owner, window: fresh.window, web: fresh.web,
+            identified: fresh.identified, adjacentFields: fresh.adjacentFields)
     }
 
     @MainActor
@@ -1075,10 +1084,57 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
+    private func manualHostKeyboard() -> String {
+        let screen = app.frame
+        if keyboardFrames().contains(where: { NativeFramePolicy.valid($0.intersection(screen)) }) { return "visible" }
+        return app.keyboards.firstMatch.exists ? "unproven" : "hidden"
+    }
+
+    private func inputReadback(_ value: Any?, expected: String) -> String {
+        guard let text = NativeControlPolicy.valueText(value) else { return "unavailable" }
+        if text == expected { return "match" }
+        return text.isEmpty ? "empty" : "different"
+    }
+
+    @MainActor
+    private func reportManualHostEntry(_ form: FormControl, expected: String, initialKeyboard: String,
+                                       beforeInput: FormControl? = nil) throws {
+        let fields: [(String, (any XCUIElementSnapshot)?)] = [
+            ("host", form.owner.snapshot), ("port", form.adjacentFields["port"]), ("user", form.adjacentFields["user"]),
+        ]
+        let focus = fields.filter { $0.1?.hasFocus == true }.map { $0.0 }
+        func adjacentReadback(_ name: String) -> String {
+            guard let beforeInput else { return "notCompared" }
+            guard let before = beforeInput.adjacentFields[name], let after = form.adjacentFields[name],
+                  sameIdentity(before, after), let prior = NativeControlPolicy.valueText(before.value),
+                  let latest = NativeControlPolicy.valueText(after.value) else { return "unavailable" }
+            return prior == latest ? "unchanged" : "changed"
+        }
+        // hasFocus describes UI focus. XCTest's element-scoped typeText
+        // separately requires keyboard focus on that element or a descendant.
+        try post("native_progress", ["nativeCheckpoint": nativePhase, "manualHostEntry": [
+            "sample": beforeInput == nil ? "afterTap" : "afterInput",
+            "initialKeyboard": initialKeyboard, "keyboard": manualHostKeyboard(),
+            "formUIFocus": focus.count > 1 ? "multiple" : focus.first ?? "none",
+            "liveHostUIFocus": form.live.snapshot.hasFocus,
+            "treeHostReadback": inputReadback(form.owner.snapshot.value, expected: expected),
+            "liveHostReadback": inputReadback(form.live.snapshot.value, expected: expected),
+            "portReadback": adjacentReadback("port"), "userReadback": adjacentReadback("user"),
+        ]])
+    }
+
+    @MainActor
     private func fillForm(_ name: String, _ text: String) throws {
+        let initialKeyboard = name == "host" && nativePhase == "encrypted_key_host" ? manualHostKeyboard() : nil
         let tapped = try tapForm(name)
-        try require(app.keyboards.firstMatch.waitForExistence(timeout: 10), "native_input_keyboard_missing")
-        let current = try formControl(name, matching: tapped).live
+        let keyboardAppeared = app.keyboards.firstMatch.waitForExistence(timeout: 10)
+        if !keyboardAppeared && initialKeyboard == nil { try require(false, "native_input_keyboard_missing") }
+        let afterTap = try formControl(name, matching: tapped)
+        if let initialKeyboard {
+            try reportManualHostEntry(afterTap, expected: text, initialKeyboard: initialKeyboard)
+        }
+        try require(keyboardAppeared, "native_input_keyboard_missing")
+        let current = afterTap.live
         try require(current.snapshot.isEnabled, "native_control_disabled")
         try post("native_progress", ["nativeCheckpoint": nativePhase, "nativeInputRole": role(current.snapshot.elementType)])
         if name == "port" {
@@ -1102,12 +1158,13 @@ final class TauriDirectSSHUITests: XCTestCase {
             ready.element.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: clearCount) + text)
             // WebKit's accessibility snapshot can lag behind the one input.
             // Re-read only the same proven field; never repeat the input.
-            var readbackState = "unavailable"
             for sample in 0..<6 {
-                let after = try formControl(name, matching: tapped).live
-                let value = NativeControlPolicy.valueText(after.snapshot.value)
-                readbackState = value == text ? "match" : value == nil ? "unavailable" : value!.isEmpty ? "empty" : "different"
+                let after = try formControl(name, matching: tapped)
+                let readbackState = inputReadback(after.live.snapshot.value, expected: text)
                 if readbackState == "match" || sample == 5 {
+                    if let initialKeyboard {
+                        try reportManualHostEntry(after, expected: text, initialKeyboard: initialKeyboard, beforeInput: form)
+                    }
                     try post("native_progress", ["nativeCheckpoint": nativePhase,
                         "inputReadback": ["state": readbackState, "samples": sample + 1]])
                 }

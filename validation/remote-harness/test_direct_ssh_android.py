@@ -583,6 +583,20 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
             self.assertEqual(runner.encrypted_app_observation(path),
                              (True, 'encrypted_waiting_private', 'fixture_validation'))
 
+    def test_connect_diagnostic_accepts_only_fixed_token_free_state(self):
+        value = dict.fromkeys(runner.ENCRYPTED_CONNECT_BOOLEAN_FIELDS, False)
+        value.update(status='disabled', rectPt=[16, 500, 358, 48],
+                     viewSizePx=[1080, 2400], viewSizePt=[360, 800], insetBottomPx=0)
+        self.assertEqual(runner.safe_encrypted_connect_diagnostic(value), value)
+        for status in ('checking', 'missing', 'multiple', 'disabled', 'not_hit', 'unstable', 'ready'):
+            self.assertEqual(runner.safe_encrypted_connect_diagnostic({**value, 'status': status})['status'], status)
+        for bad in ({**value, 'status': 'sensitive-test-key'},
+                    {**value, 'privateKeyEmpty': 'sensitive-test-key'},
+                    {**value, 'rectPt': [16, 500, 358, True]},
+                    {**value, 'extra': 'sensitive-test-key'}):
+            with self.subTest(bad=bad), self.assertRaises(runner.Failure):
+                runner.safe_encrypted_connect_diagnostic(bad)
+
     def test_tool_progress_discards_untrusted_output_and_detects_split_markers(self):
         import io
         class Chunks:
@@ -849,6 +863,8 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
                 'terminalRectPt': [16, 144, 320, 300], 'enterRectPt': [300, 400, 54, 44],
                 'columns': 12, 'rows': 10, 'terminalFocused': False, 'testInputRegistered': True,
                 'testClientSet': True, 'welcomeVisible': True, 'echoVisible': False}
+            connect_diagnostic = dict.fromkeys(runner.ENCRYPTED_CONNECT_BOOLEAN_FIELDS, False)
+            connect_diagnostic.update(status='disabled', rectPt=[16, 500, 358, 48], viewSizePx=[1080, 2400], viewSizePt=[360, 800], insetBottomPx=0)
             fake_module = types.SimpleNamespace(EncryptedKeyFixture=Mock(return_value=fixture))
             process = Mock(pid=12345); process.stdout = __import__('io').BytesIO(b'')
             process.poll.side_effect = [None, None, 1, 1, 1, 1]
@@ -865,6 +881,7 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
             def read_json(path, *unused, **kwargs):
                 if path.endswith('/stage.json'): return {'stage': 'encrypted_waiting_private'}
                 if path.endswith('encrypted-diagnostic.json'): return diagnostic
+                if path.endswith('encrypted-connect-diagnostic.json'): return connect_diagnostic
                 if path.endswith('encrypted-stage.json'): return {'phase': 'review'}
                 if path.endswith('failure.json') and finished['value']: return {'stage': 'encrypted_keyboard_show', 'code': 'direct_ssh_android_ui_failed'}
                 return None
@@ -884,6 +901,7 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
             result = json.loads((output/'result.json').read_text())
             self.assertEqual(result['failureStage'], 'encrypted_keyboard_show')
             self.assertEqual(result['uiDiagnostic'], diagnostic)
+            self.assertEqual(result['connectDiagnostic'], connect_diagnostic)
             self.assertNotIn('sensitive-test-key', json.dumps(result))
             self.assertNotIn('sensitive-test-phrase', json.dumps(result))
             self.assertFalse(Path(key_temp.name).exists())

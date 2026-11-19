@@ -30,6 +30,7 @@ Future<void> tap(
   String key, {
   void Function()? beforeTap,
   bool requireEnabled = false,
+  void Function(String, bool)? onObservation,
   Duration timeout = const Duration(seconds: 45),
 }) => tapControl(
   tester,
@@ -37,6 +38,7 @@ Future<void> tap(
   key,
   beforeTap: beforeTap,
   requireEnabled: requireEnabled,
+  onObservation: onObservation,
   timeout: timeout,
 );
 
@@ -47,13 +49,20 @@ Future<void> tapControl(
   void Function()? beforeTap,
   bool requireEnabled = false,
   bool reveal = true,
+  void Function(String, bool)? onObservation,
   Duration timeout = const Duration(seconds: 45),
 }) async {
   final deadline = DateTime.now().add(timeout);
   Rect? lastRect;
   var stable = 0;
+  var reportedChecking = false;
   while (DateTime.now().isBefore(deadline)) {
-    if (finder.evaluate().length == 1) {
+    final count = finder.evaluate().length;
+    if (count == 1) {
+      if (!reportedChecking) {
+        onObservation?.call('checking', false);
+        reportedChecking = true;
+      }
       if (reveal) await tester.ensureVisible(finder);
       await tester.pump(const Duration(milliseconds: 100));
       final enabled =
@@ -63,8 +72,19 @@ Future<void> tapControl(
       final rect = tester.getRect(finder);
       stable = enabled && hit ? (lastRect == rect ? stable + 1 : 1) : 0;
       lastRect = rect;
+      onObservation?.call(
+        !enabled
+            ? 'disabled'
+            : !hit
+            ? 'not_hit'
+            : stable < 2
+            ? 'unstable'
+            : 'ready',
+        stable >= 2,
+      );
       if (stable >= 2) break;
     } else {
+      onObservation?.call(count == 0 ? 'missing' : 'multiple', false);
       stable = 0;
       lastRect = null;
       await tester.pump(const Duration(milliseconds: 100));
@@ -600,7 +620,59 @@ Future<void> runEncryptedDirectSshUi(
   await tester.pump();
   expect(tester.widget<TextField>(passphrase).obscureText, isTrue);
   step('encrypted_connect');
-  await tap(tester, 'direct-connect', requireEnabled: true);
+  String? lastConnectDiagnostic;
+  void connectDiagnostic(String status, bool stable) {
+    final button = control('direct-connect');
+    final oneButton = button.evaluate().length == 1;
+    final rect = oneButton ? tester.getRect(button) : null;
+    final surface = ui.PlatformDispatcher.instance.implicitView!;
+    final value = {
+      'status': status,
+      'stable': stable,
+      'enabled':
+          oneButton && tester.widget<FilledButton>(button).onPressed != null,
+      'hit': oneButton && button.hitTestable().evaluate().length == 1,
+      'rectPt': rect == null
+          ? null
+          : [
+              rect.left.round(),
+              rect.top.round(),
+              rect.width.round(),
+              rect.height.round(),
+            ],
+      'viewSizePx': [
+        surface.physicalSize.width.round(),
+        surface.physicalSize.height.round(),
+      ],
+      'viewSizePt': [
+        (surface.physicalSize.width / surface.devicePixelRatio).round(),
+        (surface.physicalSize.height / surface.devicePixelRatio).round(),
+      ],
+      'insetBottomPx': surface.viewInsets.bottom.round(),
+      'privateKeyEmpty': state.secret.text.isEmpty,
+      'passphraseEmpty': state.passphrase.text.isEmpty,
+      'keyAuth': state.keyAuth == true,
+      'targetValid': state.valid == true,
+      'busy': state.busy == true,
+      'reviewRequired': state.hostKeyReviewRequired == true,
+      'fingerprintPresent': state.fingerprint != null,
+      'targetMatches': state.checkedTarget == state.target,
+      'credentialReady': state.mobileCredentialReady == true,
+      'canConnect': state.canConnect == true,
+    };
+    final encoded = jsonEncode(value);
+    if (encoded != lastConnectDiagnostic) {
+      publish('encrypted-connect-diagnostic.json', value);
+      lastConnectDiagnostic = encoded;
+    }
+  }
+
+  await tap(
+    tester,
+    'direct-connect',
+    requireEnabled: true,
+    onObservation: connectDiagnostic,
+  );
   step('encrypted_wait_terminal');
   await until(tester, () {
     diagnostic('encrypted_wait_terminal');

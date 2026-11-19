@@ -232,7 +232,7 @@ def checked_public_reply(reply, relative, limit):
 
 def read_public_json(relative, limit=4096, *, package_known=False):
     if not re.fullmatch(r'cache/herdr-direct-ssh-[0-9]+/(?:(?:rotation-|encrypted-)?(?:result|stage)|'
-                        r'ordinary-mobile-stage|encrypted-diagnostic|failure|screen-request)\.json', relative):
+                        r'ordinary-mobile-stage|encrypted-diagnostic|encrypted-connect-diagnostic|failure|screen-request)\.json', relative):
         raise Failure('direct_android_public_path_invalid')
     if not package_known and not package_present():
         return None
@@ -667,6 +667,30 @@ def safe_encrypted_diagnostic(value):
     return value
 
 
+ENCRYPTED_CONNECT_BOOLEAN_FIELDS = {
+    'stable', 'enabled', 'hit', 'privateKeyEmpty', 'passphraseEmpty', 'keyAuth',
+    'targetValid', 'busy', 'reviewRequired', 'fingerprintPresent', 'targetMatches',
+    'credentialReady', 'canConnect',
+}
+
+
+def safe_encrypted_connect_diagnostic(value):
+    fields = {'status', 'rectPt', 'viewSizePx', 'viewSizePt', 'insetBottomPx'} | ENCRYPTED_CONNECT_BOOLEAN_FIELDS
+    if (not isinstance(value, dict) or set(value) != fields
+            or value['status'] not in ('checking', 'missing', 'multiple', 'disabled', 'not_hit', 'unstable', 'ready')
+            or any(type(value[key]) is not bool for key in ENCRYPTED_CONNECT_BOOLEAN_FIELDS)
+            or type(value['insetBottomPx']) is not int or not 0 <= value['insetBottomPx'] <= 10000
+            or any(not isinstance(value[k], list) or len(value[k]) != 2
+                   or any(type(n) is not int or not 1 <= n <= 10000 for n in value[k])
+                   for k in ('viewSizePx', 'viewSizePt'))
+            or (value['rectPt'] is not None and
+                (not isinstance(value['rectPt'], list) or len(value['rectPt']) != 4
+                 or any(type(n) is not int or not -10000 <= n <= 10000 for n in value['rectPt'])
+                 or value['rectPt'][2] < 0 or value['rectPt'][3] < 0))):
+        raise Failure('direct_android_encrypted_connect_diagnostic_invalid')
+    return value
+
+
 # Inspect only fixed tool events in memory. Raw tool output can contain
 # private UI data, so no line, fragment, exception message or log is retained.
 TOOL_MARKERS = {
@@ -920,6 +944,10 @@ def run_encrypted(args, env):
                 screen = read_public_json(relative + '/screen-request.json', package_known=True)
                 if screen is not None:
                     screen_checkpoint(screen, screens, fixture, None, relative, output, require_rotation=False)
+                if current_stage == 'encrypted_connect':
+                    connect_diagnostic = read_public_json(relative + '/encrypted-connect-diagnostic.json', 2048, package_known=True)
+                    if connect_diagnostic is not None:
+                        report['connectDiagnostic'] = safe_encrypted_connect_diagnostic(connect_diagnostic)
                 diagnostic = read_public_json(relative + '/encrypted-diagnostic.json', 2048, package_known=True)
                 if diagnostic is not None:
                     report['uiDiagnostic'] = safe_encrypted_diagnostic(diagnostic)
@@ -969,6 +997,9 @@ def run_encrypted(args, env):
                 if isinstance(failure, dict):
                     report['failureStage'] = safe_encrypted_app_stage(
                         failure, failure='code' in failure)
+                connect_diagnostic = read_public_json(relative + '/encrypted-connect-diagnostic.json', 2048)
+                if connect_diagnostic is not None:
+                    report['connectDiagnostic'] = safe_encrypted_connect_diagnostic(connect_diagnostic)
                 diagnostic = read_public_json(relative + '/encrypted-diagnostic.json', 2048)
                 if diagnostic is not None:
                     report['uiDiagnostic'] = safe_encrypted_diagnostic(diagnostic)

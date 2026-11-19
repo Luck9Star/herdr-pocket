@@ -885,7 +885,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       builder:(_) => PairingPage(tokens:widget.tokens,keys:widget.keys,catalog:catalog,profileId:tab.hostId,
         registerTransport:tab.registerTransport,
         overlayAdapterFactory:widget.overlayAdapterFactory == null ? null : (connector) => widget.overlayAdapterFactory!(catalog.profiles.singleWhere((p) => p.id == tab.hostId),connector),
-        adapter:tab.adapter,visibility:tab.visible,inputEligible:tab.inputEligible,onViewState:tab.report,requestedTarget:tab.requestedTarget,
+        adapter:tab.adapter,visibility:tab.visible,layoutHidden:tab.layoutHidden,inputEligible:tab.inputEligible,onViewState:tab.report,requestedTarget:tab.requestedTarget,
         summaryLeaseFactory:(profile) {
           tab.summaryLease?.close();
           final lease = summaries.open(profile,visible:() => tabs.find(tab.id) == tab && tab.visible.value);

@@ -35,7 +35,7 @@ String pemFromSingleLineInput(String text) {
 }
 
 class RemotePage extends StatefulWidget {
-  const RemotePage({super.key,required this.tokens,this.adapter,this.pairedTarget,this.deviceKeys,this.keyHandle,this.devicePublicKey,this.onConnecting,this.onAuthenticated,this.onStopped,this.visibility,this.inputEligible,this.networkBinding,this.onViewState,this.requestedTarget,this.onOpenPane,this.summaryLease,this.registerTransport,this.overlayAdapterFactory});
+  const RemotePage({super.key,required this.tokens,this.adapter,this.pairedTarget,this.deviceKeys,this.keyHandle,this.devicePublicKey,this.onConnecting,this.onAuthenticated,this.onStopped,this.visibility,this.layoutHidden,this.inputEligible,this.networkBinding,this.onViewState,this.requestedTarget,this.onOpenPane,this.summaryLease,this.registerTransport,this.overlayAdapterFactory});
   final DesignTokens tokens;
   final NetworkConnectionBinding? networkBinding;
   final RemoteReadOnlyAdapter? adapter;
@@ -46,6 +46,7 @@ class RemotePage extends StatefulWidget {
   final String? keyHandle, devicePublicKey;
   final VoidCallback? onConnecting, onAuthenticated, onStopped;
   final ValueListenable<bool>? visibility;
+  final ValueNotifier<bool>? layoutHidden;
   final ValueListenable<bool>? inputEligible;
   bool get ownsInput => inputEligible?.value ?? true;
   final void Function(String,String?,String?,DateTime?)? onViewState;
@@ -85,6 +86,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       name:TextEditingController(text:name == 'port' ? '22' : ''),
   };
   bool reviewed = false, busy = false,viewPaused = false,dashboardFresh = false;
+  // True only when the current pause was caused by the layout stashing a live
+  // observation; re-widening may then auto-resume (D2).
+  bool layoutAutoResume = false;
   int observationCanvas = 0;
   DeviceIdentityLease? identityLease;
   int request = 0;
@@ -367,20 +371,35 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   void visibilityChanged() {
     if (tabClosing != null) return;
     if (widget.visibility?.value == false) {
+      // Eligibility for a layout auto-resume is earned only when this hide
+      // actually paused a live observation; an already-paused or not-yet-
+      // observing pane gains nothing from a later narrow/widen cycle (D2).
+      final wasObserving = !viewPaused && live;
+      final pausedByLayout = wasObserving && widget.layoutHidden?.value == true;
       showingFontDiagnostics = false;
       resetKeyboardControls();
       dismissPasteReview(); clearScreenSelection(); retirePendingPasteRead();
       widget.summaryLease?.invalidate(); summaryAttempt = null;
       inputGate.invalidate(); terminalFocus.unfocus(); if (mounted) FocusScope.of(context).unfocus();
       if (!adapter.pauseObservation()) {
+        layoutAutoResume = false;
         stop('标签已隐藏 · 未建立的连接已停止；返回后需主动审查');
       } else {
+        layoutAutoResume = pausedByLayout;
         if (!viewPaused) observationEpoch++;
         setState(() { viewPaused = true; live = false; dashboardFresh = false; status = '标签已隐藏 · 观察与输入暂停，SSH 可保留；返回后需主动恢复'; });
         reportView();
       }
-    } else if (mounted && viewPaused) {
-      setState(() { status = '标签已显示 · 旧画面仅供参考，请主动恢复原目标并等待新 full'; });
+    } else {
+      final layoutReveal = widget.layoutHidden?.value == true;
+      if (widget.layoutHidden != null) widget.layoutHidden!.value = false;
+      final auto = layoutAutoResume; layoutAutoResume = false;
+      if (mounted && viewPaused) {
+        // Re-widening auto-resumes only a pause the layout itself caused;
+        // user-driven reveals keep manual review (D2).
+        if (auto && layoutReveal) { resumeObservation(); return; }
+        setState(() { status = '标签已显示 · 旧画面仅供参考，请主动恢复原目标并等待新 full'; });
+      }
     }
   }
   void resumeObservation() {

@@ -24,7 +24,14 @@ class TauriSplitEvidenceTests(unittest.TestCase):
                  'bReceipt': 'absent', 'armed': True, 'keyDowns': 0}
         before = {**ready, 'bModeReady': False, 'bEditorFocused': False, 'bMode': 'observe',
                   'bEditorWritable': False, 'bReadOnly': True, 'armed': False}
-        after = {**ready, 'bReceipt': 'matched', 'keyDowns': 1, 'trustedKeyOnOriginalB': True}
+        after = {**ready, 'bReceipt': 'matched', 'keyDowns': 1, 'trustedKeyOnOriginalB': True,
+                 'events': {'keydown': {'atDocument': 1, 'trustedOriginal': 1, 'fixtureCharacter': 1,
+                                       'usableLegacyCode': 1, 'composed': 1, 'preventedAtDocument': 0,
+                                       'atEditorAfterHandlers': 1, 'preventedAtEditor': 1,
+                                       'text': 'private-key-event'},
+                            'beforeinput': {'atDocument': 65, 'trustedOriginal': True},
+                            'private-event-kind': {'atDocument': 1}},
+                 'ipcTiming': {'calibrated': True, 'completedSendResources': 1, 'url': 'private-ipc-url'}}
 
         def one_poll(probe, code, **kwargs):
             value = probe()
@@ -76,6 +83,7 @@ class TauriSplitEvidenceTests(unittest.TestCase):
                 self.assertEqual(read.call_args_list[-1].args[-1], 'finish')
                 artifact = (output / 's06-tauri-first-direct-key.json').read_text()
                 self.assertNotIn('private-payload', artifact)
+                self.assertNotIn('private-', artifact)
                 evidence = json.loads(artifact)
                 self.assertEqual(evidence['keyboardAttempted'], bool(sends))
                 self.assertEqual(evidence['peerBefore'], [
@@ -84,8 +92,17 @@ class TauriSplitEvidenceTests(unittest.TestCase):
                                  [len(data) for data in (received or (b'', b''))])
                 if sends:
                     self.assertEqual(evidence['beforeKey']['keyDowns'], 0)
+                    self.assertEqual(evidence['beforeKey']['ipcTiming'], {
+                        'calibrated': False, 'status': 'unavailable', 'completedSendResources': None})
                 else:
                     self.assertEqual(evidence['stage'], 'before_key')
+                if error is None:
+                    sample = evidence['afterKey']
+                    self.assertEqual(sample['events']['keydown']['preventedAtEditor'], 1)
+                    self.assertIsNone(sample['events']['beforeinput']['atDocument'])
+                    self.assertIsNone(sample['events']['beforeinput']['trustedOriginal'])
+                    self.assertEqual(sample['ipcTiming'], {
+                        'calibrated': True, 'status': 'observed', 'completedSendResources': 1})
 
     def test_only_the_matching_ancestor_owned_xvfb_can_be_prepared(self):
         with tempfile.TemporaryDirectory() as directory:

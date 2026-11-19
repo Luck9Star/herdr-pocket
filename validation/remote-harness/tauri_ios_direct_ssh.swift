@@ -1459,8 +1459,8 @@ final class TauriDirectSSHUITests: XCTestCase {
     @MainActor
     @discardableResult
     private func mobileDisconnected() throws -> RevealedControl {
-        let (rows, anchors) = try mobileWitness([("ssh-step-title", "普通 SSH", false), (nil, "已断开连接", false),
-            (nil, "本次凭据已清空。重新连接时请重新填写。", false), ("ssh-return-home", "返回首页", true)])
+        let (rows, anchors) = try mobileWitness([("ssh-step-title", "普通 SSH", false), ("ssh-closed-title", "本机已断开", false),
+            ("ssh-closed-detail", "凭据已清空，重连时请重新填写。", false), ("ssh-return-home", "返回首页", true)])
         try assertMobileSecretsLocked(anchors[0], rows)
         return try mobileControl(anchors[3], rows, "native_mobile_return_owner_unproven")
     }
@@ -2830,7 +2830,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         try phase("return_home")
         if mobileFlow {
             try tapMobileButton(try mobileDisconnected(), "native_mobile_return_owner_unproven")
-            _ = try mobileWitness([(nil, "还没有主机", false), ("host-ssh-disconnected", "普通 SSH 已断开", false)])
+            _ = try mobileWitness([(nil, "还没有主机", false), ("host-ssh-disconnected", "本机已断开", false)])
         } else {
             try tap(button("看板"))
         }
@@ -2897,6 +2897,10 @@ final class TauriDirectSSHUITests: XCTestCase {
         try post("key_change_password_b")
         let activeRotation = try connect(password: config["rotationPassword"] as! String, mobileOwner: rotatedOwner)
         try terminal("key_change", port: port, owner: activeRotation)
+        if mobileFlow {
+            try tapMobileButton(try mobileDisconnected(), "native_mobile_return_owner_unproven")
+            _ = try mobileWitness([(nil, "还没有主机", false), ("host-ssh-disconnected", "本机已断开", false)])
+        }
         try post("complete")
     }
 }

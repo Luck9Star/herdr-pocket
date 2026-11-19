@@ -1,0 +1,759 @@
+{
+  "sourceSHA": "0c3ef4817234f8519c4d9f8559cd0bd188ee89d5",
+  "variant": "main",
+  "engine": "webkit",
+  "layout": "wide",
+  "browser": "26.4",
+  "scope": "Production Tauri page, real browser UI, isolated simulated IPC, no real SSH or overlay.",
+  "proof": {
+    "opened": {
+      "tabs": [
+        {
+          "label": "fixture-B · w1:p2",
+          "active": false
+        },
+        {
+          "label": "fixture-A · w1:p1",
+          "active": true
+        }
+      ],
+      "children": 12,
+      "phase": "active",
+      "title": "fixture-A · w1:p1 · term_a001"
+    },
+    "splitBeforeClose": [
+      {
+        "title": "fixture-A · w1:p1 · term_a001",
+        "focused": "true",
+        "x": 265,
+        "y": -373.5,
+        "width": 560,
+        "height": 1572.5,
+        "frameVisible": true
+      },
+      {
+        "title": "fixture-B · w1:p2 · term_b002",
+        "focused": "false",
+        "x": 839,
+        "y": -373.5,
+        "width": 560,
+        "height": 1592,
+        "frameVisible": true
+      }
+    ],
+    "afterClosingA": {
+      "tabs": [
+        {
+          "label": "fixture-B · w1:p2",
+          "active": true
+        }
+      ],
+      "children": 12,
+      "phase": "active",
+      "title": "fixture-B · w1:p2 · term_b002"
+    },
+    "closeImage": {
+      "name": "after-closing-A",
+      "sha256": "684225d76978e55253ae80b6faf3ada02ac6a6bda3a61a4bbb25beea097a099a"
+    },
+    "remainingPanelVisible": true,
+    "newFrameImage": {
+      "name": "B-new-frame",
+      "sha256": "4a1c603a581a8cae49818d138769bd7b8a6df1f8e7a0b24256781f1bd1128c31"
+    },
+    "continued": {
+      "calls": [
+        {
+          "cmd": "remote_tab_reserve",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "clientGeneration": 1
+        },
+        {
+          "cmd": "remote_tab_visible",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1
+        },
+        {
+          "cmd": "remote_tab_observe",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1
+        },
+        {
+          "cmd": "remote_tab_select",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1,
+          "epoch": 1
+        },
+        {
+          "cmd": "remote_tab_ack",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1,
+          "epoch": 1
+        },
+        {
+          "cmd": "remote_tab_control",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "action": "pause",
+          "generation": 1,
+          "clientGeneration": 1
+        },
+        {
+          "cmd": "remote_tab_reserve",
+          "host": "fixture-A",
+          "tabId": "699065b9-e18d-42a4-ace4-a0e61cea7411",
+          "clientGeneration": 2
+        },
+        {
+          "cmd": "remote_tab_visible",
+          "host": "fixture-A",
+          "tabId": "699065b9-e18d-42a4-ace4-a0e61cea7411",
+          "generation": 2,
+          "clientGeneration": 2
+        },
+        {
+          "cmd": "remote_tab_observe",
+          "host": "fixture-A",
+          "tabId": "699065b9-e18d-42a4-ace4-a0e61cea7411",
+          "generation": 2,
+          "clientGeneration": 2
+        },
+        {
+          "cmd": "remote_tab_select",
+          "host": "fixture-A",
+          "tabId": "699065b9-e18d-42a4-ace4-a0e61cea7411",
+          "generation": 2,
+          "clientGeneration": 2,
+          "epoch": 1
+        },
+        {
+          "cmd": "remote_tab_ack",
+          "host": "fixture-A",
+          "tabId": "699065b9-e18d-42a4-ace4-a0e61cea7411",
+          "generation": 2,
+          "clientGeneration": 2,
+          "epoch": 1
+        },
+        {
+          "cmd": "remote_tab_visible",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1
+        },
+        {
+          "cmd": "remote_tab_control",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "action": "resume",
+          "generation": 1,
+          "clientGeneration": 1
+        },
+        {
+          "cmd": "remote_tab_ack",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1,
+          "epoch": 3
+        },
+        {
+          "cmd": "remote_tab_cancel",
+          "host": "fixture-A",
+          "tabId": "699065b9-e18d-42a4-ace4-a0e61cea7411",
+          "generation": 2,
+          "clientGeneration": 2
+        },
+        {
+          "cmd": "remote_tab_ack",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1,
+          "epoch": 3
+        },
+        {
+          "cmd": "remote_tab_input_mode",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1,
+          "epoch": 3,
+          "mode": "draft"
+        },
+        {
+          "cmd": "remote_tab_input_send",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1,
+          "epoch": 3
+        }
+      ],
+      "auth": [
+        {
+          "host": "fixture-B",
+          "connection": 1,
+          "generation": 1,
+          "clientGeneration": 1,
+          "profile": "cccccccccccccccccccccccccccccccc",
+          "profileRevision": 7,
+          "node": "guest-fixture-1"
+        },
+        {
+          "host": "fixture-A",
+          "connection": 2,
+          "generation": 2,
+          "clientGeneration": 2,
+          "profile": "cccccccccccccccccccccccccccccccc",
+          "profileRevision": 7,
+          "node": "guest-fixture-1"
+        }
+      ],
+      "closure": [
+        {
+          "host": "fixture-A",
+          "connection": 2,
+          "generation": 2,
+          "nodeState": "engine-started"
+        }
+      ],
+      "frames": [
+        {
+          "host": "fixture-B",
+          "connection": 1,
+          "generation": 1,
+          "epoch": 1,
+          "seq": 1,
+          "marker": "fixture-B-initial"
+        },
+        {
+          "host": "fixture-A",
+          "connection": 2,
+          "generation": 2,
+          "epoch": 1,
+          "seq": 1,
+          "marker": "fixture-A-initial"
+        },
+        {
+          "host": "fixture-B",
+          "connection": 1,
+          "generation": 1,
+          "epoch": 3,
+          "seq": 1,
+          "marker": "fixture-B-same-session-new-frame"
+        },
+        {
+          "host": "fixture-B",
+          "connection": 1,
+          "generation": 1,
+          "epoch": 3,
+          "seq": 2,
+          "marker": "fixture-B-after-close-delta",
+          "full": false
+        }
+      ],
+      "inputs": [
+        {
+          "host": "fixture-B",
+          "connection": 1,
+          "generation": 1,
+          "epoch": 3,
+          "inputEpoch": 41,
+          "marker": "B-after-A"
+        }
+      ],
+      "errors": [],
+      "node": {
+        "id": "guest-fixture-1",
+        "state": "engine-started",
+        "stops": 0
+      }
+    },
+    "afterClosingBoth": {
+      "calls": [
+        {
+          "cmd": "remote_tab_reserve",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "clientGeneration": 1
+        },
+        {
+          "cmd": "remote_tab_visible",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1
+        },
+        {
+          "cmd": "remote_tab_observe",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1
+        },
+        {
+          "cmd": "remote_tab_select",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1,
+          "epoch": 1
+        },
+        {
+          "cmd": "remote_tab_ack",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1,
+          "epoch": 1
+        },
+        {
+          "cmd": "remote_tab_control",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "action": "pause",
+          "generation": 1,
+          "clientGeneration": 1
+        },
+        {
+          "cmd": "remote_tab_reserve",
+          "host": "fixture-A",
+          "tabId": "699065b9-e18d-42a4-ace4-a0e61cea7411",
+          "clientGeneration": 2
+        },
+        {
+          "cmd": "remote_tab_visible",
+          "host": "fixture-A",
+          "tabId": "699065b9-e18d-42a4-ace4-a0e61cea7411",
+          "generation": 2,
+          "clientGeneration": 2
+        },
+        {
+          "cmd": "remote_tab_observe",
+          "host": "fixture-A",
+          "tabId": "699065b9-e18d-42a4-ace4-a0e61cea7411",
+          "generation": 2,
+          "clientGeneration": 2
+        },
+        {
+          "cmd": "remote_tab_select",
+          "host": "fixture-A",
+          "tabId": "699065b9-e18d-42a4-ace4-a0e61cea7411",
+          "generation": 2,
+          "clientGeneration": 2,
+          "epoch": 1
+        },
+        {
+          "cmd": "remote_tab_ack",
+          "host": "fixture-A",
+          "tabId": "699065b9-e18d-42a4-ace4-a0e61cea7411",
+          "generation": 2,
+          "clientGeneration": 2,
+          "epoch": 1
+        },
+        {
+          "cmd": "remote_tab_visible",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1
+        },
+        {
+          "cmd": "remote_tab_control",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "action": "resume",
+          "generation": 1,
+          "clientGeneration": 1
+        },
+        {
+          "cmd": "remote_tab_ack",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1,
+          "epoch": 3
+        },
+        {
+          "cmd": "remote_tab_cancel",
+          "host": "fixture-A",
+          "tabId": "699065b9-e18d-42a4-ace4-a0e61cea7411",
+          "generation": 2,
+          "clientGeneration": 2
+        },
+        {
+          "cmd": "remote_tab_ack",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1,
+          "epoch": 3
+        },
+        {
+          "cmd": "remote_tab_input_mode",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1,
+          "epoch": 3,
+          "mode": "draft"
+        },
+        {
+          "cmd": "remote_tab_input_send",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1,
+          "epoch": 3
+        },
+        {
+          "cmd": "remote_tab_cancel",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1
+        }
+      ],
+      "auth": [
+        {
+          "host": "fixture-B",
+          "connection": 1,
+          "generation": 1,
+          "clientGeneration": 1,
+          "profile": "cccccccccccccccccccccccccccccccc",
+          "profileRevision": 7,
+          "node": "guest-fixture-1"
+        },
+        {
+          "host": "fixture-A",
+          "connection": 2,
+          "generation": 2,
+          "clientGeneration": 2,
+          "profile": "cccccccccccccccccccccccccccccccc",
+          "profileRevision": 7,
+          "node": "guest-fixture-1"
+        }
+      ],
+      "closure": [
+        {
+          "host": "fixture-A",
+          "connection": 2,
+          "generation": 2,
+          "nodeState": "engine-started"
+        },
+        {
+          "host": "fixture-B",
+          "connection": 1,
+          "generation": 1,
+          "nodeState": "engine-started"
+        }
+      ],
+      "frames": [
+        {
+          "host": "fixture-B",
+          "connection": 1,
+          "generation": 1,
+          "epoch": 1,
+          "seq": 1,
+          "marker": "fixture-B-initial"
+        },
+        {
+          "host": "fixture-A",
+          "connection": 2,
+          "generation": 2,
+          "epoch": 1,
+          "seq": 1,
+          "marker": "fixture-A-initial"
+        },
+        {
+          "host": "fixture-B",
+          "connection": 1,
+          "generation": 1,
+          "epoch": 3,
+          "seq": 1,
+          "marker": "fixture-B-same-session-new-frame"
+        },
+        {
+          "host": "fixture-B",
+          "connection": 1,
+          "generation": 1,
+          "epoch": 3,
+          "seq": 2,
+          "marker": "fixture-B-after-close-delta",
+          "full": false
+        }
+      ],
+      "inputs": [
+        {
+          "host": "fixture-B",
+          "connection": 1,
+          "generation": 1,
+          "epoch": 3,
+          "inputEpoch": 41,
+          "marker": "B-after-A"
+        }
+      ],
+      "errors": [],
+      "node": {
+        "id": "guest-fixture-1",
+        "state": "engine-started",
+        "stops": 0
+      }
+    },
+    "afterExplicitNodeStop": {
+      "calls": [
+        {
+          "cmd": "remote_tab_reserve",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "clientGeneration": 1
+        },
+        {
+          "cmd": "remote_tab_visible",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1
+        },
+        {
+          "cmd": "remote_tab_observe",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1
+        },
+        {
+          "cmd": "remote_tab_select",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1,
+          "epoch": 1
+        },
+        {
+          "cmd": "remote_tab_ack",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1,
+          "epoch": 1
+        },
+        {
+          "cmd": "remote_tab_control",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "action": "pause",
+          "generation": 1,
+          "clientGeneration": 1
+        },
+        {
+          "cmd": "remote_tab_reserve",
+          "host": "fixture-A",
+          "tabId": "699065b9-e18d-42a4-ace4-a0e61cea7411",
+          "clientGeneration": 2
+        },
+        {
+          "cmd": "remote_tab_visible",
+          "host": "fixture-A",
+          "tabId": "699065b9-e18d-42a4-ace4-a0e61cea7411",
+          "generation": 2,
+          "clientGeneration": 2
+        },
+        {
+          "cmd": "remote_tab_observe",
+          "host": "fixture-A",
+          "tabId": "699065b9-e18d-42a4-ace4-a0e61cea7411",
+          "generation": 2,
+          "clientGeneration": 2
+        },
+        {
+          "cmd": "remote_tab_select",
+          "host": "fixture-A",
+          "tabId": "699065b9-e18d-42a4-ace4-a0e61cea7411",
+          "generation": 2,
+          "clientGeneration": 2,
+          "epoch": 1
+        },
+        {
+          "cmd": "remote_tab_ack",
+          "host": "fixture-A",
+          "tabId": "699065b9-e18d-42a4-ace4-a0e61cea7411",
+          "generation": 2,
+          "clientGeneration": 2,
+          "epoch": 1
+        },
+        {
+          "cmd": "remote_tab_visible",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1
+        },
+        {
+          "cmd": "remote_tab_control",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "action": "resume",
+          "generation": 1,
+          "clientGeneration": 1
+        },
+        {
+          "cmd": "remote_tab_ack",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1,
+          "epoch": 3
+        },
+        {
+          "cmd": "remote_tab_cancel",
+          "host": "fixture-A",
+          "tabId": "699065b9-e18d-42a4-ace4-a0e61cea7411",
+          "generation": 2,
+          "clientGeneration": 2
+        },
+        {
+          "cmd": "remote_tab_ack",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1,
+          "epoch": 3
+        },
+        {
+          "cmd": "remote_tab_input_mode",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1,
+          "epoch": 3,
+          "mode": "draft"
+        },
+        {
+          "cmd": "remote_tab_input_send",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1,
+          "epoch": 3
+        },
+        {
+          "cmd": "remote_tab_cancel",
+          "host": "fixture-B",
+          "tabId": "64bcb4de-abeb-49a5-ab16-aa8e22dad55c",
+          "generation": 1,
+          "clientGeneration": 1
+        },
+        {
+          "cmd": "network_node_status",
+          "host": null
+        },
+        {
+          "cmd": "network_node_stop",
+          "host": null
+        },
+        {
+          "cmd": "network_node_status",
+          "host": null
+        }
+      ],
+      "auth": [
+        {
+          "host": "fixture-B",
+          "connection": 1,
+          "generation": 1,
+          "clientGeneration": 1,
+          "profile": "cccccccccccccccccccccccccccccccc",
+          "profileRevision": 7,
+          "node": "guest-fixture-1"
+        },
+        {
+          "host": "fixture-A",
+          "connection": 2,
+          "generation": 2,
+          "clientGeneration": 2,
+          "profile": "cccccccccccccccccccccccccccccccc",
+          "profileRevision": 7,
+          "node": "guest-fixture-1"
+        }
+      ],
+      "closure": [
+        {
+          "host": "fixture-A",
+          "connection": 2,
+          "generation": 2,
+          "nodeState": "engine-started"
+        },
+        {
+          "host": "fixture-B",
+          "connection": 1,
+          "generation": 1,
+          "nodeState": "engine-started"
+        }
+      ],
+      "frames": [
+        {
+          "host": "fixture-B",
+          "connection": 1,
+          "generation": 1,
+          "epoch": 1,
+          "seq": 1,
+          "marker": "fixture-B-initial"
+        },
+        {
+          "host": "fixture-A",
+          "connection": 2,
+          "generation": 2,
+          "epoch": 1,
+          "seq": 1,
+          "marker": "fixture-A-initial"
+        },
+        {
+          "host": "fixture-B",
+          "connection": 1,
+          "generation": 1,
+          "epoch": 3,
+          "seq": 1,
+          "marker": "fixture-B-same-session-new-frame"
+        },
+        {
+          "host": "fixture-B",
+          "connection": 1,
+          "generation": 1,
+          "epoch": 3,
+          "seq": 2,
+          "marker": "fixture-B-after-close-delta",
+          "full": false
+        }
+      ],
+      "inputs": [
+        {
+          "host": "fixture-B",
+          "connection": 1,
+          "generation": 1,
+          "epoch": 3,
+          "inputEpoch": 41,
+          "marker": "B-after-A"
+        }
+      ],
+      "errors": [],
+      "node": {
+        "id": "guest-fixture-1",
+        "state": "stopped",
+        "stops": 1
+      }
+    }
+  },
+  "checked": true,
+  "m2VisibleAfterClose": true
+}

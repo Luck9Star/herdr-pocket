@@ -151,7 +151,7 @@ Tailscale、EasyTier 和 ZeroTier 分别推进，共用 M1 的可信连接与输
 - [ ] **M2-01** 手工创建各类型网络配置、接入、身份保存、重启/退出与分层状态提示；敏感配置不进入普通诊断。
   **待验证。** Android 两壳已有 TS/ET 配置与授权后并发，TS normal／QA 启停另经复验。ZeroTier 已有身份托管和 Android ABI 链，实机拨号、重启/退出仍待各组合验证。[双网](67-android-dual-network-startup.md) · [启动层](71-validation-branch-archive.md) · [ZeroTier S1–S4](58-session-handoff-2026-11-09-r2.md)
 - [ ] **M2-02** Host 候选路径引用网络配置，同一配置供多主机复用；停止单个主机不停止共享节点。
-  **待验证。** 源码已建共享配置、关联主机和影响审查。待复验同一节点供多主机使用，断开其一后另一主机继续输入及最终释放。[主机绑定](18-mobile-network-profiles.md) · [共享设备审查](55-mobile-shared-network-device.md)
+  **待验证。** Tauri 八组真实浏览器／模拟 IPC 对照覆盖窄屏显式恢复、宽屏原会话续帧、显式授权输入及独立停节点。仍待真实共享节点上的双主机 SSH、断开其一后另一侧原会话续输及最终释放。[主机绑定](18-mobile-network-profiles.md) · [共享设备审查](55-mobile-shared-network-device.md) · [浏览器证据](evidence/tauri-shared-node-20261119/README.md)
 - [ ] **M2-03** 仅用已配置/可用网络发起有界连接尝试，待认证配置显示需操作；验证可信主机选择、重叠地址隔离与落败连接清理。
   **待验证。** Linux 封闭配置有失败拨号和跨 provider 反例。同址路由、真实可信主机选择与落败连接清理待逐平台验证。[Linux 正负对照](65-dual-overlay-validation.md)
 - [ ] **M2-04** 验证显式切换、停用配置、节点退出与认证失效；展示受影响主机，恢复前关闭输入，退出后不静默重试。

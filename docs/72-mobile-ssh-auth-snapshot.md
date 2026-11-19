@@ -75,6 +75,14 @@ R7 验收范围为受控回环密码认证与 XCTest 输入。活动终端在三
 
 ## Flutter iOS 加密私钥独立验收
 
+### R4 模拟器复验
+
+2026-11-19，[作业 135546106261](https://github.com/Luck9Star/herdr-pocket/actions/runs/44520075525/job/135546106261)用 `2ccf9a57eba5114cd79849d66d25b114d3763dcc` 在 iPhone 11 / iOS 26.2 模拟器通过普通密码、密码换钥与独立加密私钥。独立私钥的错误口令仍在客户端拒绝，服务端在该时点没有认证、PTY 或收发。正确口令后只接受一次公钥认证。三案各有一次 PTY 和 shell，服务端各收 9 字节、出 102 字节，主动断开后均记录 `peer_eof`。三张 828 × 1792 系统终端图均通过 OCR 和目标核验，凭据、夹具与模拟器清理通过。[三案原 ZIP、OCR 与清理索引](evidence/flutter-ios-encrypted-key-r4-20261119/README.md)
+
+同一提交的[独立加密私钥 × 主机换钥作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44520076236/job/135546116097)在首次 A 探测报 `probe_failed`。服务端只有一条 A 连接，零认证、零 PTY、零收发，口令编辑及换钥流程尚未执行。R4 三案的通过只覆盖普通密码、密码换钥和独立私钥。历史 `e777df4` 的主动断开复位和 `3fdcae6` 的口令键盘下连接控件未命中保留为各自的失败边界。
+
+### R1 历史验收
+
 2026-11-19，Flutter iOS 专用 R1 作业在 iPhone 11 / iOS 26.2 模拟器完成普通密码、密码换钥与独立加密 OpenSSH Ed25519 私钥三案，XCTest 1 项通过。源提交为 `31a4bfd08fb2922a0dff8d8259858b87502bf928`，原始 ZIP 的 SHA256 为 `b56fc432ae53d65d10512069d90bc662a55da6b135bbe43771b9cda773fc5b13`。[作业 135459578044](https://github.com/Luck9Star/herdr-pocket/actions/runs/44494931219/job/135459578044) · [原始工件 14515586833](https://github.com/Luck9Star/herdr-pocket/actions/runs/44494931219/artifacts/14515586833)
 
 加密私钥案从首页进入并明确核对主机指纹。密码与私钥两向切换均清除前一种输入，并保留同一主机信任。错误口令在客户端被拒绝，此时只有首次探测，服务端认证、PTY、shell 和收发均为零。正确私钥在第二条连接完成一次公钥认证、一次 PTY 和一次 shell，收到一行 9 字节的终端命令并回显 102 字节。主动断开后返回首页，两条连接都在驱动退出前关闭。记录确认凭据、剪贴板、临时输入、夹具和模拟器已清理。

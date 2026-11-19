@@ -1407,7 +1407,7 @@ final class TauriDirectSSHUITests: XCTestCase {
             guard requireHittable else { return .success(password) }
             let frame = password.live.snapshot.frame
             let geometry = controlGeometry(field, [password.live]) { viewport, _ in
-                routeTabsOcclusion(field, rows, viewport, [frame], scrolling: false)
+                self.routeTabsOcclusion(field, rows, viewport, [frame], scrolling: false)
             }
             switch geometry.failure {
             // A real, stable offscreen frame can be revealed before touching

@@ -17,6 +17,76 @@ except ModuleNotFoundError as missing:
 
 @unittest.skipIf(observed_tick is None, 'pairing requirements are installed in the native GUI workflow')
 class TauriSplitEvidenceTests(unittest.TestCase):
+    def test_first_key_requires_same_ready_editor_and_records_both_peer_byte_counts(self):
+        ready = {'originalTargetsActive': True, 'selectedB': True, 'originalEditorB': True,
+                 'aReadOnly': True, 'documentFocused': True, 'bEditorFocused': True,
+                 'bModeReady': True, 'bEditorWritable': True, 'bMode': 'direct',
+                 'bReceipt': 'absent', 'armed': True, 'keyDowns': 0}
+        before = {**ready, 'bModeReady': False, 'bEditorFocused': False, 'bMode': 'observe',
+                  'bEditorWritable': False, 'bReadOnly': True, 'armed': False}
+        after = {**ready, 'bReceipt': 'matched', 'keyDowns': 1, 'trustedKeyOnOriginalB': True}
+
+        def one_poll(probe, code, **kwargs):
+            value = probe()
+            if not value:
+                raise GuiFailure(code)
+            return value
+
+        for states, received, error, sends in (
+            ([before, ready, after, after], (b'', b'b'), None, 1),
+            *[([before, {**ready, changed: False}, before], (b'', b''),
+               'direct_key_not_ready', 0) for changed in (
+                   'documentFocused', 'originalTargetsActive', 'originalEditorB', 'selectedB',
+                   'aReadOnly', 'bEditorFocused', 'bModeReady', 'bEditorWritable', 'armed')],
+            ([before, ready, after], (b'', b''), 'direct_input_missing', 1),
+            ([before, ready, after], (b'', b'private-payload'), 'direct_peer_bytes_mismatch', 1),
+            ([before, ready, after], (b'b', b'b'), 'direct_peer_bytes_mismatch', 1),
+            ([before, ready, ready], None, 'webdriver_actions_unknown_error', 1),
+            *[([before, ready, {**after, **changed}, {**after, **changed}],
+               (b'', b'b'), 'direct_key_delivery_unconfirmed', 1) for changed in (
+                   {'keyDowns': 0}, {'keyDowns': 2}, {'keyDowns': True},
+                   {'trustedKeyOnOriginalB': False}, {'bReceipt': 'other'},
+               )],
+        ):
+            with self.subTest(error=error, ready=states[1]), tempfile.TemporaryDirectory() as directory:
+                output = Path(directory)
+                wires = tuple(output / side for side in ('a', 'b'))
+                for wire in wires:
+                    wire.write_bytes(b'')
+
+                def key(value):
+                    self.assertEqual(value, 'b')
+                    if received is None:
+                        raise GuiFailure('webdriver_actions_unknown_error')
+                    for wire, data in zip(wires, received):
+                        wire.write_bytes(data)
+
+                ui = SplitDriver(SimpleNamespace(), output)
+                with (patch.object(ui, 'read', side_effect=states) as read,
+                      patch.object(ui, 'named') as named, patch.object(ui, 'keyboard', side_effect=key) as keys,
+                      patch('s06_tauri_gui.wait_for', side_effect=one_poll)):
+                    if error:
+                        code = error if error.startswith('webdriver_') else 's06_tauri_' + error
+                        with self.assertRaisesRegex(GuiFailure, '^' + code + '$'):
+                            ui.first_direct_key(['a', 'b'], [('p', 'a'), ('p', 'b')], wires)
+                    else:
+                        ui.first_direct_key(['a', 'b'], [('p', 'a'), ('p', 'b')], wires)
+                named.assert_called_once_with('逐键输入', 'b .tab-mode-actions')
+                self.assertEqual(keys.call_count, sends)
+                self.assertEqual(read.call_args_list[-1].args[-1], 'finish')
+                artifact = (output / 's06-tauri-first-direct-key.json').read_text()
+                self.assertNotIn('private-payload', artifact)
+                evidence = json.loads(artifact)
+                self.assertEqual(evidence['keyboardAttempted'], bool(sends))
+                self.assertEqual(evidence['peerBefore'], [
+                    {'byteCount': 0, 'match': 'empty'}, {'byteCount': 0, 'match': 'empty'}])
+                self.assertEqual([peer['byteCount'] for peer in evidence['peerAfter']],
+                                 [len(data) for data in (received or (b'', b''))])
+                if sends:
+                    self.assertEqual(evidence['beforeKey']['keyDowns'], 0)
+                else:
+                    self.assertEqual(evidence['stage'], 'before_key')
+
     def test_two_dom_panels_must_actually_share_a_row_without_overlap(self):
         a = dict(left=0, right=100, top=20, width=100, height=400)
         b = dict(left=114, right=214, top=20, width=100, height=500)

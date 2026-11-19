@@ -4,8 +4,16 @@
   "cases": [
     {
       "case": "before",
-      "productSourceSHA": "b11e2b94c18ca5b11e876fc93fc71c9c806b6e7d",
+      "workflowRun": 44471920633,
+      "job": 135390332758,
+      "attempt": 2,
+      "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44471920633",
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44471920633/job/135390332758",
+      "artifact": 14507085000,
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44471920633/artifacts/14507085000",
+      "productSourceSHA": "bc99258239354953e17dbeca03a6cf72d0b02fcd",
       "driverSourceSHA": "301f64d8cd2bd7ef6f9a96ed500f5d61c39b49fe",
+      "apkSha256": "433f3a4d6d9f9cc8e3cd17ec893d2f95c189a7eec6e3d0349893d875cefd1956",
       "zipSha256": "3bae7c91ae9bfbc591eec3da62b827af12b79979eb5ff67d8668cc2089fcadee",
       "overallStatus": "failed",
       "errorCode": "direct_active_ui_invalid",
@@ -20,8 +28,16 @@
     },
     {
       "case": "after",
+      "workflowRun": 44471913995,
+      "job": 135383192874,
+      "attempt": 1,
+      "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44471913995",
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44471913995/job/135383192874",
+      "artifact": 14505337211,
+      "artifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44471913995/artifacts/14505337211",
       "productSourceSHA": "b11e2b94c18ca5b11e876fc93fc71c9c806b6e7d",
-      "driverSourceSHA": "e40d4cdfb0d9e57fe214fa1c63e8f55a8c651a0a0",
+      "driverSourceSHA": "e40d4cdfb0d9e57fe214fa1c63e8f55a8c651a0a",
+      "apkSha256": "6638c4483cc64eb7a33ed38658a1e8dd2b2dbe9d676152cfb9d4212b9cdb7f67",
       "zipSha256": "835ef04521ccb0f701ebe299683c902cb43a9cebb64f18a12455c6370b6aebd6",
       "overallStatus": "failed",
       "errorCode": "direct_active_ui_invalid",
@@ -54,6 +70,7 @@
       "inputBytes": 0,
       "closed": false
     },
+    "provenance": "两案 APK 不同（apkSha256 相异），validation/tauri 产品代码在两案之间变化（bc99258→b11e2b9），驱动侧以 301f64d8 与 e40d4cd 各自记录；e40d4cd 相对 b11e2b9 在 validation/tauri 无差异",
     "limits": [
       "模拟器回环夹具与 ADB/CDP 驱动，非系统中文输入法组词，非实体设备",
       "两整案均 failed：修前断在 active_keyboard_opened，修后八步导航后在 terminal_input 二次开键盘失败，无第二次完整采样，不推测具体原因",

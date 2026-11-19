@@ -140,7 +140,7 @@ node docs/evidence/mobile-ssh-terminal-navigation-20261119/android-ime-browser/v
 
 ## Tauri Android R5 键盘修前后官方对照
 
-本节归档一次修前／修后对照运行的官方证据。两个整案均以失败告终，仅截图证据链自洽，不作为通过依据；此前的 R4 通过证据保持不变。两端产品同为 `b11e2b94c18ca5b11e876fc93fc71c9c806b6e7d`，驱动分别为 `301f64d8cd2bd7ef6f9a96ed500f5d61c39b49fe`（修前）与 `e40d4cdfb0d9e57fe214fa1c63e8f55a8c651a0a0`（修后），后者把产品布局修复合入同一截图驱动。环境均为 API 35 `pixel_5` x86_64 Google APIs 镜像、393 × 851 视口，自有模拟器起灭，系统输入法采样确认键盘归属本应用。
+本节归档一次修前／修后对照运行的官方证据。两个整案均以失败告终，仅截图证据链自洽，不作为通过依据；此前的 R4 通过证据保持不变。修前产品为 `bc99258239354953e17dbeca03a6cf72d0b02fcd`（驱动 `301f64d8cd2bd7ef6f9a96ed500f5d61c39b49fe`，[作业 135390332758](https://github.com/Luck9Star/herdr-pocket/actions/runs/44471920633/job/135390332758)，attempt 2），修后产品为 `b11e2b94c18ca5b11e876fc93fc71c9c806b6e7d`（驱动 `e40d4cdfb0d9e57fe214fa1c63e8f55a8c651a0a`，[作业 135383192874](https://github.com/Luck9Star/herdr-pocket/actions/runs/44471913995/job/135383192874)，attempt 1），两案 APK 哈希相异，产品布局修复落在两案产品源之间。环境均为 API 35 `pixel_5` x86_64 Google APIs 镜像、393 × 851 视口，自有模拟器起灭，系统输入法采样确认键盘归属本应用。
 
 两张图都是键盘打开瞬间的系统原屏（`adb exec-out screencap`），通过标记 OCR、隐藏认证表单与零输入门禁；回环服务端仅观测到一次成功认证与一条保持的 Shell，输入始终为零。修前图终端延伸到键盘下方，「收起键盘」按钮框为零；修后图终端收缩到键盘上方，「收起键盘」按钮为 44 × 44 且与断开控件分离，辅助行可见。两图的逐行像素与官方工件内原图一致，未做任何改写。
 
@@ -148,7 +148,7 @@ node docs/evidence/mobile-ssh-terminal-navigation-20261119/android-ime-browser/v
 
 | 对照 | 键盘打开瞬间 | 整案状态 |
 | --- | --- | --- |
-| 修前（b11e2b9） | [系统原屏](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r5/before-keyboard-opened-native.png) | 失败于 `active_keyboard_opened` |
-| 修后（e40d4cd 驱动） | [系统原屏](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r5/after-keyboard-opened-native.png) | 失败于 `terminal_input` |
+| 修前（产品 bc99258，运行 44471920633） | [系统原屏](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r5/before-keyboard-opened-native.png) | 失败于 `active_keyboard_opened` |
+| 修后（产品 b11e2b9，运行 44471913995） | [系统原屏](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r5/after-keyboard-opened-native.png) | 失败于 `terminal_input` |
 
 索引与逐文件 SHA256 见 [证据索引](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r5/official-index.json)。

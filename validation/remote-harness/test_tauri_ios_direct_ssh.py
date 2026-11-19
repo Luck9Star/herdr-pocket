@@ -1379,6 +1379,41 @@ print("native geometry cases passed")
 
 
 class NativeDiagnosticPublishingTests(unittest.TestCase):
+    def test_password_observation_redacts_and_survives_ci_publication(self):
+        from ios_direct_ssh_batch import publish_evidence
+        raw = {'role': 'secureTextField', 'owner': 'sameWeb', 'idKind': 'empty', 'labelKind': 'spaced',
+               'frameKind': 'inside', 'enabled': True, 'hit': 'unknown'}
+        live = raw | {'hit': 'yes'}
+        detail = {'rawCount': 1, 'raw': [raw], 'scopedSecureCount': 1, 'scopedSecure': [live]}
+        payload = {'stage': 'native_failure', 'nativeCheckpoint': 'ordinary_fingerprint',
+                   'nativeFailureCode': 'native_mobile_password_identity_missing', 'passwordObservation': detail}
+        sha = 'a' * 40
+        with tempfile.TemporaryDirectory() as output:
+            work = Path(output)
+            report = {'status': 'failed', 'sourceSHA': sha, 'artifacts': {}}
+            ios.Checkpoints(None, None, output, report).accept(payload)
+            self.assertEqual(report['passwordObservation'], detail)
+            public = work / 'public'
+            public.mkdir()
+            ios.write_json(public / 'result.json', report)
+            self.assertEqual(publish_evidence(public, work / 'verified', shell='tauri', source_sha=sha), {'result.json'})
+            self.assertEqual(json.loads((work / 'verified/result.json').read_text()), report)
+
+            explicit_leaks = ({'label': 'private-label'}, {'identifier': 'private-id'}, {'value': 'private-value'},
+                              {'frame': [0, 0, 100, 100]}, {'placeholder': 'private-placeholder'})
+            changes = [detail | {'raw': [raw | extra]} for extra in explicit_leaks]
+            changes += [detail | {'text': 'private'}, detail | {'rawCount': True}, detail | {'raw': [raw] * 13, 'rawCount': 13},
+                        detail | {'raw': [raw | {'labelKind': ['private']}]}, detail | {'raw': [raw | {'idKind': 'private'}]},
+                        detail | {'scopedSecure': [live | {'owner': 'otherWindow'}]}, detail | {'scopedSecureCount': -1}]
+            for changed in [payload | {'passwordObservation': change} for change in changes] + [
+                    payload | {'nativeCheckpoint': 'ordinary_port'}, payload | {'stage': 'native_progress'},
+                    payload | {'nativeFailureCode': 'native_control_disabled'}, payload | {'private': 'private'}]:
+                state = ios.Checkpoints(None, None, output, {})
+                with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                    state.accept(changed)
+                self.assertNotIn('passwordObservation', state.result)
+                self.assertNotIn('private', json.dumps(state.result))
+
     def test_mobile_password_failure_codes_are_source_bound_and_export_nothing_else(self):
         source = (ios.HERE / 'tauri_ios_direct_ssh.swift').read_text()
         codes = source.split('enum MobilePasswordIssue:', 1)[1].split('var pending:', 1)[0]

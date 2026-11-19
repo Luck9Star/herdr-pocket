@@ -477,6 +477,7 @@ struct Query {
     var allElementsBoundByIndex: [XCUIElement] = []
     var count: Int { allElementsBoundByIndex.count }
     var firstMatch: XCUIElement { allElementsBoundByIndex.first ?? XCUIElement() }
+    func element(boundBy index: Int) -> XCUIElement { allElementsBoundByIndex[index] }
     func matching(_ predicate: NSPredicate) -> Query {
         Query(allElementsBoundByIndex: allElementsBoundByIndex.filter { predicate.evaluate(with: $0.identity) })
     }
@@ -498,6 +499,9 @@ final class XCUIScreen {
     }
 }
 struct Rejected: Error { let reason: String }
+enum Thread {
+    static func sleep(forTimeInterval _: TimeInterval) {}
+}
 struct Date: Comparable {
     private static var clock: Double = 0
     static var tick: Double = 25
@@ -564,8 +568,11 @@ final class Adapter {
         self.pathControls = pathControls
     }
 
-    func require(_ condition: Bool, _ reason: String) throws {
-        if !condition { throw Rejected(reason: reason) }
+    func require(_ condition: Bool, _ reason: String, passwordObservation: [String: Any]? = nil) throws {
+        if !condition {
+            if let passwordObservation { observations?.checkpoints.append((reason, passwordObservation)) }
+            throw Rejected(reason: reason)
+        }
     }
     func nativeOcclusions() -> [CGRect] {
         guard let observations = observations, !observations.occlusionSamples.isEmpty else { return blockers }
@@ -669,6 +676,7 @@ final class Adapter {
             "func sameControlScope(_ scope:", "func mobileControl(_ anchor:", "func mobileBinding(_ anchor:",
             "func tapMobileButton(_ control:", "enum MobileWitnessObservation<Proof>", "func mobileWitness(_ targets:",
             "func waitForMobileWitness<Proof>", "func mobileAuth(port:", "func mobilePassword(in rows:",
+            "func mobilePasswordObservation(in rows:",
             "func controlGeometry(_ owner:", "func routeTabsOcclusion(_ owner:",
             "func reportFormGeometry(_ failure:", "func failControlGeometry(_ failure:",
             "func tap(_ item:", "func fillPassword(_ item:",
@@ -879,6 +887,81 @@ func checkAuthObservation() throws {
 }
 do { try checkAuthObservation() }
 catch let failure as Rejected { failures.append("auth observation failed before complete evidence: \(failure.reason)") }
+
+func checkPasswordAXAliases() throws {
+    let spaced = "密码 （仅本次使用）"
+    let spacedField = snapshot(.secureTextField, label: spaced)
+    let spacedRow = row(spacedField, path: fieldAnchor.path)
+    for identifier in ["", spaced, "ssh-password"] {
+        let field = snapshot(.secureTextField, identifier: identifier, label: spaced)
+        let (candidate, observations, password, submit) = authFixture([[row(field, path: fieldAnchor.path)]], liveSnapshot: field)
+        let proof = try candidate.auth(confirmation)
+        check(proof.password.live.element === password && observations.treeReads == 1 && password.taps + submit.taps == 0,
+              "the measured WebKit label should identify only the stable same-owner secure input")
+    }
+    let (liveAmbiguous, liveObservations, liveField, _) = authFixture([[spacedRow]], liveSnapshot: spacedField)
+    let compactAlias = Element()
+    compactAlias.identity = ["identifier": "", "label": fieldAnchor.snapshot.label]
+    liveObservations.webSurface.descendantsByRole[.secureTextField]?.append(compactAlias)
+    let wrongIdentity = snapshot(.secureTextField, identifier: "unrelated-control", label: spaced)
+    let doubledSpace = snapshot(.secureTextField, label: "密码  （仅本次使用）")
+    let unknown = snapshot(.secureTextField, label: "密码（本次使用）")
+    let wrongOwner = row(spacedField, path: [1, 0, 4], window: [1], web: [1, 0])
+    let foreignAlias = row(fieldAnchor.snapshot, path: [1, 0, 4], window: [1], web: [1, 0])
+    let rawAlias = row(fieldAnchor.snapshot, path: [0, 0, 8])
+    let plain = row(snapshot(.textField, label: spaced), path: [0, 0, 8])
+    func testCase(_ fixture: (Adapter, Observations, Element, Element), _ reason: String) -> (Adapter, Element, String) {
+        (fixture.0, fixture.2, reason)
+    }
+    let cases: [(Adapter, Element, String)] = [
+        (liveAmbiguous, liveField, "live_ambiguous"),
+        testCase(authFixture([[spacedRow, rawAlias]], liveSnapshot: spacedField), "raw_ambiguous"),
+        testCase(authFixture([[spacedRow, foreignAlias]], liveSnapshot: spacedField), "raw_ambiguous"),
+        testCase(authFixture([[wrongOwner]], liveSnapshot: spacedField), "raw_owner_unproven"),
+        testCase(authFixture([[spacedRow, plain]], liveSnapshot: spacedField), "wrong_role"),
+        testCase(authFixture([[row(wrongIdentity, path: fieldAnchor.path)]], liveSnapshot: wrongIdentity), "identity_missing"),
+        testCase(authFixture([[row(doubledSpace, path: fieldAnchor.path)]], liveSnapshot: doubledSpace), "identity_missing"),
+        testCase(authFixture([[row(unknown, path: fieldAnchor.path)]], liveSnapshot: unknown), "identity_missing"),
+    ]
+    for (candidate, field, reason) in cases {
+        do { _ = try candidate.auth(confirmation); failures.append("alias failed open: \(reason)") }
+        catch let failure as Rejected { check(failure.reason == "native_mobile_password_" + reason, "unexpected alias verdict") }
+        check(field.taps == 0 && field.inputs.isEmpty, "disputed password alias must never interact")
+    }
+
+    var privateSnapshot = snapshot(.secureTextField, identifier: "private-id", label: "private-label")
+    privateSnapshot.value = "private-value"
+    privateSnapshot.placeholderValue = "private-placeholder"
+    let otherWeb = row(snapshot(.secureTextField, label: "other-private-label"), path: [0, 1, 2], web: [0, 1])
+    let base = row(snapshot(.staticText, label: "密码"), path: [0, 0, 8])
+    let hint = row(snapshot(.staticText, label: "（仅本次使用）"), path: [0, 0, 9])
+    let (privacy, observation, _, _) = authFixture([[row(privateSnapshot, path: fieldAnchor.path), otherWeb, base, hint]],
+                                                    liveSnapshot: privateSnapshot, hits: false)
+    do { _ = try privacy.auth(confirmation); failures.append("opaque password identity accepted") }
+    catch let failure as Rejected { check(failure.reason == "native_mobile_password_identity_missing", "opaque name stays unresolved") }
+    let evidence = observation.checkpoints.first?.1 ?? [:]
+    let raw = evidence["raw"] as? [[String: Any]] ?? []
+    let scoped = evidence["scopedSecure"] as? [[String: Any]] ?? []
+    let encoded = try JSONSerialization.data(withJSONObject: evidence)
+    check(observation.checkpoints.count == 1 && Set(raw.compactMap { $0["owner"] as? String }) == ["sameWeb", "otherWeb"] &&
+          Set(raw.compactMap { $0["labelKind"] as? String }) == ["base", "hint", "other"] &&
+          evidence["rawCount"] as? Int == 4 && evidence["scopedSecureCount"] as? Int == 1 &&
+          scoped.first?["hit"] as? String == "no" && scoped.first?["frameKind"] as? String == "inside" &&
+          !String(decoding: encoded, as: UTF8.self).contains("private"),
+          "the last failure must expose only fixed classifications of the scoped native query and raw snapshot")
+
+    let (stale, staleReads, staleField, staleSubmit) = authFixture([[], [spacedRow]], liveSnapshot: spacedField)
+    let departed = staleReads.trees[1].filter { $0.snapshot.identifier != "ssh-step-title" }
+    staleReads.trees = [staleReads.trees[0]] + Array(repeating: departed, count: 9)
+    Date.tick = 3
+    defer { Date.tick = 25 }
+    do { _ = try stale.auth(confirmation); failures.append("late field accepted on a departed authentication page") }
+    catch let failure as Rejected { check(failure.reason == "native_mobile_setup_unproven", "the current page must still be proven") }
+    check(staleReads.treeReads > 1 && staleReads.checkpoints.isEmpty && staleField.taps + staleSubmit.taps == 0,
+          "the deadline must not publish or act from the old authenticated-page snapshot")
+}
+do { try checkPasswordAXAliases() }
+catch let failure as Rejected { failures.append("verified WebKit mapping failed before completing the auth gate: \(failure.reason)") }
 func expectTap(_ frame: CGRect, treeFrame: CGRect? = nil, blockers: [CGRect],
                appFrame: CGRect = screen, windowFrame: CGRect = screen, webAncestors: [CGRect] = [screen],
                hittable: Bool = true, diagnostic: String? = nil, samples: Int = 1, reason: String) {

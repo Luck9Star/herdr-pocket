@@ -277,9 +277,27 @@ enum NativeViewPolicy {
 enum NativeControlPolicy {
     static let desktopPasswordLabel = "密码"
     static let mobilePasswordLabel = "密码（仅本次使用）"
+    // WebKit can insert a single ASCII space at the inline label boundary.
+    static let mobilePasswordLabels = [mobilePasswordLabel, "密码 （仅本次使用）"]
+
+    static func isMobilePasswordField(identifier: String, label: String) -> Bool {
+        identifier == "ssh-password" ||
+            ((identifier.isEmpty || identifier == label) && mobilePasswordLabels.contains(label))
+    }
 
     static func isPasswordField(identifier: String, label: String) -> Bool {
-        identifier == "ssh-password" || label == desktopPasswordLabel || label == mobilePasswordLabel
+        identifier == "ssh-password" || label == desktopPasswordLabel || mobilePasswordLabels.contains(label)
+    }
+
+    static func passwordLabelKind(_ label: String) -> String {
+        switch label {
+        case mobilePasswordLabels[0]: return "compact"
+        case mobilePasswordLabels[1]: return "spaced"
+        case desktopPasswordLabel: return "base"
+        case "（仅本次使用）", "仅本次使用": return "hint"
+        case "": return "empty"
+        default: return "other"
+        }
     }
 
     enum MobilePasswordIssue: String, Error {
@@ -559,7 +577,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
     private enum MobileWitnessObservation<Proof> {
         case ready(Proof)
-        case pending(String)
+        case pending(String, () -> [String: Any])
     }
     private struct TerminalHeader {
         let nodes: [Observed]
@@ -590,9 +608,11 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func require(_ condition: Bool, _ code: String) throws {
+    private func require(_ condition: Bool, _ code: String, passwordObservation: [String: Any]? = nil) throws {
         if !condition {
-            try? post("native_failure", ["nativeCheckpoint": nativePhase, "nativeFailureCode": code])
+            var payload: [String: Any] = ["nativeCheckpoint": nativePhase, "nativeFailureCode": code]
+            if let passwordObservation { payload["passwordObservation"] = passwordObservation }
+            try? post("native_failure", payload)
             throw NSError(domain: code, code: 1)
         }
     }
@@ -1243,6 +1263,7 @@ final class TauriDirectSSHUITests: XCTestCase {
                                     prove: ([Observed], [Observed]) throws -> MobileWitnessObservation<Proof>) throws -> Proof {
         let deadline = Date().addingTimeInterval(20)
         var pending = "native_mobile_setup_unproven"
+        var pendingObservation: (() -> [String: Any])?
         repeat {
             let rows = try observedNodes()
             let displayed = rows.filter { NativeFramePolicy.valid($0.snapshot.frame) &&
@@ -1256,14 +1277,17 @@ final class TauriDirectSSHUITests: XCTestCase {
                 windows: displayed.map(\.windowPath), webs: displayed.map(\.webPath), targets: targets) {
                 switch try prove(rows, matches.map { displayed[$0] }) {
                 case .ready(let proof): return proof
-                case .pending(let reason): pending = reason
+                case .pending(let reason, let observe):
+                    pending = reason
+                    pendingObservation = observe
                 }
             } else {
                 pending = "native_mobile_setup_unproven"
+                pendingObservation = nil
             }
             Thread.sleep(forTimeInterval: 0.2)
         } while Date() < deadline
-        try require(false, pending)
+        try require(false, pending, passwordObservation: pendingObservation?())
         throw NSError(domain: pending, code: 1)
     }
 
@@ -1274,8 +1298,16 @@ final class TauriDirectSSHUITests: XCTestCase {
         // live element that agrees with the raw snapshot identity and frame.
         let snapshot = owner.snapshot
         guard [.button, .secureTextField].contains(snapshot.elementType) else { return .failure(.liveIdentity) }
-        let match = snapshot.identifier.isEmpty ? NSPredicate(format: "label == %@", snapshot.label) :
-            NSPredicate(format: "identifier == %@", snapshot.identifier)
+        let match: NSPredicate
+        if snapshot.elementType == .secureTextField {
+            // Include both names in the scoped query so a second live
+            // representation cannot be ignored at the actual interaction.
+            // The raw witness still has to match the returned node exactly.
+            match = NSPredicate(format: "identifier == %@ OR label IN %@", "ssh-password", NativeControlPolicy.mobilePasswordLabels)
+        } else {
+            match = snapshot.identifier.isEmpty ? NSPredicate(format: "label == %@", snapshot.label) :
+                NSPredicate(format: "identifier == %@", snapshot.identifier)
+        }
         let query = web.element.descendants(matching: snapshot.elementType).matching(match)
         let matches = query.count
         guard matches <= 1 else { return .failure(.liveAmbiguous) }
@@ -1364,8 +1396,9 @@ final class TauriDirectSSHUITests: XCTestCase {
             switch mobilePassword(in: rows, submit: submit, previous: previous, requireHittable: !ready) {
             case .success(let control): password = control
             case .failure(let issue):
-                if issue.pending { return .pending(issue.rawValue) }
-                try require(false, issue.rawValue)
+                let observe = { self.mobilePasswordObservation(in: rows, submit: submit, previous: previous) }
+                if issue.pending { return .pending(issue.rawValue, observe) }
+                try require(false, issue.rawValue, passwordObservation: issue == .disabled ? nil : observe())
                 throw issue
             }
             let current = password.live.snapshot
@@ -1387,8 +1420,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         guard sameControlScope(scope, previous) else { return .failure(.ownerChanged) }
         let named = rows.filter { row in
             let field = row.snapshot
-            return field.identifier == "ssh-password" ||
-                ((field.identifier.isEmpty || field.identifier == field.label) && field.label == NativeControlPolicy.mobilePasswordLabel)
+            return NativeControlPolicy.isMobilePasswordField(identifier: field.identifier, label: field.label)
         }
         let fields = named.filter { $0.snapshot.elementType == .secureTextField }
         guard fields.count <= 1, named.filter({ $0.snapshot.identifier == "ssh-password" }).count <= 1 else {
@@ -1417,6 +1449,55 @@ final class TauriDirectSSHUITests: XCTestCase {
             default: return .failure(.frameUnsettled)
             }
         }
+    }
+
+    @MainActor
+    private func mobilePasswordObservation(in rows: [Observed], submit: Observed, previous: RevealedControl) -> [String: Any] {
+        let limit = 12
+        let visible = submit.window.flatMap {
+            NativeFramePolicy.visible(window: $0, screen: app.frame, webAncestors: submit.webs, occlusions: nativeOcclusions())
+        }
+        func row(_ snapshot: any XCUIElementSnapshot, owner: String, hit: Bool?) -> [String: Any] {
+            let label = NativeControlPolicy.passwordLabelKind(snapshot.label)
+            let identifier = snapshot.identifier == "ssh-password" ? "expected" : snapshot.identifier.isEmpty ? "empty" :
+                snapshot.identifier == snapshot.label ? "labelAlias" : "other"
+            let role = snapshot.elementType == .textView ? "textView" : snapshot.elementType == .searchField ? "searchField" :
+                self.role(snapshot.elementType)
+            let frame: String
+            if !NativeFramePolicy.valid(snapshot.frame) { frame = "invalid" }
+            else if let visible, owner == "sameWeb" {
+                frame = visible.contains(snapshot.frame) ? "inside" : visible.intersects(snapshot.frame) ? "intersects" : "outside"
+            } else { frame = "unmeasured" }
+            return ["role": role, "owner": owner, "idKind": identifier, "labelKind": label,
+                    "frameKind": frame, "enabled": snapshot.isEnabled,
+                    "hit": hit.map { $0 ? "yes" : "no" } ?? "unknown"]
+        }
+        let candidates = rows.filter {
+            let snapshot = $0.snapshot
+            let label = NativeControlPolicy.passwordLabelKind(snapshot.label)
+            return [.secureTextField, .textField, .textView, .searchField].contains(snapshot.elementType) ||
+                snapshot.identifier == "ssh-password" || !["empty", "other"].contains(label)
+        }
+        let raw = candidates.prefix(limit).map { candidate in
+            let owner: String
+            if candidate.windowPath.isEmpty { owner = "unowned" }
+            else if candidate.windowPath != submit.windowPath { owner = "otherWindow" }
+            else if candidate.webPath.isEmpty { owner = "unowned" }
+            else if candidate.webPath != submit.webPath { owner = "otherWeb" }
+            else { owner = "sameWeb" }
+            return row(candidate.snapshot, owner: owner, hit: nil)
+        }
+        var live: [[String: Any]] = []
+        var liveCount = -1
+        if let scope = controlScope(submit, rows), sameControlScope(scope, previous),
+           liveOnPath(scope.window) != nil, let web = liveOnPath(scope.web) {
+            let query = web.element.descendants(matching: .secureTextField)
+            liveCount = min(10000, query.count)
+            live = (0..<min(limit, liveCount)).compactMap { index in
+                liveControl(query.element(boundBy: index)).map { row($0.snapshot, owner: "sameWeb", hit: $0.hittable) }
+            }
+        }
+        return ["rawCount": candidates.count, "raw": raw, "scopedSecureCount": liveCount, "scopedSecure": live]
     }
 
     @MainActor
@@ -1451,13 +1532,13 @@ final class TauriDirectSSHUITests: XCTestCase {
     @MainActor
     private func assertCredentialsInactive(_ page: Observed, _ rows: [Observed]) throws {
         let visible = try safeFrame([page])
-        for (identifier, label) in [("ssh-password", mobileFlow ? NativeControlPolicy.mobilePasswordLabel : NativeControlPolicy.desktopPasswordLabel),
-            ("ssh-key", mobileFlow ? "私钥 PEM（仅本次使用）" : "私钥"),
-            ("ssh-passphrase", mobileFlow ? "私钥口令（加密私钥需要）" : "私钥口令（可选）")] {
+        for (identifier, labels) in [("ssh-password", mobileFlow ? NativeControlPolicy.mobilePasswordLabels : [NativeControlPolicy.desktopPasswordLabel]),
+            ("ssh-key", [mobileFlow ? "私钥 PEM（仅本次使用）" : "私钥"]),
+            ("ssh-passphrase", [mobileFlow ? "私钥口令（加密私钥需要）" : "私钥口令（可选）"])] {
             let query = app.descendants(matching: .any).matching(NSPredicate(format:
-                "identifier == %@ OR label == %@", identifier, label))
+                "identifier == %@ OR label IN %@", identifier, labels))
             var visibleLabel = false
-            for text in app.staticTexts.matching(NSPredicate(format: "label == %@", label)).allElementsBoundByIndex
+            for text in app.staticTexts.matching(NSPredicate(format: "label IN %@", labels)).allElementsBoundByIndex
             {
                 guard let current = liveControl(text), current.hittable,
                       current.snapshot.frame.intersects(visible) else { continue }

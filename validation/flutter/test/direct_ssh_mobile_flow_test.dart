@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/direct_ssh_page.dart';
+import 'package:herdr_flutter_probe/main.dart' as app;
 import 'package:terminal_view/terminal_view.dart';
-import 'direct_ssh_widget_test.dart' show waitFor;
+import 'direct_ssh_widget_test.dart' show mockClipboard, waitFor;
 
 void main() {
   for (final width in [320.0, 390.0]) {
@@ -112,6 +113,76 @@ void main() {
     }, variant: TargetPlatformVariant.only(TargetPlatform.iOS),
       skip: Platform.environment['HERDR_MOBILE_${mode}_PORT'] == null || Platform.environment['HERDR_MOBILE_${mode}_KEY'] == null);
   }
+
+  testWidgets('Android encrypted retry retains the credential and connect elements after paste notice clears', (tester) async {
+    final port = Platform.environment['HERDR_MOBILE_ENCRYPTED_PORT']!;
+    final privateKey = File(Platform.environment['HERDR_MOBILE_ENCRYPTED_KEY']!).readAsStringSync();
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(393, 851);
+    tester.view.padding = const FakeViewPadding(top: 24, bottom: 24);
+    tester.view.viewPadding = const FakeViewPadding(top: 24, bottom: 24);
+    addTearDown(tester.view.reset);
+    mockClipboard(tester, () async => {'text': privateKey});
+    Finder key(String name) => find.byKey(ValueKey(name));
+    Future<void> tap(String name) async {
+      await tester.ensureVisible(key(name));
+      await tester.tap(key(name));
+      await tester.pumpAndSettle();
+    }
+
+    await tester.runAsync(app.main);
+    await tester.pumpAndSettle();
+    await tap('hosts-direct-ssh');
+    for (final field in {'direct-host': '127.0.0.1', 'direct-user': 'fixture', 'direct-port': port}.entries) {
+      await tester.enterText(key(field.key), field.value);
+      await tester.pump();
+    }
+    await tap('direct-probe');
+    await waitFor(tester, key('direct-trust-key'));
+    final fingerprint = tester.widget<SelectableText>(key('direct-key-fingerprint')).data;
+    expect(fingerprint, startsWith('SHA256:'));
+    await tap('direct-trust-key');
+    await tap('direct-auth-key');
+    await tap('direct-paste-key');
+    final passphrase = key('direct-passphrase');
+    final connect = key('direct-connect');
+    await tester.ensureVisible(passphrase);
+    await tester.enterText(passphrase, 'wrong-passphrase');
+    await tester.pump();
+    await tap('direct-connect');
+    final dynamic state = tester.state(find.byType(DirectSshPage));
+    expect(state.connectFailure, DirectSshConnectFailure.keyParse);
+    expect(state.secret.text.isEmpty && state.passphrase.text.isEmpty, isTrue);
+
+    await tap('direct-paste-key');
+    expect(key('direct-paste-status'), findsOneWidget);
+    await tester.ensureVisible(passphrase);
+    final editing = tester.element(passphrase);
+    final button = tester.element(connect);
+    final withNotice = tester.getTopLeft(connect).dy;
+    await tester.enterText(passphrase, 'fixture-passphrase');
+    await tester.pump();
+    expect(tester.view.viewInsets.bottom, 0);
+    expect(key('direct-paste-status'), findsNothing);
+    expect(tester.element(connect), same(button));
+    expect(tester.element(passphrase), same(editing));
+    expect(tester.widget<EditableText>(find.descendant(of: passphrase, matching: find.byType(EditableText))).focusNode.hasFocus, isTrue);
+    expect(tester.getTopLeft(connect).dy, lessThan(withNotice));
+    expect(tester.widget<FilledButton>(connect).onPressed, isNotNull);
+    final target = 'fixture@127.0.0.1:$port';
+    expect(state.checkedTarget, target);
+    expect(state.fingerprint, fingerprint);
+    await tester.tap(connect);
+    await tester.pump();
+    await waitFor(tester, find.byType(TerminalView));
+    expect(state.activeTarget, target);
+    expect(state.connectHostKeyMatched, isTrue);
+    expect(state.secret.text.isEmpty && state.passphrase.text.isEmpty, isTrue);
+    await tester.tap(find.text('断开'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android),
+    skip: Platform.environment['HERDR_MOBILE_ENCRYPTED_PORT'] == null || Platform.environment['HERDR_MOBILE_ENCRYPTED_KEY'] == null);
 
   testWidgets('mobile changed-key view keeps distinct algorithms and locks credentials', (tester) async {
     tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(390, 844);

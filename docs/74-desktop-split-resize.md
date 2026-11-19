@@ -73,12 +73,13 @@ ffmpeg -v error -i "$image" -frames:v 1 -pix_fmt rgba -f hash -hash sha256 -
 
 ## 回宽自动恢复（`028072e`、`c9410f9`）
 
-同日在同一 Widget 用例上以红绿闭环验证两轮主复核反例，观察帧和输入回执仍由**合成适配器**提供；真实 stock/guarded 远端的回宽自动恢复待云端作业，macOS 原生窗口另项验收。
+同日在同一 Widget 用例上以红绿闭环验证两轮主复核反例。Widget 用例使用**合成适配器**提供观察帧与输入回执；窄宽序列驱动的正是真实 Widget 树与真实分屏状态机。固定 1440 视口的 Ubuntu 官方作业（见下）验证的是固定窗口下的真实远端连接，不能验证窗口拖拽窄宽——真实远端下的窄宽自动恢复目前待 macOS 原生窗口验收（R5 作业 44475250370 的 pairA host 回读失败，未通过）。
 
 - 反例一（红绿）：副侧已手动暂停时，新的窄宽周期不得赋予自动恢复资格；手动恢复入口必须仍可用。旧资格判定（`!viewPaused && live`）在该反例下通过，但反例二暴露缺口。
 - 反例二（红绿，先红 `Expected 3, Actual 2`）：副侧收窄→拉宽已自动恢复（`live=false`，等新完整帧）→**不发任何帧**再次收窄→再拉宽。旧判定在第二次收窄时丢失资格，面板永远停留旧画面。`c9410f9` 将资格改为 `!viewPaused && (live || observationEpoch > 0)`：等新帧的已恢复观察保留布局资格；手动暂停（`viewPaused=true`）与从未观察（`observationEpoch==0`）仍无资格。
 - 双次来回断言最终拉宽后同一目标自动恢复（`resumes==3`）、零新增远端输入、无重连。迟帧拒绝既有断言覆盖：旧 generation 帧、旧 epoch 完整帧均拒绝，仅新 epoch 帧生效。
-- 单用例通过；完整 Flutter 套 **607 通过、23 跳过、0 失败**；独立工程 `flutter analyze --no-pub` 无问题（工程 `lib/`、`test/` 与 `c9410f9` 逐文件一致后运行）。`remote_adapter.dart` 的 `resumeObservation` 注释已同步两壳新契约（显式用户动作或布局拉宽其自身暂停的观察）。
+- 单用例通过；完整 Flutter 套 **607 通过、23 跳过、0 失败**；独立工程 `flutter analyze --no-pub` 无问题（工程 `lib/`、`test/` 与 `c9410f9` 逐文件一致后运行，[运行摘要](evidence/desktop-split-resize-20261119/r2-c9410f9-widget-run-summary.json)，原始控制台日志因 `*.log` 通配不入库，摘要与原件逐项核对）。`remote_adapter.dart` 的 `resumeObservation` 注释已同步两壳新契约（显式用户动作或布局拉宽其自身暂停的观察）。
+- Ubuntu 官方 stock/guarded 作业在 `c9410f9` 复验固定视口真实连接通过，见[下节](#ubuntu-官方-flutter-双-ssh-验证)。
 
 ### 回宽两态截图（`c9410f9`）
 
@@ -93,13 +94,19 @@ ffmpeg -v error -i "$image" -frames:v 1 -pix_fmt rgba -f hash -hash sha256 -
 
 ### 重跑回宽自动恢复用例
 
-从 `c9410f9` 仓库根目录执行。截图直出依赖用例内 `HERDR_SPLIT_CAPTURE` 钩子；「新完整帧已到」一张需在临时副本的 `expect(bResumed, isNot(same(bTerminal)));` 行后补一行 `await capture('auto-new-full');`（本仓不保留该插桩，永久用例止于状态断言）。
+从 `c9410f9` 仓库根目录执行；依赖固定方式与上文「重跑 Flutter 用例」相同（先 `flutter pub get --offline`）。截图直出依赖用例内 `HERDR_SPLIT_CAPTURE` 钩子；「新完整帧已到」一张需在临时副本的 `expect(bResumed, isNot(same(bTerminal)));` 行后补一行 `await capture('auto-new-full');`（本仓不保留该插桩，永久用例止于状态断言）。
 
 ```sh
-python3 validation/flutter/tool/ci.py prepare --destination "$(mktemp -d /tmp/herdr-d2-r2.XXXXXX)/app"
-# 同步 lib/ 与 test/ 后，在该 app 内：
-HERDR_SPLIT_CAPTURE=<目录> flutter test test/host_split_widget_test.dart --no-pub
-flutter analyze --no-pub
+run2=$(mktemp -d /tmp/herdr-d2-r2.XXXXXX)
+python3 validation/flutter/tool/ci.py prepare --destination "$run2/app"
+cp -R validation/flutter/lib "$run2/app/lib" && cp -R validation/flutter/test "$run2/app/test"
+(
+  cd "$run2/app" &&
+    flutter pub get --offline &&
+    HERDR_SPLIT_CAPTURE="$run2/out" flutter test test/host_split_widget_test.dart --no-pub &&
+    flutter analyze --no-pub
+)
+ls "$run2/out"   # wide / critical / narrow / restored 四帧
 ```
 
 ## macOS 真实双回环
@@ -138,6 +145,17 @@ printf '%s  %s\n' "$herdr_digest" "$herdr_bin" | shasum -a 256 -c &&
 
 两次均观察到 `OpenSSH_9.6p1 Ubuntu-3ubuntu13.20, OpenSSL 3.0.13 30 Jan 2024`。stock 的 Ubuntu 镜像为 `20261116.133.1`，guarded 为 `20261111.127.1`。两案验证固定 Widget 视口内的真实连接，D2 的收窄和恢复仍由上述独立 Widget 回归覆盖。macOS 原生窗口、两条真实连接中的窗口宽度往返、系统输入法组词、平台密钥库和真实跨网仍待验收。
 
+### `c9410f9` 复验
+
+`c9410f96703041113414b31eb4bf5de98f3bbc57` 上的固定 1440×1000 Widget 视口复验通过，同一套断言与清理检查全部满足。作业产物 ZIP 与其内部 `SHA256SUMS` 均已核对，`sourceSHA` 等于 `c9410f9`。
+
+| 模式 | 两侧服务端收字节 | 两侧 PTY 采样 | 运行与归档 |
+| --- | --- | --- | --- |
+| stock，只观察 | `[0,0]`，`exactRemoteBytes` 为真 | 帧数 7/10、增量 5/9，`119×40` 保持，0 次尺寸变化 | [作业 44475116460](https://github.com/Luck9Star/herdr-pocket/actions/runs/44475116460/job/135393668921) · ZIP `968a736c6f37e03158d1169c2c5fd6f9a5a026519371b5645a82674707dc26fe` · [脱敏 manifest](evidence/desktop-split-resize-20261119/s06-stock-c941-official.json) |
+| guarded，明确启用受保护输入 | `[9,1]`，`exactRemoteBytes` 为真 | 帧数 12/15、增量 10/14，`119×40` 保持，0 次尺寸变化 | [作业 44475148214](https://github.com/Luck9Star/herdr-pocket/actions/runs/44475148214/job/135395559119) · ZIP `d22f63d6d3a8d4ca5d91f3ff0f149417a924dfd705bdbcf2f91fa941015c01b2` · [脱敏 manifest](evidence/desktop-split-resize-20261119/s06-guarded-c941-official.json) |
+
+原始 ZIP 不入库，上列 SHA-256 供比对；两个脱敏 manifest（含 `sourceSHA`、两侧字节、帧计数、PTY 记录与清理结果）已归档并列入 `SHA256SUMS-r2`。
+
 ## 已有 S06 运行范围
 
 | 运行 | 验证范围 |
@@ -146,6 +164,6 @@ printf '%s  %s\n' "$herdr_digest" "$herdr_bin" | shasum -a 256 -c &&
 | 2026-11-15 Tauri，Ubuntu，`042c80f` | 原生 GTK WebView，两条真实隔离 SSH/herdr 观察。stock 收到 0/0 字节，guarded 收到 9/1 字节。身份为进程内测试实现。[stock manifest](evidence/design-parity-20261115/tauri-s06-stock-43676588247.json) · [guarded manifest](evidence/design-parity-20261115/tauri-s06-guarded-43676590579.json) |
 | 2026-11-19 macOS 双回环 | 有两套真实配对、独立 OpenSSH 认证、各 10 字节和清理。运行入口是无界面夹具。[脱敏报告](evidence/dual-overlay-20261115/macos-two-paired-hosts.json) |
 | 2026-11-19 Flutter D2，`3ff4d23` | Widget 验证窗口阈值、分屏位置、暂停和恢复、键盘焦点及输入隔离，使用合成适配器。[验证记录](evidence/desktop-split-resize-20261119/widget-verification.json) |
-| 2026-11-19 Flutter D2 回宽自动恢复，`c9410f9` | Widget 红绿验证两轮复核反例：布局暂停的活跃观察拉宽自动恢复、等新帧期间资格保持、手动暂停与从未观察不自动；合成适配器。[测试日志](evidence/desktop-split-resize-20261119/r2-c9410f9-split-test.log) · [analyzer](evidence/desktop-split-resize-20261119/r2-c9410f9-analyze.log) |
+| 2026-11-19 Flutter D2 回宽自动恢复，`c9410f9` | Widget 红绿验证两轮复核反例：布局暂停的活跃观察拉宽自动恢复、等新帧期间资格保持、手动暂停与从未观察不自动；合成适配器。[运行摘要](evidence/desktop-split-resize-20261119/r2-c9410f9-widget-run-summary.json) |
 
 历史 S06 的连接、字节和 PTY 采样见[原验收记录](63-design-parity-and-direct-ssh.md#s06-双侧界面与真实回环验收)。macOS 原生窗口需要在同一次运行中验证两条真实连接、窗口来回变化、键盘切换和服务端 PTY 与输入计数。[S06 隔离运行入口](../validation/remote-harness/README-s06-real-ssh.md)

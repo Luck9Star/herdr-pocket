@@ -1,0 +1,53 @@
+{
+  "before": [
+    16.0,
+    607.0,
+    288.0,
+    17.0
+  ],
+  "after": [
+    16.0,
+    575.0,
+    288.0,
+    17.0
+  ],
+  "form": [
+    0.0,
+    80.0,
+    320.0,
+    536.0
+  ],
+  "connect": [
+    16.0,
+    511.0,
+    288.0,
+    48.0
+  ],
+  "connectEnabled": false,
+  "back": [
+    8.0,
+    30.0,
+    44.0,
+    44.0
+  ],
+  "backCenterHit": true,
+  "viewport": [
+    320,
+    640
+  ],
+  "safeArea": [
+    24,
+    24
+  ],
+  "dpr": 1,
+  "sourceProductCommit": "26d8abfcd25d78fa22d5ead31e58bc39cb6e34ca",
+  "passwordAndPrivateKeyFields": "empty",
+  "backAction": "returned to target form",
+  "peerAuthenticated": false,
+  "screenshot": "screens/flutter-private-key-scrolled-320.png",
+  "sourceSha256": "d1ef1a4aaedfa8daff221c196c463b1abe0aa0a40e2f4820a0a3a6802fb32805",
+  "archiveSha256": "9ed7ab2241fdc6c69204f87c0b0a713bbdf3328b5a8e2b4e528cd933738fc0d0",
+  "decodedPixelsSha256": "45a519f6cada5cd160dc19da0601fcfc562ad4e0f64639fc49158ceacab9b87c",
+  "pixelIdentical": true,
+  "textAndExifRemoved": true
+}

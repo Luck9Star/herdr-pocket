@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "kind": "flutter-android-dual-overlay-identity-recovery",
+  "date": "2026-11-20",
+  "mainBaseline": "8a8311dbb46cca293ff038d7a5af1326181c0e74",
+  "device": {
+    "apiLevel": 35,
+    "abi": "x86_64",
+    "physicalDevice": false
+  },
+  "network": {
+    "providers": [
+      "tailscale",
+      "easytier"
+    ],
+    "fixture": "isolated-test-control-and-overlay-ssh",
+    "testAdbReverse": true,
+    "productionCrossNetworkVerified": false
+  },
+  "nativeSource": "547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8",
+  "hostSource": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
+  "hostArtifactId": 14171011473,
+  "hostArtifactSha256": "4bdc54843a9f438896db3717bd002859021fab51cbe60339c35e8a62a5bd6698",
+  "rawLogsArchived": false,
+  "runs": [
+    {
+      "runId": 44579499859,
+      "jobId": 135755986206,
+      "artifactId": 14557999356,
+      "uiSource": "aed169c12fea72150939d0a900ea1866d157037e",
+      "status": "failed",
+      "zipSizeBytes": 1723,
+      "zipSha256": "23d41f4d273d2351eb930d5fa996445dcabdf53aaa91c064042f85ad43f68ade",
+      "manifestSha256": "a3e9e27aa6f170cbb440ba03f2c899972ff7da843379c8cf6617373b3ed07924",
+      "cases": [
+        {
+          "firstStop": "et",
+          "status": "passed",
+          "stage": "both_stopped_audit",
+          "survivor": "ts",
+          "acceptedSessionsPerPeer": 1,
+          "newSessionsAfterBaseline": 0,
+          "inputBytesAtBothStopped": {
+            "et": 1,
+            "ts": 2
+          },
+          "cleanupPassed": true
+        },
+        {
+          "firstStop": "ts",
+          "status": "failed",
+          "stage": "ts_identity_open",
+          "peerSessions": 0,
+          "peerInputBytes": 0,
+          "cleanupPassed": true
+        }
+      ],
+      "archive": "r2-actions-14557999356.zip",
+      "round": "R2"
+    },
+    {
+      "runId": 44585708517,
+      "jobId": 135777927119,
+      "artifactId": 14561826753,
+      "uiSource": "ce1c8b1b2a7ab48ca6af29a515e5dd99616e2932",
+      "status": "passed",
+      "zipSizeBytes": 1583,
+      "zipSha256": "7155676332cda026e1b4af98990203ac18cebc462efcdb787e77bdebdbc4eb36",
+      "manifestSha256": "3b485f7ef4b3f66c7eb7c2b4c955f190833b1072daa1a79962350bba5c33d9f1",
+      "cases": [
+        {
+          "firstStop": "et",
+          "status": "passed",
+          "stage": "both_stopped_audit",
+          "survivor": "ts",
+          "acceptedSessionsPerPeer": 1,
+          "newSessionsAfterBaseline": 0,
+          "inputBytesAtBothStopped": {
+            "et": 1,
+            "ts": 2
+          },
+          "cleanupPassed": true
+        },
+        {
+          "firstStop": "ts",
+          "status": "passed",
+          "stage": "both_stopped_audit",
+          "survivor": "et",
+          "acceptedSessionsPerPeer": 1,
+          "newSessionsAfterBaseline": 0,
+          "inputBytesAtBothStopped": {
+            "et": 2,
+            "ts": 1
+          },
+          "cleanupPassed": true
+        }
+      ],
+      "archive": "r3-actions-14561826753.zip",
+      "round": "R3"
+    },
+    {
+      "runId": 44589479663,
+      "jobId": 135791272955,
+      "artifactId": 14563338860,
+      "uiSource": "ebc3c346bbcd8aa09bed3e2f73f350cb6a45b072",
+      "status": "passed",
+      "zipSizeBytes": 1582,
+      "zipSha256": "19a8538b9596c0f058c7d2fc9947738628f4127ff83cbba6acb3ddfa93af2007",
+      "manifestSha256": "b93f2a2f291053656eb7de8a5b97371b8552b347984748565247cd00f5e84385",
+      "cases": [
+        {
+          "firstStop": "et",
+          "status": "passed",
+          "stage": "both_stopped_audit",
+          "survivor": "ts",
+          "acceptedSessionsPerPeer": 1,
+          "newSessionsAfterBaseline": 0,
+          "inputBytesAtBothStopped": {
+            "et": 1,
+            "ts": 2
+          },
+          "cleanupPassed": true
+        },
+        {
+          "firstStop": "ts",
+          "status": "passed",
+          "stage": "both_stopped_audit",
+          "survivor": "et",
+          "acceptedSessionsPerPeer": 1,
+          "newSessionsAfterBaseline": 0,
+          "inputBytesAtBothStopped": {
+            "et": 2,
+            "ts": 1
+          },
+          "cleanupPassed": true
+        }
+      ],
+      "archive": "main-r1-actions-14563338860.zip",
+      "round": "main-r1"
+    }
+  ]
+}

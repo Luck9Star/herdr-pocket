@@ -157,7 +157,7 @@ Tailscale、EasyTier 和 ZeroTier 分别推进，共用 M1 的可信连接与输
 - [ ] **M2-04** 验证显式切换、停用配置、节点退出与认证失效；展示受影响主机，恢复前关闭输入，退出后不静默重试。
   **待验证。** Android 已通过双向停网。配置切换、认证失效、删除身份与重启后的输入关闭、影响提示和禁止重试仍待组合复验。[Android 停网](67-android-dual-network-startup.md) · [影响审查](55-mobile-shared-network-device.md)
 - [ ] **M2-05** 每个已支持单网组合通过身份/秘密隔离、共享节点复用与释放用例；前台 TS+ET 同时连接不同主机并输入，停用一网不影响另一网；声明 ZeroTier 支持须另过 TS+ZT、ET+ZT 及三者同开。
-  **待验证。** Android 模拟器先停 TS/ET × 两壳四案均通过，幸存端沿原认证会话续输、被停端保留原输入计数并关闭。Flutter Android 另通过同一 EasyTier 节点双主机只读观察与逐条释放。双网失败见历史交接，当前结论以第 67 页为准。Linux 封闭 namespace 的两方向通过，默认 ET 对照失败。macOS 有单 TS C ABI 的 TCP 往返和独立 ET EOF 结果，双网待验。15 个单网格、20 个并发格仍待逐格验收。[Android](67-android-dual-network-startup.md) · [历史交接](66-iteration-handoff-2026-11-16.md) · [Linux 与 macOS](65-dual-overlay-validation.md) · [平台矩阵](09-prototype-validation.md#5-五端--三网络运行矩阵15格)
+  **待验证。** Android 模拟器先停 TS/ET × 两壳四案均通过，幸存端沿原认证会话续输、被停端保留原输入计数并关闭。Flutter 身份入口驱动修正后，从默认分支基线独立复验，两种停网顺序及清理均通过。Flutter Android 另通过同一 EasyTier 节点双主机只读观察与逐条释放。Linux 封闭 namespace 的两方向通过，默认 ET 对照失败。macOS 有单 TS C ABI 的 TCP 往返和独立 ET EOF 结果，双网待验。15 个单网格、20 个并发格仍待逐格验收。[Flutter 双网复验](evidence/flutter-android-dual-identity-recovery-20261120/README.md) · [Android 双网](67-android-dual-network-startup.md) · [历史交接](66-iteration-handoff-2026-11-16.md) · [Linux 与 macOS](65-dual-overlay-validation.md) · [平台矩阵](09-prototype-validation.md#5-五端--三网络运行矩阵15格)
 
 验收：无公开入站路径的测试主机上，各 provider × 平台在对应系统网络客户端关闭时完成看板、终端与输入闭环。分别记录平台/库版本、网络条件、连接路径、恢复及清理证据；不能用一个组合成功代替其余 14 格。
 

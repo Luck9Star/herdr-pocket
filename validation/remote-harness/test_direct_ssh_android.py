@@ -20,6 +20,112 @@ _spec.loader.exec_module(runner)
 
 
 class GuardTests(unittest.TestCase):
+    def test_ordinary_child_failure_reports_only_bound_startup_evidence_and_cleans_up(self):
+        import subprocess
+
+        private_text = b'PRIVATE_FIXTURE_VALUE /outside/temp/private.log\n'
+        gradle = b"Running Gradle task 'assembleDebug'...\nGradle task assembleDebug failed with exit code 1\n"
+        installing = b'Built build/app/outputs/flutter-apk/app-debug.apk\nInstalling build/app/outputs/flutter-apk/app-debug.apk...\n'
+        launch_failure = b'The VM Service is not available on the test device.\n'
+        ui_test = b'00:00 +1: Android homepage host key rotation, ordinary SSH input, echo and disconnect\n'
+        cases = (
+            ('build', gradle, False, {}, 'not_installed', 'not_observed', None),
+            ('install', installing + b'Package install error: Failure [INSTALL_FAILED_INVALID_APK]\n',
+             False, {}, 'not_installed', 'not_observed', None),
+            ('launch', installing + launch_failure, True, {}, 'missing', 'not_observed', None),
+            ('fixture_validation', ui_test + b'direct_ssh_android_isolated_fixture_required\n',
+             True, {}, 'missing', 'not_observed', None),
+            ('ui_stage_observed', ui_test, True, {'stage.json': {'stage': 'rotation_home'}},
+             'verified', 'rotation_home', None),
+            ('ui_stage_observed', ui_test, True,
+             {'stage.json': {'stage': 'rotation_home'},
+              'failure.json': {'stage': 'rotation_home', 'code': 'direct_ssh_android_ui_failed'}},
+             'verified', 'rotation_home', 'rotation_home'),
+            ('unknown', ui_test, True,
+             {'stage.json': {'stage': private_text.decode().strip()}}, 'invalid', 'not_observed', None),
+            ('unknown', gradle + launch_failure, False, {}, 'not_installed', 'not_observed', None),
+            ('unknown', b"Running Gradle task 'assembleDebug'...\n", False, {},
+             'not_installed', 'not_observed', None),
+        )
+        for area, output, installation, records, readback, app_stage, failure_stage in cases:
+            with self.subTest(area=area, readback=readback, failureStage=failure_stage), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                app, public = root / 'app', root / 'public'
+                app.mkdir()
+                env = {**os.environ, 'GITHUB_SHA': 'a' * 40, 'GITHUB_RUN_ID': '123', 'RUNNER_TEMP': temp}
+                peers = []
+                for port in (40001, 40002):
+                    peer = MagicMock(port=port, username='fixture', password=private_text.decode(),
+                                     fingerprint='SHA256:fixture', rotated_fingerprint='SHA256:fixtureB')
+                    peer.__enter__.return_value = peer
+                    peer.snapshot.return_value = {'connections': 0, 'connectionsClosed': True}
+                    peers.append(peer)
+                fixture_module = types.SimpleNamespace(DirectSshFixture=Mock(side_effect=peers))
+                installed = False
+                real_popen = subprocess.Popen
+
+                def tool(command, **kwargs):
+                    nonlocal installed
+                    self.assertEqual(command[:2], ['flutter', 'test'])
+                    self.assertEqual(command[-1], runner.TARGET)
+                    self.assertTrue(command[-2].startswith('--dart-define-from-file='))
+                    installed = installation
+                    return real_popen([sys.executable, '-c',
+                        f'import os; os.write(1, {(output + private_text)!r}); raise SystemExit(3)'], **kwargs)
+
+                def adb(*args, **kwargs):
+                    nonlocal installed
+                    if args == ('uninstall', runner.PACKAGE):
+                        self.assertTrue(installed)
+                        installed = False
+                    if args == ('get-state',):
+                        return CompletedProcess([], 0, b'device\n', b'')
+                    return CompletedProcess([], 0, b'', b'')
+
+                def text(*args):
+                    return {('devices',): 'List of devices attached\nemulator-5554 device',
+                            ('shell', 'getprop', 'ro.kernel.qemu'): '1',
+                            ('shell', 'getprop', 'ro.build.version.sdk'): '35',
+                            ('shell', 'am', 'get-current-user'): '0',
+                            ('shell', 'settings', 'get', 'secure', 'show_ime_with_hard_keyboard'): '1'}.get(args, '')
+
+                def read(path, *args, **kwargs):
+                    return records.get(path.rsplit('/', 1)[-1])
+
+                with patch.dict(sys.modules, {'direct_ssh_fixture': fixture_module}), \
+                     patch.object(runner, 'checked_paths', return_value=(app, public)), \
+                     patch.object(runner, 'verify_prepared'), patch.object(runner, 'text', side_effect=text), \
+                     patch.object(runner, 'package_present', side_effect=lambda: installed), \
+                     patch.object(runner, 'forward_set', return_value=set()), \
+                     patch.object(runner, 'adb', side_effect=adb) as device, \
+                     patch.object(runner, 'read_public_json', side_effect=read), \
+                     patch.object(runner.subprocess, 'Popen', side_effect=tool) as process:
+                    with self.assertRaisesRegex(runner.Failure, '^direct_android_device_test_failed$'):
+                        runner.run(types.SimpleNamespace(project=app, output=public), env)
+                process.assert_called_once()
+                raw = (public / 'result.json').read_text()
+                result = json.loads(raw)
+                startup = result['startup']
+                self.assertEqual(result['status'], 'failed')
+                self.assertEqual(result.get('failureStage'), failure_stage)
+                self.assertEqual(startup['failureArea'], area)
+                self.assertEqual(startup['appReadback'], readback)
+                self.assertEqual(startup['appStage'], app_stage)
+                self.assertEqual(startup['packageObserved'], installation)
+                self.assertEqual(startup['toolExitCode'], 3)
+                self.assertEqual(startup['tool']['streamState'], 'eof')
+                self.assertEqual(result['protocol']['connections'], 0)
+                self.assertEqual(result['rotation']['finalSnapshot']['connections'], 0)
+                self.assertTrue(all(value for name, value in result['cleanup'].items() if name != 'rawLogsUploaded'))
+                self.assertNotIn('PRIVATE_FIXTURE_VALUE', raw)
+                self.assertNotIn('/outside/temp/private.log', raw)
+                self.assertNotIn('INSTALL_FAILED_INVALID_APK', raw)
+                self.assertNotIn('Running Gradle task', raw)
+                self.assertEqual([item.name for item in public.iterdir()], ['result.json'])
+                self.assertFalse(list(root.glob('herdr-direct-android-private-*')))
+                self.assertEqual(sum(call.args[:2] == ('reverse', '--remove') for call in device.call_args_list), 2)
+                self.assertFalse(any('tee' in call.args for call in device.call_args_list))
+
     def test_status_zero_offline_screenshot_gets_a_transport_diagnostic(self):
         request = {'tag': 'key-rotation', 'attempt': 1, 'bounds': [0, 20, 400, 500],
                    'viewSize': [400, 600], 'observedTarget': 'fixture@127.0.0.1:40002'}

@@ -6,7 +6,7 @@ on:
       auth_case:
         description: 'SSH acceptance case'
         type: choice
-        options: [standard, encrypted-key]
+        options: [standard, encrypted-key, encrypted-key-rotation]
         default: standard
   push:
     branches:
@@ -63,7 +63,7 @@ jobs:
           flutter analyze lib integration_test test/android_connect_diagnostic_test.dart
           flutter test --no-pub test/android_connect_diagnostic_test.dart
       - name: Prebuild the encrypted-key integration target without a device
-        if: ${{ inputs.auth_case == 'encrypted-key' }}
+        if: ${{ inputs.auth_case == 'encrypted-key' || inputs.auth_case == 'encrypted-key-rotation' }}
         run: |
           export PATH="$RUNNER_TEMP/direct-ssh-sdk/bin:$PATH"
           cd "$RUNNER_TEMP/direct-ssh-app"
@@ -76,6 +76,7 @@ jobs:
           case "${AUTH_CASE:-}" in
             ''|standard) set -- ;;
             encrypted-key) set -- --encrypted-key ;;
+            encrypted-key-rotation) set -- --encrypted-key-rotation ;;
             *) echo 'unsupported SSH acceptance case' >&2; exit 1 ;;
           esac
           AVD_EVIDENCE_DIR="$RUNNER_TEMP/direct-ssh-avd" bash validation/remote-harness/with-android-emulator.sh \

@@ -152,12 +152,17 @@ void main() {
       var stage = 'fixture_validation';
       var fixtureValidated = false;
       try {
-        if (encryptedCase != '' && encryptedCase != '1') {
+        if (!const {'', '1', 'rotation'}.contains(encryptedCase)) {
           throw StateError('direct_ssh_android_invalid_case');
         }
-        final encrypted = encryptedCase == '1';
+        final encrypted = encryptedCase.isNotEmpty;
+        final encryptedRotation = encryptedCase == 'rotation';
         final config = encrypted
-            ? target(encoded: encryptedTargetJson, encrypted: true)
+            ? target(
+                encoded: encryptedTargetJson,
+                encrypted: true,
+                rotating: encryptedRotation,
+              )
             : target();
         final rotation = encrypted
             ? null
@@ -233,7 +238,9 @@ void main() {
             final active = find.byKey(const ValueKey('direct-active-target'));
             expect(active, findsOneWidget);
             final observedTarget = tester.widget<Text>(active).data;
-            final peer = name == 'connected' ? config : rotation!;
+            final peer = name == 'connected' || encryptedRotation
+                ? config
+                : rotation!;
             final expectedTarget =
                 '${peer['username']}@${peer['host']}:${peer['port']}';
             expect(observedTarget, expectedTarget);
@@ -286,6 +293,7 @@ void main() {
             step: step,
             publish: publish,
             capture: capture,
+            rotating: encryptedRotation,
           );
           return;
         }
@@ -312,14 +320,16 @@ void main() {
         if (fixtureValidated) {
           publish(
             'failure.json',
-            encryptedCase == '1'
+            encryptedCase.isNotEmpty
                 ? encryptedFailure(stage, error, stack)
                 : {'stage': stage, 'code': 'direct_ssh_android_ui_failed'},
           );
         }
         rethrow;
       } finally {
-        if (fixtureValidated && Platform.isAndroid && encryptedCase == '1') {
+        if (fixtureValidated &&
+            Platform.isAndroid &&
+            encryptedCase.isNotEmpty) {
           await tester.runAsync(
             () => Clipboard.setData(const ClipboardData(text: '')),
           );

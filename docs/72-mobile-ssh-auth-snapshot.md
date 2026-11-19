@@ -202,3 +202,11 @@ git rev-parse HEAD
 - R7 冷启动 App 后长按原本为空的 PEM 字段。同窗采样可读，记录为空字段，未取得唯一菜单或内容插入的证据。权限弹窗、菜单实际可用性和产品支持情况均未证实。[R7 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44510667185/job/135513780849)
 
 两次都止于填入口令前的粘贴确认。服务端各只有一条已关闭的 A，认证尝试及成功、PTY、shell、输入及输出均为零。模拟器删除、夹具关闭和私有临时文件移除均通过。恢复验收须先在同一 App 窗口证明粘贴动作及内容插入，结果未知时停止并清理，不能重放原动作。错口令拒绝、正确私钥认证、终端回显及原屏 OCR、主动断开仍待实测。
+
+## Flutter Android 加密私钥与主机换钥
+
+**通过 — API 35 模拟器、受控回环。** 2026-11-19，R2 以 `auth_case=encrypted-key-rotation` 从正常首页完成加密 OpenSSH Ed25519 私钥与主机换钥的同次运行。源码 `3fdcae6794ecff0f1b63e0e4f9c3ed8caf7fead3` 与归档基线 `4056f41` 的 Flutter 产品树一致。独立的常规密码作业在同一源码上通过。[R2 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44515040529/job/135528754522) · [同源常规密码作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44515044000/job/135528765174)
+
+R2 先核对 A，见到 B 后拒绝认证。取消后仍保留 A 的信任，重新探测并显式核对 B 后才允许连接。对端四条传输依次为 A、B、B、B，前三条均为零认证、PTY、shell、输入与输出。末条只受理一次公钥认证、一项 PTY 和一个 shell，收到 9 字节并回显。Android 系统原图与 Flutter 渲染表面原图均通过各自 OCR 核对。主动断开、对端关闭、凭据清理、应用卸载、ADB 转发移除与 AVD 退出均有记录。[官方原 ZIP、图像摘要及逐条计数](evidence/flutter-android-encrypted-key-rotation-20261119/README.md)
+
+R1 已记录换钥与远端回显，读取截图时返回非 PNG，原图与完整清理未证实。R2 独立完成全流程。实体设备、物理 IME、真实网络和其他平台未纳入此格。[R1 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44510452198/job/135513026564)

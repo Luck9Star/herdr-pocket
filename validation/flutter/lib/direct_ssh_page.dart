@@ -32,7 +32,7 @@ class DirectSshPage extends StatefulWidget {
     this.onSelectDestination,
   });
   final DesignTokens tokens;
-  final VoidCallback? onReturnAfterDisconnect;
+  final ValueChanged<bool>? onReturnAfterDisconnect;
   final HostCatalog? catalog;
   final void Function(Set<String>)? closeCatalogTabs;
   final ValueListenable<bool>? sessionVisible;
@@ -66,8 +66,11 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   String status = '填写连接信息后先探测主机密钥。';
   bool busy = false, connected = false, keyAuth = false, foreground = true;
   bool mobileAuth = false, userDisconnected = false;
-  bool? desktopCloseConfirmed;
   bool desktopCloseAttempt = false;
+  bool closeLocalConfirmed = false;
+  bool closeRemoteReported = false;
+  bool closeCleanupFailed = false;
+  bool closeReturnPending = false;
   DirectSshConnectPhase connectPhase = DirectSshConnectPhase.idle;
   DirectSshConnectFailure? connectFailure;
   bool connectHostKeyMatched = false, connectCredentialCaptured = false, connectPasswordRequested = false;
@@ -154,43 +157,57 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     if (current == null) return;
     current.onOutput = null; current.onResize = null; current.dispose();
   }
+  void resetCloseOutcome() {
+    desktopCloseAttempt = false;
+    closeLocalConfirmed = false;
+    closeRemoteReported = false;
+    closeCleanupFailed = false;
+    closeReturnPending = false;
+  }
   void changed() {
     userDisconnected = false;
-    desktopCloseAttempt = false;
+    resetCloseOutcome();
     cancelKeyPaste();
     if (busy && pendingTarget != target) stop(message: '连接目标已更改；本次操作已取消。', notify: false);
     if (checkedTarget != target) { mobileAuth = false; fingerprint = null; algorithm = null; checkedTarget = null; hostKeyReviewRequired = false; hostKeyChange = null; secret.clear(); passphrase.clear(); }
     if (mounted) setState(() {});
   }
-  Future<bool> _retireActiveSession(SSHSession session, SSHClient transport, SSHSocket connection) async {
+  Future<({bool localClosed, bool remoteReported})> _retireActiveSession(SSHSession session, SSHClient transport, SSHSocket connection) async {
     const limit = Duration(seconds: 3);
     final elapsed = Stopwatch()..start();
     try {
       // Close stdin after delivering its queued bytes. Keep the original
       // transport reading until the peer closes the channel.
       await Future.wait<void>([session.stdin.close(), session.done], eagerError: true).timeout(limit);
-      // Channel completion also occurs after transport failure. A remote exit
-      // report is the evidence that the peer finished this shell.
-      final remoteExited = session.exitCode != null || session.exitSignal != null;
+      // A remote exit report is independent evidence; local closure is the
+      // acceptance condition, so both outcomes are returned separately.
+      final remoteReported = session.exitCode != null || session.exitSignal != null;
       await transport.close().timeout(limit - elapsed.elapsed);
-      return remoteExited;
+      return (localClosed: true, remoteReported: remoteReported);
     } catch (_) {
-      connection.destroy();
-      return false;
+      final remoteReported = session.exitCode != null || session.exitSignal != null;
+      try {
+        connection.destroy();
+        return (localClosed: true, remoteReported: remoteReported);
+      } catch (_) {
+        return (localClosed: false, remoteReported: remoteReported);
+      }
     }
   }
 
   void disconnect() {
     final wasConnected = connected;
-    final desktop = !mobileLayout;
     userDisconnected = wasConnected;
-    desktopCloseConfirmed = null;
-    desktopCloseAttempt = desktop && wasConnected;
+    desktopCloseAttempt = !mobileLayout && wasConnected;
+    closeLocalConfirmed = false;
+    closeRemoteReported = false;
+    closeCleanupFailed = false;
+    closeReturnPending = false;
     mobileAuth = false;
-    stop(message: desktop && wasConnected ? '正在关闭连接；未重放输入。' : '已断开；未重放输入。', drainInput: wasConnected, reportDesktopClose: desktop && wasConnected);
+    stop(message: wasConnected ? '正在断开本机连接；未重放输入。' : '已断开；未重放输入。', drainInput: wasConnected, reportCloseOutcome: wasConnected);
   }
 
-  void stop({String? message, bool notify = true, bool drainInput = false, bool reportDesktopClose = false}) {
+  void stop({String? message, bool notify = true, bool drainInput = false, bool reportCloseOutcome = false}) {
     cancelKeyPaste();
     if (busy && connectPhase != DirectSshConnectPhase.idle && connectFailure == null) connectFailure = DirectSshConnectFailure.cancelled;
     epoch++; connected = false; busy = false; pendingTarget = null; activeTarget = null;
@@ -200,6 +217,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     if (targetScroll.hasClients) targetScroll.jumpTo(0);
     retireTerminal();
     secret.clear(); passphrase.clear();
+    final credentialsCleared = secret.text.isEmpty && passphrase.text.isEmpty;
     final retiredStdout = stdout, retiredStderr = stderr;
     final session = shell, transport = client, connection = socket;
     stdout = null; stderr = null; shell = null; client = null; socket = null;
@@ -208,20 +226,31 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     }
     if (drainInput && session != null && transport != null && connection != null) {
       final retiringEpoch = epoch;
-      unawaited(_retireActiveSession(session, transport, connection).then((confirmed) {
+      unawaited(_retireActiveSession(session, transport, connection).then((outcome) {
         cancelOutput();
-        if (reportDesktopClose && mounted && epoch == retiringEpoch && userDisconnected) {
-          setState(() {
-            desktopCloseConfirmed = confirmed;
-            status = confirmed ? '已断开；未重放输入。' : '本地连接已关闭，远端关闭未确认；未重放输入。';
-          });
+        if (reportCloseOutcome && ((epoch == retiringEpoch && userDisconnected) || closeReturnPending)) {
+          final confirmed = outcome.localClosed && credentialsCleared;
+          closeLocalConfirmed = confirmed;
+          closeRemoteReported = outcome.remoteReported;
+          closeCleanupFailed = !confirmed;
+          final nextStatus = closeCleanupFailed ? '本机连接关闭失败；未重放输入。'
+            : closeRemoteReported ? '本机已断开；远端已报告结束，凭据已清空。重连时请重新填写。'
+            : '本机已断开；凭据已清空，重连时请重新填写。';
+          if (mounted) setState(() => status = nextStatus); else status = nextStatus;
+          if (closeReturnPending) {
+            widget.onReturnAfterDisconnect?.call(confirmed);
+            closeReturnPending = false;
+            userDisconnected = false;
+          }
         }
       }));
     } else {
       cancelOutput();
-      if (reportDesktopClose) {
-        desktopCloseConfirmed = false;
-        status = '本地连接已关闭，远端关闭未确认；未重放输入。';
+      if (reportCloseOutcome) {
+        closeLocalConfirmed = false;
+        closeRemoteReported = false;
+        closeCleanupFailed = true;
+        status = '本机连接关闭失败；未重放输入。';
         message = null;
       }
       session?.close();
@@ -260,7 +289,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   Future<void> probe() async {
     if (!valid || busy || !foreground) return;
     userDisconnected = false;
-    desktopCloseAttempt = false;
+    resetCloseOutcome();
     stop(); connectPhase = DirectSshConnectPhase.idle; connectFailure = null;
     connectHostKeyMatched = false; connectCredentialCaptured = false; connectPasswordRequested = false;
     final generation = ++epoch; final originalTarget = target;
@@ -304,7 +333,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   Future<void> connect() async {
     if (!valid || busy || !foreground || hostKeyReviewRequired || fingerprint == null || checkedTarget != target || secret.text.isEmpty) return;
     userDisconnected = false;
-    desktopCloseAttempt = false;
+    resetCloseOutcome();
     cancelKeyPaste();
     final generation = ++epoch, expected = fingerprint!, expectedAlgorithm = algorithm!;
     final originalTarget = target;
@@ -509,18 +538,26 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     }
     setState(() { mobileAuth = false; });
   }
+  ({String title, String detail}) get disconnectOutcomeCopy {
+    if (closeCleanupFailed) return (title: '本机连接关闭失败', detail: '会话可能仍在。可返回首页。');
+    if (!closeLocalConfirmed) return (title: '正在断开本机连接', detail: '正在关闭本机会话；未重放输入。');
+    if (closeRemoteReported) return (title: '本机已断开', detail: '远端已报告结束，凭据已清空。重连时请重新填写。');
+    return (title: '本机已断开', detail: '凭据已清空，重连时请重新填写。');
+  }
   Widget desktopDisconnectedForm() {
     final t = widget.tokens;
+    final outcome = disconnectOutcomeCopy;
+    final failed = closeCleanupFailed;
     final viewportWidth = MediaQuery.sizeOf(context).width;
     final left = viewportWidth < 700 ? 16.0 : viewportWidth < 960 ? 104.0 : 264.0;
     final width = (viewportWidth - left - (viewportWidth < 700 ? 16 : 40)).clamp(0.0, 560.0);
     return ListView(key: const ValueKey('direct-form'), padding: EdgeInsets.fromLTRB(left, 20, 16, 24), children: [
       Align(alignment: Alignment.topLeft, child: SizedBox(width: width, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Container(key: const ValueKey('direct-closed-feedback'), height: 66, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(color: t.color('brandSoft'), borderRadius: BorderRadius.circular(10), border: Border.all(color: t.color('brandBorder'))),
+          decoration: BoxDecoration(color: t.color(failed ? 'dangerSoft' : 'brandSoft'), borderRadius: BorderRadius.circular(10), border: Border.all(color: t.color(failed ? 'dangerBorder' : 'brandBorder'))),
           child: Semantics(liveRegion: true, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(desktopCloseConfirmed == true ? '已断开连接' : desktopCloseConfirmed == false ? '远端关闭未确认' : '正在关闭连接', key: const ValueKey('direct-status'), style: TextStyle(color: t.color('brand'), fontWeight: FontWeight.bold)),
-            Text(desktopCloseConfirmed == false ? '本机已断开，远端状态未确认。' : '本次凭据已清空。重新连接时请重新填写。', style: TextStyle(fontSize: 13, color: t.color('textSecondary'))),
+            Text(outcome.title, key: const ValueKey('direct-status'), style: TextStyle(color: t.color(failed ? 'dangerText' : 'brand'), fontWeight: FontWeight.bold)),
+            Text(outcome.detail, style: TextStyle(fontSize: 13, color: t.color('textSecondary'))),
           ]))),
         const SizedBox(height: 16), const Text('填写连接目标', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)), const SizedBox(height: 27),
         SizedBox(height: 48, child: TextField(key: const ValueKey('direct-host'), controller: host, decoration: const InputDecoration(labelText: '主机地址'))),
@@ -533,15 +570,18 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       ]))),
     ]);
   }
-  Widget mobileTargetForm() => ListView(key: const ValueKey('direct-form'), padding: EdgeInsets.fromLTRB(mobileMargin, 20, mobileMargin, 24), children: [
+  Widget mobileTargetForm() {
+    final outcome = disconnectOutcomeCopy;
+    final failed = closeCleanupFailed;
+    return ListView(key: const ValueKey('direct-form'), padding: EdgeInsets.fromLTRB(mobileMargin, 20, mobileMargin, 24), children: [
     if (userDisconnected && !busy) ...[
       Container(key: const ValueKey('direct-closed-feedback'), constraints: const BoxConstraints(minHeight: 66),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(color: widget.tokens.color('brandSoft'), borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: widget.tokens.color('brandBorder'))),
+        decoration: BoxDecoration(color: widget.tokens.color(failed ? 'dangerSoft' : 'brandSoft'), borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: widget.tokens.color(failed ? 'dangerBorder' : 'brandBorder'))),
         child: Semantics(liveRegion: true, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('已断开连接', key: const ValueKey('direct-status'), style: TextStyle(color: widget.tokens.color('brand'), fontWeight: FontWeight.bold)),
-          Text('本次凭据已清空。重新连接时请重新填写。', style: TextStyle(fontSize: 13, color: widget.tokens.color('textSecondary'))),
+          Text(outcome.title, key: const ValueKey('direct-status'), style: TextStyle(color: widget.tokens.color(failed ? 'dangerText' : 'brand'), fontWeight: FontWeight.bold)),
+          Text(outcome.detail, style: TextStyle(fontSize: 13, color: widget.tokens.color('textSecondary'))),
         ]))), const SizedBox(height: 16),
     ] else if (hostKeyReviewRequired && !busy) ...[
       Container(key: const ValueKey('direct-trust-preserved'), constraints: const BoxConstraints(minHeight: 66),
@@ -574,7 +614,8 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     if (userDisconnected) ...[const SizedBox(height: 10), SizedBox(height: mobileButtonHeight, child: OutlinedButton(
       key: const ValueKey('direct-return-home'), style: mobileSecondaryButton, onPressed: returnAfterDisconnect, child: const Text('返回首页')))],
     if (busy) TextButton(onPressed: () => stop(message: '已取消，未重放操作。'), child: const Text('取消')),
-  ]);
+    ]);
+  }
   Widget mobileAuthForm() {
     final t = widget.tokens;
     Widget choice(String text, bool value) => Expanded(child: SizedBox(height: mobileLargeText ? 60 : 44, child: OutlinedButton(
@@ -1181,9 +1222,13 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       }
       if (didPop && busy) stop(notify: false);
       if (didPop && userDisconnected) {
-        final confirmed = !desktopCloseAttempt || desktopCloseConfirmed == true;
-        userDisconnected = false;
-        if (confirmed) widget.onReturnAfterDisconnect?.call();
+        if (closeCleanupFailed || closeLocalConfirmed) {
+          final confirmed = closeLocalConfirmed;
+          userDisconnected = false;
+          widget.onReturnAfterDisconnect?.call(confirmed);
+        } else {
+          closeReturnPending = true;
+        }
       }
     },
     child: Scaffold(

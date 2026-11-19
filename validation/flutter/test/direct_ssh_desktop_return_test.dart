@@ -30,14 +30,15 @@ void main() {
         await waitFor(tester, find.byType(TerminalView));
         await tester.tap(find.widgetWithText(TextButton, '断开')); await tester.pump();
         final confirmed = Platform.environment['HERDR_DIRECT_SSH_EXPECT_EXIT'] == '1';
-        await waitFor(tester, find.text(confirmed ? '已断开连接' : '远端关闭未确认'));
-        if (!confirmed) expect(find.text('本机已断开，远端状态未确认。'), findsOneWidget);
+        await waitFor(tester, find.text('本机已断开'));
+        expect(find.text(confirmed ? '远端已报告结束，凭据已清空。重连时请重新填写。' : '凭据已清空，重连时请重新填写。'), findsOneWidget);
         expect(key('direct-closed-feedback').hitTestable(), findsOneWidget);
         expect(key('direct-return-home').hitTestable(), findsOneWidget);
         print('DESKTOP_GEOMETRY ${size.width} feedback=${tester.getRect(key('direct-closed-feedback'))} return=${tester.getRect(key('direct-return-home'))}');
         await tester.tap(key('direct-return-home')); await tester.pumpAndSettle();
-        expect(key('home-ssh-closed'), confirmed ? findsOneWidget : findsNothing);
-        if (confirmed) print('DESKTOP_GEOMETRY ${size.width} home=${tester.getRect(key('home-ssh-closed'))}');
+        expect(key('home-ssh-closed'), findsOneWidget);
+        expect(find.text('本机已断开'), findsOneWidget);
+        print('DESKTOP_GEOMETRY ${size.width} home=${tester.getRect(key('home-ssh-closed'))}');
         expect(tester.takeException(), isNull); await tester.pumpWidget(const SizedBox()); catalog.dispose();
       }, variant: TargetPlatformVariant.only(TargetPlatform.linux), skip: Platform.environment['HERDR_DIRECT_SSH_FIXTURE_PORT'] == null || (chooser && size.width >= 960));
     }

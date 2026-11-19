@@ -688,7 +688,7 @@ final class Adapter {
             "func passwordGeometryDetail(_ viewport:", "func scrollToControl(_ owner:",
             "func controlIdentityRows(_ current:", "func controlOwner(_ current:",
             "func reveal(_ item:", "func tapForm(_ name:",
-            "func mobileLiveControl(_ owner:", "func sameControlScope(_ lhs:",
+            "func mobileLiveControl(_ owner:", "func authMethodFact(_ node:", "func sameControlScope(_ lhs:",
             "func sameControlScope(_ scope:", "func mobileControl(_ anchor:", "func mobileBinding(_ anchor:",
             "func tapMobileButton(_ control:", "enum MobileWitnessObservation<Proof>", "func mobileWitness(_ targets:",
             "func visibleWitness(_ rows:", "func waitForMobileWitness<Proof>", "func mobileAuth(port:", "func mobilePassword(in rows:",
@@ -2078,8 +2078,25 @@ precondition(NativeControlPolicy.clearCount("请输入主机地址", placeholder
 precondition(NativeControlPolicy.clearCount("输入密码", placeholder: "输入密码", secure: true) == 0)
 precondition(NativeControlPolicy.clearCount("••••", placeholder: nil, secure: true) == nil)
 precondition(!NativeControlPolicy.credentialEmpty("••••", placeholder: nil))
+precondition(NativeControlPolicy.credentialMasked("••••"))
+precondition(!NativeControlPolicy.credentialMasked("•••6"))
+precondition(!NativeControlPolicy.credentialMasked(""))
+precondition(!NativeControlPolicy.credentialMasked(nil))
 precondition(!NativeControlPolicy.credentialEmpty("密码", placeholder: nil))
 precondition(NativeControlPolicy.credentialEmpty("密码", placeholder: "密码"))
+let key = NativeControlPolicy.AuthMethod.key
+let keyButton = F(identifier: "ssh-auth-key", label: "已有私钥", role: "toggle", value: nil)
+let otherKeyButton = F(identifier: "", label: "已有私钥", role: "button", value: nil)
+let wrongKeyRole = F(identifier: "ssh-auth-key", label: "已有私钥", role: "textField", value: nil)
+precondition(try! key.candidate([keyButton]).get() == 0)
+precondition(key.candidate([keyButton, otherKeyButton]) == .failure(.ambiguous))
+precondition(key.candidate([wrongKeyRole]) == .failure(.wrongRole))
+let pem = NativeControlPolicy.KeyField.pem
+precondition(pem.matches(identifier: "", label: "私钥 PEM（仅本次使用）"))
+precondition(pem.accepts(role: "textView") && !pem.accepts(role: "secureTextField"))
+let passphrase = NativeControlPolicy.KeyField.passphrase
+precondition(passphrase.matches(identifier: "", label: "私钥口令 （加密私钥需要）"))
+precondition(passphrase.accepts(role: "secureTextField") && !passphrase.accepts(role: "textField"))
 let unknown = NSObject()
 precondition(NativeControlPolicy.valueText(nil) == "")
 precondition(NativeControlPolicy.valueText(unknown) == nil)

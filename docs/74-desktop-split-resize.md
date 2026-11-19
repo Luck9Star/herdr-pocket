@@ -1,6 +1,6 @@
 # 桌面分屏窗口变化验收
 
-2026-11-19，Flutter 的 [D2 窄桌面与窗口变化](08-ui-design-plan.md#3-首轮画板与状态清单)在正常主机工作台完成 Widget 回归。收窄时保留活动终端与输入焦点，暂停另一侧。拉宽后恢复原来的左右位置，副侧显示旧画面并标为已暂停。macOS 另有两套真实 OpenSSH/herdr 的无界面回环复验。macOS 原生窗口内两条真实连接的分屏与窗口变化仍待验收。
+2026-11-19，Flutter 的 [D2 窄桌面与窗口变化](08-ui-design-plan.md#3-首轮画板与状态清单)在正常主机工作台完成 Widget 回归。收窄时保留活动终端与输入焦点，暂停另一侧。拉宽后恢复原来的左右位置，副侧显示旧画面并标为已暂停。Ubuntu 官方作业已在 Flutter Widget 中验证两条真实 OpenSSH/herdr 回环的分屏、焦点和输入隔离。macOS 无界面回环也已复验，macOS 原生窗口内两条真实连接的分屏与窗口变化仍待验收。
 
 ## Flutter 窗口与键盘回归
 
@@ -92,6 +92,20 @@ printf '%s  %s\n' "$herdr_digest" "$herdr_bin" | shasum -a 256 -c &&
   shasum -a 256 "$pair_run/report.json" &&
   cmp "$pair_run/report.json" docs/evidence/dual-overlay-20261115/macos-two-paired-hosts.json
 ```
+
+
+## Ubuntu 官方 Flutter 双 SSH 验证
+
+两次作业使用 `67c5263fbbf1a6bd947c940c5f7ceb4bd160b80d`、Ubuntu 24.04 x86_64、Flutter Widget 的 1440×1000 视口和两套真实回环 OpenSSH/herdr。签名器、目录和输入日志使用测试后端。原始 ZIP 与 Actions 摘要、各内部文件 SHA256 已核对。
+
+| 模式 | 两侧服务端收字节 | 两侧 PTY 采样 | 运行与归档 |
+| --- | --- | --- | --- |
+| stock，只观察 | `[0,0]` | 518／513 次，均保持 119×40 | [作业 44459182939](https://github.com/Luck9Star/herdr-pocket/actions/runs/44459182939/job/135341525126) · [正式工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44459182939/artifacts/14498758741) · [脱敏摘要与 SHA256](evidence/desktop-split-resize-20261119/s06-stock-official.json) |
+| guarded，明确启用受保护输入 | `[9,1]` | 558／552 次，均保持 119×40 | [作业 44459280773](https://github.com/Luck9Star/herdr-pocket/actions/runs/44459280773/job/135343613484) · [正式工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44459280773/artifacts/14499861389) · [脱敏摘要与 SHA256](evidence/desktop-split-resize-20261119/s06-guarded-official.json) |
+
+两侧各连一次，使用各自的认证设备身份。相同 pane ID 解析为不同终端，两个面板各自显示并推进观察帧。只有选中侧获得输入资格，切换焦点不会恢复此前的输入模式，迟到输入被拒。服务端按目标核对实际字节。两个远端 PTY 在 50 ms 采样中观察到 0 次尺寸变化。两条观察停止、临时授权撤销、受控进程和密钥清理均通过。
+
+两次均观察到 `OpenSSH_9.6p1 Ubuntu-3ubuntu13.20, OpenSSL 3.0.13 30 Jan 2024`。stock 的 Ubuntu 镜像为 `20261116.133.1`，guarded 为 `20261111.127.1`。两案验证固定 Widget 视口内的真实连接，D2 的收窄和恢复仍由上述独立 Widget 回归覆盖。macOS 原生窗口、两条真实连接中的窗口宽度往返、系统输入法组词、平台密钥库和真实跨网仍待验收。
 
 ## 已有 S06 运行范围
 

@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'
+    show LogicalKeyboardKey, PhysicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/direct_ssh_page.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
@@ -119,6 +121,7 @@ Future<void> runLinuxOrdinary(
     'linux_direct_home_timeout',
   );
   final originalHome = tester.widget<HostCatalogPage>(home);
+  final homeState = tester.state(home);
   expect(
     originalHome.catalog == null &&
         originalHome.adapterFactory == null &&
@@ -130,11 +133,12 @@ Future<void> runLinuxOrdinary(
   await openDirectSshFromHome(tester);
   final page = find.byType(DirectSshPage);
   expect(Theme.of(tester.element(page)).platform, TargetPlatform.linux);
-  for (final (name, value) in [
+  final fields = [
     ('direct-host', '127.0.0.1'),
     ('direct-port', '${target.port}'),
     ('direct-user', 'fixture'),
-  ]) {
+  ];
+  for (final (name, value) in fields) {
     final field = control(name);
     await tester.ensureVisible(field);
     await tester.enterText(field, value);
@@ -241,37 +245,43 @@ Future<void> runLinuxOrdinary(
     tester.widget<Text>(bound).data == target.label && credential.text.isEmpty,
     isTrue,
   );
+  expect(
+    find
+        .descendant(
+          of: control('direct-terminal-status'),
+          matching: find.text('已连接'),
+        )
+        .hitTestable(),
+    findsOneWidget,
+  );
   final terminal = tester.widget<TerminalView>(terminalView).terminal;
   final terminalState = tester.state<TerminalViewState>(terminalView);
   await checkpoint('connected', const {});
 
   step('input');
   await tapControl(tester, terminalView, 'linux_terminal', reveal: false);
+  bool focusedOnBoundTerminal() =>
+      terminalState.hasInputConnection &&
+      identical(
+        FocusManager.instance.primaryFocus?.context
+            ?.findAncestorStateOfType<TerminalViewState>(),
+        terminalState,
+      ) &&
+      identical(tester.state<TerminalViewState>(terminalView), terminalState) &&
+      tester.widget<Text>(bound).data == target.label;
   await waitUi(
     tester,
-    () =>
-        terminalState.hasInputConnection &&
-        identical(
-          FocusManager.instance.primaryFocus?.context
-              ?.findAncestorStateOfType<TerminalViewState>(),
-          terminalState,
-        ) &&
-        identical(
-          tester.state<TerminalViewState>(terminalView),
-          terminalState,
-        ) &&
-        tester.widget<Text>(bound).data == target.label,
+    focusedOnBoundTerminal,
     'linux_direct_terminal_focus_timeout',
   );
-  // One normal text-client commit and one activation of the visible Enter
-  // control. No direct Terminal, SSH session or platform IME injection.
+  // Commit the line once and dispatch desktop Enter to the same focused view.
+  expect(find.widgetWithText(TextButton, 'Enter').hitTestable(), findsNothing);
   tester.testTextInput.enterText('hp-check');
   await tester.pump();
-  await tapControl(
-    tester,
-    find.widgetWithText(TextButton, 'Enter'),
-    'linux_terminal_enter',
-    reveal: false,
+  expect(focusedOnBoundTerminal(), isTrue);
+  await tester.sendKeyEvent(
+    LogicalKeyboardKey.enter,
+    physicalKey: PhysicalKeyboardKey.enter,
   );
   await waitUi(
     tester,
@@ -299,7 +309,9 @@ Future<void> runLinuxOrdinary(
   );
 
   step('disconnect');
-  final disconnect = find.widgetWithText(TextButton, '断开');
+  final disconnect = control('direct-desktop-disconnect');
+  expect(disconnect.hitTestable(), findsOneWidget);
+  expect(tester.widget<TextButton>(disconnect).onPressed, isNotNull);
   await tapControl(tester, disconnect, 'linux_disconnect', reveal: false);
   await waitUi(
     tester,
@@ -307,10 +319,21 @@ Future<void> runLinuxOrdinary(
     'linux_direct_disconnect_timeout',
   );
   await verifyLocalClose(tester, tester.state(page));
+  expect(control('direct-closed-feedback').hitTestable(), findsOneWidget);
+  expect(connect, findsNothing);
+  expect(
+    tester.widget<FilledButton>(control('direct-probe')).onPressed,
+    isNotNull,
+  );
+  for (final (name, value) in fields) {
+    expect(tester.widget<TextField>(control(name)).controller!.text, value);
+  }
   await checkpoint('disconnect', const {});
 
   step('return_home');
   await verifyReturnHome(tester);
+  expect(tester.state(home), same(homeState));
+  expect(control('home-ssh-closed').hitTestable(), findsOneWidget);
   await checkpoint('complete', const {});
 }
 

@@ -8,7 +8,8 @@ from unittest.mock import MagicMock, patch
 try:
     from s06_tauri_gui import (SplitDriver, exercise_window_resize, layout_matches, observed_tick,
                                peer_connection_evidence, require_same_positions, require_side_by_side,
-                               window_dimensions, exercise_direct_resize, owned_xvfb, park_xvfb_pointer, GuiFailure)
+                               window_dimensions, exercise_direct_resize, exercise_peer_close, peer_close_sample,
+                               owned_xvfb, park_xvfb_pointer, GuiFailure)
 except ModuleNotFoundError as missing:
     if missing.name != 'cryptography':
         raise
@@ -203,7 +204,7 @@ class TauriSplitEvidenceTests(unittest.TestCase):
 
         def one_poll(probe, code, **kwargs):
             result = probe()
-            if result is not True:
+            if not result:
                 raise GuiFailure(code)
             return result
 
@@ -214,7 +215,7 @@ class TauriSplitEvidenceTests(unittest.TestCase):
                  'bothReadOnly': True, 'keyCount': 1, 'trustedConsumedChord': True}
         with (patch.object(ui, 'read', side_effect=[before, {**before, 'armed': True}, after]) as read,
               patch('s06_tauri_gui.wait_for', side_effect=one_poll)):
-            ui.escape_direct_input(['a', 'b'], [('pane-a', 'terminal-a'), ('pane-b', 'terminal-b')])
+            self.assertEqual(ui.escape_direct_input(['a', 'b'], [('pane-a', 'terminal-a'), ('pane-b', 'terminal-b')]), after)
         self.assertEqual([call.args[-1] for call in read.call_args_list], [False, True, False])
         self.assertEqual(calls, [('POST', '/session/test/actions', {'actions': [{
             'type': 'key', 'id': 's06-native-keyboard', 'actions': [
@@ -655,9 +656,66 @@ class TauriSplitEvidenceTests(unittest.TestCase):
             for log, count, done in [(other, 0, False), (accepted, 1, False),
                     (closed + accepted, 1, False), (accepted + closed.replace('40123', '40124'), 1, False),
                     (accepted + closed, 1, True), (accepted + 'Connection closed by 127.0.0.1 port 40123\n', 1, True),
+                    (accepted + 'Connection closed by 127.0.0.1 port 40123 [preauth]\n', 1, False),
+                    (accepted + other.replace('40124', '40123') + closed, 1, False),
+                    (accepted + 'Disconnected from user stranger 127.0.0.1 port 40123\n', 1, False),
                     (accepted + accepted, 2, False)]:
                 (root / 'sshd.log').write_text(log)
                 self.assertEqual(peer_connection_evidence(approval), {'authenticationCount': count, 'closed': done})
+
+    def test_auth_bound_reset_and_socket_state_are_diagnostics_only(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            approval = SimpleNamespace(root=root, config={'username': 'fixture', 'port': 30333}, fingerprint='SHA256:reviewed')
+            log = root / 'sshd.log'
+            log.write_text('Accepted publickey for fixture from 127.0.0.1 port 40123 ssh2: ED25519 SHA256:reviewed\n')
+            with patch('s06_tauri_gui.loopback_tcp_states', return_value={(30333, 40123): '01', (30333, 40124): '06'}):
+                self.assertEqual(peer_close_sample([approval]), [
+                    {'authenticationCount': 1, 'recognizedCloseCount': 0, 'resetCount': 0, 'socketState': 'established'}])
+            with log.open('ab') as handle:
+                handle.write(b'Read error from remote host 127.0.0.1 port 40123: Connection reset by peer\r\n')
+            with patch('s06_tauri_gui.loopback_tcp_states', return_value={}):
+                self.assertEqual(peer_close_sample([approval]), [
+                    {'authenticationCount': 1, 'recognizedCloseCount': 0, 'resetCount': 1, 'socketState': 'absent'}])
+            self.assertEqual(peer_connection_evidence(approval), {'authenticationCount': 1, 'closed': False})
+            with log.open('ab') as handle:
+                handle.write(b'Disconnected from user fixture 127.0.0.1 port 40123\r\n')
+            with patch('s06_tauri_gui.loopback_tcp_states', return_value={}):
+                self.assertEqual(peer_close_sample([approval]), [
+                    {'authenticationCount': 1, 'recognizedCloseCount': 1, 'resetCount': 1, 'socketState': 'absent'}])
+
+    def test_close_reports_both_clicks_and_peers_before_driver_exit(self):
+        active = {'authenticationCount': 1, 'recognizedCloseCount': 0, 'resetCount': 0, 'socketState': 'established'}
+        closed = {**active, 'recognizedCloseCount': 1, 'socketState': 'absent'}
+        reset = {**active, 'resetCount': 1, 'socketState': 'absent'}
+
+        def one_poll(probe, code, **kwargs):
+            if code.endswith('peer_close_unconfirmed'):
+                self.assertEqual(kwargs['timeout'], 12)
+            if not probe():
+                raise GuiFailure(code)
+            return True
+
+        for end, error in (([closed, closed], None), ([closed, reset], 'peer_close_unconfirmed'),
+                           ([closed, {**closed, 'resetCount': 1}], 'peer_close_unconfirmed'),
+                           ([closed, {**active, 'socketState': 'absent'}], 'peer_close_unconfirmed'),
+                           ([closed, {**closed, 'authenticationCount': 2}], 'peer_close_unconfirmed')):
+            with self.subTest(end=end), tempfile.TemporaryDirectory() as temp:
+                ui = SimpleNamespace(output=Path(temp), focus=MagicMock(), named=MagicMock(), read=MagicMock(return_value=True))
+                samples = [[active, active], [active, active], [closed, active], [closed, active], end, end]
+                with (patch('s06_tauri_gui.peer_close_sample', side_effect=samples),
+                      patch('s06_tauri_gui.wait_for', side_effect=one_poll)):
+                    if error:
+                        with self.assertRaisesRegex(GuiFailure, '^s06_tauri_' + error + '$'):
+                            exercise_peer_close(ui, ['a', 'b'], ['unused-a', 'unused-b'])
+                    else:
+                        self.assertEqual(exercise_peer_close(ui, ['a', 'b'], ['unused-a', 'unused-b']), [1, 1])
+                self.assertEqual([call.args for call in ui.named.call_args_list], [
+                    ('关闭此标签', 'a .tab-connection-actions'), ('关闭此标签', 'b .tab-connection-actions')])
+                report = json.loads((ui.output / 's06-tauri-peer-close.json').read_text())
+                self.assertEqual(report['final'], end)
+                self.assertTrue(report['workspaceHidden'])
+                self.assertTrue(all(step['panelRemoved'] for step in report['steps']))
 
 
 if __name__ == '__main__':

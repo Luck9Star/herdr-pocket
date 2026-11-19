@@ -517,21 +517,72 @@ def require_same_positions(before, after):
             raise GuiFailure('s06_tauri_split_position_changed')
 
 
+def peer_log_evidence(approval):
+    """Keep the authenticated source ports private to the peer observer."""
+    text = bounded_wire(approval.root / 'sshd.log', 2_097_152).decode(errors='replace').replace('\r\n', '\n')
+    username = re.escape(approval.config['username'])
+    accepted = (r'^Accepted publickey for ' + username + r' from 127\.0\.0\.1 port ([0-9]{1,5}) ssh2: ED25519 ' +
+                re.escape(approval.fingerprint or '') + r'(?=\s|$)')
+    connections = []
+    for match in re.finditer(accepted, text, re.MULTILINE):
+        port = int(match[1])
+        if not 1 <= port <= 65535:
+            continue
+        peer = rf'127\.0\.0\.1 port {port}'
+        remainder = text[match.end():]
+        reuse = re.search(rf'^(?:Connection from|Accepted [^\n]* from) {peer}(?=\s|$)', remainder, re.MULTILINE)
+        session = remainder[:reuse.start()] if reuse else remainder
+        closed = re.search(rf'^(?:Received disconnect from {peer}:|'
+                           rf'Disconnected from user {username} {peer}(?=\s|$)|'
+                           rf'Connection closed by (?:user {username} )?{peer}(?=\s|$))[^\n]*$',
+                           session, re.MULTILINE)
+        # An authenticated transport reset explains a missing graceful record.
+        # It cannot satisfy the close gate.
+        reset = re.search(rf'^Read error from remote host {peer}: Connection reset by peer$', session, re.MULTILINE)
+        connections.append((port, bool(closed and '[preauth]' not in closed[0]), bool(reset)))
+    return connections
+
+
 def peer_connection_evidence(approval):
-    """Match only this reviewed key's loopback SSH connection and peer close."""
-    text = bounded_wire(approval.root / 'sshd.log', 2_097_152).decode(errors='replace')
-    pattern = (r'Accepted publickey for ' + re.escape(approval.config['username']) +
-               r' from 127\.0\.0\.1 port ([0-9]+) ssh2: ED25519 ' +
-               re.escape(approval.fingerprint or '') + r'(?:\s|$)')
-    accepted = list(re.finditer(pattern, text))
-    closed = True
-    for match in accepted:
-        port = re.escape(match[1])
-        closing = (r'(?:Received disconnect from 127\.0\.0\.1 port ' + port +
-                   r':|Disconnected from user [^\n]+ 127\.0\.0\.1 port ' + port +
-                   r'(?:\s|$)|Connection closed by (?:user [^\n]+ )?127\.0\.0\.1 port ' + port + r'(?:\s|$))')
-        closed = closed and re.search(closing, text[match.end():]) is not None
-    return {'authenticationCount': len(accepted), 'closed': bool(accepted) and closed}
+    connections = peer_log_evidence(approval)
+    return {'authenticationCount': len(connections), 'closed': bool(connections) and all(row[1] for row in connections)}
+
+
+def loopback_tcp_states(path=Path('/proc/net/tcp')):
+    """Snapshot only IPv4 loopback tuples on the sshd's network namespace."""
+    try:
+        with path.open(encoding='ascii') as source:
+            text = source.read(2_097_153)
+        if len(text) > 2_097_152 or 'local_address' not in text.split('\n', 1)[0]:
+            return None
+        result = {}
+        for line in text.splitlines()[1:]:
+            columns = line.split()
+            if len(columns) < 4:
+                return None
+            local, remote, state = columns[1:4]
+            if local.startswith('0100007F:') and remote.startswith('0100007F:'):
+                result[int(local[9:], 16), int(remote[9:], 16)] = state
+        return result
+    except (OSError, ValueError):
+        return None
+
+
+def peer_close_sample(approvals):
+    sockets = loopback_tcp_states()
+    rows = []
+    for approval in approvals:
+        connections = peer_log_evidence(approval)
+        listener = approval.config.get('port')
+        socket_state = 'unavailable'
+        if sockets is not None and type(listener) is int and len(connections) == 1:
+            state = sockets.get((listener, connections[0][0]))
+            socket_state = ('absent' if state is None else 'established' if state == '01' else
+                            'closing' if state in ('04', '05', '06', '07', '08', '09', '0B') else 'other')
+        rows.append({'authenticationCount': min(len(connections), 64),
+                     'recognizedCloseCount': min(sum(row[1] for row in connections), 64),
+                     'resetCount': min(sum(row[2] for row in connections), 64), 'socketState': socket_state})
+    return rows
 
 
 class SplitDriver:
@@ -668,6 +719,7 @@ class SplitDriver:
 
     def escape_direct_input(self, panels, targets):
         before = ('originalTargetsActive', 'selectedB', 'directXterm', 'bReceiptMatched', 'aFocusButtonReady')
+        after = ('originalTargetsActive', 'selectedB', 'aFocusButtonFocused', 'bothReadOnly', 'trustedConsumedChord')
 
         def ready(arm=False):
             evidence = self.read(DIRECT_EXIT_SCRIPT, panels, targets, arm)
@@ -676,10 +728,10 @@ class SplitDriver:
 
         def escaped():
             evidence = self.read(DIRECT_EXIT_SCRIPT, panels, targets, False)
-            return (isinstance(evidence, dict) and type(evidence.get('keyCount')) is int and
-                    evidence['keyCount'] == 1 and all(evidence.get(key) is True for key in (
-                        'originalTargetsActive', 'selectedB', 'aFocusButtonFocused',
-                        'bothReadOnly', 'trustedConsumedChord')))
+            if (isinstance(evidence, dict) and type(evidence.get('keyCount')) is int and
+                    evidence['keyCount'] == 1 and all(evidence.get(key) is True for key in after)):
+                return {key: evidence[key] for key in (*after, 'keyCount')}
+            return None
 
         # The independent peer has received b. Wait for the matching local
         # receipt as well, so this exit cannot interrupt an in-flight send.
@@ -688,7 +740,7 @@ class SplitDriver:
             raise GuiFailure('s06_tauri_direct_escape_not_armed')
         # W3C WebDriver key values for F6, Control and Shift. Send exactly once.
         self.keyboard('\ue036', modifiers=('\ue009', '\ue008'))
-        wait_for(escaped, 's06_tauri_direct_escape_unconfirmed')
+        return wait_for(escaped, 's06_tauri_direct_escape_unconfirmed')
 
     def focus(self, panel):
         if self.read('return document.querySelector(arguments[0])?.dataset.focus;', panel) != 'true':
@@ -1177,6 +1229,48 @@ def exercise_direct_resize(ui, panels, targets, approvals, check_bytes):
             'peerInputBytesBeforeEscape': [0, 1]}
 
 
+def exercise_peer_close(ui, panels, approvals):
+    report = {'before': None, 'steps': [], 'workspaceHidden': False, 'final': None}
+
+    def finished():
+        report['final'] = peer_close_sample(approvals)
+        return all(row['authenticationCount'] == 1 and row['recognizedCloseCount'] == 1 and row['resetCount'] == 0
+                   for row in report['final'])
+
+    try:
+        report['before'] = peer_close_sample(approvals)
+        for index, panel in enumerate(panels):
+            ui.focus(panel)
+            step = {'side': index, 'before': peer_close_sample(approvals), 'attempted': False,
+                    'clickReturned': False, 'panelRemoved': False, 'after': None}
+            report['steps'].append(step)
+            original = step['before'][index]
+            if original['authenticationCount'] != 1 or original['recognizedCloseCount'] or original['resetCount']:
+                raise GuiFailure('s06_tauri_peer_changed_before_close')
+            step['attempted'] = True
+            ui.named('关闭此标签', panel + ' .tab-connection-actions')
+            step['clickReturned'] = True
+            # Await the real UI removal before addressing the remaining panel.
+            wait_for(lambda: ui.read('return !document.querySelector(arguments[0]);', panel) is True,
+                     's06_tauri_closed_panel_still_present')
+            step['panelRemoved'] = True
+            step['after'] = peer_close_sample(approvals)
+        wait_for(lambda: ui.read('return document.querySelector("#tab-workspace").hidden;') is True,
+                 's06_tauri_tabs_not_closed')
+        report['workspaceHidden'] = True
+        wait_for(finished, 's06_tauri_peer_close_unconfirmed', timeout=12)
+        return [row['authenticationCount'] for row in report['final']]
+    finally:
+        if ui.output is not None:
+            if report['final'] is None:
+                try:
+                    report['final'] = peer_close_sample(approvals)
+                except (GuiFailure, OSError):
+                    pass
+            # Record before WebDriver exit or fixture cleanup can affect the peers.
+            (ui.output / 's06-tauri-peer-close.json').write_text(json.dumps(report, sort_keys=True))
+
+
 def exercise(args, root, env, configs, approvals, expected):
     driver, stage = WebDriver(), 'prepare_display'
     ui = SplitDriver(driver, args.output)
@@ -1292,12 +1386,16 @@ def exercise(args, root, env, configs, approvals, expected):
                     ui.first_direct_key(panels, targets, (root / 'received.bin', other / 'received.bin'))
                     stage = 'direct_resize'
                     direct_resize_evidence = exercise_direct_resize(ui, panels, targets, approvals, check_bytes)
+                    (args.output / 's06-tauri-direct-resize.json').write_text(json.dumps(direct_resize_evidence, sort_keys=True))
                     stage = 'direct_escape'
-                    ui.escape_direct_input(panels, targets)
+                    escape_observation = ui.escape_direct_input(panels, targets)
                     if any(peer_connection_evidence(approval) != {'authenticationCount': 1, 'closed': False}
                            for approval in approvals):
                         raise GuiFailure('s06_tauri_direct_escape_peer_changed')
                     check_bytes((b'', b'b'))
+                    (args.output / 's06-tauri-direct-escape.json').write_text(json.dumps(
+                        {'observation': escape_observation, 'originalPeersPreserved': True, 'noExtraInputBytes': True},
+                        sort_keys=True))
                     stage = 'input_focus'
                 ui.focus(panels[0])
                 driver.click(panels[1] + ' .terminal-host')
@@ -1327,24 +1425,14 @@ def exercise(args, root, env, configs, approvals, expected):
                     targets = [(config['paneId'], fixture_terminal_id(config)) for config in configs]
                     resize_evidence = exercise_window_resize(ui, panels, targets, approvals, check_bytes)
                 stage = 'close'
-                for panel in panels:
-                    ui.focus(panel); ui.named('关闭此标签', panel + ' .tab-connection-actions')
-                    # The click starts an async cancel. Wait for that real tab
-                    # to disappear before addressing the remaining single view;
-                    # its split-only focus header is intentionally gone then.
-                    wait_for(lambda: ui.read('return !document.querySelector(arguments[0]);', panel) is True,
-                             's06_tauri_closed_panel_still_present')
-                wait_for(lambda: ui.read('return document.querySelector("#tab-workspace").hidden;') is True,
-                         's06_tauri_tabs_not_closed')
-                wait_for(lambda: all(peer_connection_evidence(a) == {'authenticationCount': 1, 'closed': True}
-                                     for a in approvals), 's06_tauri_peer_close_unconfirmed', timeout=12)
+                peer_authentication_counts = exercise_peer_close(ui, panels, approvals)
                 check_bytes(expected)
                 return {**{key: True for key in ('normalHomepage', 'twoReviewedIdentities', 'samePaneDifferentTerminal',
                     'bothVisible', 'independentFrames', 'bothAdvanced', 'singleInputFocus', 'focusDoesNotRestoreInput',
                     'lateInputRejected', 'stoppedBoth')},
                     'sides': [{'visibleFrameSnapshots': 2, 'tickAdvanced': second > first, 'inputAccepted': guarded}
                               for first, second in ticks],
-                    'peerAuthenticationCounts': [peer_connection_evidence(a)['authenticationCount'] for a in approvals],
+                    'peerAuthenticationCounts': peer_authentication_counts,
                     'peersClosedBeforeDriverExit': True, 'frameEvidence': 'public visible-terminal-text UI snapshots; native WebDriver actions',
                     **({'guardedDirectEscape': {'trustedChordConsumed': True, 'domFocusMovedToA': True,
                         'selectedTargetStayedB': True, 'originalTargetsAndPeersPreserved': True,

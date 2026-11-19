@@ -1,6 +1,6 @@
 # Tauri 普通 SSH：本机关停与桌面活动页
 
-产品源码基线 `e719ddf136397ad7a6796ae1f66558f240ecd388`，本批 UI 移植提交 `dde0ca4`。后者 9 个 Tauri 前端及测试文件完整取自 `f440c36611ab89b35bf7762044532ce600f2c34b`，根目录运行 `shasum -a 256 -c docs/evidence/tauri-local-close-main-20261120/source-SHA256SUMS` 可核对。需要整体复用是因为活动页与真实侧栏、桌面分步认证、手机同文件样式及共享网络读取状态相互依赖；没有移动 Rust、Flutter、原生驱动或工作流。
+产品源码基线 `e719ddf136397ad7a6796ae1f66558f240ecd388`，本批 UI 移植提交 `dde0ca4`。后者 9 个 Tauri 前端及测试文件完整取自 `f440c36611ab89b35bf7762044532ce600f2c34b`。`source-SHA256SUMS` 只描述冻结提交 `dde0ca4` 的九文件，后续 HEAD 已含回执竞态修复；应在该提交的独立导出中校验，见下方命令。需要整体复用是因为活动页与真实侧栏、桌面分步认证、手机同文件样式及共享网络读取状态相互依赖；没有移动 Rust、Flutter、原生驱动或工作流。
 
 这是 Playwright WebKit 26.5、真实产品前端和 xterm、回环 HTTP 与受控合成 Tauri IPC 的测量，**不是实际 SSH、原生 WebView、手机真机或真实键盘证据**。320×640、390×844 分别注入 24px、47px 顶部模拟安全区，不代表设备实测安全区。页面 `DPR=1`，坐标为 CSS px，对照冻结设计 logical pt。
 
@@ -32,6 +32,19 @@
 `terminal-replay.mjs` 复用 `f440c36` 已验的参数化入口：三桌面、两手机、长目标、已有主机、已有网络配置和读取失败共 9 项通过。真实 xterm 滚动后经看板、网络、设置往返，验证同一 xterm 和可见行保留、无额外连接、无额外输入；随后显式输入 `hp-once` 并断开。网络空态、新建/管理、已有配置和不可读均为合成数据，不读取或更改真实网络。每个场景的 JSON 和选定原图在 `routes/`；JSON 中未归档截图的哈希仅用于该次临时运行。
 
 `npm-test-integrated.log` 为 709/709，`npm-build-integrated.log` 为构建通过。一次初始测试因临时副本漏取 `validation/remote-harness/theme-prompt-measurement.js` 出现 708/709；补齐同基线依赖后重跑得到所归档的 709/709。设计生成器 SHA-256：桌面 `c14896bbddaef94e46a92b562fca9f9a21b0515c72ea295bd88f54f652f621d0`；手机 `5e38aa1dd6567af3cdd2ed3dfb577ce01414b1b58f535891ff6197bbfb73f313`。
+
+## 冻结九文件校验
+
+从仓库根目录执行；不要拿后续 HEAD 的文件与历史清单直接比较：
+
+```sh
+REPO_PATH="$PWD"
+FROZEN_DIR="$(mktemp -d)"
+git archive dde0ca4 validation/tauri/index.html validation/tauri/src validation/tauri/test | tar -x -C "$FROZEN_DIR"
+(cd "$FROZEN_DIR" && shasum -a 256 -c "$REPO_PATH/docs/evidence/tauri-local-close-main-20261120/source-SHA256SUMS")
+```
+
+[后续回执竞态红绿、受影响 WebKit 图与 f442 原生工件来源](race-followup/README.md) 单独记录；新 UI 与 Linux 驱动合并候选的云端复验尚在进行。
 
 ## 复验
 

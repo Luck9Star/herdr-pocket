@@ -1,0 +1,565 @@
+{
+  "sourceSHA": "2f060341363462f4fb811d4555913029e2325fed",
+  "engine": "Playwright WebKit 26.5",
+  "dpr": 1,
+  "cases": [
+    {
+      "viewport": "320x640",
+      "scenario": "pending",
+      "passed": true,
+      "rectangles": {
+        "connected": {
+          "feedback": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "returnHome": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "host": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "port": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "probe": [
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "disconnected": {
+          "feedback": [
+            16,
+            100,
+            288,
+            66
+          ],
+          "returnHome": [
+            16,
+            476,
+            288,
+            48
+          ],
+          "host": [
+            16,
+            240,
+            288,
+            48
+          ],
+          "port": [
+            220,
+            324,
+            84,
+            48
+          ],
+          "probe": [
+            16,
+            392,
+            288,
+            48
+          ]
+        },
+        "failed-after-pending": {
+          "feedback": [
+            16,
+            100,
+            288,
+            66
+          ],
+          "returnHome": [
+            16,
+            476,
+            288,
+            48
+          ],
+          "host": [
+            16,
+            240,
+            288,
+            48
+          ],
+          "port": [
+            220,
+            324,
+            84,
+            48
+          ],
+          "probe": [
+            16,
+            392,
+            288,
+            48
+          ]
+        },
+        "returned-failed": {
+          "feedback": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "returnHome": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "host": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "port": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "probe": [
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "ipcCounts": {
+        "ssh_host_key_probe": 1,
+        "ssh_shell_open": 1,
+        "ssh_shell_close": 1,
+        "ssh_shell_write": 0
+      }
+    },
+    {
+      "viewport": "320x640",
+      "scenario": "opening",
+      "passed": true,
+      "rectangles": {
+        "cancelled-opening": {
+          "feedback": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "returnHome": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "host": [
+            16,
+            158,
+            288,
+            48
+          ],
+          "port": [
+            220,
+            242,
+            84,
+            48
+          ],
+          "probe": [
+            16,
+            310,
+            288,
+            48
+          ]
+        }
+      },
+      "ipcCounts": {
+        "ssh_host_key_probe": 1,
+        "ssh_shell_open": 1,
+        "ssh_shell_close": 1,
+        "ssh_shell_write": 0
+      }
+    },
+    {
+      "viewport": "390x844",
+      "scenario": "pending",
+      "passed": true,
+      "rectangles": {
+        "connected": {
+          "feedback": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "returnHome": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "host": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "port": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "probe": [
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "disconnected": {
+          "feedback": [
+            24,
+            123,
+            342,
+            66
+          ],
+          "returnHome": [
+            24,
+            499,
+            342,
+            48
+          ],
+          "host": [
+            24,
+            263,
+            342,
+            48
+          ],
+          "port": [
+            282,
+            347,
+            84,
+            48
+          ],
+          "probe": [
+            24,
+            415,
+            342,
+            48
+          ]
+        },
+        "failed-after-pending": {
+          "feedback": [
+            24,
+            123,
+            342,
+            66
+          ],
+          "returnHome": [
+            24,
+            499,
+            342,
+            48
+          ],
+          "host": [
+            24,
+            263,
+            342,
+            48
+          ],
+          "port": [
+            282,
+            347,
+            84,
+            48
+          ],
+          "probe": [
+            24,
+            415,
+            342,
+            48
+          ]
+        },
+        "returned-failed": {
+          "feedback": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "returnHome": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "host": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "port": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "probe": [
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "ipcCounts": {
+        "ssh_host_key_probe": 1,
+        "ssh_shell_open": 1,
+        "ssh_shell_close": 1,
+        "ssh_shell_write": 0
+      }
+    },
+    {
+      "viewport": "390x844",
+      "scenario": "opening",
+      "passed": true,
+      "rectangles": {
+        "cancelled-opening": {
+          "feedback": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "returnHome": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "host": [
+            24,
+            181,
+            342,
+            48
+          ],
+          "port": [
+            282,
+            265,
+            84,
+            48
+          ],
+          "probe": [
+            24,
+            333,
+            342,
+            48
+          ]
+        }
+      },
+      "ipcCounts": {
+        "ssh_host_key_probe": 1,
+        "ssh_shell_open": 1,
+        "ssh_shell_close": 1,
+        "ssh_shell_write": 0
+      }
+    },
+    {
+      "viewport": "1440x900",
+      "scenario": "pending",
+      "passed": true,
+      "rectangles": {
+        "connected": {
+          "feedback": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "returnHome": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "host": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "port": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "probe": [
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "disconnected": {
+          "feedback": [
+            264,
+            76,
+            560,
+            66
+          ],
+          "returnHome": [
+            264,
+            452,
+            560,
+            48
+          ],
+          "host": [
+            264,
+            216,
+            560,
+            48
+          ],
+          "port": [
+            740,
+            300,
+            84,
+            48
+          ],
+          "probe": [
+            264,
+            368,
+            560,
+            48
+          ]
+        },
+        "failed-after-pending": {
+          "feedback": [
+            264,
+            76,
+            560,
+            66
+          ],
+          "returnHome": [
+            264,
+            452,
+            560,
+            48
+          ],
+          "host": [
+            264,
+            216,
+            560,
+            48
+          ],
+          "port": [
+            740,
+            300,
+            84,
+            48
+          ],
+          "probe": [
+            264,
+            368,
+            560,
+            48
+          ]
+        },
+        "returned-failed": {
+          "feedback": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "returnHome": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "host": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "port": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "probe": [
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "ipcCounts": {
+        "ssh_host_key_probe": 1,
+        "ssh_shell_open": 1,
+        "ssh_shell_close": 1,
+        "ssh_shell_write": 0
+      }
+    },
+    {
+      "viewport": "1440x900",
+      "scenario": "opening",
+      "passed": true,
+      "rectangles": {
+        "cancelled-opening": {
+          "feedback": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "returnHome": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "host": [
+            264,
+            134,
+            560,
+            48
+          ],
+          "port": [
+            740,
+            218,
+            84,
+            48
+          ],
+          "probe": [
+            264,
+            286,
+            560,
+            48
+          ]
+        }
+      },
+      "ipcCounts": {
+        "ssh_host_key_probe": 1,
+        "ssh_shell_open": 1,
+        "ssh_shell_close": 1,
+        "ssh_shell_write": 0
+      }
+    }
+  ]
+}

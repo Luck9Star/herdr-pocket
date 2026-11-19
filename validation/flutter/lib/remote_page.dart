@@ -1374,7 +1374,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             RemoteWorkflowSteps(tokens:widget.tokens,labels:const ['连接目标','身份核验','只读观察'],current:0),
           ],
           if (dashboard != null && MediaQuery.viewInsetsOf(context).bottom == 0) sessionTabs(),
-          if (snapshot != null && !widget.ownsInput) RemoteWorkflowNotice(tokens:widget.tokens,child:const Text('另一侧拥有输入焦点 · 本侧只读；选择此侧后仍需主动启用输入',key:ValueKey('remote-input-ineligible'))),
+          if (snapshot != null && !widget.ownsInput) RemoteWorkflowNotice(tokens:widget.tokens,child:const Text('只读观察 · 获取输入焦点后可选择输入模式',key:ValueKey('remote-input-ineligible'))),
           if (snapshot != null || inputGate.unknown != null) modeSelector(),
           if ((snapshot != null || inputGate.unknown != null) && inputGate.mode == RemoteInputMode.draft) inputPanel(),
           if (snapshot != null) ExpansionTile(key:const ValueKey('remote-display-tools'),

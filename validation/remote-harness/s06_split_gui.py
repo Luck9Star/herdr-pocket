@@ -6,6 +6,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import time
 
 from paired_gui import (FixtureApproval, GuiFailure, Host, bounded_wire,
                         fixture_terminal_id, owned_process, wait_for)
@@ -15,12 +16,13 @@ from guarded_input import DRAFT
 REQUIRED = ('normalHomepage', 'twoReviewedIdentities', 'samePaneDifferentTerminal',
             'bothVisible', 'independentFrames', 'bothAdvanced', 'singleInputFocus',
             'focusDoesNotRestoreInput', 'lateInputRejected', 'stoppedBoth')
+STOCK_CLOSE_CHECK = 'focusedTabClosedPeerAdvanced'
 
 
 def widget_failure(exchange, fallback):
     stages = {'s06_homepage', 's06_pair_0', 's06_pair_1', 's06_connect_0',
               's06_connect_1', 's06_select_0', 's06_select_1', 's06_frames_0', 's06_frames_1',
-              's06_split_resume', 's06_input_eligibility', 's06_stop_both'}
+              's06_split_resume', 's06_input_eligibility', 's06_close_focused_tab', 's06_stop_both'}
     path = exchange / 'stage'
     if path.is_file():
         stage = bounded_wire(path, 40).decode('ascii', errors='ignore')
@@ -65,7 +67,8 @@ def failure_diagnostics(exchange):
 
 
 def checked_widget_result(raw, guarded):
-    if not isinstance(raw, dict) or any(raw.get(key) is not True for key in REQUIRED):
+    required = REQUIRED if guarded else (*REQUIRED, STOCK_CLOSE_CHECK)
+    if not isinstance(raw, dict) or any(raw.get(key) is not True for key in required):
         raise GuiFailure('s06_widget_checks_incomplete')
     sides = raw.get('sides')
     if not isinstance(sides, list) or len(sides) != 2:
@@ -82,7 +85,28 @@ def checked_widget_result(raw, guarded):
             raise GuiFailure('s06_input_capability_mismatch')
         clean.append(dict(connectionCount=1, frameCount=full, deltaFrames=delta,
                           inputAccepted=guarded))
-    return {**{key: True for key in REQUIRED}, 'sides': clean}
+    return {**{key: True for key in required}, 'sides': clean}
+
+
+def stock_peers_match(approvals, *, both_closed):
+    from s06_tauri_gui import peer_connection_evidence
+
+    return [peer_connection_evidence(approval) for approval in approvals] == [
+        {'authenticationCount': 1, 'closed': True},
+        {'authenticationCount': 1, 'closed': both_closed},
+    ]
+
+
+def acknowledge_stock_close(exchange, approvals, proc, deadline):
+    def ready():
+        if proc.poll() is not None:
+            raise widget_failure(exchange, 's06_widget_exited_before_close')
+        return (exchange / 'focused-close-request').is_file()
+
+    wait_for(ready, 's06_focused_close_request_timeout', timeout=deadline - time.monotonic())
+    wait_for(lambda: stock_peers_match(approvals, both_closed=False),
+             's06_focused_peer_close_unconfirmed', timeout=min(12, deadline - time.monotonic()))
+    (exchange / 'focused-close-ack').touch(exist_ok=False)
 
 
 def run_gui(args, root, env, config, command, final_pty_evidence):
@@ -146,13 +170,19 @@ def run_gui(args, root, env, config, command, final_pty_evidence):
                     pending = exchange / f'response-{index}.new'
                     pending.write_bytes(response)
                     pending.rename(exchange / f'response-{index}.json')
+                deadline = time.monotonic() + 160
+                if not guarded:
+                    acknowledge_stock_close(exchange, approvals, proc, deadline)
                 try:
-                    code = proc.wait(timeout=160)
+                    code = proc.wait(timeout=160 if guarded else max(0, deadline - time.monotonic()))
                 except subprocess.TimeoutExpired:
                     raise widget_failure(exchange, 's06_widget_completion_timeout') from None
                 if code or not (exchange / 'result.json').is_file():
                     raise widget_failure(exchange, 's06_widget_failed')
                 result.update(checked_widget_result(json.loads(bounded_wire(exchange / 'result.json', 4096)), guarded))
+                if not guarded:
+                    wait_for(lambda: stock_peers_match(approvals, both_closed=True),
+                             's06_stock_final_peer_close_unconfirmed', timeout=12)
         # Independent server-side attestations, never accepted from widgets.
         if approvals[0].fingerprint == approvals[1].fingerprint:
             raise GuiFailure('s06_distinct_device_keys_missing')

@@ -1,0 +1,33 @@
+{
+  "viewport": [
+    980,
+    780
+  ],
+  "engine": "Playwright WebKit 26.5",
+  "fixture": "loopback HTTP and synthetic IPC; no real SSH or network catalog",
+  "states": {
+    "pending-resize": {
+      "sha256": "6b2171b73d4f8257b704ca8f6150d9e4be03b94d73b60c40a03cd097e84a5ed3",
+      "cardCount": 0,
+      "panelText": "正在读取网络配置…"
+    },
+    "fresh-empty": {
+      "sha256": "172e9631e7092f21aa7fc28a4cb558402164325971850f133e92c8adf2dfe613",
+      "cardCount": 1,
+      "panelText": "还没有网络配置\n\n配置 ZeroTier、Tailscale 或 EasyTier 后，在这里管理网络。\n\n添加网络配置\n管理网络与共享设备"
+    },
+    "failed-resize": {
+      "sha256": "fb3b141a4df26ff947519d6096c72c4d0b6b3be51de60b8cbc32dbc0d05ba679",
+      "cardCount": 0,
+      "panelText": "网络配置读取失败，当前状态未知；请稍后核对。"
+    }
+  },
+  "checks": {
+    "pendingProtected": true,
+    "freshReadPublished": true,
+    "retiredReplyIgnored": true,
+    "failureRemainsUnknown": true
+  },
+  "errors": [],
+  "passed": true
+}

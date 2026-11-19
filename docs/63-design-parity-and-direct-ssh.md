@@ -268,3 +268,7 @@ Flutter Android 普通 SSH 的 d925 [首轮 43715213819](evidence/design-parity-
 11 月 18 日汇总的 Android 换钥案例使用临时密码。11 月 19 日的独立作业补验了 Tauri Android 加密私钥换钥。iOS 密码路径 Flutter 以 R19/R20 为准，Tauri 以 R21 定向复验为准。Flutter R1 已通过独立加密私钥，当时尚未验证换钥组合。后续 [iOS R3](evidence/flutter-ios-encrypted-key-rotation-20261119/README.md)已通过加密私钥与主机换钥。Tauri iOS 既有私钥待验证。iOS Tauri 底部按钮边框遮挡已消除（R19 约 8 点遮挡；R20 起像素测量净空约 8.7 逻辑点，R21 未见回归）。macOS Flutter 密码/私钥结论主要来自本页实际验证表的本机实窗与隔离 bundle 记录（a5082d0 等），43793582196 作为单一工件只证明安全字段、服务端认证/PTY/shell 与断开窗口 peer close，不含终端回显。macOS Tauri 两处证据中 `HerdrNativeR3.app` 为本机快照、未绑定完整源码提交，66 实窗为主控会话文本记录；四次传输计数另见 70 的 R19/R21 原始 result。
 
 S06 在 macOS/Windows 原生桌面及手机设备的双窗、手机真机触控/IME/相机/系统密钥存储、其他主机算法与认证组合、EasyTier 的其他平台与 GUI/vault 接入、Tailscale/ZeroTier 真实路由及三网并发、长时间运行和正式发布均不能由本页证据推出。后续每项新增结论必须对应新的实际运行记录；历史“只允许远端 herdr”作为当时基线保留，现行两类远端接入范围以本页及架构/产品设计的 2026-11-15 增量为准。
+
+## #39／#40 合入前普通 SSH 原生复验
+
+2026-11-20 回读六份官方工件。Tauri `ea5dd70` 与 Flutter `8be0a23` 分别在 Linux GTK 隔离窗口、Android API 35 模拟器和 iOS 26.2 模拟器通过其普通 SSH 作业。两条 Linux 作业只验证密码；设备场景、独立加密私钥、换钥、断开和清理的具体覆盖见逐项索引。报告对应各自源码与隔离 SSH 夹具。 [原作业、工件与复跑](evidence/ordinary-ssh-native-39-40-20261120/README.md) · [#42 Linux 同源六格](evidence/linux-ordinary-ssh-auth-matrix-20261120/README.md)

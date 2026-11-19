@@ -6,7 +6,9 @@ import 'package:herdr_flutter_probe/config_transfer_page.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/host_catalog.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
-import 'host_catalog_test.dart' show MemoryCatalogStorage;
+import 'package:herdr_flutter_probe/host_tabs.dart';
+import 'package:herdr_flutter_probe/remote_adapter.dart' show RemotePane;
+import 'host_catalog_test.dart' show MemoryCatalogStorage,catalogPairing;
 import 'config_transfer_test.dart' show portable;
 import 'pairing_gui_test.dart' show TestDeviceKeys,tapVisible;
 import 'remote_test_data.dart';
@@ -18,6 +20,143 @@ class MemoryConfigDocuments implements ConfigDocuments {
   @override Future<bool> save(Uint8List archive) async { saves++; return false; }
 }
 void main() {
+  testWidgets('review from settings shows every tab for selected replacements only', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(540, 860);
+    addTearDown(tester.view.reset);
+    final disk = MemoryCatalogStorage();
+    final catalog = HostCatalog(storage:disk,clock:() => 1000);
+    final tabs = HostTabs();
+    await catalog.load();
+    Future<HostProfile> addHost(String label,String address) async {
+      final original = HostProfile.create(label,{...fixtureConfig(),'host':address},catalogPairing(authorized:true),1000);
+      final profile = HostProfile.fromJson({...original.toJson(),
+        'pairing':{...original.pairingRecord,'handle':'fixture-device-handle-${address.split('.').first}'},
+      },1000);
+      await catalog.add(profile);
+      return profile;
+    }
+    final first = await addHost('开发','development.invalid');
+    final second = await addHost('验证','validation.invalid');
+    final unrelated = await addHost('旁路','unrelated.invalid');
+    final writes = disk.writes;
+    const password = 'fixture archive passphrase';
+    final archive = (await tester.runAsync(() => encryptPortableConfig(password,PortableConfig.fromJson({
+      'version':1,'hosts':[
+        portable(label:first.label,host:'new-development.invalid').toJson(),
+        portable(label:'验证新名称',host:'validation.invalid').toJson(),
+      ],
+    }))))!;
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    var opens = 0;
+    messenger.setMockMethodCallHandler(NativeConfigDocuments.channel,(call) async {
+      expect(call.method,'open');
+      opens++;
+      return archive;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(NativeConfigDocuments.channel,null));
+    final keys = TestDeviceKeys(fixtureConfig()['privateKeyPem'] as String);
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:HostCatalogPage(tokens:tokens,catalog:catalog,
+      tabs:tabs,keys:keys,offlineBuilder:(_) => const SizedBox())));
+    await tester.pumpAndSettle();
+    expect(tabs.open(first,requestedTarget:const RemotePane('pane-a','terminal-a')),isTrue);
+    expect(tabs.open(first,requestedTarget:const RemotePane('pane-b','terminal-b')),isTrue);
+    expect(tabs.open(second,requestedTarget:const RemotePane('pane-c','terminal-c')),isTrue);
+    expect(tabs.open(unrelated,requestedTarget:const RemotePane('pane-d','terminal-d')),isTrue);
+    final originalTabs = tabs.tabs;
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithIcon(NavigationDestination,Icons.settings_outlined));
+    await tester.pumpAndSettle();
+    await tapVisible(tester,'hosts-transfer');
+    await tester.pumpAndSettle();
+    expect(find.byType(ConfigTransferPage),findsOneWidget);
+    expect(tabs.tabs,originalTabs);
+    await tapVisible(tester,'transfer-open');
+    await tester.pumpAndSettle();
+    expect(opens,1);
+
+    final passwordField = find.byKey(const ValueKey('transfer-password'));
+    await tester.ensureVisible(passwordField);
+    await tester.enterText(passwordField,password);
+    final controller = tester.widget<TextField>(passwordField).controller!;
+    final decrypt = find.byKey(const ValueKey('transfer-decrypt'));
+    await tester.ensureVisible(decrypt);
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      await tester.tap(decrypt);
+      final deadline = DateTime.now().add(const Duration(seconds:30));
+      while (controller.text.isNotEmpty && DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds:20));
+      }
+      expect(controller.text,isEmpty);
+    });
+    await tester.pumpAndSettle();
+
+    Future<void> choose(int index,String title) async {
+      await tapVisible(tester,'transfer-choice-$index');
+      await tester.pumpAndSettle();
+      final item = find.text(title).hitTestable().last;
+      expect(item,findsOneWidget);
+      await tester.tap(item);
+      await tester.pumpAndSettle();
+    }
+    const replace = '替换全部所列冲突（原身份停用保留）';
+    const keep = '保留本机／跳过此条';
+    const add = '添加新条目（不复用身份）';
+    final impact = find.byKey(const ValueKey('transfer-impact'));
+    Finder affected(HostTab tab) => find.descendant(of:impact,matching:find.byKey(ValueKey('transfer-affected-tab-${tab.id}')));
+    expect(impact,findsNothing);
+    await choose(0,replace);
+    expect(impact,findsOneWidget);
+    expect(affected(originalTabs[0]),findsOneWidget);
+    expect(affected(originalTabs[1]),findsOneWidget);
+    expect(affected(originalTabs[2]),findsNothing);
+    expect(affected(originalTabs[3]),findsNothing);
+    expect(find.descendant(of:impact,matching:find.textContaining('pane-a · terminal-a')),findsOneWidget);
+    expect(find.descendant(of:impact,matching:find.textContaining('pane-b · terminal-b')),findsOneWidget);
+    expect(find.descendant(of:impact,matching:find.textContaining('停止连接')),findsOneWidget);
+    expect(find.descendant(of:impact,matching:find.textContaining('当前没有终端输入授权')),findsOneWidget);
+    expect(find.descendant(of:impact,matching:find.textContaining('fixture-device-handle')),findsNothing);
+
+    tester.view.physicalSize = const Size(320, 740);
+    await tester.pumpAndSettle();
+    await choose(1,replace);
+    expect(affected(originalTabs[2]),findsOneWidget);
+    expect(find.descendant(of:affected(originalTabs[2]),matching:find.textContaining('· 验证 · pane-c')),findsOneWidget);
+    await choose(0,add);
+    expect(affected(originalTabs[0]),findsNothing);
+    expect(affected(originalTabs[1]),findsNothing);
+    expect(affected(originalTabs[2]),findsOneWidget);
+    await choose(1,keep);
+    expect(impact,findsNothing);
+    await choose(0,replace);
+    expect(affected(originalTabs[0]),findsOneWidget);
+    expect(affected(originalTabs[1]),findsOneWidget);
+    expect(affected(originalTabs[2]),findsNothing);
+    await tapVisible(tester,'transfer-review');
+    await tester.pumpAndSettle();
+    final apply = find.byKey(const ValueKey('transfer-apply'));
+    await tester.ensureVisible(apply);
+    await tester.pumpAndSettle();
+    expect(apply.hitTestable(),findsOneWidget);
+    expect(tester.widget<FilledButton>(apply).onPressed,isNotNull);
+    expect(tester.takeException(),isNull);
+    expect(tabs.tabs,originalTabs);
+    expect(disk.writes,writes);
+    expect(keys.signCalls,0);
+
+    expect(tabs.open(first,requestedTarget:const RemotePane('pane-new','terminal-new')),isTrue);
+    final newTab = tabs.active!;
+    await tester.pumpAndSettle();
+    expect(affected(newTab),findsOneWidget);
+    expect(find.descendant(of:affected(newTab),matching:find.textContaining('输入焦点将撤回')),findsOneWidget);
+    expect(tester.widget<CheckboxListTile>(find.byKey(const ValueKey('transfer-review'))).value,isFalse);
+    expect(tester.widget<FilledButton>(apply).onPressed,isNull);
+    expect(disk.writes,writes);
+    await tester.pumpWidget(const SizedBox()); tabs.dispose(); catalog.dispose();
+  });
+
   testWidgets('normal host board opens imported metadata in formal explicit pairing without inheriting identity', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(800, 860);

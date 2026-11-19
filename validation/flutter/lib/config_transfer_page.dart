@@ -2,12 +2,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'config_transfer.dart';
 import 'host_catalog.dart';
+import 'host_tabs.dart';
 import 'remote_adapter.dart' show RemoteFailure;
 
 class ConfigTransferPage extends StatefulWidget {
-  const ConfigTransferPage({super.key,required this.catalog,required this.closeTabs,this.documents});
+  const ConfigTransferPage({super.key,required this.catalog,required this.closeTabs,this.tabs,this.documents});
   final HostCatalog catalog;
   final void Function(Set<String>) closeTabs;
+  final HostTabs? tabs;
   final ConfigDocuments? documents;
   @override State<ConfigTransferPage> createState() => _ConfigTransferPageState();
 }
@@ -20,12 +22,14 @@ class _ConfigTransferPageState extends State<ConfigTransferPage> {
   Uint8List? archive;
   ConfigImportPlan? plan;
   List<ConfigImportAction?> choices = [];
+  List<(String,bool)> reviewedImpact = const [];
   String message = '只迁移公开主机、网络参数和明确选择的终端显示偏好。身份、公钥授权、草稿、未知发送、当前连接均不迁移。';
   bool get supported => widget.documents != null || (!kIsWeb &&
     [TargetPlatform.android,TargetPlatform.iOS,TargetPlatform.macOS].contains(defaultTargetPlatform));
   bool get available => supported && widget.catalog.ready && !widget.catalog.writing && widget.catalog.pendingCreation == null;
-  @override void initState() { super.initState(); widget.catalog.addListener(changed); }
+  @override void initState() { super.initState(); widget.catalog.addListener(changed); widget.tabs?.addListener(changed); }
   @override void dispose() {
+    widget.tabs?.removeListener(changed);
     widget.catalog.removeListener(changed); password.clear(); repeatPassword.clear(); password.dispose(); repeatPassword.dispose();
     archive?.fillRange(0,archive!.length,0); super.dispose();
   }
@@ -37,7 +41,42 @@ class _ConfigTransferPageState extends State<ConfigTransferPage> {
       if (plan != null && (plan!.revision != widget.catalog.revision || !widget.catalog.ready || widget.catalog.pendingCreation != null)) {
         plan = null; choices = []; importNetworks.clear(); applyPreferences = false; reviewed = false; message = '目录或待创建状态已变化 · 请重新解密并逐条审查，未自动套用旧选择。';
       }
+      if (reviewed && !listEquals(reviewedImpact,impactScope(replacedHosts))) {
+        reviewed = false;
+        message = '受影响的标签已变化 · 请重新核对确认。';
+      }
     });
+  }
+  Set<String> get replacedHosts {
+    final preview = plan;
+    return preview == null ? {} : {
+      for (final (index,choice) in choices.indexed)
+        if (choice == ConfigImportAction.replace) ...preview.conflicts[index].map((profile) => profile.id),
+    };
+  }
+  Iterable<(int,HostTab)> affectedTabs(Set<String> hosts) =>
+    (widget.tabs?.tabs ?? const <HostTab>[]).indexed.where((entry) => hosts.contains(entry.$2.hostId));
+  List<(String,bool)> impactScope(Set<String> hosts) =>
+    [for (final (_,tab) in affectedTabs(hosts)) (tab.id,tab.inputEligible.value)];
+
+  Widget importImpact(Set<String> hosts) {
+    final affected = affectedTabs(hosts).toList();
+    return Card(key:const ValueKey('transfer-impact'),child:Padding(padding:const EdgeInsets.all(12),child:Column(
+      crossAxisAlignment:CrossAxisAlignment.start,children:[
+        if (affected.isEmpty) const Text('当前没有受影响的本地标签。') else ...[
+          Text('确认后将停止连接',style:Theme.of(context).textTheme.titleSmall),
+          for (final (index,tab) in affected) Padding(
+            key:ValueKey('transfer-affected-tab-${tab.id}'),padding:const EdgeInsets.only(top:6),
+            child:ValueListenableBuilder<HostTabView>(valueListenable:tab.view,builder:(_,view,_) => Text(
+              '标签 ${index+1} · ${tab.label} · ${view.target}'
+              '${tab.inputEligible.value ? ' · 输入焦点将撤回' : ''}',
+            )),
+          ),
+          if (!affected.any((entry) => entry.$2.inputEligible.value))
+            const Padding(padding:EdgeInsets.only(top:6),child:Text('以上标签当前没有终端输入授权。')),
+        ],
+      ],
+    )));
   }
   Future<void> operation(Future<void> Function() work) async {
     if (busy || !available) return;
@@ -52,6 +91,8 @@ class _ConfigTransferPageState extends State<ConfigTransferPage> {
           _ => '文件格式、大小或公开字段不符合约定 · 未导入任何资料。',
         } : error is RemoteFailure && error.code == 'transfer_network_unavailable'
           ? '此阶段不导出已绑定网络的主机 · 请等待保留网络绑定的迁移格式，不能静默降级为系统直连。'
+          : error is RemoteFailure && error.code == 'catalog_transfer_impact_changed'
+          ? '受影响的标签已变化 · 请重新核对确认。'
           : error is RemoteFailure && widget.catalog.ready
           ? '导入选择冲突、容量不足或审查计划已过期 · 尚未保存，请修正并重新审查。'
           : '操作未确认或目录版本冲突 · 文件或本机保存可能已生效，请返回重新读取核验；不会重放。'; });
@@ -96,9 +137,14 @@ class _ConfigTransferPageState extends State<ConfigTransferPage> {
     final reviewedPlan = plan;
     if (reviewedPlan == null || !reviewed || choices.any((value) => value == null)) return;
     final decisions = [for (final choice in choices) ConfigImportChoice(choice!)];
+    final approvedImpact = reviewedImpact;
     await widget.catalog.applyConfigImport(reviewedPlan,decisions,selectedNetworks:Set.of(importNetworks),applyPreferences:applyPreferences,beforeCommit:(affected) {
       // Whole-plan validation and the queue-time revision check have passed.
       // Revocation is synchronous and immediately precedes the one catalog CAS.
+      if (!listEquals(approvedImpact,impactScope(affected))) {
+        if (mounted) setState(() { reviewed = false; });
+        throw const RemoteFailure('catalog_transfer_impact_changed');
+      }
       widget.closeTabs(affected);
       if (mounted) setState(() { plan = null; choices = []; reviewed = false; });
     });
@@ -107,7 +153,9 @@ class _ConfigTransferPageState extends State<ConfigTransferPage> {
   Widget secret(TextEditingController controller,String key,String label) => TextField(key:ValueKey(key),controller:controller,
     enabled:available && !busy,obscureText:true,autocorrect:false,enableSuggestions:false,enableIMEPersonalizedLearning:false,
     maxLength:1024,decoration:InputDecoration(labelText:label,helperText:'不裁剪空格，不规范化 Unicode；口令不会写入资料文件。'));
-  @override Widget build(BuildContext context) => PopScope(canPop:!busy,child:Scaffold(
+  @override Widget build(BuildContext context) {
+    final affectedHosts = replacedHosts;
+    return PopScope(canPop:!busy,child:Scaffold(
     appBar:AppBar(title:const Text('加密迁移公开配置')),
     body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       Text(message,key:const ValueKey('transfer-status')),
@@ -137,6 +185,7 @@ class _ConfigTransferPageState extends State<ConfigTransferPage> {
             SelectableText('${hostProviderLabel(plan!.hosts[index].provider)}\n${plan!.hosts[index].target.entries.map((e) => '${e.key}: ${e.value}').join('\n')}'),
             Text(plan!.conflicts[index].isEmpty ? '没有同名或相同目标冲突' : '冲突：${plan!.conflicts[index].map((p) => '${p.label} · ${p.hasIdentity ? '含本机身份，替换会停用保留' : '未配对资料'}').join('；')}'),
             DropdownButtonFormField<ConfigImportAction>(key:ValueKey('transfer-choice-$index'),initialValue:choices[index],
+              isExpanded:true,
               hint:const Text('请明确选择处理方式'),items:[
                 const DropdownMenuItem(value:ConfigImportAction.add,child:Text('添加新条目（不复用身份）')),
                 const DropdownMenuItem(value:ConfigImportAction.keep,child:Text('保留本机／跳过此条')),
@@ -162,10 +211,14 @@ class _ConfigTransferPageState extends State<ConfigTransferPage> {
           subtitle:const Text('默认不覆盖。本机显示改变不会调整共享 PTY。'),
           onChanged:available && !busy ? (value) => setState(() { applyPreferences = value == true; reviewed = false; }) : null),
       ],
-      CheckboxListTile(key:const ValueKey('transfer-review'),value:reviewed,onChanged:available && !busy ? (value) => setState(() { reviewed = value == true; }) : null,
-        title:const Text('我已核对范围与所有冲突；迁移不带入信任、身份或授权，替换先停止原标签')),
+      if (widget.tabs != null && affectedHosts.isNotEmpty) importImpact(affectedHosts),
+      CheckboxListTile(key:const ValueKey('transfer-review'),value:reviewed,onChanged:available && !busy ? (value) => setState(() {
+        reviewed = value == true;
+        reviewedImpact = reviewed ? impactScope(affectedHosts) : const [];
+      }) : null,title:const Text('我已核对范围与冲突。迁移不带入信任、身份或授权，替换会停止相关连接。')),
       FilledButton(key:const ValueKey('transfer-export'),onPressed:available && !busy && reviewed && (selected.isNotEmpty || selectedNetworks.isNotEmpty || includePreferences) && selected.length <= 16 ? export : null,child:const Text('加密并另存所选公开资料')),
       if (plan != null) FilledButton(key:const ValueKey('transfer-apply'),onPressed:available && !busy && reviewed && choices.every((value) => value != null) ? apply : null,child:const Text('按所选范围原子导入一次')),
       if (busy) const LinearProgressIndicator(),
     ])))));
+  }
 }

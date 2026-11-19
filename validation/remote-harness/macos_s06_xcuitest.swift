@@ -11,28 +11,35 @@ final class MacosS06UITests: XCTestCase {
     private lazy var app = XCUIApplication()
     private lazy var clipboard = NSPasteboard.general
     private var window: XCUIElement { app.windows.firstMatch }
-    private var exchange: URL!
+    private var channel: MacosS06Channel!
 
     private func require(_ condition: @autoclosure () -> Bool, _ code: String) throws {
         guard condition() else { throw Failure.check(code) }
     }
 
-    private func until<T>(_ code: String, seconds: TimeInterval = 15, _ probe: () -> T?) throws -> T {
+    private func until<T>(_ code: String, seconds: TimeInterval = 15, _ probe: () throws -> T?) throws -> T {
         let deadline = Date().addingTimeInterval(seconds)
         repeat {
-            if let value = probe() { return value }
+            if let value = try probe() { return value }
             Thread.sleep(forTimeInterval: 0.15)
         } while Date() < deadline
         throw Failure.check(code)
     }
 
-    private func mark(_ stage: String) throws {
-        do {
-            try Data(stage.utf8).write(to: exchange.appendingPathComponent("stage"), options: .atomic)
-        } catch {
-            throw Failure.check("exchange_stage_write_failed")
-        }
+    private func mark(_ stage: String) {
         trace("STAGE", stage)
+    }
+
+    private func send(_ topic: MacosS06Channel.Topic, _ data: Data) throws {
+        do { try channel.send(topic, data) }
+        catch { throw Failure.check("private_channel_send_failed") }
+    }
+
+    private func receive(_ topic: MacosS06Channel.Topic, or code: String) throws -> Data {
+        try until(code) {
+            do { return try self.channel.receive(topic) }
+            catch { throw Failure.check("private_channel_receive_failed") }
+        }
     }
 
     private func trace(_ kind: String, _ token: String) {
@@ -153,7 +160,7 @@ final class MacosS06UITests: XCTestCase {
         for (label, value) in fields { try paste(value, into: label) }
         _ = try reveal(peer.fingerprint)
         try click("我已通过可信渠道核验账号、主机公钥与命名会话资料", kind: .checkBox)
-        try mark(index == 0 ? "keyA" : "keyB")
+        mark(index == 0 ? "keyA" : "keyB")
         try click("在此设备创建独立身份并生成公开请求")
         clipboard.clearContents()
         try click("复制当前公开请求")
@@ -162,11 +169,11 @@ final class MacosS06UITests: XCTestCase {
                   text.utf8.count <= 2048, text.starts(with: "{") else { return nil as String? }
             return text
         }
-        try Data(request.utf8).write(to: exchange.appendingPathComponent("request-\(index).json"), options: .atomic)
-        try mark(index == 0 ? "pairA" : "pairB")
-        let responseURL = exchange.appendingPathComponent("response-\(index).json")
-        let response = try until("reviewed_host_response_unavailable") {
-            try? String(contentsOf: responseURL, encoding: .utf8)
+        try send(index == 0 ? .request0 : .request1, Data(request.utf8))
+        mark(index == 0 ? "pairA" : "pairB")
+        let payload = try receive(index == 0 ? .response0 : .response1, or: "reviewed_host_response_unavailable")
+        guard let response = String(data: payload, encoding: .utf8) else {
+            throw Failure.check("reviewed_host_response_invalid")
         }
         try paste(response, into: "公开授权／撤销响应 JSON")
         _ = try reveal("待审查响应", prefix: true)
@@ -291,31 +298,27 @@ final class MacosS06UITests: XCTestCase {
     }
 
     private func exerciseTwoPairedPeers() throws {
-        guard let pathData = Data(base64Encoded: "__HP_S06_EXCHANGE_BASE64__"),
-              let path = String(data: pathData, encoding: .utf8) else {
-            throw Failure.check("private_exchange_path_invalid")
-        }
-        exchange = URL(fileURLWithPath: path, isDirectory: true)
-        trace("STAGE", "exchangeResolved")
-        try mark("exchangeWritable")
-        let release: Data
-        do {
-            release = try Data(contentsOf: exchange.appendingPathComponent("release.json"))
-        } catch {
-            throw Failure.check("private_release_read_failed")
-        }
-        try mark("releaseRead")
+        do { channel = try MacosS06Channel(nonce: "__HP_S06_CHANNEL_NONCE__", party: .test) }
+        catch { throw Failure.check("private_channel_scope_invalid") }
+        mark("channelConfigured")
+        let release = try receive(.release, or: "private_release_unavailable")
+        mark("releaseRead")
         let fixture: MacosS06Fixture
         do {
             fixture = try JSONDecoder().decode(MacosS06Fixture.self, from: release)
         } catch {
             throw Failure.check("private_release_decode_failed")
         }
-        try mark("releaseDecoded")
+        mark("releaseDecoded")
         try require(fixture.hasIndependentTargets, "private_fixture_binding_invalid")
         let a = fixture.peers[0], b = fixture.peers[1]
-        try mark("targetsValidated")
-        try mark("display")
+        mark("targetsValidated")
+        let challenge = Data(UUID().uuidString.lowercased().utf8)
+        try send(.testReady, challenge)
+        let receipt = try receive(.hostReady, or: "private_channel_receipt_missing")
+        try require(receipt == challenge, "private_channel_receipt_mismatch")
+        mark("channelRoundTrip")
+        mark("display")
         let display = CGMainDisplayID()
         guard let original = CGDisplayCopyDisplayMode(display) else { throw Failure.check("display_unavailable") }
         if original.width < 1550 || original.height < 1000 {
@@ -331,24 +334,24 @@ final class MacosS06UITests: XCTestCase {
             clipboard.clearContents()
             _ = CGDisplaySetDisplayMode(display, original, nil)
         }
-        try mark("homepage")
+        mark("homepage")
         app.launchArguments = ["--herdr-xcui-embedder-semantics"]
         app.launch()
         try require(window.waitForExistence(timeout: 15), "native_window_missing")
         try moveOwnedWindow()
         let start = try resize(1440, height: 900)
         _ = try reveal("配对添加", in: .main, kind: .button, enabled: true)
-        try mark("pairA"); try request(a, index: 0)
-        try mark("pairB"); try request(b, index: 1)
-        try mark("connectA"); try connect(a, other: b)
+        mark("pairA"); try request(a, index: 0)
+        mark("pairB"); try request(b, index: 1)
+        mark("connectA"); try connect(a, other: b)
         try click("主机看板", in: .sidebar)
-        try mark("connectB"); try connect(b, other: a)
-        try mark("split")
+        mark("connectB"); try connect(b, other: a)
+        mark("split")
         try click("并排观察此标签", in: .sidebar)
         try checkLayout(left: b, right: a)
         try click("恢复原目标观察", in: .right)
 
-        try mark("frames")
+        mark("frames")
         let firstA = try tick(a, in: .right)
         let firstB = try tick(b, in: .left)
         let secondA = try tick(a, in: .right)
@@ -356,12 +359,12 @@ final class MacosS06UITests: XCTestCase {
         try require(secondA > firstA && secondB > firstB, "native_visible_ticks_not_advancing")
         try checkStock(in: .left); try checkStock(in: .right)
 
-        try mark("keyboard")
+        mark("keyboard")
         try click("\(b.title) · 输入焦点", in: .left)
         try selectWithKeys(a, in: .right)
         _ = try reveal("\(b.title) · 观察中", in: .left, kind: .button)
         app.typeKey("x", modifierFlags: [])
-        try mark("resize")
+        mark("resize")
         let narrow = try resize(700)
         _ = try reveal("分屏空间不足", prefix: true)
         _ = try reveal(a.remoteTitle)
@@ -370,29 +373,26 @@ final class MacosS06UITests: XCTestCase {
         try checkLayout(left: b, right: a)
         _ = try reveal("\(a.title) · 输入焦点", in: .right, kind: .button)
         _ = try reveal("\(b.title) · 已暂停", in: .left, kind: .button)
-        try mark("resume")
+        mark("resume")
         try click("恢复原目标观察", in: .left)
         let resumed = try tick(b, in: .left)
         try require(resumed > secondB, "native_resumed_peer_tick_not_fresh")
         try checkStock(in: .left); try checkStock(in: .right)
-        try mark("stop")
-        try Data([1]).write(to: exchange.appendingPathComponent("stop-requested"), options: .atomic)
+        mark("stop")
+        try send(.stopRequested, Data([1]))
         try click("停止并断开", in: .left)
         try click("停止并断开", in: .right)
-        _ = try until("peer_close_unconfirmed_while_window_running") {
-            FileManager.default.fileExists(atPath: self.exchange.appendingPathComponent("peers-closed").path)
-                ? true : nil
-        }
-        try mark("remove")
+        let closed = try receive(.peersClosed, or: "peer_close_unconfirmed_while_window_running")
+        try require(closed == Data([1]), "peer_close_receipt_invalid")
+        mark("remove")
         try click("主机看板", in: .sidebar)
         try remove(a, other: b)
         try remove(b, other: a)
         let checks = ["homepage", "reviewedPairings", "twoVisibleTargets", "bothTicksAdvanced",
                       "stockControlsDisabled", "keyboardFocus", "narrowStowed", "originalSidesRestored",
-                      "explicitResume", "stoppedBoth", "localProfilesAbsentFromBoard"]
+                      "explicitResume", "stoppedBoth", "localProfilesAbsentFromBoard", "channelRoundTrip"]
         let evidence: [String: Any] = ["widths": [start, narrow, returned],
                                        "checks": Dictionary(uniqueKeysWithValues: checks.map { ($0, true) })]
-        try JSONSerialization.data(withJSONObject: evidence).write(to: exchange.appendingPathComponent("ui.json"),
-                                                                    options: .atomic)
+        try send(.result, JSONSerialization.data(withJSONObject: evidence))
     }
 }

@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import shlex
 import shutil
 import subprocess
@@ -14,7 +15,8 @@ import sys
 import tempfile
 import time
 import unittest
-from unittest.mock import patch
+import uuid
+from unittest.mock import Mock, patch
 
 try:
     import macos_s06 as runner
@@ -101,30 +103,21 @@ class MacosS06Checks(unittest.TestCase):
             with self.assertRaisesRegex(GuiFailure, 'candidate_lock_not_verified'):
                 runner.checked_candidate(root, source)
 
-    def test_progress_does_not_export_arbitrary_text(self):
-        with tempfile.TemporaryDirectory() as work:
-            root = Path(work)
-            for phase, expected in [('resize', 'resize'), ('arbitrary text', None), ('x' * 40, None)]:
-                (root / 'stage').write_text(phase)
-                self.assertEqual(runner.native_stage(root), expected)
-
     def test_xcode_selects_exact_native_case_on_known_test_action(self):
         base = ['xcodebuild', '-scheme', 'Runner']
         bundle = Path('/tmp/owned/private.xcresult')
         self.assertEqual(runner.test_command(base, bundle),
                          base + ['-only-testing:' + TEST_SELECTION, '-resultBundlePath', str(bundle), 'test'])
 
-    def test_atomic_release_does_not_overwrite_when_pending_write_is_unknown(self):
-        with tempfile.TemporaryDirectory() as work:
-            root = Path(work)
-            runner.publish_release(root, [])
-            self.assertEqual(json.loads((root / 'release.json').read_bytes()), {'schemaVersion': 1, 'peers': []})
-            self.assertFalse((root / 'release.new').exists())
-            (root / 'release.new').write_bytes(b'partial')
-            with self.assertRaises(FileExistsError):
-                runner.publish_release(root, [{'port': 1234}])
-            self.assertEqual(json.loads((root / 'release.json').read_bytes())['peers'], [])
-            self.assertEqual((root / 'release.new').read_bytes(), b'partial')
+    def test_harness_does_not_review_public_requests_before_valid_challenge(self):
+        process, channel, target = Mock(), Mock(), Mock()
+        process.poll.return_value = None
+        channel.receive.return_value = b'invalid challenge'
+        with self.assertRaisesRegex(GuiFailure, 'channel_challenge_invalid'):
+            runner.requests_and_disconnect(process, channel, {'a': target})
+        channel.receive.assert_called_once_with('testReady')
+        channel.send.assert_not_called()
+        target.review.assert_not_called()
 
     def test_native_startup_diagnostics_whitelist_and_last_known_phase(self):
         log = ("Test Case '-[RunnerTests.MacosS06UITests testTwoPairedPeersInNativeWindow]' started.\n"
@@ -164,8 +157,7 @@ class MacosS06Checks(unittest.TestCase):
                 stdout.write(json.dumps(raw).encode())
                 return subprocess.CompletedProcess(_args, 0)
             with patch('macos_s06_diagnostics.subprocess.run', side_effect=summary_command):
-                result = diagnostics(log, bundle, 65, 'exchangeWritable')
-            self.assertEqual(result['atomicStage'], 'exchangeWritable')
+                result = diagnostics(log, bundle, 65)
             self.assertEqual(result['lastLoggedStage'], 'entered')
             self.assertEqual(result['xcresultTestCounts'], {'totalTestCount': 1, 'failedTests': 1})
             self.assertEqual(result['xcodeExitCode'], 65)
@@ -177,19 +169,32 @@ class MacosS06Checks(unittest.TestCase):
         keys = MemoryKeyStore()
         with tempfile.TemporaryDirectory(prefix='hps06t-', dir='/tmp') as directory:
             base = Path(directory).resolve()
-            with runner.fixtures(Path(BINARY), base) as (targets, owned, metadata, configs):
+            with runner.owned_channel(base) as channel, runner.fixtures(Path(BINARY), base) as (
+                    targets, owned, metadata, configs):
                 self.assertEqual(metadata['herdrSha256'], runner.HERDR_SHA256)
-                self.check_swift_release(base, configs)
+                test = runner.NativeChannel(channel.executable, channel.nonce, party='test')
+                release = runner.release_payload(configs)
+                channel.send('release', release)
+                self.assertEqual(test.receive('release'), release)
+                self.check_swift_release(base, release)
+                self.check_private_channel(channel, test)
                 with ExitStack() as readers:
                     clients = []
-                    for target, config in zip(targets.values(), configs):
+                    for index, (target, config) in enumerate(zip(targets.values(), configs)):
                         handle = keys.create()
                         pairing = PendingPairing(keys, handle, account=config['username'],
                             expected_host_key=target.host.pin, device='Owned local test', now=int(time.time()))
                         request = encode(pairing.request)
-                        review = target.review(request)
-                        target.approve(request, request_id=review['requestId'],
-                                       device_fingerprint=review['deviceFingerprint'], reviewed=True)
+                        test.send(f'request{index}', request)
+                        host_request = channel.receive(f'request{index}')
+                        self.assertEqual(host_request, request)
+                        review = target.review(host_request)
+                        response = target.approve(host_request, request_id=review['requestId'],
+                            device_fingerprint=review['deviceFingerprint'], reviewed=True)
+                        channel.send(f'response{index}', response)
+                        public_response = test.receive(f'response{index}')
+                        self.assertEqual(public_response, response)
+                        pairing.accept(public_response, now=int(time.time()), source_reviewed=True)
                         private = target.root / 'client'
                         private.write_bytes(keys._keys[handle].private_bytes(
                             Encoding.PEM, PrivateFormat.OpenSSH, NoEncryption()))
@@ -234,12 +239,34 @@ class MacosS06Checks(unittest.TestCase):
                 self.assertFalse((target.root / 'capture-running').exists())
                 self.assertIsNotNone(target.approval.revocation_response)
             self.assertTrue(all(child.poll() is not None for child in owned))
+            self.assertTrue(channel.released)
+            try:
+                self.assertIsNone(test.receive('release'))
+                self.assertIsNone(channel.receive('request0'))
+                self.assertIsNone(channel.receive('request1'))
+            finally:
+                channel.call('releaseAll')
         self.assertFalse(base.exists())
 
-    def check_swift_release(self, base, configs):
+    def check_private_channel(self, host, test):
+        other = runner.NativeChannel(host.executable, secrets.token_hex(32), party='test')
+        try:
+            self.assertIsNone(other.receive('release'))
+        finally:
+            runner.NativeChannel(host.executable, other.nonce).call('releaseAll')
+        for sender, topic, data in ((host, 'release', b'replay'), (host, 'testReady', b'wrong writer'),
+                                    (host, 'unknown', b'wrong topic'), (test, 'request0', b'x' * 2049)):
+            with self.assertRaisesRegex(GuiFailure, 'private_channel_rejected'):
+                sender.send(topic, data)
+        challenge = str(uuid.uuid4()).encode()
+        test.send('testReady', challenge)
+        self.assertEqual(host.receive('testReady'), challenge)
+        host.send('hostReady', challenge)
+        self.assertEqual(test.receive('hostReady'), challenge)
+
+    def check_swift_release(self, base, payload):
         compiler = shutil.which('swiftc')
         self.assertIsNotNone(compiler, 'macOS stock fixture verification requires Swift')
-        runner.publish_release(base, configs)
         driver = base / 'main.swift'
         driver.write_text('''import Foundation
 do {
@@ -252,7 +279,6 @@ do {
         probe = base / 'decode-fixture'
         subprocess.run([compiler, str(runner.HERE / 'macos_s06_fixture.swift'), str(driver), '-o', str(probe)],
                        check=True, capture_output=True, timeout=25)
-        payload = (base / 'release.json').read_bytes()
         self.assertEqual(subprocess.check_output([probe], input=payload, timeout=5), b'valid\n')
         release = json.loads(payload)
         wrong_port = copy.deepcopy(release)

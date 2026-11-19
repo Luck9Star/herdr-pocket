@@ -1,18 +1,18 @@
 """Run the stock paired S06 XCUITest on an owned GitHub-hosted macOS window."""
 import argparse
-import base64
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
+import secrets
 import subprocess
 import tempfile
 import time
 
 from macos_secure_xcuitest import install_test_semantics_hook, prepare
-from macos_s06_diagnostics import STAGES, TEST_SELECTION, diagnostics
+from macos_s06_diagnostics import TEST_SELECTION, diagnostics
 from paired_dual_demo import prepared_pairing_hosts
 from paired_gui import GuiFailure, bounded_wire, fixture_terminal_id, owned_process, wait_for
 from s06_tauri_gui import peer_connection_evidence
@@ -23,20 +23,23 @@ SESSIONS = {'et': 's06-a', 'ts': 's06-b'}
 MARKERS = {'et': 'HPS06A', 'ts': 'HPS06B'}
 CHECKS = ('homepage', 'reviewedPairings', 'twoVisibleTargets', 'bothTicksAdvanced', 'stockControlsDisabled',
           'keyboardFocus', 'narrowStowed', 'originalSidesRestored', 'explicitResume', 'stoppedBoth',
-          'localProfilesAbsentFromBoard')
+          'localProfilesAbsentFromBoard', 'channelRoundTrip')
 
 
-def prepare_test(app, exchange):
+def prepare_test(app, nonce):
     """Only change the generated native test target and opt-in AX notification."""
+    if re.fullmatch(r'[a-f0-9]{64}', nonce) is None:
+        raise GuiFailure('s06_native_channel_scope_invalid')
     fixture = (HERE / 'macos_s06_fixture.swift').read_text()
+    channel = (HERE / 'macos_s06_channel.swift').read_text()
     template = (HERE / 'macos_s06_xcuitest.swift').read_text()
-    placeholder = '__HP_S06_EXCHANGE_BASE64__'
+    placeholder = '__HP_S06_CHANNEL_NONCE__'
     if template.count(placeholder) != 1:
         raise GuiFailure('s06_native_test_template_invalid')
     prepare(app)
     install_test_semantics_hook(app)
-    payload = base64.b64encode(os.fsencode(exchange)).decode('ascii')
-    (app / 'macos/RunnerTests/RunnerTests.swift').write_text(fixture + '\n' + template.replace(placeholder, payload))
+    (app / 'macos/RunnerTests/RunnerTests.swift').write_text(
+        fixture + '\n' + channel + '\n' + template.replace(placeholder, nonce))
 
 
 def stock_binary(binary):
@@ -88,29 +91,57 @@ def fixtures(binary, base):
         yield targets, children, metadata, configs
 
 
-def write_exchange(path, payload):
-    pending = path.with_suffix('.new')
-    with pending.open('xb') as stream:
-        stream.write(payload)
-    pending.replace(path)
+class NativeChannel:
+    def __init__(self, executable, nonce, party='host'):
+        self.executable, self.nonce, self.party = executable, nonce, party
+        self.released = False
+
+    def call(self, action, topic=None, payload=b''):
+        command = [self.executable, self.party, self.nonce, action]
+        if topic is not None:
+            command.append(topic)
+        child = subprocess.run(command, input=payload, stdout=subprocess.PIPE,
+                               stderr=subprocess.DEVNULL, timeout=8, check=False)
+        if child.returncode or len(child.stdout) > 4096:
+            raise GuiFailure('s06_native_private_channel_rejected')
+        return child.stdout
+
+    def send(self, topic, payload):
+        self.call('send', topic, payload)
+
+    def receive(self, topic):
+        return self.call('receive', topic) or None
+
+    def release_all(self):
+        self.call('releaseAll')
+        self.released = True
 
 
-def publish_release(exchange, configs):
-    write_exchange(exchange / 'release.json', json.dumps({'schemaVersion': 1, 'peers': configs}).encode())
+def compile_channel(root):
+    executable = root / 's06-broker'
+    with (root / 'broker-build-private.log').open('wb') as log:
+        subprocess.run(['swiftc', HERE / 'macos_s06_channel.swift', HERE / 'macos_s06_broker.swift',
+                        '-o', executable], stdout=log, stderr=subprocess.STDOUT, check=True, timeout=90)
+    return executable
+
+
+@contextmanager
+def owned_channel(root):
+    channel = NativeChannel(compile_channel(root), secrets.token_hex(32))
+    try:
+        yield channel
+    finally:
+        channel.release_all()
+
+
+def release_payload(configs):
+    return json.dumps({'schemaVersion': 1, 'peers': configs}).encode()
 
 
 def test_command(xcode, bundle):
     # Use the same test action as the existing macOS native suite. The
     # separately verified build-for-testing warms this derived-data directory.
     return xcode + ['-only-testing:' + TEST_SELECTION, '-resultBundlePath', str(bundle), 'test']
-
-
-def native_stage(exchange):
-    try:
-        phase = bounded_wire(exchange / 'stage', 32).decode('ascii')
-        return phase if phase in STAGES else None
-    except (GuiFailure, OSError, UnicodeError):
-        return None
 
 
 def checked_ui_result(raw):
@@ -141,16 +172,27 @@ def final_pty(root):
     return {key: data[key] for key in ('rows', 'columns', 'samples', 'elapsedMs', 'maxSampleGapMs', 'changes')}
 
 
-def requests_and_disconnect(proc, exchange, targets):
+def requests_and_disconnect(proc, channel, targets):
     reviewed = {}
     audits = None
+    roundtrip = False
     deadline = time.monotonic() + 750
     while proc.poll() is None and time.monotonic() < deadline:
-        for index, target in enumerate(targets.values()):
-            request = exchange / f'request-{index}.json'
-            if not request.is_file() or index in reviewed:
+        if not roundtrip:
+            challenge = channel.receive('testReady')
+            if challenge is None:
+                time.sleep(.2)
                 continue
-            raw = bounded_wire(request, 2048)
+            if not re.fullmatch(rb'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', challenge):
+                raise GuiFailure('s06_native_private_channel_challenge_invalid')
+            channel.send('hostReady', challenge)
+            roundtrip = True
+        for index, target in enumerate(targets.values()):
+            if index in reviewed:
+                continue
+            raw = channel.receive(f'request{index}')
+            if raw is None:
+                continue
             facts = target.review(raw)
             if any(facts['deviceFingerprint'] == item['deviceFingerprint'] or
                    facts['requestId'] == item['requestId'] for item in reviewed.values()):
@@ -158,18 +200,23 @@ def requests_and_disconnect(proc, exchange, targets):
             response = target.approve(raw, request_id=facts['requestId'],
                                       device_fingerprint=facts['deviceFingerprint'], reviewed=True)
             reviewed[index] = facts
-            write_exchange(exchange / f'response-{index}.json', response)
-        if (audits is None and len(reviewed) == 2 and (exchange / 'stop-requested').is_file() and
-                all(peer_connection_evidence(target.approval) == {'authenticationCount': 1, 'closed': True}
-                    for target in targets.values())):
+            channel.send(f'response{index}', response)
+        stopping = channel.receive('stopRequested') if audits is None and len(reviewed) == 2 else None
+        if stopping is not None and stopping != b'\x01':
+            raise GuiFailure('s06_native_stop_signal_invalid')
+        if stopping is not None and all(
+                peer_connection_evidence(target.approval) == {'authenticationCount': 1, 'closed': True}
+                for target in targets.values()):
             audits = [target.audit(b'') for target in targets.values()]
             if any(item['acceptedSessions'] != 1 or item['approvedDeviceSessions'] != 1 or
                    item['otherAcceptedDeviceSessions'] != 0 for item in audits):
                 raise GuiFailure('s06_native_peer_authentication_mismatch')
-            write_exchange(exchange / 'peers-closed', b'1')
-        time.sleep(.1)
+            channel.send('peersClosed', b'\x01')
+        time.sleep(.2)
     if proc.poll() != 0:
         raise GuiFailure('s06_native_test_timeout' if proc.poll() is None else 's06_native_xcuitest_failed')
+    if not roundtrip:
+        raise GuiFailure('s06_native_private_channel_unconfirmed')
     if audits is None:
         raise GuiFailure('s06_native_live_peer_close_missing')
     return audits
@@ -194,16 +241,19 @@ def run(app, binary, output):
     source = isolated_runner(app, output)
     output.mkdir(mode=0o700)
     result = {'schemaVersion': 1, 'status': 'failed', 'sourceSHA': source, 'mode': 'stock',
-              'scope': 'native macOS Flutter window with real paired loopback OpenSSH/herdr'}
+              'scope': 'native macOS Flutter window with real paired loopback OpenSSH/herdr',
+              'privateTransport': 'one-use scoped AppKit pasteboards'}
     stage = 'build'
+    channel = None
     try:
         result['flutterCandidate'] = checked_candidate(app, source)
         stock_binary(binary)
-        with tempfile.TemporaryDirectory(prefix='hpns06-', dir='/tmp') as temporary:
+        with tempfile.TemporaryDirectory(prefix='hpns06-', dir='/tmp') as temporary, ExitStack() as owned:
             root = Path(temporary).resolve()
-            exchange = root / 'exchange'
-            exchange.mkdir(mode=0o700)
-            prepare_test(app, exchange)
+            stage = 'channel'
+            channel = owned.enter_context(owned_channel(root))
+            stage = 'build'
+            prepare_test(app, channel.nonce)
             xcode = ['xcodebuild', '-workspace', str(app / 'macos/Runner.xcworkspace'),
                      '-scheme', 'Runner', '-configuration', 'Debug', '-destination', 'platform=macOS',
                      '-derivedDataPath', str(root / 'derived'), '-parallel-testing-enabled', 'NO']
@@ -213,7 +263,7 @@ def run(app, binary, output):
                     raise GuiFailure('s06_native_test_build_failed')
             stage = 'fixture'
             with fixtures(binary, root) as (targets, children, metadata, configs):
-                publish_release(exchange, configs)
+                channel.send('release', release_payload(configs))
                 stage = 'test'
                 result['releasePublished'] = True
                 proc = None
@@ -221,14 +271,13 @@ def run(app, binary, output):
                 try:
                     with owned_process(test_command(xcode, bundle), cwd=app,
                                        env=os.environ, log=private_test_log) as proc:
-                        audit = requests_and_disconnect(proc, exchange, targets)
+                        audit = requests_and_disconnect(proc, channel, targets)
                 finally:
-                    phase = native_stage(exchange)
-                    native = diagnostics(private_test_log, bundle, proc.poll() if proc else None, phase)
+                    native = diagnostics(private_test_log, bundle, proc.poll() if proc else None)
                     result['nativeDiagnostics'] = native
-                    if last := native.get('lastLoggedStage', phase):
+                    if last := native.get('lastLoggedStage'):
                         result['nativeStage'] = last
-                ui = checked_ui_result(json.loads(bounded_wire(exchange / 'ui.json', 2048)))
+                ui = checked_ui_result(json.loads(channel.receive('result') or b'null'))
                 if any(fixture_terminal_id(target.config) != config['terminalId']
                        for target, config in zip(targets.values(), configs)):
                     raise GuiFailure('s06_native_terminal_binding_changed')
@@ -249,6 +298,8 @@ def run(app, binary, output):
         specific = str(error) if isinstance(error, GuiFailure) else ''
         result.update(errorCode=specific if re.fullmatch(r's06_[a-z_]{1,63}', specific)
                       else 's06_native_' + stage + '_failed')
+    if channel is not None:
+        result['privateChannelReleased'] = channel.released
     (output / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
     return result['status'] == 'passed'
 

@@ -22,6 +22,8 @@ from screen_proof_token import token_lines
 from tauri_linux_direct_ssh import (
     DesktopDriver,
     REVIEW_WITNESS,
+    ROTATION_REPROBE_ACTION,
+    ROTATION_REPROBE_CREDENTIALS,
     execute,
     DirectSshFixture,
     EncryptedKeyFixture,
@@ -260,6 +262,10 @@ class RotationEvidenceTests(unittest.TestCase):
         self.assertEqual([c.args[0] for c in driver.click.call_args_list],
                          ['#ssh-connect', '#ssh-key-cancel', '#ssh-probe', '#ssh-trust-confirm', '#ssh-auth-key'])
         self.assertEqual([c.args for c in fixture.rotation_evidence.call_args_list], [(2,), (2,), (2,), (3,)])
+        observations = [call.args for call in driver.observe.call_args_list]
+        self.assertIn((REVIEW_WITNESS, endpoint, 'ssh-rsa', fixture.rotated_fingerprint), observations)
+        self.assertIn((ROTATION_REPROBE_ACTION,), observations)
+        self.assertTrue(any(args[0] == ROTATION_REPROBE_CREDENTIALS for args in observations))
         self.assertTrue(report['rotation']['cancelKeptOldTrust'])
         self.assertEqual(report['rotation']['freshProbe'], new)
         self.assertNotIn(fixture.private_key, json.dumps(report))
@@ -273,6 +279,21 @@ class RotationEvidenceTests(unittest.TestCase):
             exercise_rotation_review(driver, fixture, 'fixture@127.0.0.1:2222', target, {})
         self.assertEqual([c.args[0] for c in driver.click.call_args_list], ['#ssh-connect', '#ssh-key-cancel'])
         driver.send_test_line.assert_not_called()
+
+    def test_fresh_review_fails_before_confirmation_without_retention_action_or_locked_empty_fields(self):
+        for witness, code in ((ROTATION_REPROBE_ACTION, 'rotation_reprobe_action_unproven'),
+                              (ROTATION_REPROBE_CREDENTIALS, 'rotation_reprobe_credentials_unproven')):
+            old = {'stage': 2}
+            driver, fixture, target = self.run_review([old, old, old])
+            driver.observe.side_effect = lambda script, *_: script != witness
+            with self.subTest(code=code), \
+                 patch('tauri_linux_direct_ssh.capture_outcome', return_value=(b'png', {})), \
+                 self.assertRaisesRegex(GuiFailure, code):
+                exercise_rotation_review(driver, fixture, 'fixture@127.0.0.1:2222', target, {})
+            self.assertEqual([c.args[0] for c in driver.click.call_args_list],
+                             ['#ssh-connect', '#ssh-key-cancel', '#ssh-probe'])
+            self.assertNotIn((3,), [c.args for c in fixture.rotation_evidence.call_args_list])
+            driver.send_test_line.assert_not_called()
 
 
 class WebDriverTests(unittest.TestCase):

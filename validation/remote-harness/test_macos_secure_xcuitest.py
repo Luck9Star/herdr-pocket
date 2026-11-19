@@ -3,6 +3,8 @@ import json
 import base64
 import ast
 import os
+import re
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -155,20 +157,29 @@ class ScaffoldTests(unittest.TestCase):
             self.assertNotEqual(execute().returncode,0)
             report=json.loads(output.read_text());self.assertTrue(report['targetMetrics'][0]['hostMatches']);self.assertFalse(report['targetMetrics'][0]['passwordPortMatches'])
             self.assertNotIn('private target material',output.read_text())
-            focus = 'HP_XCUI_FOCUS=phase:tap,ax:ok,trusted:1,role:textfield,match:yes,exists:1,enabled:1,hittable:1,stable:1,retained:match'
-            invalid = ['HP_XCUI_FOCUS=phase:drag,ax:ok,trusted:1,role:private-secret,match:yes,exists:1,enabled:1,hittable:1,stable:1,retained:match',
+            focus = 'HP_XCUI_FOCUS=phase:tap,owner:verified,ax:ok,trusted:1,role:textfield,match:yes,exists:1,enabled:1,hittable:1,stable:1,retained:match'
+            invalid = ['HP_XCUI_FOCUS=phase:drag,owner:verified,ax:ok,trusted:1,role:private-secret,match:yes,exists:1,enabled:1,hittable:1,stable:1,retained:match',
                        focus + ',value:private-secret', focus.replace('enabled:1', 'enabled:2'),
                        focus.replace('phase:tap', 'phase:other')]
             invalid.append(focus.replace('ax:ok', 'ax:denied'))
-            drag = 'HP_XCUI_FOCUS=phase:drag,ax:denied,trusted:0,role:unknown,match:unknown,exists:1,enabled:1,hittable:1,stable:1,retained:unavailable'
+            invalid.append(focus.replace('owner:verified', 'owner:unknown'))
+            invalid.append(focus.replace('owner:verified', 'owner:private-secret'))
+            drag = 'HP_XCUI_FOCUS=phase:drag,owner:verified,ax:denied,trusted:0,role:unknown,match:unknown,exists:1,enabled:1,hittable:1,stable:1,retained:unavailable'
             log.write_text('Test Case testSystemMasking failed\n' + focus + '\n' + '\n'.join(invalid) + '\n' + drag + '\n')
             self.assertNotEqual(execute().returncode,0)
             report=json.loads(output.read_text())
-            self.assertEqual(report['ordinaryFocus'], [{'phase':'tap','ax':'ok','trusted':True,'role':'textfield','frameMatch':'yes',
+            self.assertEqual(report['ordinaryFocus'], [{'phase':'tap','owner':'verified','ax':'ok','trusted':True,'role':'textfield','frameMatch':'yes',
                 'exists':True,'enabled':True,'hittable':True,'frameStable':True,'retained':'match'},
-                {'phase':'drag','ax':'denied','trusted':False,'role':'unknown','frameMatch':'unknown',
+                {'phase':'drag','owner':'verified','ax':'denied','trusted':False,'role':'unknown','frameMatch':'unknown',
                  'exists':True,'enabled':True,'hittable':True,'frameStable':True,'retained':'unavailable'}])
             self.assertNotIn('private-secret',output.read_text())
+            unknown = 'HP_XCUI_FOCUS=phase:drag,owner:unknown,ax:unavailable,trusted:0,role:unknown,match:unknown,exists:1,enabled:1,hittable:1,stable:1,retained:unavailable'
+            log.write_text('Test Case testSystemMasking failed\n' + unknown + '\n')
+            self.assertNotEqual(execute().returncode,0)
+            report=json.loads(output.read_text())
+            self.assertEqual(report['ordinaryFocus'][0]['owner'], 'unknown')
+            self.assertEqual(report['ordinaryFocus'][0]['ax'], 'unavailable')
+            self.assertFalse(report['systemTreeAndSecureFieldsVerified'])
             (root/'macos-secure-private-details.json').write_text(json.dumps({'message':'test timed out','private':'synthetic credential'}))
             self.assertNotEqual(execute().returncode,0)
             report=json.loads(output.read_text());self.assertIn('timeout',report['failureCategories']);self.assertTrue(report['xcresultDetailsAvailable'])
@@ -316,7 +327,15 @@ class ScaffoldTests(unittest.TestCase):
     def test_focus_diagnostic_is_read_only_and_never_replays_sentinel(self):
         swift = (Path(__file__).parent / 'macos_secure_xcuitest.swift').read_text()
         diagnostic = swift[swift.index('private func ordinaryFocusObservation'):swift.index('private func verifyOrdinarySentinel')]
-        self.assertIn('AXUIElementCreateApplication(app.processID)', diagnostic)
+        self.assertIsNone(re.search(r'\bapp\.processID\b', swift))
+        self.assertIn('NSRunningApplication.runningApplications(withBundleIdentifier:', diagnostic)
+        self.assertIn('app.state == .runningForeground', diagnostic)
+        self.assertIn('app.windows.count == 1', diagnostic)
+        self.assertIn('candidates.count == 1', diagnostic)
+        self.assertIn('frontmost.isEqual(candidate)', diagnostic)
+        self.assertIn('candidate.isActive', diagnostic)
+        self.assertIn('candidate.processIdentifier > 0', diagnostic)
+        self.assertIn('AXUIElementCreateApplication(candidate.processIdentifier)', diagnostic)
         self.assertIn('kAXFocusedUIElementAttribute', diagnostic)
         self.assertIn('kAXPositionAttribute', diagnostic)
         self.assertIn('frame match is only a geometric clue', swift.lower())
@@ -329,6 +348,31 @@ class ScaffoldTests(unittest.TestCase):
         self.assertLess(helper.index('phase: "drag"'), helper.index('address.typeText(sentinel)'))
         self.assertEqual(helper.count('address.typeText(sentinel)'), 1)
         self.assertIn('seen = try ordinaryValue(address) == sentinel', helper)
+
+    @unittest.skipUnless(sys.platform == 'darwin' and shutil.which('swiftc'), 'requires macOS Swift and AppKit')
+    def test_focus_observation_typechecks_without_any_xcui_process_id(self):
+        swift = (Path(__file__).parent / 'macos_secure_xcuitest.swift').read_text()
+        helper = swift[swift.index('    private func ordinaryFocusObservation'):swift.index('    private func verifyOrdinarySentinel')]
+        # This deliberately models only the public XCUI state/query surface and
+        # has no processID. AppKit and ApplicationServices are the real SDK.
+        stub = """import Foundation
+import AppKit
+import ApplicationServices
+class XCUIElement { var exists = false; var frame = CGRect.zero; var isEnabled = false; var isHittable = false }
+class XCUIElementQuery { var count = 0 }
+class XCUIApplication { enum State { case runningForeground, notRunning }; var state: State = .notRunning; var windows = XCUIElementQuery() }
+class Probe { func ordinaryValue(_ address: XCUIElement) throws -> String? { nil }
+"""
+        with tempfile.TemporaryDirectory() as temp:
+            source=Path(temp)/'Focus.swift'; binary=Path(temp)/'focus'
+            source.write_text(stub + helper.replace('    private func ordinaryFocusObservation', '    func ordinaryFocusObservation', 1)
+                              + '}\nProbe().ordinaryFocusObservation(XCUIApplication(), address: XCUIElement(), addresses: XCUIElementQuery(), initialFrame: .zero, phase: "tap")\n')
+            build=subprocess.run(['swiftc', '-swift-version', '5', str(source), '-o', str(binary)], capture_output=True, text=True)
+            self.assertEqual(build.returncode, 0, build.stderr)
+            observed=subprocess.run([str(binary)], capture_output=True, text=True)
+            self.assertEqual(observed.returncode, 0, observed.stderr)
+            self.assertIn('owner:unknown,ax:unavailable', observed.stdout)
+            self.assertIn('role:unknown,match:unknown', observed.stdout)
 
     def test_fingerprint_mouse_fallback_requires_unique_visible_target_and_actual_confirmation(self):
         swift=(Path(__file__).parent/'macos_secure_xcuitest.swift').read_text()

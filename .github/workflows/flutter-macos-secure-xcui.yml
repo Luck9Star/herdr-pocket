@@ -214,14 +214,15 @@ jobs:
           ordinary=re.findall(r'hp_xcui_ordinary=nodes:(\d{1,5}),values:(\d{1,5}),sentinel:([01])',log)
           ordinary=[{'nodes':int(n),'nonemptyValues':int(v),'sentinelObserved':s=='1'} for n,v,s in ordinary[:2]]
           ordinary_focus=[]
-          focus_pattern=re.compile(r'hp_xcui_focus=phase:(tap|drag),ax:(ok|denied|unavailable),trusted:([01]),role:(textfield|textarea|window|application|other|unknown),match:(yes|no|unknown),exists:([01]),enabled:([01]),hittable:([01]),stable:([01]),retained:(match|different|unavailable)')
+          focus_pattern=re.compile(r'hp_xcui_focus=phase:(tap|drag),owner:(verified|unknown),ax:(ok|denied|unavailable),trusted:([01]),role:(textfield|textarea|window|application|other|unknown),match:(yes|no|unknown),exists:([01]),enabled:([01]),hittable:([01]),stable:([01]),retained:(match|different|unavailable)')
           for line in log.splitlines():
               match=focus_pattern.fullmatch(line.strip())
               if not match: continue
-              phase,ax,trusted,role,frame_match,exists,enabled,hittable,stable,retained=match.groups()
+              phase,owner,ax,trusted,role,frame_match,exists,enabled,hittable,stable,retained=match.groups()
+              if owner == 'unknown' and ax != 'unavailable': continue
               if ax != 'ok' and (role != 'unknown' or frame_match != 'unknown'): continue
               if any(row['phase']==phase for row in ordinary_focus): continue
-              ordinary_focus.append({'phase':phase,'ax':ax,'trusted':trusted=='1','role':role,'frameMatch':frame_match,
+              ordinary_focus.append({'phase':phase,'owner':owner,'ax':ax,'trusted':trusted=='1','role':role,'frameMatch':frame_match,
                   'exists':exists=='1','enabled':enabled=='1','hittable':hittable=='1','frameStable':stable=='1','retained':retained})
               if len(ordinary_focus)==2: break
           back_metrics=re.findall(r'hp_xcui_back=buttons:(\d{1,5}),exact:(\d{1,5}),hittable:(\d{1,5})',log)

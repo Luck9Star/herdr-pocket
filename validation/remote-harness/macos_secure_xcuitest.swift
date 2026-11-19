@@ -285,9 +285,20 @@ final class SecureCredentialUITests: XCTestCase {
         let stable = exists && addresses.count == 1 && !frame.isEmpty && frame == initialFrame
         let value = exists ? try? ordinaryValue(address) : nil
         let retained = value == nil ? "unavailable" : value == "127.0.0.1" ? "match" : "different"
-        let targetApp = AXUIElementCreateApplication(app.processID)
+        // XCTest does not expose a public process ID. Only a unique running
+        // candidate which is also the foreground app may supply one to AX.
+        let candidates = NSRunningApplication.runningApplications(withBundleIdentifier: "dev.herdr.herdrFlutterProbe")
+        var owner = "unknown"
         var focused: CFTypeRef?
-        let status = AXUIElementCopyAttributeValue(targetApp, kAXFocusedUIElementAttribute as CFString, &focused)
+        var status: AXError = .failure
+        if app.state == .runningForeground, app.windows.count == 1, candidates.count == 1,
+           let candidate = candidates.first, candidate.isActive, !candidate.isTerminated,
+           candidate.processIdentifier > 0, let frontmost = NSWorkspace.shared.frontmostApplication,
+           frontmost.isEqual(candidate) {
+            owner = "verified"
+            let targetApp = AXUIElementCreateApplication(candidate.processIdentifier)
+            status = AXUIElementCopyAttributeValue(targetApp, kAXFocusedUIElementAttribute as CFString, &focused)
+        }
         var ax = status == .apiDisabled ? "denied" : "unavailable"
         var role = "unknown", frameMatch = "unknown"
         if status == .success, let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() {
@@ -312,7 +323,7 @@ final class SecureCredentialUITests: XCTestCase {
                 }
             }
         }
-        print("HP_XCUI_FOCUS=phase:\(phase),ax:\(ax),trusted:\(AXIsProcessTrusted() ? 1 : 0),role:\(role),match:\(frameMatch),exists:\(exists ? 1 : 0),enabled:\(exists && address.isEnabled ? 1 : 0),hittable:\(exists && address.isHittable ? 1 : 0),stable:\(stable ? 1 : 0),retained:\(retained)")
+        print("HP_XCUI_FOCUS=phase:\(phase),owner:\(owner),ax:\(ax),trusted:\(AXIsProcessTrusted() ? 1 : 0),role:\(role),match:\(frameMatch),exists:\(exists ? 1 : 0),enabled:\(exists && address.isEnabled ? 1 : 0),hittable:\(exists && address.isHittable ? 1 : 0),stable:\(stable ? 1 : 0),retained:\(retained)")
         fflush(stdout)
     }
 

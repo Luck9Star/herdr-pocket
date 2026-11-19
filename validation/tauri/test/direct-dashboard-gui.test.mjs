@@ -114,6 +114,7 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scan
       node.tagName = tag;
       return node;
     },
+    createElementNS: (_ns, tag) => { const node = new Element(); node.tagName = tag; return node; },
     addEventListener(name,fn) { (documentEvents[name] ??= []).push(fn); },
   };
   globalThis.window = { addEventListener(name,fn) { (windowEvents[name] ??= []).push(fn); }, confirm: () => true };
@@ -1998,6 +1999,18 @@ test('entry sidebar toggle changes and restores its real expanded state', async 
     button.click();
     assert.equal(button.getAttribute('aria-expanded'), initial);
     assert.equal(document.body.dataset.entrySidebar, initial === 'true' ? 'expanded' : 'collapsed');
+  } finally { h.restore(); }
+});
+
+test('active ordinary SSH advertises its session on the board, network and sidebar only while ready', async () => {
+  const h = await setup({compactEntry:{matches:false, addEventListener(){}}, sshInvoke:name => name === 'ssh_shell_open' ? 's1' : null});
+  const n = h.nodes;
+  try {
+    await openOrdinary(h, 's1');
+    for (const id of ['ssh-board-active', 'ssh-network-active', 'ssh-nav-live']) assert.equal(n[id].hidden, false);
+    n['ssh-disconnect'].click();
+    await flush();
+    for (const id of ['ssh-board-active', 'ssh-network-active', 'ssh-nav-live']) assert.equal(n[id].hidden, true);
   } finally { h.restore(); }
 });
 

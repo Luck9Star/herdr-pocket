@@ -236,3 +236,65 @@
 @media (max-width:359px) {
   #ssh-live #ssh-target { font-size:0.6875rem; }
 }
+
+.ssh-desktop-active, .ssh-desktop-active-detail { display:none; }
+
+@media (min-width:600px) {
+  body:has(#host-home:not([hidden]) #ssh-settings-active:not([hidden])) {
+    #home-ssh:has(#ssh-live:not([hidden])) :is(#ssh-page-heading, #ssh-status) { display:none; }
+    #ssh-live:not([hidden]) { display:flex; flex-direction:column; margin:0; }
+    #ssh-live .ssh-live-header {
+      display:flex; align-items:center; justify-content:space-between; flex:none;
+      min-height:56px; margin:0 -40px; padding:0 40px;
+      border-bottom:1px solid var(--hp-border);
+    }
+    #ssh-live #ssh-active-title { display:block; margin:0; font-size:1.125rem; font-weight:600; }
+    #ssh-live #ssh-disconnect { align-self:flex-start; position:relative; top:4px; width:76px; min-height:44px; margin:0; padding:4px; border:0; background:var(--hp-dangerSoft); color:var(--hp-dangerText); font-size:0.875rem; }
+    #ssh-live #ssh-disconnect .ssh-compact-control { display:block; }
+    #ssh-live #ssh-disconnect .ssh-wide-control { display:none; }
+    #ssh-live .ssh-live-status { display:flex; flex:none; align-items:center; min-height:44px; gap:10px; margin:12px 0 8px; }
+    #ssh-live .ssh-connected-badge { display:flex; align-items:center; justify-content:center; flex:none; min-width:62px; min-height:24px; padding:2px 4px; border:1px solid var(--hp-successBorder); border-radius:8px; background:var(--hp-successSoft); color:var(--hp-successText); font-size:0.75rem; font-weight:600; }
+    #ssh-live #ssh-target { position:static; flex:1; min-width:0; margin:0; overflow:visible; overflow-wrap:anywhere; white-space:normal; font:400 0.75rem/1.25rem ui-monospace,monospace; }
+    #ssh-live #ssh-target .ssh-wide-control, #ssh-live :is(#ssh-focus, #ssh-hide-keyboard, #ssh-helper-keys) { display:none; }
+    #home-ssh #ssh-terminal-output { flex:none; width:100%; height:calc(100dvh - 136px); min-height:120px; margin:0; padding:11px; border:1px solid var(--hp-termBorder); }
+    .route-tabs #nav-terminal { position:relative; }
+    .route-tabs #nav-terminal #ssh-nav-live:not([hidden]) { display:flex; align-items:center; gap:4px; margin:0 0 0 auto; color:var(--hp-successText); font-size:0.6875rem; }
+    .route-tabs #nav-terminal #ssh-nav-live::before { content:''; width:8px; height:8px; border-radius:50%; background:var(--hp-successBorder); }
+    @media (max-width:959px) {
+      &:not([data-entry-sidebar="expanded"]) .route-tabs #nav-terminal #ssh-nav-live:not([hidden]) { position:absolute; top:6px; right:6px; font-size:0; }
+    }
+    &[data-entry-sidebar="collapsed"] .route-tabs #nav-terminal #ssh-nav-live:not([hidden]) { position:absolute; top:6px; right:6px; font-size:0; }
+    #ssh-board-active:not([hidden]), #ssh-network-active:not([hidden]) {
+      display:block; max-width:560px; min-height:66px; margin:0 0 16px; padding:8px 11px;
+      border:1px solid var(--hp-successBorder); border-radius:10px; background:var(--hp-successSoft);
+      color:var(--hp-successText); font-size:0.875rem; line-height:1.375rem;
+    }
+    #ssh-board-active p, #ssh-network-active p { margin:0; color:var(--hp-textSecondary); font-size:0.8125rem; line-height:1.125rem; }
+    #home-network > h2 { margin:28px 0 8px; font-size:1.375rem; line-height:1.625rem; }
+    #home-settings > h2 { display:flex; align-items:center; min-height:56px; margin:0 -40px 20px; padding:0 40px; border-bottom:1px solid var(--hp-border); font-size:1.125rem; line-height:1.375rem; }
+    #ssh-settings-active:not([hidden]) { display:block; max-width:560px; min-height:66px; margin:0 0 10px; padding:8px 11px; border:1px solid var(--hp-successBorder); border-radius:10px; background:var(--hp-successSoft); color:var(--hp-successText); font-size:0.875rem; line-height:1.375rem; }
+    #ssh-settings-active .ssh-desktop-active-detail { display:block; margin:0; color:var(--hp-textSecondary); font-size:0.8125rem; line-height:1.125rem; }
+    #ssh-settings-target:not([hidden]) { display:block; max-width:560px; min-height:52px; padding:4px 11px; border:1px solid var(--hp-border); border-radius:10px; background:var(--hp-card); overflow-wrap:anywhere; }
+    #ssh-settings-target p { margin:0; color:var(--hp-textSecondary); font-size:0.75rem; }
+    #home-settings .host-save { max-width:560px; padding:0; margin:16px 0 0; border:0; background:transparent; }
+    #home-settings .host-save label { display:block; font-size:0.8125rem; line-height:1.125rem; font-weight:600; }
+    #terminal-font-size { display:block; width:100%; min-height:48px; margin:4px 0 12px; padding:10px 11px; font-size:1rem; font-weight:400; appearance:textfield; }
+    #terminal-font-size::-webkit-inner-spin-button, #terminal-font-size::-webkit-outer-spin-button { appearance:none; margin:0; }
+    #terminal-font-save, #config-transfer-open { display:block; width:min(100%,560px); min-height:48px; font-size:0.875rem; }
+    #terminal-font-status:empty { display:none; }
+    #config-transfer-open { margin-top:16px; }
+
+  }
+}
+
+@media (min-width:600px) {
+  #home-network:has(#network-empty-card) > #network-open { display:none; }
+  #network-panel:has(#network-empty-card) { max-width:560px; margin:0; padding:0; border:0; background:transparent; }
+  #network-empty-card { min-height:204px; padding:15px; border:1px solid var(--hp-border); border-radius:var(--hp-radius-card); background:var(--hp-card); }
+  #network-empty-card .network-empty-icon { display:grid; place-items:center; width:44px; height:44px; border-radius:10px; color:var(--hp-textSecondary); background:var(--hp-cardSubtle); font-size:24px; line-height:1; }
+  #network-empty-card .network-empty-icon svg { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+  #network-empty-card h3 { margin:11px 0 0; font-size:18px; line-height:22px; font-weight:600; }
+  #network-empty-card p { margin:9px 0 20px; color:var(--hp-textSecondary); font-size:13px; line-height:18px; }
+  #network-empty-card button { display:block; width:100%; min-height:48px; font-size:14px; }
+  #network-empty-card + button { margin-top:12px; }
+}

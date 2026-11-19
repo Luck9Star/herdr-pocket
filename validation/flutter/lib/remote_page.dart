@@ -77,6 +77,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     : widget.adapter ?? RemoteReadOnlyAdapter(inputJournal:const PlatformRemoteInputJournal());
   ReleaseHostTransport? releaseTransport;
   Future<void>? tabClosing;
+  late final bool Function() allowDial = () => mounted && widget.canUseCommands;
   Future<void> confirmTransportClose(Future<void> cancelling) async {
     final retirement = adapter.transportRetirement;
     await cancelling;
@@ -226,6 +227,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     widget.summaryLease?.registry.addListener(summaryChanged);
     originalNetworkBinding = widget.networkBinding;
     adapter.captureInputJournalReview = inputGate.captureJournalRefresh;
+    adapter.canDispatchDial = allowDial;
     releaseTransport = widget.registerTransport?.call(closeForTab,takeScreen:takeScreen);
     draft.addListener(draftChanged);
     terminalFocus.addListener(terminalFocusChanged);
@@ -468,6 +470,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     widget.networkBinding?.changes?.removeListener(networkChanged);
     WidgetsBinding.instance.removeObserver(this); request++; identityLease?.cancel();
     adapter.captureInputJournalReview = null;
+    if (identical(adapter.canDispatchDial,allowDial)) adapter.canDispatchDial = null;
     inputGate.onChanged = null; inputGate.invalidate();
     clearScreenSelection(); screenText.dispose(); screenTextFocus.dispose();
     terminalFocus.removeListener(terminalFocusChanged); terminalFocus.dispose(); draftFocus.dispose(); draft.removeListener(draftChanged); draft.dispose();
@@ -626,7 +629,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     } catch (error) {
       if (!mounted || ticket != request) return;
       widget.summaryLease?.invalidate(); summaryAttempt = null;
-      identityLease?.cancel(); widget.onStopped?.call();
+      identityLease?.cancel(); frozenNode = null; widget.onStopped?.call();
       clearScreenSelection();
       inputGate.invalidate(); terminalFocus.unfocus();
       final code = error is RemoteFailure ? error.code : 'connection_failed';
@@ -642,6 +645,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           'network_identity_unavailable' => '本机网络身份不可用或当前无密码模式不受支持 · 已停止，请核对本机资料',
           'network_runtime_unavailable' => '节点状态或连接桥不可确认 · 已停止，请刷新状态后重新审查',
           'network_binding_changed' => '网络绑定已改变或停用 · 已停止，请关闭后重新审查',
+          'catalog_unavailable' => '目录待核验 · 未开始连接，请重新读取目录后主动审查',
           'device_key_unavailable' || 'device_key_changed' => '设备密钥锁定、丢失或不可用 · 已停止，不会生成替代身份或使用明文',
           'host_key_mismatch' => '主机指纹不符 · 已在认证前拒绝，请从可信渠道重新核验',
           'session_mismatch' || 'pane_missing' || 'invalid_terminal_id' || 'invalid_snapshot' || 'stale_selection' => '指定会话或目标不匹配 · 已停止，请检查资料',

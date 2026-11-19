@@ -1,6 +1,6 @@
 import { createDirectSsh, directSshCloseFeedback } from './direct-ssh.js';
 
-export function initDirectSshUI({native, invoke, channelFactory, terminalFactory, terminalCursor, clipboardRead, keyboardRequest, onBack, onCloseUpdate}) {
+export function initDirectSshUI({native, invoke, channelFactory, terminalFactory, terminalCursor, clipboardRead, keyboardRequest, onBack, onCloseUpdate, onViewStateChange}) {
   const $ = id => document.getElementById(id);
   const hideKeyboard = $('ssh-hide-keyboard');
   const compactLayout = globalThis.window?.matchMedia?.('(max-width:599px)');
@@ -201,6 +201,8 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     setup.hidden = ready || blocked;
     $('ssh-live').hidden = !ready;
     $('ssh-settings-active').hidden = !ready;
+    for (const id of ['ssh-board-active', 'ssh-network-active', 'ssh-nav-live']) if ($(id)) $(id).hidden = !ready;
+    onViewStateChange?.();
     $('ssh-settings-target').hidden = !ready;
     $('ssh-key-change').hidden = !blocked;
     // While the change review is open, its own heading is the first heading and the

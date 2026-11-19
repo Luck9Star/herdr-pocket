@@ -1,24 +1,33 @@
 .ssh-mobile-only, #sidebar-toggle { display:none; }
 
 @media (min-width:600px) {
-  body:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) {
+  body:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) {
     --outcome-sidebar:224px;
     .app-header { display:none; }
+    &:has(#home-dashboard:not([hidden]) #host-empty[hidden]) {
+      .app-header { display:block; position:absolute; top:4px; right:40px; z-index:2; padding:0; }
+      .brand-lockup { display:none; }
+      #host-board-intro { padding-right:112px; }
+    }
     .route-tabs { position:fixed; z-index:4; inset:0 auto 0 0; display:flex; flex-direction:column; align-items:stretch; width:var(--outcome-sidebar); max-width:none; margin:0; padding:68px 8px 0; gap:8px; background:var(--hp-card); border-right:1px solid var(--hp-border); }
     .route-tabs #sidebar-toggle { display:grid; place-items:center; border:0; background:transparent; position:absolute; top:8px; left:8px; width:44px; height:44px; padding:10px; }
+    .route-tabs button:not(#sidebar-toggle) { width:208px; }
     .route-tabs button { display:flex; align-items:center; justify-content:flex-start; flex:none; min-height:44px; padding:10px; text-align:left; font-size:0.875rem; }
     .route-tabs #sidebar-toggle svg { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; }
     .route-tabs button span { display:none; }
     .route-tabs .empty-route-icon { display:block; flex:none; width:24px; height:24px; margin-right:10px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
     #host-home { max-width:none; margin:0 0 0 var(--outcome-sidebar); padding:0 40px 40px; }
-    #host-home-status { display:none; }
-    #home-dashboard { position:relative; padding-top:78px; }
-    #home-dashboard:has(#host-ssh-disconnected:not([hidden])) { padding-top:62px; }
-    #host-board-intro { position:absolute; top:282px; left:16px; width:min(528px,calc(100% - 32px)); }
-    #home-dashboard:has(#host-ssh-disconnected:not([hidden])) #host-board-intro { top:326px; }
-    #host-board-intro h2 { position:absolute; top:-258px; left:-16px; margin:0; font-size:22px; line-height:26px; }
-    #home-dashboard:has(#host-ssh-disconnected:not([hidden])) #host-board-intro h2 { top:-302px; }
-    #host-board-intro #home-open-ssh { width:100%; min-height:48px; font-size:14px; }
+    #home-dashboard:has(#host-empty:not([hidden])) #host-home-status { display:none; }
+    #home-dashboard:has(#host-empty:not([hidden])) { position:relative; padding-top:78px; }
+    #home-dashboard:has(#host-empty:not([hidden])):has(#host-ssh-disconnected:not([hidden])),
+    #home-dashboard:has(#host-empty:not([hidden])):has(#ssh-board-active:not([hidden])) { padding-top:62px; }
+    #home-dashboard:has(#host-empty:not([hidden])) #host-board-intro { position:absolute; top:282px; left:16px; width:min(528px,calc(100% - 32px)); }
+    #home-dashboard:has(#host-empty:not([hidden])):has(#host-ssh-disconnected:not([hidden])) #host-board-intro { top:326px; }
+    #home-dashboard:has(#host-empty:not([hidden])):has(#ssh-board-active:not([hidden])) #host-board-intro { top:348px; }
+    #home-dashboard:has(#host-empty:not([hidden])) #host-board-intro h2 { position:absolute; top:-258px; left:-16px; margin:0; font-size:22px; line-height:26px; }
+    #home-dashboard:has(#host-empty:not([hidden])):has(#host-ssh-disconnected:not([hidden])) #host-board-intro h2 { top:-302px; }
+    #home-dashboard:has(#host-empty:not([hidden])):has(#ssh-board-active:not([hidden])) #host-board-intro h2 { top:-324px; }
+    #home-dashboard:has(#host-empty:not([hidden])) #host-board-intro #home-open-ssh { width:100%; min-height:48px; font-size:14px; }
     #host-empty { max-width:560px; min-height:268px; padding:15px; text-align:start; border-radius:var(--hp-radius-card); }
     #host-empty .empty-terminal-icon { display:grid; place-items:center; width:44px; height:44px; border-radius:10px; color:var(--hp-brand); background:var(--hp-brandSoft); }
     #host-empty .connection-icon { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
@@ -28,24 +37,25 @@
     #host-empty #home-open-ssh { margin-top:12px; }
   }
   @media (max-width:959px) {
-    body:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) {
+    body:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) {
       --outcome-sidebar:64px;
       .route-tabs { padding-inline:10px; }
       .route-tabs #sidebar-toggle { left:10px; }
       .route-tabs button { justify-content:center; font-size:0; padding:10px; }
+      .route-tabs button:not(#sidebar-toggle) { width:44px; }
       .route-tabs .empty-route-icon { margin:0; }
     }
   }
-  body[data-entry-sidebar="expanded"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) { --outcome-sidebar:224px !important; }
-  body[data-entry-sidebar="expanded"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs #sidebar-toggle { left:8px; }
-  body[data-entry-sidebar="expanded"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs { padding-inline:8px; }
-  body[data-entry-sidebar="expanded"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs button:not(#sidebar-toggle) { justify-content:flex-start; font-size:0.875rem; }
-  body[data-entry-sidebar="expanded"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs .empty-route-icon { margin-right:10px; }
-  body[data-entry-sidebar="collapsed"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) { --outcome-sidebar:64px !important; }
-  body[data-entry-sidebar="collapsed"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs { padding-inline:10px; }
-  body[data-entry-sidebar="collapsed"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs #sidebar-toggle { left:10px; }
-  body[data-entry-sidebar="collapsed"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs button:not(#sidebar-toggle) { justify-content:center; font-size:0; }
-  body[data-entry-sidebar="collapsed"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs .empty-route-icon { margin:0; }
+  body[data-entry-sidebar="expanded"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) { --outcome-sidebar:224px !important; }
+  body[data-entry-sidebar="expanded"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs #sidebar-toggle { left:8px; }
+  body[data-entry-sidebar="expanded"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs { padding-inline:8px; }
+  body[data-entry-sidebar="expanded"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs button:not(#sidebar-toggle) { width:208px; justify-content:flex-start; font-size:0.875rem; }
+  body[data-entry-sidebar="expanded"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs .empty-route-icon { margin-right:10px; }
+  body[data-entry-sidebar="collapsed"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) { --outcome-sidebar:64px !important; }
+  body[data-entry-sidebar="collapsed"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs { padding-inline:10px; }
+  body[data-entry-sidebar="collapsed"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs #sidebar-toggle { left:10px; }
+  body[data-entry-sidebar="collapsed"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs button:not(#sidebar-toggle) { width:44px; justify-content:center; font-size:0; }
+  body[data-entry-sidebar="collapsed"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-step]:not([hidden]) #ssh-setup:not([hidden]), #host-home:not([hidden]) #ssh-settings-active:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs .empty-route-icon { margin:0; }
   body:has(#host-home:not([hidden]) #home-add:not([hidden])) {
     .connection-choice-header { display:flex; align-items:center; height:56px; margin:0 -32px; gap:8px; font-size:18px; font-weight:600; }
     #add-back { display:grid; place-items:center; width:44px; height:44px; padding:0; border:0; background:transparent; }

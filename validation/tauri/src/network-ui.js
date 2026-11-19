@@ -11,9 +11,9 @@ export async function settleNetworkOperation(work, affected, onAffected, load) {
   return completed;
 }
 // Network configuration is public metadata; provider identities remain native.
-export function initNetworkUI({native, invoke, getHosts, onAffected, prepareStop=async()=>{}, pollOptions, beforeForgetZeroTier}) {
+export function initNetworkUI({native, invoke, getHosts, onAffected, prepareStop=async()=>{}, pollOptions, beforeForgetZeroTier, showEmpty=()=>false}) {
   const panel=document.getElementById('network-panel'), open=document.getElementById('network-open');
-  let deviceReviewDialog=null;
+  let deviceReviewDialog=null, forceManager=false;
   let renderedReview=null, renderEpoch=0;
   const expandedProfiles=new Set();
   let bindingRows=new Map();
@@ -134,10 +134,26 @@ export function initNetworkUI({native, invoke, getHosts, onAffected, prepareStop
     catch {if(epoch===nodeEpoch)await load('授权入口已失效或打开结果未知；请核对当前节点状态，不会自动重试。');}
     finally {busy=false;}
   }
+  function startNewProfile() {
+    editing={id:'0'.repeat(32),label:'',provider:'tailscale',enabled:true,revision:1,settings:{controlUrl:'',hostname:''}};
+    render();
+  }
   function render(message='') {
     if(discardChangedBindings())message=bindingChanged;
     const previousBindings=bindingRows;bindingRows=new Map();
-    if(!catalog){renderedReview=null;return;}renderedReview=viewReview(catalog,identityStates,nodeStates);renderEpoch++;clearSecrets();panel.replaceChildren();panel.append(el('h2','网络配置'),el('p','公开配置和本机网络身份分开保存；身份不随配置导出。节点状态不代表已入网。'));
+    if(!catalog){renderedReview=null;return;}renderedReview=viewReview(catalog,identityStates,nodeStates);renderEpoch++;clearSecrets();panel.replaceChildren();
+    if(native && showEmpty() && !forceManager && !editing && !identityEditor && typeof catalog.revision==='string' && catalog.revision.length>0 &&
+       Number.isInteger(catalog.preferences?.terminalFontSize) && catalog.preferences.terminalFontSize>=10 && catalog.preferences.terminalFontSize<=28 &&
+       Array.isArray(catalog.profiles) && catalog.profiles.length===0 && Array.isArray(catalog.bindings) && catalog.bindings.length===0) {
+      const card=el('section','','network-empty-card');card.id='network-empty-card';
+      const icon=el('span','','network-empty-icon');icon.setAttribute('aria-hidden','true');
+      const globe=document.createElementNS('http://www.w3.org/2000/svg','svg'),path=document.createElementNS('http://www.w3.org/2000/svg','path');
+      globe.setAttribute('viewBox','0 0 24 24');path.setAttribute('d','M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 M3 12 H21 M12 3 C6 7 6 17 12 21 C18 17 18 7 12 3');globe.append(path);icon.append(globe);
+      card.append(icon,el('h3','还没有网络配置'),el('p','配置 ZeroTier、Tailscale 或 EasyTier 后，在这里管理网络。'),button('添加网络配置',startNewProfile));
+      panel.append(card,button('管理网络与共享设备',()=>{forceManager=true;render();}));
+      return;
+    }
+    panel.append(el('h2','网络配置'),el('p','公开配置和本机网络身份分开保存；身份不随配置导出。节点状态不代表已入网。'));
     const status=el('p',message);status.setAttribute('role','status');panel.append(status);
     panel.append(button('审查 ZeroTier 共享设备',()=>{deviceReviewDialog=openZeroTierDeviceReview({invoke,beforeForget:beforeForgetZeroTier,onSettled:async ids=>{await onAffected(ids);await load();}});}));
     for(const profile of catalog.profiles) {
@@ -169,7 +185,7 @@ export function initNetworkUI({native, invoke, getHosts, onAffected, prepareStop
       if(deleteReason){del.disabled=true;del.title=deleteReason;actions.append(el('p',deleteReason));}
       actions.append(del);management.append(actions);card.append(management);panel.append(card);
     }
-    panel.append(button('新增网络配置',()=>{editing={id:'0'.repeat(32),label:'',provider:'tailscale',enabled:true,revision:1,settings:{controlUrl:'',hostname:''}};render();}));
+    panel.append(button('新增网络配置',startNewProfile));
     if(editing) {
       const form=el('form','','network-editor');form.append(el('h3',catalog.profiles.some(p=>p.id===editing.id)?'编辑网络':'新增网络'));
       const name=field(editing.label,'配置名称');name.maxLength=96;name.required=true;form.append(label('名称',name));
@@ -213,8 +229,10 @@ export function initNetworkUI({native, invoke, getHosts, onAffected, prepareStop
       });record.apply=apply;bindingRows.set(host.id,record);row.append(select,apply);hostSection.append(row);
     }panel.append(hostSection);
   }
-  open.disabled=!native;open.onclick=()=>{deviceReviewDialog?.close();deviceReviewDialog=null;retirePublication();clearSecrets();bindingRows.clear();identityEditor=null;panel.hidden=!panel.hidden;if(!panel.hidden)void load();};
+  open.disabled=!native;open.onclick=()=>{deviceReviewDialog?.close();deviceReviewDialog=null;retirePublication();clearSecrets();bindingRows.clear();identityEditor=null;panel.hidden=!panel.hidden;if(!panel.hidden){forceManager=false;if(panel.querySelector('#network-empty-card'))panel.replaceChildren(el('p','正在读取网络配置…'));void load();}};
+  const responsive=globalThis.window?.matchMedia?.('(min-width:600px)');
+  responsive?.addEventListener?.('change',()=>{if(catalog && !panel.hidden && !document.hidden && !editing && !identityEditor)render();});
   document.addEventListener('visibilitychange',()=>{retirePublication();clearSecrets();bindingRows.clear();identityEditor=null;if(!document.hidden && !panel.hidden)void load('已返回应用；正在核对原配置与当前节点。');});
   window.addEventListener('pagehide',()=>{retirePublication();clearSecrets();bindingRows.clear();});
-  return {refresh:()=>{if(!panel.hidden)void load();},close:()=>{deviceReviewDialog?.close();deviceReviewDialog=null;retirePublication();clearSecrets();bindingRows.clear();identityEditor=null;panel.hidden=true;}};
+  return {refresh:()=>{if(!panel.hidden)void load();},reconcile:()=>{if(catalog && !panel.hidden && !document.hidden && !editing && !identityEditor)render();},close:()=>{deviceReviewDialog?.close();deviceReviewDialog=null;retirePublication();clearSecrets();bindingRows.clear();identityEditor=null;panel.hidden=true;}};
 }

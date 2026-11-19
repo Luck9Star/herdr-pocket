@@ -837,7 +837,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     if(changed)renderSummaryChanges();
   }
   const workspace=initTabWorkspace({native,invoke,theme,channelFactory:()=>new Channel(),terminalFactory:options=>createUnicodeTerminal(Terminal,options),onDashboard:onWorkspaceDashboard,getFontSize:()=>terminalFontSize,hostInfo:id=>{const host=hostRecords.find(h=>h.id===id);if(!host || host.pairingStatus==='revoked' || runtimeRevokedHosts.has(id))return null;const networkRevision=host.networkProfileId ? networkRevisions.get(host.networkProfileId) : null;return networkRevision===undefined ? null : {...host,networkRevision};},hostName:id=>hostRecords.find(h=>h.id===id)?.name || '主机'});
-  const networks=initNetworkUI({native,invoke,getHosts:()=>hostRecords,prepareStop:async ids=>{workspace.prepareAffected(ids);if(ids.includes(activeHostId))cancel('正在停止此网络；输入已锁定，等待原连接结束。',false,true);},onAffected:async ids=>{workspace.affected(ids);if(ids.includes(activeHostId))cancel('网络操作涉及此主机；观察已停止，请重新核对当前配置。');await refreshHosts(false);}});
+  const networks=initNetworkUI({native,invoke,getHosts:()=>hostRecords,showEmpty:()=>native && !$('ssh-settings-active').hidden && globalThis.window?.matchMedia?.('(min-width:600px)').matches===true,prepareStop:async ids=>{workspace.prepareAffected(ids);if(ids.includes(activeHostId))cancel('正在停止此网络；输入已锁定，等待原连接结束。',false,true);},onAffected:async ids=>{workspace.affected(ids);if(ids.includes(activeHostId))cancel('网络操作涉及此主机；观察已停止，请重新核对当前配置。');await refreshHosts(false);}});
   // 桌面工作台侧栏（切片 1）：与主机看板共用 hostRecords/hostSummaries，渲染挂在 renderHosts/renderSummaryChanges。
   // 只读展示与既有回调转发；不做键盘导航/分屏，也不改任何 PTY 或画布尺寸。
   const workbench=initDesktopWorkbench({
@@ -882,6 +882,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   const ssh = initDirectSshUI({native, invoke, clipboardRead, keyboardRequest, terminalCursor:theme.terminal.cursor,
     onBack: (outcome, returnToDashboard) => navigateHome(outcome || returnToDashboard ? 'dashboard' : sshBackSection),
     onCloseUpdate: outcome => { if (homeSshClose === outcome) renderHomeSshClose(); },
+    onViewStateChange: () => networks.reconcile(),
     channelFactory:()=>new Channel(), terminalFactory:options=>createUnicodeTerminal(Terminal,options)});
   function setHomeSection(section) {
     const wasHidden = $('home-ssh').hidden;

@@ -1,0 +1,22 @@
+00:00 +0: loading /private/tmp/herdr-flutter-entry.YSQ3/app/test/network_profiles_widget_test.dart
+00:00 +0: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_catalog_test.dart: creation intent and key binding survive process restart; trust and live connection do not
+00:00 +1: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_catalog_test.dart: unknown create persists a blocking intent; known handle can be explicitly cleaned
+00:00 +2: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_catalog_test.dart: pending intent remains typed and immutable through repeated in-memory validation
+00:00 +3: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_catalog_test.dart: typed pending normalization still rejects extra fields and malformed target maps
+00:00 +4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_catalog_test.dart: corruption, duplicate decoded fields, secret fields and wrong account binding fail closed
+00:00 +5: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_catalog_test.dart: stale CAS failure locks writes and does not replay queued operations
+00:00 +6: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_catalog_test.dart: a delayed profile snapshot cannot undo a newer local change
+00:00 +7: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_catalog_test.dart: rename and enable preserve key and pinned target; target replacement is rejected
+00:00 +8: /private/tmp/herdr-flutter-entry.YSQ3/app/test/network_profiles_widget_test.dart: desktop live network does not revive a superseded empty read and keeps the editor across widths
+00:00 +9: /private/tmp/herdr-flutter-entry.YSQ3/app/test/network_profiles_widget_test.dart: status read during pending start cannot clear an unknown start result
+00:00 +10: /private/tmp/herdr-flutter-entry.YSQ3/app/test/network_profiles_widget_test.dart: pending node start can be refreshed and stopped; late start cannot overwrite stopped
+00:00 +11: /private/tmp/herdr-flutter-entry.YSQ3/app/test/network_profiles_widget_test.dart: profile editing is re-enabled only after node start settles
+00:00 +12: /private/tmp/herdr-flutter-entry.YSQ3/app/test/network_profiles_widget_test.dart: normal 360px host board exposes network manager and creates a reusable profile
+00:01 +13: /private/tmp/herdr-flutter-entry.YSQ3/app/test/network_profiles_widget_test.dart: network guidance stays readable at 320px
+00:01 +14: /private/tmp/herdr-flutter-entry.YSQ3/app/test/network_profiles_widget_test.dart: network guidance stays readable at 390px
+00:01 +15: /private/tmp/herdr-flutter-entry.YSQ3/app/test/network_profiles_widget_test.dart: network impact lists referenced host and refusing delete preserves its binding
+00:01 +16: /private/tmp/herdr-flutter-entry.YSQ3/app/test/network_profiles_widget_test.dart: network deletion review preserves existing device identity and forbids automatic removal
+00:01 +17: /private/tmp/herdr-flutter-entry.YSQ3/app/test/network_profiles_widget_test.dart: disabled overlay without a bridge still permits offline pairing and helper response review after reopening
+00:01 +18: /private/tmp/herdr-flutter-entry.YSQ3/app/test/network_profiles_widget_test.dart: every overlay stops before SSH adapter or device signing; explicit revision is displayed
+00:02 +19: /private/tmp/herdr-flutter-entry.YSQ3/app/test/network_profiles_widget_test.dart: Android runtime channel failure stops overlay before credentials or system dial
+00:02 +20: All tests passed!

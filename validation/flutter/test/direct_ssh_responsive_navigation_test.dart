@@ -75,19 +75,23 @@ void main() {
       expect(terminal, findsNothing);
       tester.view.physicalSize = Size(initialWidth == 980 ? 980 : 700, 900);
       await tester.pumpAndSettle();
-      await tapControl(tester, control('home-tab-1'));
+      await tapControl(tester, control('ssh-flow-nav-1').hitTestable());
       expect(tester.state(find.byType(DirectSshPage)), same(page));
       expect(tester.widget<TerminalView>(terminal).terminal, same(shell));
 
       if (initialWidth == 980) {
-        await tapControl(tester, find.byType(BackButton));
-        expect(openSsh.hitTestable(), findsOneWidget);
-        expect(control('home-ssh-closed'), findsNothing);
-      } else {
-        await tapAndWaitForOrdinaryDisconnect(tester);
-        await tapControl(tester, control('direct-return-home'));
-        expect(control('home-ssh-closed').hitTestable(), findsOneWidget);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(tester.widget<TerminalView>(terminal).terminal, same(shell));
+        await tapControl(tester, control('ssh-flow-nav-3').hitTestable());
+        expect(terminal, findsNothing);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(tester.widget<TerminalView>(terminal).terminal, same(shell));
       }
+      await tapAndWaitForOrdinaryDisconnect(tester);
+      await tapControl(tester, control('direct-return-home'));
+      expect(control('home-ssh-closed').hitTestable(), findsOneWidget);
       expect(find.byType(DirectSshPage, skipOffstage: false), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());

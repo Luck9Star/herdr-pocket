@@ -93,7 +93,14 @@ class HostTabs extends ChangeNotifier {
   /// Both visible tabs may observe; input belongs only to the selected tab.
   void select(String? id) {
     if (id != null && find(id) == null) return;
-    if (activeId == id) return;
+    if (activeId == id) {
+      final tab = active;
+      if (tab != null && !tab.inputEligible.value) {
+        tab.inputEligible.value = true;
+        notifyListeners();
+      }
+      return;
+    }
     final old = active;
     old?.inputEligible.value = false;
     if (_splitAvailable && splitId != null && id == splitId) {
@@ -145,8 +152,10 @@ class HostTabs extends ChangeNotifier {
     tab.inputEligible.value = false; tab.summaryLease?.close(); tab.visible.value = false;
     if (activeId == id) {
       final other = splitId == null ? null : find(splitId!);
-      other?.summaryLease?.invalidate(); other?.visible.value = false;
-      activeId = null; splitId = null; splitLeftId = null; // do not implicitly activate another host
+      // Keep an already displayed pane visible without transferring input.
+      activeId = other != null && other.visible.value ? other.id : null;
+      other?.layoutHidden.value = false;
+      splitId = null; splitLeftId = null;
     } else if (splitId == id) { splitId = null; splitLeftId = null; }
     _tabs.remove(tab); tab.dispose(); notifyListeners();
   }

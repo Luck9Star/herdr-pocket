@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:terminal_view/terminal_view.dart';
@@ -29,6 +30,8 @@ Future<void> tap(
   String key, {
   void Function()? beforeTap,
   bool requireEnabled = false,
+  bool stableHitPoint = false,
+  void Function(String, bool)? onObservation,
   Duration timeout = const Duration(seconds: 45),
 }) => tapControl(
   tester,
@@ -36,6 +39,8 @@ Future<void> tap(
   key,
   beforeTap: beforeTap,
   requireEnabled: requireEnabled,
+  stableHitPoint: stableHitPoint,
+  onObservation: onObservation,
   timeout: timeout,
 );
 
@@ -46,13 +51,33 @@ Future<void> tapControl(
   void Function()? beforeTap,
   bool requireEnabled = false,
   bool reveal = true,
+  bool stableHitPoint = false,
+  void Function(String, bool)? onObservation,
   Duration timeout = const Duration(seconds: 45),
 }) async {
+  if (stableHitPoint) {
+    await tapControlAtStablePoint(
+      tester,
+      finder,
+      name,
+      beforeTap: beforeTap,
+      reveal: reveal,
+      timeout: timeout,
+      onObservation: onObservation,
+    );
+    return;
+  }
   final deadline = DateTime.now().add(timeout);
   Rect? lastRect;
   var stable = 0;
+  var reportedChecking = false;
   while (DateTime.now().isBefore(deadline)) {
-    if (finder.evaluate().length == 1) {
+    final count = finder.evaluate().length;
+    if (count == 1) {
+      if (!reportedChecking) {
+        onObservation?.call('checking', false);
+        reportedChecking = true;
+      }
       if (reveal) await tester.ensureVisible(finder);
       await tester.pump(const Duration(milliseconds: 100));
       final enabled =
@@ -62,8 +87,19 @@ Future<void> tapControl(
       final rect = tester.getRect(finder);
       stable = enabled && hit ? (lastRect == rect ? stable + 1 : 1) : 0;
       lastRect = rect;
+      onObservation?.call(
+        !enabled
+            ? 'disabled'
+            : !hit
+            ? 'not_hit'
+            : stable < 2
+            ? 'unstable'
+            : 'ready',
+        stable >= 2,
+      );
       if (stable >= 2) break;
     } else {
+      onObservation?.call(count == 0 ? 'missing' : 'multiple', false);
       stable = 0;
       lastRect = null;
       await tester.pump(const Duration(milliseconds: 100));
@@ -73,6 +109,109 @@ Future<void> tapControl(
   if (stable < 2) fail('direct_ssh_control_not_ready_$name');
   expect(finder.hitTestable(), findsOneWidget);
   await tester.tap(finder);
+  await tester.pump(const Duration(milliseconds: 200));
+}
+
+// Used only for the second encrypted-key connect: a fixed screen point must
+// hit the same enabled button in two frames and immediately before one tap.
+Future<void> tapControlAtStablePoint(
+  WidgetTester tester,
+  Finder finder,
+  String name, {
+  void Function()? beforeTap,
+  required bool reveal,
+  required Duration timeout,
+  void Function(String, bool)? onObservation,
+}) async {
+  bool hits(Element element, Offset point) {
+    final object = element.renderObject;
+    if (object is! RenderBox || !object.hasSize || object.size.isEmpty)
+      return false;
+    final local = object.globalToLocal(point);
+    if (!(Offset.zero & object.size).contains(local)) return false;
+    final alignment = Alignment(
+      2 * local.dx / object.size.width - 1,
+      2 * local.dy / object.size.height - 1,
+    );
+    return finder
+        .hitTestable(at: alignment)
+        .evaluate()
+        .any((e) => identical(e, element));
+  }
+
+  final deadline = DateTime.now().add(timeout);
+  Element? candidate;
+  VoidCallback? action;
+  Offset? point;
+  var stable = false;
+  while (DateTime.now().isBefore(deadline)) {
+    final elements = finder.evaluate().toList();
+    if (elements.length != 1) {
+      if (candidate != null) {
+        onObservation?.call(elements.isEmpty ? 'missing' : 'multiple', false);
+        fail('direct_ssh_control_not_ready_$name');
+      }
+      candidate = null;
+      point = null;
+      onObservation?.call(elements.isEmpty ? 'missing' : 'multiple', false);
+    } else {
+      final element = elements.single;
+      if (candidate == null &&
+          reveal &&
+          finder.hitTestable().evaluate().isEmpty) {
+        await tester.ensureVisible(finder);
+      }
+      await tester.pump(const Duration(milliseconds: 100));
+      final current = finder.evaluate().toList();
+      if (current.length != 1 || !identical(current.single, element)) {
+        if (candidate != null) fail('direct_ssh_control_not_ready_$name');
+        candidate = null;
+        point = null;
+        continue;
+      }
+      final enabledAction = tester.widget<FilledButton>(finder).onPressed;
+      final centerHit = finder.hitTestable().evaluate().length == 1;
+      if (candidate != null) {
+        if (!identical(candidate, element) ||
+            action != enabledAction ||
+            enabledAction == null ||
+            point == null ||
+            !hits(element, point)) {
+          onObservation?.call(enabledAction == null ? 'disabled' : 'not_hit', false);
+          fail('direct_ssh_control_not_ready_$name');
+        }
+        stable = true;
+        onObservation?.call('ready', true);
+        break;
+      }
+      candidate = enabledAction != null && centerHit ? element : null;
+      action = enabledAction;
+      point = candidate == null ? null : tester.getCenter(finder);
+      onObservation?.call(
+        enabledAction == null
+            ? 'disabled'
+            : !centerHit
+            ? 'not_hit'
+            : 'unstable',
+        false,
+      );
+    }
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+  beforeTap?.call();
+  final current = finder.evaluate().toList();
+  if (!stable ||
+      point == null ||
+      candidate == null ||
+      current.length != 1 ||
+      !identical(current.single, candidate) ||
+      tester.widget<FilledButton>(finder).onPressed != action ||
+      action == null ||
+      !hits(candidate, point)) {
+    onObservation?.call('not_hit', false);
+    fail('direct_ssh_control_not_ready_$name');
+  }
+  await tester.tapAt(point);
   await tester.pump(const Duration(milliseconds: 200));
 }
 
@@ -96,19 +235,43 @@ Future<void> openDirectSshFromHome(WidgetTester tester) async {
 }
 
 bool hasMarker(Terminal terminal, String marker) {
-  final bytes = marker.codeUnits;
+  final expected = marker.codeUnits;
+  if (expected.isEmpty) return false;
+  final candidate = <int>[];
   for (var y = 0; y < terminal.viewHeight; y++) {
     final line = terminal.buffer.lines[y];
-    for (var x = 0; x + bytes.length <= terminal.viewWidth; x++) {
-      if (List.generate(
-            bytes.length,
-            (i) => line.getCodePoint(x + i),
-          ).join(',') ==
-          bytes.join(','))
+    // Only a terminal soft wrap continues the previous line. Hard newlines
+    // must not combine unrelated output into a successful marker.
+    if (!line.isWrapped) candidate.clear();
+    for (var x = 0; x < terminal.viewWidth; x++) {
+      candidate.add(line.getCodePoint(x));
+      if (candidate.length > expected.length) candidate.removeAt(0);
+      if (candidate.length == expected.length &&
+          List.generate(
+            expected.length,
+            (i) => candidate[i] == expected[i],
+          ).every((match) => match)) {
         return true;
+      }
     }
   }
   return false;
+}
+
+Future<void> waitForEncryptedIdleTerminal(
+  WidgetTester tester,
+  Terminal terminal, {
+  required double Function() keyboardInset,
+  required void Function() observe,
+}) async {
+  final view = find.byType(TerminalView);
+  await until(tester, () {
+    observe();
+    return view.hitTestable().evaluate().length == 1 &&
+        control('direct-disconnect').hitTestable().evaluate().length == 1 &&
+        identical(tester.widget<TerminalView>(view).terminal, terminal) &&
+        keyboardInset() == 0;
+  }, timeoutReason: 'direct_ssh_encrypted_idle_ime_timeout');
 }
 
 Future<void> verifyOrdinaryMobileControls(
@@ -391,6 +554,335 @@ Future<void> runDirectSshUi(
   step('peer_confirmed');
   binding.reportData = report;
   step('report_data_set');
+}
+
+Future<void> runEncryptedDirectSshUi(
+  WidgetTester tester, {
+  required IntegrationTestWidgetsFlutterBinding binding,
+  required Map<String, dynamic> config,
+  required String directory,
+  required String platform,
+  required void Function(String) step,
+  required void Function(String, Object) publish,
+  required Future<void> Function(String) capture,
+}) async {
+  Future<void> checkpoint(String phase) async {
+    publish('encrypted-stage.json', {'phase': phase});
+    final confirmation = File('$directory/encrypted-$phase-confirmed.json');
+    await until(tester, confirmation.existsSync);
+    expect(jsonDecode(confirmation.readAsStringSync()), {
+      'phase': phase,
+      'serverEvidenceAccepted': true,
+    });
+  }
+
+  String? lastDiagnostic;
+  void diagnostic(String phase, [Terminal? terminal]) {
+    final views = find.byType(TerminalView);
+    final toggle = control('direct-keyboard-toggle');
+    final disconnect = control('direct-disconnect');
+    final enter = control('direct-key-enter');
+    final surface = ui.PlatformDispatcher.instance.implicitView!;
+    final oneView = views.evaluate().length == 1;
+    final oneToggle = toggle.evaluate().length == 1;
+    final oneEnter = enter.evaluate().length == 1;
+    final tooltip = oneToggle
+        ? tester.widget<IconButton>(toggle).tooltip
+        : null;
+    final rect = oneView ? tester.getRect(views) : null;
+    final enterRect = oneEnter ? tester.getRect(enter) : null;
+    final value = {
+      'phase': phase,
+      'terminalCount': views.evaluate().length,
+      'terminalHit': oneView && views.hitTestable().evaluate().length == 1,
+      'disconnectHit': disconnect.hitTestable().evaluate().length == 1,
+      'toggleHit': oneToggle && toggle.hitTestable().evaluate().length == 1,
+      'enterHit': oneEnter && enter.hitTestable().evaluate().length == 1,
+      'headerHit': find.text('普通 SSH').hitTestable().evaluate().isNotEmpty,
+      'toggleState': tooltip == '打开键盘'
+          ? 'open'
+          : tooltip == '收起键盘'
+          ? 'close'
+          : tooltip == null
+          ? 'missing'
+          : 'other',
+      'insetBottomPx': surface.viewInsets.bottom.round(),
+      'viewSizePx': [
+        surface.physicalSize.width.round(),
+        surface.physicalSize.height.round(),
+      ],
+      'terminalRectPt': rect == null
+          ? null
+          : [
+              rect.left.round(),
+              rect.top.round(),
+              rect.width.round(),
+              rect.height.round(),
+            ],
+      'enterRectPt': enterRect == null
+          ? null
+          : [
+              enterRect.left.round(),
+              enterRect.top.round(),
+              enterRect.width.round(),
+              enterRect.height.round(),
+            ],
+      'columns': terminal?.viewWidth ?? 0,
+      'rows': terminal?.viewHeight ?? 0,
+      'terminalFocused':
+          oneView &&
+          (tester.widget<TerminalView>(views).focusNode?.hasFocus ?? false),
+      'testInputRegistered': tester.testTextInput.isRegistered,
+      'testClientSet': tester.testTextInput.setClientArgs != null,
+      'welcomeVisible':
+          terminal != null && hasMarker(terminal, 'POCKET-ANDROID-READY'),
+      'echoVisible':
+          terminal != null && hasMarker(terminal, 'POCKET-ANDROID-SSH-OK'),
+    };
+    final encoded = jsonEncode(value);
+    if (encoded != lastDiagnostic) {
+      publish('encrypted-diagnostic.json', value);
+      lastDiagnostic = encoded;
+    }
+  }
+
+  Future<void> pasteKey() async {
+    try {
+      await tester.runAsync(
+        () => Clipboard.setData(
+          ClipboardData(text: config['privateKey'] as String),
+        ),
+      );
+      await tap(tester, 'direct-paste-key');
+      await until(
+        tester,
+        () =>
+            tester
+                .widget<TextField>(control('direct-secret'))
+                .controller!
+                .text ==
+            config['privateKey'],
+      );
+    } finally {
+      await tester.runAsync(
+        () => Clipboard.setData(const ClipboardData(text: '')),
+      );
+      final cleared = await tester.runAsync(
+        () => Clipboard.getData(Clipboard.kTextPlain),
+      );
+      expect(cleared?.text?.isEmpty ?? true, isTrue);
+      // Let Android's transient clipboard preview expire before any capture.
+      await tester.pump(const Duration(seconds: 8));
+    }
+  }
+
+  step('encrypted_home');
+  await app.main();
+  await until(
+    tester,
+    () =>
+        find.byType(HostCatalogPage).evaluate().length == 1 &&
+        control('hosts-direct-ssh').evaluate().isNotEmpty,
+  );
+  final home = tester.widget<HostCatalogPage>(find.byType(HostCatalogPage));
+  expect(home.catalog, isNull);
+  expect(home.adapterFactory, isNull);
+  expect(home.keys, isNull);
+  await capture('home');
+  await openDirectSshFromHome(tester);
+  for (final entry in {
+    'direct-host': '127.0.0.1',
+    'direct-port': '${config['port']}',
+    'direct-user': 'fixture',
+  }.entries) {
+    await tester.ensureVisible(control(entry.key));
+    await tester.enterText(control(entry.key), entry.value);
+    await tester.pump();
+  }
+  expect(control('direct-secret'), findsNothing);
+  step('encrypted_probe');
+  await tap(tester, 'direct-probe');
+  await until(
+    tester,
+    () => control('direct-trust-key').evaluate().length == 1,
+  );
+  expect(
+    find.textContaining(config['fingerprint'] as String),
+    findsOneWidget,
+  );
+  step('encrypted_review');
+  await checkpoint('review');
+  await tap(tester, 'direct-trust-key');
+  await tap(tester, 'direct-auth-key');
+  await pasteKey();
+  final passphrase = control('direct-passphrase');
+  expect(tester.widget<TextField>(passphrase).obscureText, isTrue);
+  await tester.ensureVisible(passphrase);
+  await tester.enterText(passphrase, 'invalid-fixture-passphrase');
+  await tester.pump();
+  await tap(tester, 'direct-connect', requireEnabled: true);
+  await until(
+    tester,
+    () => find.textContaining('私钥无法解析或解密').evaluate().isNotEmpty,
+  );
+  final dynamic state = tester.state(find.byType(DirectSshPage));
+  expect(state.secret.text.isEmpty, isTrue);
+  expect(state.passphrase.text.isEmpty, isTrue);
+  step('encrypted_rejected');
+  await checkpoint('rejected');
+  await pasteKey();
+  await tester.ensureVisible(passphrase);
+  await tester.enterText(passphrase, config['passphrase'] as String);
+  config.remove('privateKey');
+  config.remove('passphrase');
+  await tester.pump();
+  expect(tester.widget<TextField>(passphrase).obscureText, isTrue);
+  step('encrypted_connect');
+  String? lastConnectDiagnostic;
+  void connectDiagnostic(String status, bool stable) {
+    final button = control('direct-connect');
+    final oneButton = button.evaluate().length == 1;
+    final rect = oneButton ? tester.getRect(button) : null;
+    final surface = ui.PlatformDispatcher.instance.implicitView!;
+    final value = {
+      'status': status,
+      'stable': stable,
+      'enabled':
+          oneButton && tester.widget<FilledButton>(button).onPressed != null,
+      'hit': oneButton && button.hitTestable().evaluate().length == 1,
+      'rectPt': rect == null
+          ? null
+          : [
+              rect.left.round(),
+              rect.top.round(),
+              rect.width.round(),
+              rect.height.round(),
+            ],
+      'viewSizePx': [
+        surface.physicalSize.width.round(),
+        surface.physicalSize.height.round(),
+      ],
+      'viewSizePt': [
+        (surface.physicalSize.width / surface.devicePixelRatio).round(),
+        (surface.physicalSize.height / surface.devicePixelRatio).round(),
+      ],
+      'insetBottomPx': surface.viewInsets.bottom.round(),
+      'privateKeyEmpty': state.secret.text.isEmpty,
+      'passphraseEmpty': state.passphrase.text.isEmpty,
+      'keyAuth': state.keyAuth == true,
+      'targetValid': state.valid == true,
+      'busy': state.busy == true,
+      'reviewRequired': state.hostKeyReviewRequired == true,
+      'fingerprintPresent': state.fingerprint != null,
+      'targetMatches': state.checkedTarget == state.target,
+      'credentialReady': state.mobileCredentialReady == true,
+      'canConnect': state.canConnect == true,
+    };
+    final encoded = jsonEncode(value);
+    if (encoded != lastConnectDiagnostic) {
+      publish('encrypted-connect-diagnostic.json', value);
+      lastConnectDiagnostic = encoded;
+    }
+  }
+
+  await tap(
+    tester,
+    'direct-connect',
+    requireEnabled: true,
+    stableHitPoint: true,
+    onObservation: connectDiagnostic,
+  );
+  step('encrypted_wait_terminal');
+  await until(tester, () {
+    diagnostic('encrypted_wait_terminal');
+    return find.byType(TerminalView).evaluate().length == 1;
+  });
+  final terminalView = find.byType(TerminalView);
+  final terminal = tester.widget<TerminalView>(terminalView).terminal;
+  step('encrypted_wait_welcome');
+  await until(tester, () {
+    diagnostic('encrypted_wait_welcome', terminal);
+    return hasMarker(terminal, 'POCKET-ANDROID-READY');
+  });
+  expect(state.secret.text.isEmpty, isTrue);
+  expect(state.passphrase.text.isEmpty, isTrue);
+  final surface = ui.PlatformDispatcher.instance.implicitView!;
+  step('encrypted_wait_idle_ime');
+  await waitForEncryptedIdleTerminal(
+    tester,
+    terminal,
+    keyboardInset: () => surface.viewInsets.bottom,
+    observe: () => diagnostic('encrypted_wait_idle_ime', terminal),
+  );
+  step('encrypted_keyboard_show');
+  try {
+    await toggleOrdinaryKeyboard(tester, show: true);
+  } finally {
+    diagnostic('encrypted_keyboard_show', terminal);
+  }
+  step('encrypted_input');
+  diagnostic('encrypted_input', terminal);
+  tester.testTextInput.enterText('hp-check');
+  await tester.pump();
+  step('encrypted_enter');
+  try {
+    await tapControl(tester, control('direct-key-enter'), 'terminal-enter');
+  } finally {
+    diagnostic('encrypted_enter', terminal);
+  }
+  step('encrypted_wait_echo');
+  await until(tester, () {
+    diagnostic('encrypted_wait_echo', terminal);
+    return hasMarker(terminal, 'POCKET-ANDROID-SSH-OK');
+  });
+  step('encrypted_keyboard_hide');
+  try {
+    await toggleOrdinaryKeyboard(tester, show: false);
+  } finally {
+    diagnostic('encrypted_keyboard_hide', terminal);
+  }
+  step('encrypted_capture');
+  diagnostic('encrypted_capture', terminal);
+  await capture('connected');
+  step('encrypted_disconnect');
+  await tapControl(
+    tester,
+    control('direct-disconnect'),
+    'direct-disconnect',
+    reveal: false,
+  );
+  await until(tester, () => find.byType(TerminalView).evaluate().isEmpty);
+  expect(state.secret.text.isEmpty, isTrue);
+  expect(state.passphrase.text.isEmpty, isTrue);
+  expect(find.textContaining('已断开'), findsOneWidget);
+  await capture('disconnected');
+  expect(tester.takeException(), isNull);
+  final report = {
+    'schemaVersion': 1,
+    'platform': platform,
+    'homepageEntry': true,
+    'fingerprintMatched': true,
+    'explicitTrustRequired': true,
+    'privateKeyPasted': true,
+    'passphraseObscured': true,
+    'wrongPassphraseRejectedLocally': true,
+    'realTerminalView': true,
+    'normalTextInputCommit': true,
+    'remoteEchoVisible': true,
+    'disconnectUiConfirmed': true,
+    'credentialsCleared': true,
+    'privateInputRemoved': true,
+    'clipboardCleared': true,
+    'physicalImeVerified': false,
+  };
+  publish('encrypted-result.json', report);
+  final confirmation = File('$directory/encrypted-peer-confirmed.json');
+  await until(tester, confirmation.existsSync);
+  expect(jsonDecode(confirmation.readAsStringSync()), {
+    'protocolAccepted': true,
+    'peerClosedBeforeDriverExit': true,
+  });
+  binding.reportData = report;
 }
 
 Future<void> runDirectSshRotationUi(

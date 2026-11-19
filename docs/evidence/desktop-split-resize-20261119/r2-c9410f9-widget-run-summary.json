@@ -1,0 +1,54 @@
+{
+ "schemaVersion": 1,
+ "kind": "console-log-summary",
+ "replaces": [
+  "r2-c9410f9-split-test.log",
+  "r2-c9410f9-analyze.log"
+ ],
+ "reason": "*.log excluded by .gitignore:35; summaries verified against the originals, which stay off-repo",
+ "project": "validation/flutter",
+ "sourceSHA": "c9410f96703041113414b31eb4bf5de98f3bbc57",
+ "sync": "lib/ and test/ matched the worktree file-for-file before running (single added capture line in the temporary test copy for the new-full screenshot)",
+ "sources": [
+  {
+   "role": "split-test",
+   "originalSha256": "71bd7f4be92a92fbcf1bdcc8a9fde32bd8b890bade84e2c7a4054409a33accf8",
+   "originalBytes": 559
+  },
+  {
+   "role": "analyze",
+   "originalSha256": "e7ad047354eb4220568ee80428723c0536285145635aa4925aff24fd9b97b120",
+   "originalBytes": 64551
+  }
+ ],
+ "commands": [
+  {
+   "role": "split-test",
+   "argv": [
+    "flutter",
+    "test",
+    "test/host_split_widget_test.dart",
+    "--no-pub"
+   ],
+   "env": {
+    "HERDR_SPLIT_CAPTURE": "dedicated output directory"
+   },
+   "exitCode": 0,
+   "resultLine": "00:03 +1: All tests passed!",
+   "tests": {
+    "passed": 1,
+    "failed": 0
+   }
+  },
+  {
+   "role": "analyze",
+   "argv": [
+    "flutter",
+    "analyze",
+    "--no-pub"
+   ],
+   "exitCode": 0,
+   "resultLine": "No issues found! (ran in 1.7s)"
+  }
+ ]
+}

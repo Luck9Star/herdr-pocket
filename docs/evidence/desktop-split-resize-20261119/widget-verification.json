@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "framework": {
+    "version": "3.47.9",
+    "commit": "c197ca5199e9ee5661e865596c9c07294dfab51c"
+  },
+  "environment": {
+    "host": "macOS arm64",
+    "mode": "Flutter Widget with synthetic adapters",
+    "devicePixelRatio": 1
+  },
+  "baseline": {
+    "sourceSHA": "aecd0d753533ac6019b9ffaa630c2197d9256880",
+    "widgetTestExit": 1,
+    "at1183SplitEntryPresent": true,
+    "onReturn1440SecondPanePresent": false,
+    "exceptions": [
+      "semantics_render_ancestry",
+      "scroll_controller_multiple_views"
+    ]
+  },
+  "candidate": {
+    "sourceSHA": "3ff4d230dcdec08b8e8b595c3251396ce8873c15",
+    "widgetSuite": {
+      "passed": 607,
+      "skipped": 23,
+      "failed": 0
+    },
+    "analyzeNoPubExit": 0,
+    "at1183SplitEntryPresent": false,
+    "onReturn1440SecondPanePresent": true
+  },
+  "pngSanitization": {
+    "removedChunks": [
+      "sBIT",
+      "sRGB"
+    ],
+    "idatPreserved": true,
+    "byteIdenticalDecodedRgba": true
+  },
+  "captures": [
+    {
+      "file": "before-1440-start.png",
+      "width": 1440,
+      "height": 900,
+      "rawCaptureSha256": "90549928e2a82adafa5b9b86b5e711ca730cd3dad7553610d2064ed2907b05a5",
+      "archiveSha256": "ff9ba675d86c04a62843ec8abc407ccfd8802893ff337b3c0f91726223f4fda0",
+      "rgbaSha256": "e41532d2a3c226b2a42d09680ae738718fbb01238c6b69edfb17ef15ff10242d"
+    },
+    {
+      "file": "after-1440-start.png",
+      "width": 1440,
+      "height": 900,
+      "rawCaptureSha256": "ab79724d97fd826ff40e32bc2fd7898bd39147c887ab08970becac994efe1e76",
+      "archiveSha256": "9cb64fbcc58ae918e410e1f5a626bc50f7f68ab6b932fbb6f4356280c513f6d2",
+      "rgbaSha256": "1eba3221acf663fde457b992c4b766f863766f48ba7948667696f08c2d638c88"
+    },
+    {
+      "file": "before-1183-critical.png",
+      "width": 1183,
+      "height": 900,
+      "rawCaptureSha256": "b5e124f0645a04b4455d335063708aba2f082a0111f98d366cecfa784a009de3",
+      "archiveSha256": "bf003f571886adfeabe0887071f7334420fe0930581c8a303ac56264f113050b",
+      "rgbaSha256": "5c10c62b7708bb6807cf495aa84804185cd47fb9e46aeef3cdf605438ee81c3d"
+    },
+    {
+      "file": "after-1183-critical.png",
+      "width": 1183,
+      "height": 900,
+      "rawCaptureSha256": "07f59689a885fef7c757480d51021cb4f57e6b8d2375806c7a9ff5ad4c548e14",
+      "archiveSha256": "851e85005d304799abddddc2972216992d65b627c3aeafc234d2f7e4ce2a1528",
+      "rgbaSha256": "5527a477764179925d6fcdc846b5f06b7c89b3ba39611901c837cf88b4757926"
+    },
+    {
+      "file": "before-700-narrow.png",
+      "width": 700,
+      "height": 900,
+      "rawCaptureSha256": "c011a80a667954ea19fd0f86509ba96e8f61574a1bee7e5eef4e15d5d0df71d2",
+      "archiveSha256": "450f0fc470b8b17951104560e128864529ae1ea142b7e05e538a59c9095c32e1",
+      "rgbaSha256": "78bc31c5a97008bf58c5124c131f9cebcb49b6dea608fcba0f761e79956d4756"
+    },
+    {
+      "file": "after-700-narrow.png",
+      "width": 700,
+      "height": 900,
+      "rawCaptureSha256": "be86bc03de62ecf915225fb85dd5b28d55212ff023e55c8983745fb7fc240ec3",
+      "archiveSha256": "3e9bf233424b91f3d9e90e9756f7e82313f730250142a9bb4d3cfeaa1c7a4320",
+      "rgbaSha256": "21d6ccd504aa41972acd98a40c700aab602de27568650f0a2675df0c2f4529d3"
+    },
+    {
+      "file": "before-1440-return.png",
+      "width": 1440,
+      "height": 900,
+      "rawCaptureSha256": "aa9738b3c2c45b353405c8d39fc6c6c606e30f2f882baec6989c78fb4ea7056b",
+      "archiveSha256": "c3315ac3175c3871c986e19f585130ffddecc8134a799cd2cdd47f5633b378a9",
+      "rgbaSha256": "829d96a0bc4a8bf50728949e250bc01ae9a48c500ddb433064def3c42066b0e0"
+    },
+    {
+      "file": "after-1440-return.png",
+      "width": 1440,
+      "height": 900,
+      "rawCaptureSha256": "d338a523304deb26af3f0857bcdf041bd8e3fd161b6ed18dd66e7b9ea39f70f3",
+      "archiveSha256": "cbfba5b884172640d5dfae85948bbe33335bef43560a1603ec0d3e184fc8f35d",
+      "rgbaSha256": "c6755e5a24ebb18d6c2e3a0b15b60400aa9973aa99dfe7dc56df01126c0b6349"
+    }
+  ]
+}

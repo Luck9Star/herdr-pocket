@@ -57,6 +57,16 @@ R7 验收范围为受控回环密码认证与 XCTest 输入。活动终端在三
 
 [后续活动终端与切页验证](73-mobile-ssh-terminal-navigation.md)记录两壳在本地回环中的看板、网络和设置往返，以及同尺寸键盘开合对照。
 
+## Flutter Android 加密私钥独立验收
+
+2026-11-19，[R5 作业 135408718366](https://github.com/Luck9Star/herdr-pocket/actions/runs/44479715559/job/135408718366)在 Android API 35 模拟器通过加密 OpenSSH Ed25519 私钥路径，源码为 `36a9228df84e344ff9f9f4b4e2fecd92dd177246`。此前上表的 Flutter Android R2 已覆盖普通密码和主机换钥；R5 是独立私钥单项，并未重复换钥。
+
+| 入口和认证 | 指纹确认与错误口令 | 正确私钥与会话 | 图像与清理 |
+| --- | --- | --- | --- |
+| 真实首页进入，粘贴临时加密私钥并输入遮罩口令 | 首次核对前和错误口令后，首条探测均为零认证、零 PTY；错误口令本地拒绝 | 第二条连接仅一次公钥认证、一次 PTY 和 shell，服务端记录 9 字节输入与回显，主动断开且会话在驱动退出前关闭 | Flutter 和设备原图均通过独立 OCR 检查；凭据、剪贴板、临时输入、密钥、包、reverse、forward 和 fixture 清理均获记录 |
+
+[证据索引、原图、结构化结果、哈希及 R1–R4 停点](evidence/flutter-android-encrypted-key-r5-20261119/README.md)。[原始 Actions 工件 14508621605](https://github.com/Luck9Star/herdr-pocket/actions/runs/44479715559/artifacts/14508621605) 的 ZIP SHA256 为 `b796cc238e1775384c836242d3212ec8d03c1d024267a43462fcaf3bd178199f`。终端输入使用 Flutter 测试文本输入；物理键盘、系统中文 IME、实体设备和跨网不属于该次通过范围。
+
 ## R22 Android 设备证据
 
 两次作业使用受控 API 35 x86_64 模拟器与回环 SSH，均完成普通连接、主机密钥变化、终端回显和断开。两次使用不同源码，原始 ZIP 已完整重新下载并计算 SHA256。[可复核的运行、工件及内部结果索引](evidence/mobile-ssh-auth-r23/r22-actions.json)

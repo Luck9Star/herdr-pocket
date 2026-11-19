@@ -1,11 +1,11 @@
 # M0 证据归档：依赖来源、可重跑步骤与降级行为
 
-本文对应 [roadmap](04-roadmap.md) M0 三条未勾条目的证据归档（[04-roadmap.md:46-48](04-roadmap.md)）：关键依赖来源与未验证边界、可重放命令与通过/失败/未执行分记、能力缺失时的降级行为。按 [回填口径](04-roadmap.md)（五维度分记、证据分级），本文只归档证据，不改勾选状态；勾选由 roadmap 维护任务决定。
+本文归档 M0-02 至 M0-04 的关键依赖来源与未验证边界、可重跑命令与结果、能力缺失时的降级行为。各项验收状态见[路线图 M0](04-roadmap.md#m0--调研归档与证据整理)。
 
 口径说明：
 
-- 版本一律取自仓库锁文件或固定源 manifest；`核查日期` 取源文件内 `checked_at`/`asOf` 字段，无显式日期的取该文件 git 最后提交日（2026-11-10 查）。
-- 许可证结论引用 [许可与分发审查](17-license-and-distribution-review.md)（下称 doc17），本文不复制其声明表，只记录证据视角（来源、版本、核查方式、边界）。
+- 版本取自仓库锁文件、固定来源或指定 CI 批次的日志及工件。核查日期沿用来源的 `checked_at`／`asOf` 或注明本次复核日期。历史记录无显式日期时使用来源文件的 Git 提交日期。
+- 许可证列记录对应版本的上游声明及核查范围。实际产物的分发审查见 [doc17](17-license-and-distribution-review.md)。
 - 「未验证边界」= 该依赖什么没验过、为什么没验；参考项目采用某方案不代替本项目运行结果（[04-roadmap.md:50](04-roadmap.md)）。
 
 ## 1. 关键依赖证据归档表
@@ -22,7 +22,7 @@
 | @tauri-apps/api / cli | 2.12.4（[package.json](../validation/tauri/package.json)，lock v3） | npm registry | 同上（doc17:35 一并记录） | 2026-11-07 | npm lock 固定 | 同上 |
 | @xterm/xterm | 6.0.0（lock 固定） | npm registry | MIT（doc17:36） | 2026-11-07 | 固定版本 LICENSE 与本地安装包文本核对（doc17:36） | 打包 minified JS 仍须保留版权；现有 package 脚本未显式收集该文件 |
 | @xterm/addon-unicode-graphemes | 0.4.0，来源提交 `f447274f430fd22513f6adbf9862d19524471c04` | npm registry（doc17:134） | MIT（独立版权信息） | 2026-11-07 | tarball SHA-512 与 npm lock 比对（doc17:134） | 上游标记实验性；grapheme 行为以实测为准 |
-| vite | 8.3.5（devDependencies） | npm registry | 未确认（doc17 未单列，未另行核查） | — | 仅 lock 固定 | 许可证与声明收集未做 |
+| vite | 8.3.5（devDependencies），tag 对应 `981f07fa4580fb88b333c4450431e4715d2a0b82` | [npm 元数据](https://registry.npmjs.org/vite/8.3.5) · [官方 tarball](https://registry.npmjs.org/vite/-/vite-8.3.5.tgz) · [本仓 npm lock](../validation/tauri/package-lock.json#L1015-L1020) | 核心 MIT。随 Vite 发布的依赖声明列 BSD-2-Clause、CC0-1.0、ISC、MIT | 2026-11-19 | tarball SHA-256 `7f22c2a78d15bac5ad755c5f413806048db453604fa0c293f6a0613890dc7c17`，SHA-512 integrity 与注册表和 lock 一致。`package/LICENSE.md` 与[固定源码许可](https://github.com/vitejs/vite/blob/981f07fa4580fb88b333c4450431e4715d2a0b82/packages/vite/LICENSE.md#L1-L30)逐字节一致，SHA-256 `a22152baa1aef74402443008e767e7c689a524c0909d19b0431d97f5ab066a13`。第 1–24 行是核心许可，第 26 行起是实际 npm 包的随附依赖声明 | 核查范围为 Vite 工具包，最终应用产物的依赖和声明待按实际输出核对 |
 
 ### 1.2 Rust crates（transport-rust / tauri / ssh / android-network-source 等 Cargo.toml 锁定）
 
@@ -33,8 +33,8 @@
 | tokio | =1.54.1（transport/tauri/ssh）；portable-stream 单独锁 =1.53.1 | crates.io | MIT/Apache 双许可主干（doc17:39 初步元数据） | 2026-11-07 | lock + registry 元数据抽查（doc17:39,41） | 初步元数据核对，非逐包全文复核 |
 | serde / serde_json | =1.0.229 / =1.0.154 | crates.io | 同上 | 2026-11-07 | 同上 | 同上 |
 | base64ct / zeroize / libc | =1.8.3 / =1.9.1 / 0.2.191（doc17:39） | crates.io | MIT/Apache/BSD 主干 | 2026-11-07 | 同上 | 同上 |
-| jni | =0.21.1（android-network-source、flutter-network-runtime） | crates.io | 未确认（doc17 未单列） | — | 仅 lock 固定 | 许可证未核查 |
-| lock 覆盖范围 | transport lock 180 条 / tauri lock 515 条 | — | — | 2026-11-07 | 本机 registry manifest 覆盖抽查（doc17:41） | 覆盖率≠运行时链接数；缺失包含 Windows/Linux GUI、WASM、Android 目标项，须各平台实际构建补齐（doc17:41） |
+| jni | =0.21.1，tag 对应 `09a5911358ffa846b5c85451c050a0e64669e863` | [crates.io 元数据](https://crates.io/api/v1/crates/jni/0.21.1) · [官方 crate](https://static.crates.io/crates/jni/jni-0.21.1.crate) · [Android 探针 lock](../validation/android-network-source/Cargo.lock#L46-L50) · [Flutter runtime lock](../validation/flutter-network-runtime/Cargo.lock#L908-L912) | MIT OR Apache-2.0。[固定清单](https://github.com/jni-rs/jni-rs/blob/09a5911358ffa846b5c85451c050a0e64669e863/Cargo.toml#L12)及元数据写作 `MIT/Apache-2.0`，[随包 README](https://github.com/jni-rs/jni-rs/blob/09a5911358ffa846b5c85451c050a0e64669e863/README.md#L28-L34)明确可任选其一 | 2026-11-19 | crate SHA-256 `1a87aa2bb7d2af34197c04845522473242e1aa17c12f4935d5856491a7fb8c97`，与注册表及两份 lock 一致。`.cargo_vcs_info.json` 指向相同提交。[LICENSE-MIT](https://github.com/jni-rs/jni-rs/blob/09a5911358ffa846b5c85451c050a0e64669e863/LICENSE-MIT) 和 [LICENSE-APACHE](https://github.com/jni-rs/jni-rs/blob/09a5911358ffa846b5c85451c050a0e64669e863/LICENSE-APACHE) 与固定源码逐字节一致 | 核查范围为 `jni` crate，传递依赖、实际 Android 链接和随包声明待按产物核对 |
+| lock 覆盖范围 | 历史抽查 transport lock 180 条 / tauri lock 515 条 | [doc17 抽查记录](17-license-and-distribution-review.md#2-两-gui-实际终端ssh-与-crypto) | — | 2026-11-07 | 本机 registry manifest 覆盖抽查（doc17:41） | 覆盖率≠运行时链接数；缺失包含 Windows/Linux GUI、WASM、Android 目标项，须各平台实际构建补齐（doc17:41） |
 
 ### 1.3 三网 native 候选与补丁（`validation/native/`）
 
@@ -56,12 +56,27 @@
 | 组件 | 版本或 commit | 来源 | 许可证 | 核查日期 | 核查方式 | 未验证边界 |
 | --- | --- | --- | --- | --- | --- | --- |
 | BouncyCastle | `org.bouncycastle:bcprov-jdk18on:1.86` | Maven + [pairing/sources.json](../validation/pairing/sources.json) | MIT（doc17:63） | 2026-11-05 | LICENSE 原文与仓库 notice 语义核对（HTML↔Markdown 不要求逐字） | 未证明硬件 Keystore 行为（doc17:63 原口径） |
-| zxing 扫码 | `zxing-android-embedded:4.3.0` + `zxing core:3.5.3` | github journeyapps/zying（[pairing/native/camera/sources.json](../validation/pairing/native/camera/sources.json)） | 均 Apache-2.0（doc17:64） | 2026-11-05 | 固定 COPYING/LICENSE + artifact 来源追溯；APK 检查器强制唯一一份且 hash 一致 | — |
+| zxing 扫码 | `zxing-android-embedded:4.3.0` + `zxing core:3.5.3` | Maven Central AAR/JAR 与上游固定 tag（[扫码来源清单](../validation/pairing/native/camera/sources.json)） | 均 Apache-2.0（doc17:64） | 2026-11-06（来源清单） | 固定 COPYING/LICENSE + artifact SHA-256；APK 检查器要求声明唯一且与源哈希一致 | 来源复核未运行真机相机，完整 Gradle 传递依赖按实际产物核对（doc17:65） |
 | pyca/cryptography | 46.0.3 | github.com/pyca/cryptography（pairing/sources.json） | Apache-2.0 OR BSD-3-Clause | 2026-11-05（checked_at） | 固定官方 46.0.3 文档双查（context7 + 官网） | fixture 公钥随机生成即弃，不对应用户身份（pairing/README.md:26） |
 | Android KeyStore/KeyMint | API 35 模拟器（软件 KeyMint）；Keystore 线程自 `onCreate` 启动（commit `5959b0d`） | Android 平台 API | 平台条款 | 2026-11-08（docs/56 记录） | 不注册 JCE provider 的三个生产文件仪器化验证，CI 产物为准（[56-project-status-and-handoff.md:32](56-project-status-and-handoff.md)） | **模拟器软件 KeyMint 不构成硬件隔离结论**；硬件 KeyStore 隔离未做（docs/56:66 遗留台账） |
 | Apple CryptoKit / Keychain | iOS 15 compile target / macOS SDK 26 本地编译；ThisDeviceOnly | Apple 平台 API | 平台条款 | 2026-11-05 | 官方 JSON 文档独立核对（pairing/sources.json apple 节） | 仅 memory backend 探针，系统 Keychain 未实例化；iPhone 签名安装、锁屏、重启未验（[15-mobile-gui-validation.md:42](15-mobile-gui-validation.md)） |
-| herdr（协议对端） | 0.9.5 / 协议 22，固定 commit `2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01` | github.com/herdrdev/herdr（[transport-rust/README.md:45-47](../validation/transport-rust/README.md)；运行时校验 `--version`=herdr 0.9.5，[blocked_fixture_probe.py:61](../validation/remote-harness/blocked_fixture_probe.py)） | 未确认（doc17 未单列） | 2026-11-08 | CI 下载真实二进制并校验版本/协议号（blocked_fixture.py:79 断言 0.9.5+protocol 22） | 许可证未核查；仅 loopback 隔离 harness，用户主机未接入 |
-| CI sshd（OpenSSH） | runner 自带，未锁版本 | GitHub runner 预装 | 未确认 | — | 查证 ssh-validation.yml 与 remote-harness README，无版本锁定记录 | 版本漂移未管控；隔离靠配置（127.0.0.1 高端口、禁 PTY/密码与交互认证/agent forwarding，[remote-harness/README.md:10-15](../validation/remote-harness/README.md)） |
+| herdr（协议对端） | 0.9.5 / 协议 22，固定 commit `2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01` | [v0.9.5 release](https://github.com/herdrdev/herdr/releases/tag/v0.9.5) · [固定源码 tarball](https://codeload.github.com/herdrdev/herdr/tar.gz/2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01) · [本仓协议证据](../validation/transport-rust/README.md) | 项目根 [LICENSE](https://github.com/herdrdev/herdr/blob/2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01/LICENSE) 与 [Cargo.toml](https://github.com/herdrdev/herdr/blob/2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01/Cargo.toml#L2-L8) 均为 Apache-2.0。第三方库与 Windows ConPTY 有独立文本 | 2026-11-19 | 注解 tag 解引用至固定提交，源码包 SHA-256 `cbd4354f1c44530d9f094c2797380208c50f19b4d6350b6e5206e220133c3168`，其中根 LICENSE SHA-256 `c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4`，与固定源码一致。官方 Linux x86_64 文件 SHA-256 `14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d`，与发布元数据一致。既有 CI 单独校验 0.9.5 与协议 22 | 运行证据限于隔离回环。协议对端与测试工具的分发边界见 [doc17](17-license-and-distribution-review.md#1-当前公开和分发范围) |
+| CI sshd（OpenSSH） | Ubuntu 24.04 amd64 `openssh-server 1:9.6p1-3ubuntu13.20`（四个 CI 作业实录） | GitHub runner 预装，经 APT 确认。上游为 OpenSSH portable `9.6p1` 加 Ubuntu 打包与补丁。[Ubuntu 包](https://packages.ubuntu.com/noble/amd64/openssh-server) · [固定源码描述](https://archive.ubuntu.com/ubuntu/pool/main/o/openssh/openssh_9.6p1-3ubuntu13.20.dsc) | 多许可，按文件适用。上游 `LICENCE` 汇总 BSD 风格等条款，打包目录 `debian/*` 列 BSD-2-Clause。[上游 LICENCE](https://github.com/openssh/openssh-portable/blob/V_9_6_P1/LICENCE) · [固定版 debian/copyright](https://changelogs.ubuntu.com/changelogs/pool/main/o/openssh/openssh_9.6p1-3ubuntu13.20/copyright) | 2026-11-19 | 四份 APT 日志、两份运行 manifest 与官方源码包复核。[批次与哈希](#ci-sshd-批次记录) | 证据覆盖 Ubuntu 回环 fixture。工作流未锁 APT 包版本，后续镜像可能漂移。测试工具如另行分发，需按实际产物核对许可。[回环隔离](../validation/remote-harness/README.md#隔离边界) · [分发范围](17-license-and-distribution-review.md#1-当前公开和分发范围) |
+
+#### CI sshd 批次记录
+
+三个工作流都使用 `ubuntu-24.04`，先运行 `apt-get update`，再安装未钉版本的 `openssh-server`。下面四个作业的 APT 日志均报告 runner 已预装 `1:9.6p1-3ubuntu13.20`。[SSH 工作流](https://github.com/Luck9Star/herdr-pocket/blob/0e1cedba01cef926d61b4dc7a61993fdae014390/.github/workflows/ssh-validation.yml#L21-L26) · [mobile-remote 工作流](https://github.com/Luck9Star/herdr-pocket/blob/3df3e646c214053109367ab04a0f67d8d6f3ff1e/.github/workflows/mobile-remote-validation.yml#L41-L46) · [paired GUI 工作流](https://github.com/Luck9Star/herdr-pocket/blob/c9410f96703041113414b31eb4bf5de98f3bbc57/.github/workflows/paired-gui-validation.yml#L70-L76)
+
+| 执行日（UTC） | 作业 | runner 镜像 | 核查来源 |
+| --- | --- | --- | --- |
+| 2026-10-30 | [SSH fixture](https://github.com/Luck9Star/herdr-pocket/actions/runs/40986346261/job/123838161887) | `20261025.353.1` | APT 日志 |
+| 2026-11-05 | [mobile-remote 回环](https://github.com/Luck9Star/herdr-pocket/actions/runs/42036313863/job/127275298918) | `20261025.353.1` | APT 日志 |
+| 2026-11-19 | [Flutter S06 stock](https://github.com/Luck9Star/herdr-pocket/actions/runs/44475116460/job/135393668921) | `20261111.370.1` | APT 日志、[工件 14506211377](https://github.com/Luck9Star/herdr-pocket/actions/runs/44475116460/artifacts/14506211377) |
+| 2026-11-19 | [Flutter S06 guarded](https://github.com/Luck9Star/herdr-pocket/actions/runs/44475148214/job/135395559119) | `20261111.127.1` | APT 日志、[工件 14505924753](https://github.com/Luck9Star/herdr-pocket/actions/runs/44475148214/artifacts/14505924753) |
+
+- 两份 S06 工件均来自 `c9410f96703041113414b31eb4bf5de98f3bbc57`。各 ZIP 的 SHA-256 与 GitHub API 摘要一致（stock `968a736c6f37e03158d1169c2c5fd6f9a5a026519371b5645a82674707dc26fe`，guarded `d22f63d6d3a8d4ca5d91f3ff0f149417a924dfd705bdbcf2f91fa941015c01b2`），各自 `SHA256SUMS` 四项均通过。两份 manifest 的 `openSshVersion` 均为 `OpenSSH_9.6p1 Ubuntu-3ubuntu13.20, OpenSSL 3.0.13 30 Jan 2024`。[实际二进制取版本代码](https://github.com/Luck9Star/herdr-pocket/blob/c9410f96703041113414b31eb4bf5de98f3bbc57/validation/remote-harness/run-ci.py#L395-L399)
+- 较早的 `67c5263` S06 回环记录也保存了相同的 `openSshVersion`。两份脱敏摘要分别对应 [stock](evidence/desktop-split-resize-20261119/s06-stock-official.json) 镜像 `20261116.133.1` 与 [guarded](evidence/desktop-split-resize-20261119/s06-guarded-official.json) 镜像 `20261111.127.1`。
+- Ubuntu Noble 的对应源包于 2026-10-14 发布至 Security、2026-10-21 发布至 Updates。原始源码 tarball 和 Ubuntu 打包 tarball 的 SHA-256 均与固定 `.dsc` 一致。归档中的上游 `LICENCE` 和打包 `debian/copyright` 分别与上游固定 tag 和 Ubuntu 发布的版权文本逐字节一致。未比对 runner 上二进制的 SHA-256。[Security 发布记录](https://api.launchpad.net/1.0/ubuntu/+archive/primary/+sourcepub/18835136) · [Updates 发布记录](https://api.launchpad.net/1.0/ubuntu/+archive/primary/+sourcepub/18890837)
 
 ### 1.5 工具链锁点与共享 fixture
 
@@ -71,7 +86,7 @@
 | Android NDK | 28.2.13676358 | [android-network-experiment.yml:207,342](../.github/workflows/android-network-experiment.yml) | 平台条款 | 2026-11-09 | workflow 固定路径 | 本机无 SDK，仅编译校验（docs/56:32） |
 | 测试 Mac | Mac17,3 / arm64 / macOS 26.6.2 | [09-prototype-validation.md:26](09-prototype-validation.md) | — | 2026-10-30 | 构建记录绑定 | 当前 runner 版本未复核（2026-10-30 批次记录） |
 | 终端字体 | JetBrainsMonoNerdFontMono-Regular.ttf（Nerd Fonts v3.4.0 / JetBrains Mono 2.304），fixture sha `f01031f4…` | [shared/fixture.json](../validation/shared/fixture.json) | OFL-1.1（JetBrains）+ Nerd Fonts 总许可（doc17:62） | 2026-11-07 | 与上游 v3.4.0 OFL 副本核对（doc17:62,84） | 所含 Codicons/FA/MDI 等 glyph 来源声明未逐件审清（doc17:84）；不能改标 GPL/AGPL 或单卖 |
-| 共享 fixture | 80×24、ANSI/Unicode/负载文件 + SHA256SUMS | [shared/README.md](../validation/shared/README.md) | — | 2026-10-30 | 两路线同 fixture（docs/09:26） | 终端布局/内容区尺寸未完全校准，无性能胜负结论（docs/09:26） |
+| 共享 fixture | `herdr-terminal-v1`，80×24、ANSI/Unicode/负载文件 | [fixture.json](../validation/shared/fixture.json) · [SHA256SUMS](../validation/shared/SHA256SUMS) · [shared/README.md](../validation/shared/README.md) | — | 2026-10-30 | 两路线同 fixture（docs/09:26） | 终端布局/内容区尺寸未完全校准，无性能胜负结论（docs/09:26） |
 
 ## 2. 可重跑命令清单
 
@@ -195,8 +210,8 @@ python3 validation/native/tool/tailscale_candidate.py build /absolute/fresh/work
 
 ## 未确认项清单
 
-1. **vite 8.3.5、jni 0.21.1、herdr 0.9.5 的许可证**：查证 docs/17 全文与 remote-dependencies.json 范围，均未单列；按未确认记录，不做推测。
-2. **CI sshd/OpenSSH 版本**：查证 ssh-validation.yml、mobile-remote-validation.yml 与 remote-harness README，使用 runner 预装且无版本锁定记录。
+1. **实际产物的依赖与声明**：上述三项的固定版本及上游许可原文已核实。两壳产物实际包含的代码、链接依赖与随包声明，仍按 [doc17 的完成条件](17-license-and-distribution-review.md#6-最短下一步与完成条件) 核对。
+2. **后续 CI sshd 版本**：四个已核查作业的版本见[批次记录](#ci-sshd-批次记录)。APT 未锁定版本，新增批次须以届时日志及可用的运行 manifest 为准。
 3. **native/tool 全目录 unittest discover**（`-p 'test_*.py'`）：CI 只按单文件形态跑（android-network-experiment.yml:140,336）；全目录形式未核实，文中已标注为同约定外推。
 4. **docs/17 的核查日期**：文内无显式日期字段，取 git 最后提交日 2026-11-07。
 5. **Linux Secret Service 锁定/缺失的运行时降级**：仓库内无该场景的代码路径实测；现有证据止于调研文档（docs/00:23、docs/02:53、docs/03:92）与两壳探针的「平台禁用」实现。

@@ -152,3 +152,11 @@ node docs/evidence/mobile-ssh-terminal-navigation-20261119/android-ime-browser/v
 | 修后（产品 b11e2b9，运行 44471913995） | [系统原屏](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r5/after-keyboard-opened-native.png) | 失败于 `terminal_input` |
 
 索引与逐文件 SHA256 见 [证据索引](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r5/official-index.json)。
+
+## Tauri Android R7 导航后第二次打开键盘
+
+Android API 35 x86_64 模拟器上的正式作业通过普通连接、换钥和加密 OpenSSH 私钥三案。运行源码 `1ceab7c84a6c8ed87e55586e5d0640e2b1b364ca` 的 `validation/tauri` 与 `7890fcd` 字节一致。R6 仅留下清理阶段的断点记录，无法据此确定唯一根因。原工件 ZIP 的 SHA-256 为 `dc0744be8a8cdad08e8d40733b2ae70da566872b15c2fdb43b5f8dfea07d573c`。 [官方作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44486748851/job/135432008494) · [原工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44486748851/artifacts/14511926239) · [原始清单](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r7/manifest.json) · [逐文件 SHA-256](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r7/SHA256SUMS)
+
+普通案完成八次操作，依次打开与收起键盘、进入看板与返回终端、进入网络与返回终端、进入设置与返回终端。导航后的第二次打开键盘前后，系统采样从 `owned_hidden` 到 `owned_visible`，编辑器激活状态从 `false` 到 `true`。两次都核对到同一条活连接，累计成功认证、PTY 和 Shell 各一次，输入仍为零。三案随后均核对输入回显、主动断开及五项清理，包括浏览器、应用、端口正反向转发和夹具连接。
+
+三张原始系统图均保留对应门禁 JSON。键盘图通过夹具标记、隐藏认证表单和零输入检查，普通与换钥回显图通过标记、令牌及回显顺序检查。实体设备、系统输入法组词、真实跨网及加密私钥与换钥的组合仍待验证。 [键盘原图](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r7/ime-keyboard-opened-native.png) · [普通连接原图](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r7/ssh-terminal-android.png) · [换钥原图](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r7/ssh-rotation-terminal-android.png)

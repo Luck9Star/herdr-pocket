@@ -1490,7 +1490,8 @@ class NativeDiagnosticPublishingTests(unittest.TestCase):
             for phase in ios.MOBILE_PASSWORD_PHASES:
                 for code in ios.MOBILE_PASSWORD_FAILURES:
                     payload = {'stage': 'native_failure', 'nativeCheckpoint': phase, 'nativeFailureCode': code}
-                    state = ios.Checkpoints(None, None, output, {})
+                    state = ios.Checkpoints(None, None, output, {},
+                                            encrypted=object() if phase == 'encrypted_key_fingerprint' else None)
                     state.accept(payload)
                     self.assertEqual(state.result, {'nativeCheckpoint': phase, 'nativeFailureCode': code})
             payload = {'stage': 'native_failure', 'nativeCheckpoint': 'ordinary_fingerprint',
@@ -1985,6 +1986,138 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
             with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
                 state.accept({'stage': 'native_failure', **bad})
             self.assertNotIn(self.ordinary.password, json.dumps(state.result))
+
+
+class EncryptedKeyFixtureTests(unittest.TestCase):
+    def test_generated_key_requires_its_passphrase_and_peer_disallows_password(self):
+        import paramiko
+        with ios.EncryptedKeyFixture(screen_proof=True, channel_deadline=time.monotonic() + 60) as fixture:
+            identity = fixture.private_key
+            with self.assertRaises(paramiko.SSHException):
+                paramiko.Ed25519Key(file_obj=io.StringIO(identity), password=fixture.wrong_passphrase)
+            private_key = paramiko.Ed25519Key(file_obj=io.StringIO(identity), password=fixture.passphrase)
+            peer = paramiko.Transport(('127.0.0.1', fixture.port))
+            self.addCleanup(peer.close)
+            peer.start_client(timeout=5)
+            with self.assertRaises(paramiko.AuthenticationException):
+                peer.auth_password(fixture.username, fixture.password)
+            peer.auth_publickey(fixture.username, private_key)
+            self.assertTrue(peer.is_authenticated())
+            channel = peer.open_session(timeout=5)
+            channel.close()
+            peer.close()
+            self.assertTrue(fixture.wait_for_connections_closed(1, timeout=5))
+            event = fixture.snapshot()['connectionEvents'][0]
+            self.assertEqual(event['authAttempts'], 2)
+            self.assertEqual(event['authSuccesses'], 1)
+            report = json.dumps(fixture.snapshot())
+            for secret in (identity, fixture.passphrase, fixture.wrong_passphrase):
+                self.assertTrue(secret not in report, 'private credential leaked into peer snapshot')
+        self.assertFalse(any((fixture.private_key, fixture.passphrase, fixture.wrong_passphrase)),
+                         'ephemeral fixture did not release its credentials')
+
+    def test_clipboard_uses_only_owned_simulator_and_stdin(self):
+        private_marker = 'synthetic-pem-private-value'
+        device = '10BD11AB-F5EC-4202-9C05-1A9E9CC8526A'
+        with patch.object(ios.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)) as run:
+            ios.simulator_clipboard(device, private_marker)
+        args, options = run.call_args
+        self.assertEqual(args, (['xcrun', 'simctl', 'pbcopy', device],))
+        self.assertEqual(options['input'], private_marker.encode())
+        self.assertEqual(options['stdout'], subprocess.DEVNULL)
+        self.assertEqual(options['stderr'], subprocess.DEVNULL)
+
+    def test_encrypted_flow_retains_default_two_cases_and_disables_automatic_captures_only_on_request(self):
+        self.assertEqual(ios.Checkpoints(None, None, '/unused', {}).stages, ios.STAGES)
+        expanded = ios.Checkpoints(None, None, '/unused', {}, encrypted=object()).stages
+        self.assertEqual(expanded, (*ios.STAGES[:-1], *ios.ENCRYPTED_KEY_STAGES, 'complete'))
+        for config in ({}, {'encryptedPort': 12345, 'encryptedFingerprint': 'SHA256:fixture', 'encryptedAlgorithm': 'ssh-rsa'}):
+            with self.subTest(config=config), tempfile.TemporaryDirectory() as directory:
+                ios.prepare_driver(directory, config)
+                spec = json.loads((Path(directory) / 'project.json').read_text())
+                settings = spec['schemes']['PocketUI']['test']
+                self.assertEqual(settings.get('captureScreenshotsAutomatically'), False if config else None)
+                self.assertEqual(json.loads((Path(directory) / 'UITests/Fixture.json').read_text()), config)
+
+    def test_authorized_in_order_clipboard_and_passphrase_stages_never_export_credentials(self):
+        import paramiko
+        with ios.EncryptedKeyFixture(screen_proof=True, channel_deadline=time.monotonic() + 60) as fixture:
+            reports = {'cases': {'encryptedKey': {'status': 'not_run'}}}
+            clipboard = []
+            state = ios.Checkpoints(None, None, '/unused', reports, encrypted=fixture, clipboard=clipboard.append)
+            state.index = state.stages.index('encrypted_key_form')
+            server, thread = ios.start_checkpoints(state)
+            self.addCleanup(thread.join, 2)
+            self.addCleanup(server.server_close)
+            self.addCleanup(server.shutdown)
+
+            def send(stage, *, authenticated=True, suffix='/checkpoint', **extras):
+                payload = {'stage': 'encrypted_key_' + stage, **extras}
+                url = f'http://127.0.0.1:{server.server_port}' + suffix
+                with urlopen(Request(url, data=json.dumps(payload).encode(),
+                                     headers={'Authorization': state.secret if authenticated else 'unauthorized'}), timeout=5) as response:
+                    self.assertEqual(response.headers['Cache-Control'], 'no-store')
+                    return json.load(response)
+
+            for options in ({'authenticated': False}, {'suffix': '/other'}):
+                with self.assertRaises(HTTPError) as error:
+                    send('wrong_ready', **options)
+                self.assertEqual(error.exception.code, 403)
+                error.exception.close()
+            self.assertEqual(clipboard, [])
+            self.assertEqual(send('form'), {'ok': True})
+            def handshake_only(count):
+                with paramiko.Transport(('127.0.0.1', fixture.port)) as peer:
+                    peer.start_client(timeout=5)
+                    self.assertEqual(peer.get_remote_server_key().get_base64(), fixture.public_key.split()[1])
+                    ios.wait_peer(fixture, lambda f: f['connectionEvents'][count - 1]['handshakeCompleted'],
+                                  'encrypted_fixture_handshake_not_recorded', timeout=5)
+                self.assertTrue(fixture.wait_for_connections_closed(count, timeout=5))
+
+            handshake_only(1)
+            self.assertEqual(send('probe'), {'ok': True})
+            self.assertEqual(send('reviewed'), {'ok': True})
+            self.assertEqual(send('clipboard_wrong'), {'ok': True})
+            self.assertTrue(state.clipboard_dirty)
+            self.assertTrue(send('wrong_ready', pasteMethod='productPaste') == {'ok': True, 'passphrase': fixture.wrong_passphrase})
+            self.assertTrue(clipboard == [fixture.private_key, ''])
+            self.assertFalse(state.clipboard_dirty)
+            self.assertEqual(send('wrong_submit'), {'ok': True})
+            handshake_only(2)
+            self.assertEqual(send('wrong_rejected'), {'ok': True})
+            self.assertEqual(send('clipboard_retry'), {'ok': True})
+            self.assertTrue(send('retry_ready', pasteMethod='systemEditMenu') == {'ok': True, 'passphrase': fixture.passphrase})
+            self.assertTrue(clipboard == [fixture.private_key, '', fixture.private_key, ''])
+            self.assertFalse(state.clipboard_dirty)
+            with self.assertRaises(HTTPError) as error:
+                send('retry_ready', pasteMethod='systemEditMenu')
+            self.assertEqual(error.exception.read(), b'{"ok": false}')
+            error.exception.close()
+            public = json.dumps(reports)
+            for secret in (fixture.private_key, fixture.passphrase, fixture.wrong_passphrase):
+                self.assertTrue(secret.splitlines()[0] not in public, 'private credential leaked into the public report')
+            wrong = reports['cases']['encryptedKey']['wrongPassphrase']['peer']
+            self.assertEqual(wrong['authAttempts'], 0)
+            self.assertEqual(wrong['authSuccesses'], 0)
+
+    def test_wrong_attempt_must_reach_handshake_and_never_authenticate(self):
+        counters = dict.fromkeys(('authAttempts', 'authSuccesses', 'ptyRequests', 'shellRequests', 'inputBytes', 'outputBytes'), 0)
+        probe = {'id': 1, 'hostKey': 'A', 'closed': True, 'handshakeCompleted': False, 'sessionClosed': False, **counters}
+        wrong_attempt = {**probe, 'id': 2, 'handshakeCompleted': True}
+        class Peer:
+            def wait_for_connections_closed(self, count, timeout):
+                return True
+            def snapshot(self):
+                return {'connections': len(events), 'connectionEvents': events}
+        fixture = Peer()
+        events = [probe, wrong_attempt]
+        self.assertEqual(ios.encrypted_key_prefix(fixture, empty_connections=2, connection_count=2)['connections'], 2)
+        for field, value in (('authAttempts', 1), ('authSuccesses', 1), ('handshakeCompleted', False), ('ptyRequests', 1),
+                             ('inputBytes', 1), ('closed', False)):
+            with self.subTest(field=field):
+                events = [probe, {**wrong_attempt, field: value}]
+                with self.assertRaisesRegex(ios.Failure, 'encrypted_key_pre_auth_not_empty'):
+                    ios.encrypted_key_prefix(fixture, empty_connections=2, connection_count=2)
 
 
 if __name__ == '__main__':

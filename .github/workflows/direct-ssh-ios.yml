@@ -121,6 +121,7 @@ jobs:
       CI: 'true'
       CARGO_TERM_COLOR: never
       PYTHONDONTWRITEBYTECODE: '1'
+      INCLUDE_ENCRYPTED_KEY: ${{ startsWith(github.ref, 'refs/heads/codex/acceptance/direct-ssh-ios-tauri-only-encrypted-key-') }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -164,15 +165,19 @@ jobs:
           echo "TAURI_IOS_APP=$TAURI_IOS_APP" >> "$GITHUB_ENV"
       - name: Drive the real Tauri application with loopback SSH and key rotation
         run: |
+          options=()
+          if [[ "$INCLUDE_ENCRYPTED_KEY" == true ]]; then options+=(--include-encrypted-key); fi
           "$RUNNER_TEMP/direct-ssh-python/bin/python" validation/remote-harness/tauri_ios_direct_ssh.py \
             --project validation/tauri/src-tauri/gen/apple \
-            --app "$TAURI_IOS_APP" --output "$RUNNER_TEMP/tauri-direct-ssh-public"
+            --app "$TAURI_IOS_APP" --output "$RUNNER_TEMP/tauri-direct-ssh-public" "${options[@]}"
       - name: Verify source-bound public evidence for this batch
         if: always()
         run: |
+          options=()
+          if [[ "$INCLUDE_ENCRYPTED_KEY" == true ]]; then options+=(--include-encrypted-key); fi
           "$RUNNER_TEMP/direct-ssh-python/bin/python" validation/remote-harness/ios_direct_ssh_batch.py publish \
             --shell tauri --source-sha "$GITHUB_SHA" \
-            --root "$RUNNER_TEMP/tauri-direct-ssh-public" --destination "$RUNNER_TEMP/tauri-direct-ssh-verified"
+            --root "$RUNNER_TEMP/tauri-direct-ssh-public" --destination "$RUNNER_TEMP/tauri-direct-ssh-verified" "${options[@]}"
       - name: Upload sanitized evidence only
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -185,4 +190,6 @@ jobs:
             ${{ runner.temp }}/tauri-direct-ssh-verified/key-change-review.png
             ${{ runner.temp }}/tauri-direct-ssh-verified/key-change-terminal.png
             ${{ runner.temp }}/tauri-direct-ssh-verified/key-change-terminal-ocr.json
+            ${{ runner.temp }}/tauri-direct-ssh-verified/encrypted-key-terminal.png
+            ${{ runner.temp }}/tauri-direct-ssh-verified/encrypted-key-terminal-ocr.json
           if-no-files-found: warn

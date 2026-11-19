@@ -32,6 +32,7 @@ class WorkflowRoutingTests(unittest.TestCase):
             (prefix + 'both-r1', {'flutter', 'tauri'}),
             (prefix + 'flutter-only-r1', {'flutter'}),
             (prefix + 'tauri-only-r1', {'tauri'}),
+            (prefix + 'tauri-only-encrypted-key-r1', {'tauri'}),
             ('refs/heads/main', set()),
             ('refs/tags/codex/acceptance/direct-ssh-ios-r1', set()),
         ):
@@ -39,6 +40,11 @@ class WorkflowRoutingTests(unittest.TestCase):
                 selected = {client for client, clauses in routes.items()
                             if all(ref.startswith(branch) != bool(negated) for negated, branch in clauses)}
                 self.assertEqual(selected, expected)
+
+        mode = re.search(r"INCLUDE_ENCRYPTED_KEY: \$\{\{ startsWith\(github.ref, '([^']+)'\) \}\}", workflow)
+        self.assertIsNotNone(mode)
+        self.assertEqual(mode[1], prefix + 'tauri-only-encrypted-key-')
+        self.assertEqual(workflow.count('options+=(--include-encrypted-key)'), 2)
 
 
 class PublicEvidenceTests(unittest.TestCase):
@@ -74,6 +80,52 @@ class PublicEvidenceTests(unittest.TestCase):
             expected = {'result.json', *batch.REQUIRED_IMAGES, *batch.TERMINAL_PROOFS.values()}
             self.assertEqual(self.publish(root, destination), expected)
             self.assertEqual({path.name for path in destination.iterdir()}, expected)
+
+    def test_encrypted_key_publication_is_opt_in_and_requires_completed_case_and_bound_ocr(self):
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            report = self.evidence(root)
+            def publish(name, *, include=True, shell='tauri'):
+                return batch.publish_evidence(root, root / name, shell=shell, source_sha=self.source_sha,
+                                              include_encrypted_key=include)
+
+            with self.assertRaisesRegex(batch.BatchFailure, 'required_images_missing'):
+                publish('missing-image')
+            png, proof = next(iter(batch.ENCRYPTED_KEY_PROOF.items()))
+            report['artifacts'][png] = report['artifacts']['ordinary-terminal.png']
+            (root / 'result.json').write_text(json.dumps(report))
+            with self.assertRaisesRegex(batch.BatchFailure, 'encrypted_key_image_reused'):
+                publish('password-image-replay')
+            Image.new('RGB', (8, 8), (170, 40, 60)).save(root / png, format='PNG')
+            data = (root / png).read_bytes()
+            report['artifacts'][png] = hashlib.sha256(data).hexdigest()
+            criteria = json.loads((root / 'ordinary-terminal-ocr.json').read_text()) | {'imageSha256': report['artifacts'][png]}
+            (root / proof).write_text(json.dumps(criteria))
+            (root / 'result.json').write_text(json.dumps(report))
+            with self.assertRaisesRegex(batch.BatchFailure, 'artifact_manifest_invalid'):
+                publish('unexpected', include=False)
+            with self.assertRaisesRegex(batch.BatchFailure, 'source_invalid'):
+                publish('flutter-opt-in', shell='flutter')
+            with self.assertRaisesRegex(batch.BatchFailure, 'encrypted_key_case_missing'):
+                publish('missing-case')
+
+            attempts = dict.fromkeys(('authAttempts', 'authSuccesses', 'ptyRequests', 'shellRequests',
+                                      'inputBytes', 'outputBytes'), 0)
+            wrong = {'rejected': True, 'peer': {'handshakeCompleted': True, 'closed': True, **attempts}}
+            case = {'status': 'passed', 'pasteActions': ['productPaste', 'systemEditMenu'], 'fingerprintReviewed': True,
+                    'terminalInputReceived': True, 'disconnected': True, 'returnedHome': True, 'wrongPassphrase': wrong}
+            report['cases'] = {'encryptedKey': case}
+            wrong['peer']['authAttempts'] = 1
+            (root / 'result.json').write_text(json.dumps(report))
+            with self.assertRaisesRegex(batch.BatchFailure, 'encrypted_key_case_missing'):
+                publish('wrong-auth')
+            wrong['peer']['authAttempts'] = 0
+            (root / 'result.json').write_text(json.dumps(report))
+            self.assertEqual(publish('completed'), {'result.json', *report['artifacts'], *batch.TERMINAL_PROOFS.values(), proof})
+            (root / proof).unlink()
+            with self.assertRaisesRegex(batch.BatchFailure, 'file_invalid'):
+                publish('missing-ocr')
 
     def test_wrong_source_cannot_export_even_a_result(self):
         with tempfile.TemporaryDirectory() as temp:

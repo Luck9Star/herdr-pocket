@@ -40,12 +40,21 @@ STAGES = ('ordinary_form', 'ordinary_probe', 'ordinary_password', 'ordinary_inpu
           'key_change_review', 'key_change_cancelled', 'key_change_probe_b',
           'key_change_password_b', 'key_change_input', 'key_change_terminal',
           'key_change_disconnect_attempt', 'key_change_disconnected', 'complete')
+ENCRYPTED_KEY_STAGES = ('encrypted_key_form', 'encrypted_key_probe', 'encrypted_key_reviewed',
+                        'encrypted_key_clipboard_wrong', 'encrypted_key_wrong_ready', 'encrypted_key_wrong_submit',
+                        'encrypted_key_wrong_rejected', 'encrypted_key_clipboard_retry', 'encrypted_key_retry_ready',
+                        'encrypted_key_retry_submit', 'encrypted_key_connected', 'encrypted_key_input',
+                        'encrypted_key_terminal', 'encrypted_key_disconnect_attempt', 'encrypted_key_disconnected',
+                        'encrypted_key_returned_home')
+ENCRYPTED_KEY_PNG = 'encrypted-key-terminal.png'
 ORDINARY_ACTIVE_STEPS = ('keyboard_opened', 'keyboard_closed', 'board', 'terminal_from_board',
                          'network', 'terminal_from_network', 'settings', 'terminal_from_settings')
-NATIVE_PHASES = frozenset(prefix + '_' + phase for prefix in ('ordinary', 'key_change') for phase in (
+NATIVE_PHASES = frozenset(prefix + '_' + phase for prefix in ('ordinary', 'key_change', 'encrypted_key') for phase in (
     'launch', 'open_add', 'open_ssh', 'host', 'port', 'username', 'probe', 'fingerprint',
     'password', 'connect', 'terminal_focus', 'terminal_input', 'terminal_capture', 'disconnect',
-    'review_capture', 'cancel', 'cancel_check', 'reprobe', 'new_fingerprint')) | {'ordinary_return_home', 'ordinary_active_flow'}
+    'review_capture', 'cancel', 'cancel_check', 'reprobe', 'new_fingerprint')) | {
+        'ordinary_return_home', 'ordinary_active_flow', 'encrypted_key_return_home', 'encrypted_key_select_key',
+        'encrypted_key_paste', 'encrypted_key_passphrase', 'encrypted_key_wrong_submit'}
 GEOMETRY_PHASES = frozenset(
     prefix + '_' + phase for prefix in ('ordinary', 'key_change')
     for phase in ('host', 'port', 'username', 'probe', 'password')
@@ -58,7 +67,7 @@ GEOMETRY_REASONS = frozenset((
 MAX_GEOMETRY_REASONS_PER_CHECKPOINT = 24
 MOBILE_PASSWORD_PHASES = frozenset((
     'ordinary_fingerprint', 'ordinary_password', 'key_change_fingerprint',
-    'key_change_new_fingerprint', 'key_change_password'))
+    'key_change_new_fingerprint', 'key_change_password', 'encrypted_key_fingerprint'))
 MOBILE_PASSWORD_FAILURES = frozenset('native_mobile_password_' + reason for reason in (
     'identity_missing', 'secure_role_missing', 'wrong_role', 'raw_ambiguous',
     'raw_owner_unproven', 'live_owner_unproven', 'live_missing', 'live_unreadable',
@@ -86,7 +95,10 @@ NATIVE_FAILURES = frozenset((
     'native_terminal_header_unproven', 'native_mobile_setup_unproven', 'native_active_page_unproven',
     'native_active_action_unproven', 'native_active_owner_unproven',
     'native_mobile_confirmation_owner_unproven', 'native_mobile_password_owner_unproven',
-    'native_mobile_submit_owner_unproven', 'native_mobile_return_owner_unproven')) | MOBILE_PASSWORD_FAILURES
+    'native_mobile_submit_owner_unproven', 'native_mobile_return_owner_unproven',
+    'native_encrypted_key_owner_unproven', 'native_encrypted_key_method_unproven',
+    'native_encrypted_key_paste_unproven', 'native_encrypted_key_rejection_unproven',
+    'native_encrypted_key_credentials_retained')) | MOBILE_PASSWORD_FAILURES
 HOME_MEMBERS = frozenset(('brand', 'headerAdd', 'emptyAdd', 'homeHeading', 'emptyHeading',
                          'zeroHosts', 'ordinaryShortcut', 'addHeading', 'sshOption'))
 COMPACT_HOME_MEMBERS = {'emptyDescription', 'compactShortcut'}
@@ -484,6 +496,27 @@ class SingleCommandFixture(DirectSshFixture):
             super()._handle(transport)
         finally:
             transport.accept = original_accept
+
+
+class EncryptedKeyFixture(SingleCommandFixture):
+    """Generate a one-time encrypted OpenSSH identity entirely in this process."""
+    def __init__(self, **options):
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+        key = Ed25519PrivateKey.generate()
+        expected = key.public_key().public_bytes(serialization.Encoding.OpenSSH, serialization.PublicFormat.OpenSSH)
+        super().__init__(client_public_key=expected.decode().split()[1], **options)
+        self.passphrase = secrets.token_hex(16)
+        self.wrong_passphrase = ('0' if self.passphrase[0] != '0' else '1') + self.passphrase[1:]
+        self.private_key = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.OpenSSH,
+                                             serialization.BestAvailableEncryption(self.passphrase.encode())).decode()
+
+    def close(self):
+        try:
+            super().close()
+        finally:
+            self.private_key = self.passphrase = self.wrong_passphrase = ''
 
 
 class Failure(RuntimeError):
@@ -957,10 +990,55 @@ def rotation_session_evidence(fixture, *, closed):
     return facts
 
 
+def encrypted_key_prefix(fixture, *, empty_connections, connection_count):
+    if empty_connections == connection_count:
+        require(fixture.wait_for_connections_closed(connection_count, timeout=30), 'tauri_ios_encrypted_key_prefix_not_closed')
+    facts = fixture.snapshot()
+    events = facts['connectionEvents']
+    require(facts['connections'] == len(events) == connection_count, 'tauri_ios_encrypted_key_connection_count_invalid')
+    counters = ('authAttempts', 'authSuccesses', 'ptyRequests', 'shellRequests', 'inputBytes', 'outputBytes')
+    # The product already proved the initial probe by independently displaying
+    # its fingerprint. Only the rejected credential attempt must reach KEX.
+    require(all(e['id'] == index and e['hostKey'] == 'A' and (index == 1 or e['handshakeCompleted'] is True)
+                and e['closed'] is True and e['sessionClosed'] is False
+                and all(e[k] == 0 for k in counters) for index, e in enumerate(events[:empty_connections], 1)),
+            'tauri_ios_encrypted_key_pre_auth_not_empty')
+    return facts
+
+
+def encrypted_key_session(fixture, *, closed, marker):
+    facts = encrypted_key_prefix(fixture, empty_connections=2, connection_count=3)
+    session = facts['connectionEvents'][2]
+    # The product's russh client offers the key, then sends the signed request.
+    require(session['id'] == 3 and session['hostKey'] == 'A' and session['handshakeCompleted'] is True
+            and session['authAttempts'] == 2 and session['authSuccesses'] == 1 and session['authAccepted'] is True
+            and session['ptyRequests'] == 1 and session['shellRequests'] == 1 and session['outputBytes'] > 0,
+            'tauri_ios_encrypted_key_session_incomplete')
+    require(session['markerReceived'] is marker and session['singleMarkerLineExact'] is marker
+            and session['inputBytes'] == (len(fixture.marker) + 1 if marker else 0),
+            'tauri_ios_encrypted_key_input_invalid')
+    require(session['closed'] is closed and session['sessionClosed'] is closed and facts['connectionsClosed'] is closed,
+            'tauri_ios_encrypted_key_close_order_invalid')
+    return facts
+
+
+def simulator_clipboard(device, contents):
+    """Write to the owned simulator directly. Never use argv or read it back."""
+    try:
+        result = subprocess.run(['xcrun', 'simctl', 'pbcopy', device], input=contents.encode(),
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        raise Failure('tauri_ios_encrypted_key_clipboard_unavailable') from None
+    require(result.returncode == 0, 'tauri_ios_encrypted_key_clipboard_unavailable')
+
+
 class Checkpoints:
-    def __init__(self, ordinary, rotation, output, result):
+    def __init__(self, ordinary, rotation, output, result, *, encrypted=None, clipboard=None):
         self.ordinary, self.rotation, self.output, self.result = ordinary, rotation, Path(output), result
+        self.encrypted, self.clipboard = encrypted, clipboard
+        self.stages = STAGES if encrypted is None else (*STAGES[:-1], *ENCRYPTED_KEY_STAGES, 'complete')
         self.index, self.failure = 0, None
+        self.clipboard_dirty = False
         self.disconnects = set()
         self.started_cases = set()
         self.secret = secrets.token_hex(32)
@@ -973,7 +1051,8 @@ class Checkpoints:
 
     def capture(self, stage, payload, fixture):
         review = stage == 'key_change_review'
-        case = self.result['cases']['keyChange' if stage.startswith('key_change') else 'ordinary']
+        case_name = 'encryptedKey' if stage.startswith('encrypted_key') else 'keyChange' if stage.startswith('key_change') else 'ordinary'
+        case = self.result['cases'][case_name]
         require(payload.get('identityVerified') is True and payload.get('noCredentialsVisible') is True,
                 'tauri_ios_capture_identity_unverified')
         require('nativeOwner' in payload, 'tauri_ios_native_owner_missing')
@@ -993,8 +1072,8 @@ class Checkpoints:
                     geometry['candidateTerminalBounds'] = candidate
         except (ValueError, OSError):
             raise Failure('tauri_ios_capture_png_invalid') from None
-        name = ('key-change-review.png' if review else
-                'key-change-terminal.png' if stage.startswith('key_change') else 'ordinary-terminal.png')
+        name = ('key-change-review.png' if review else {'ordinary': 'ordinary-terminal.png',
+                'keyChange': 'key-change-terminal.png', 'encryptedKey': ENCRYPTED_KEY_PNG}[case_name])
         require(not (self.output / name).exists(), 'tauri_ios_capture_replay_rejected')
         (self.output / name).write_bytes(data)
         digest = hashlib.sha256(data).hexdigest()
@@ -1025,6 +1104,59 @@ class Checkpoints:
         case['terminalScreenshot']['criteriaFile'] = criteria_name
         case['terminalScreenshot']['criteriaSha256'] = hashlib.sha256((self.output / criteria_name).read_bytes()).hexdigest()
 
+    def accept_encrypted(self, stage, payload):
+        fixture = self.encrypted
+        case = self.result['cases']['encryptedKey']
+        passphrase_stage = stage in ('encrypted_key_wrong_ready', 'encrypted_key_retry_ready')
+        if stage != 'encrypted_key_terminal':
+            keys = {'stage', 'pasteMethod'} if passphrase_stage else {'stage'}
+            require(set(payload) == keys, 'tauri_ios_encrypted_key_checkpoint_payload_invalid')
+        if passphrase_stage:
+            require(payload['pasteMethod'] in ('productPaste', 'systemEditMenu'),
+                    'tauri_ios_encrypted_key_checkpoint_payload_invalid')
+        if stage == 'encrypted_key_form':
+            self.started_cases.add('encryptedKey')
+        if stage in ('encrypted_key_probe', 'encrypted_key_reviewed', 'encrypted_key_clipboard_wrong',
+                      'encrypted_key_wrong_ready', 'encrypted_key_wrong_submit'):
+            initial_probe_evidence(fixture)
+        if stage == 'encrypted_key_reviewed':
+            case['fingerprintReviewed'] = True
+        if stage in ('encrypted_key_wrong_rejected', 'encrypted_key_clipboard_retry', 'encrypted_key_retry_ready',
+                     'encrypted_key_retry_submit'):
+            encrypted_key_prefix(fixture, empty_connections=2, connection_count=2)
+            if stage == 'encrypted_key_wrong_rejected':
+                case['wrongPassphrase'] = {'rejected': True, 'peer': failure_peer_snapshot(fixture)['events'][1]}
+        if stage in ('encrypted_key_clipboard_wrong', 'encrypted_key_clipboard_retry'):
+            self.clipboard_dirty = True
+            self.clipboard(fixture.private_key)
+        if passphrase_stage:
+            self.clipboard('')
+            self.clipboard_dirty = False
+            case.setdefault('pasteActions', []).append(payload['pasteMethod'])
+            return {'passphrase': fixture.wrong_passphrase if stage == 'encrypted_key_wrong_ready' else fixture.passphrase}
+        if stage == 'encrypted_key_connected':
+            facts = wait_peer(fixture, lambda f: f['shellRequested'] and f['connectionEvents'][-1]['outputBytes'] > 0,
+                              'tauri_ios_encrypted_key_shell_missing')
+            encrypted_key_session(fixture, closed=False, marker=False)
+            self.encrypted_initial_output = facts['connectionEvents'][-1]['outputBytes']
+        if stage == 'encrypted_key_input':
+            wait_peer(fixture, lambda f: f['markerReceived'] and f['connectionEvents'][-1]['outputBytes'] > self.encrypted_initial_output,
+                      'tauri_ios_encrypted_key_peer_input_missing')
+            encrypted_key_session(fixture, closed=False, marker=True)
+            case['terminalInputReceived'] = True
+        if stage in ('encrypted_key_terminal', 'encrypted_key_disconnect_attempt'):
+            encrypted_key_session(fixture, closed=False, marker=True)
+            if stage == 'encrypted_key_terminal':
+                self.capture(stage, payload, fixture)
+            else:
+                self.disconnects.add('encrypted_key')
+        if stage in ('encrypted_key_disconnected', 'encrypted_key_returned_home'):
+            require('encrypted_key' in self.disconnects, 'tauri_ios_disconnect_not_requested')
+            require(fixture.wait_for_connections_closed(3, timeout=30), 'tauri_ios_peer_disconnect_missing')
+            case.update(disconnected=True, peer=encrypted_key_session(fixture, closed=True, marker=True))
+            if stage == 'encrypted_key_returned_home':
+                case.update(returnedHome=True, status='passed')
+
     def accept(self, payload):
         stage = payload.get('stage')
         require('passwordObservation' not in payload or stage == 'native_failure', 'tauri_ios_native_diagnostic_invalid')
@@ -1035,16 +1167,18 @@ class Checkpoints:
             detail = public_active_diagnostic(payload['detail'])
             phase, context = payload['nativeCheckpoint'], detail['context']
             require(isinstance(phase, str) and phase == self.result.get('nativeCheckpoint'), invalid)
-            scenario = 'ordinary' if phase.startswith('ordinary_') else 'key_change'
+            scenario = phase.rsplit('_', 1)[0] if context in ('connect', 'disconnect') else next(
+                (name for name in ('ordinary', 'key_change', 'encrypted_key') if phase.startswith(name + '_')), None)
+            require(scenario in ('ordinary', 'key_change', 'encrypted_key'), invalid)
             if context.startswith('route_'):
                 allowed = {'ordinary_active_flow': 'ordinary_input'}
             elif context.startswith('keyboard_'):
                 allowed = {'ordinary_active_flow': 'ordinary_input', scenario + '_terminal_focus': scenario + '_input',
                            scenario + '_terminal_capture': scenario + '_terminal'}
             else:
-                target = 'input' if context == 'connect' else 'disconnected'
+                target = ('connected' if scenario == 'encrypted_key' else 'input') if context == 'connect' else 'disconnected'
                 allowed = {scenario + '_' + context: scenario + '_' + target}
-            require(phase in allowed and self.index == STAGES.index(allowed[phase]), invalid)
+            require(phase in allowed and allowed[phase] in self.stages and self.index == self.stages.index(allowed[phase]), invalid)
             self.result['activeDiagnostic'] = {'nativeCheckpoint': phase, **detail}
             return
         if stage == 'ordinary_active':
@@ -1066,12 +1200,15 @@ class Checkpoints:
             return
         if stage in ('native_home', 'native_home_entry', 'native_navigation', 'native_navigation_arrival'):
             phase = payload.get('nativeCheckpoint')
-            require(self.failure is None and phase in ('ordinary_open_add', 'key_change_open_add', 'ordinary_open_ssh', 'key_change_open_ssh'),
+            scenarios = {'ordinary': ('ordinary', self.ordinary, 'ordinary_probe'),
+                         'key_change': ('keyChange', self.rotation, 'key_change_probe_a')}
+            if self.encrypted is not None:
+                scenarios['encrypted_key'] = ('encryptedKey', self.encrypted, 'encrypted_key_probe')
+            slots = {prefix + suffix: value for prefix, value in scenarios.items() for suffix in ('_open_add', '_open_ssh')}
+            require(self.failure is None and phase in slots,
                     'tauri_ios_home_diagnostic_phase_invalid')
-            key = 'ordinary' if phase.startswith('ordinary_') else 'keyChange'
-            next_stage = 'ordinary_probe' if key == 'ordinary' else 'key_change_probe_a'
-            require(self.index == STAGES.index(next_stage), 'tauri_ios_home_diagnostic_phase_invalid')
-            fixture = self.ordinary if key == 'ordinary' else self.rotation
+            key, fixture, next_stage = slots[phase]
+            require(self.index == self.stages.index(next_stage), 'tauri_ios_home_diagnostic_phase_invalid')
             require(fixture is None or fixture.snapshot()['connections'] == 0, 'tauri_ios_navigation_after_ssh')
             readiness = self.result.get('homeReadiness', {})
             if stage != 'native_home' and key in readiness:
@@ -1193,8 +1330,10 @@ class Checkpoints:
             return
         if stage == 'native_capture_diagnostic':
             phase = payload.get('nativeCheckpoint')
-            require(self.failure is None and phase in ('ordinary_terminal_capture', 'key_change_terminal_capture',
-                                                       'key_change_review_capture'),
+            allowed = {'ordinary_terminal_capture', 'key_change_terminal_capture', 'key_change_review_capture'}
+            if self.encrypted is not None:
+                allowed.add('encrypted_key_terminal_capture')
+            require(self.failure is None and phase in allowed,
                     'tauri_ios_capture_diagnostic_invalid')
             detail = public_capture_diagnostic(payload.get('detail'), review=phase == 'key_change_review_capture')
             trace = self.result.get('captureDiagnostics', {}).get(phase, [])
@@ -1203,7 +1342,9 @@ class Checkpoints:
             return
         if stage in ('native_progress', 'native_failure'):
             phase = payload.get('nativeCheckpoint')
-            require(self.failure is None and phase in NATIVE_PHASES, 'tauri_ios_native_diagnostic_invalid')
+            require(self.failure is None and phase in NATIVE_PHASES
+                    and (self.encrypted is not None or not phase.startswith('encrypted_key_')),
+                    'tauri_ios_native_diagnostic_invalid')
             detail = None
             if 'geometryDetail' in payload:
                 require(stage == 'native_progress' and phase in ('ordinary_password', 'key_change_password')
@@ -1229,7 +1370,7 @@ class Checkpoints:
                         'tauri_ios_native_diagnostic_invalid')
                 self.result['nativePortType'] = payload['nativePortType']
             if 'nativeInputRole' in payload:
-                require(phase.rsplit('_', 1)[-1] in ('host', 'port', 'username', 'password')
+                require(phase.rsplit('_', 1)[-1] in ('host', 'port', 'username', 'password', 'passphrase')
                         and payload['nativeInputRole'] in HOME_ROLES, 'tauri_ios_native_diagnostic_invalid')
                 self.result.setdefault('nativeInputRoles', {})[phase] = payload['nativeInputRole']
             if stage == 'native_failure':
@@ -1259,9 +1400,15 @@ class Checkpoints:
                     except ValueError:
                         raise Failure('tauri_ios_rotation_evidence_invalid') from None
             return
-        require(self.failure is None and self.index < len(STAGES) and stage == STAGES[self.index],
+        require(self.failure is None and self.index < len(self.stages) and stage == self.stages[self.index],
                 'tauri_ios_checkpoint_order_invalid')
         self.result['stage'] = stage
+        if stage in ENCRYPTED_KEY_STAGES:
+            require(self.encrypted is not None, 'tauri_ios_checkpoint_order_invalid')
+            reply = self.accept_encrypted(stage, payload)
+            self.index += 1
+            self.result['lastCompletedStage'] = stage
+            return reply
         if stage in ('ordinary_form', 'key_change_form'):
             self.started_cases.add('ordinary' if stage == 'ordinary_form' else 'keyChange')
         ordinary, rotation = self.ordinary, self.rotation
@@ -1325,33 +1472,39 @@ class Checkpoints:
             case['status'] = 'passed'
         if stage == 'complete':
             ordinary_evidence(ordinary, closed=True)
+            if self.encrypted is not None:
+                encrypted_key_session(self.encrypted, closed=True, marker=True)
         self.index += 1
         self.result['lastCompletedStage'] = stage
 
 
 def start_checkpoints(state):
+    exchange = threading.Lock()
+
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_):
             pass
 
         def do_POST(self):
-            if not secrets.compare_digest(self.headers.get('Authorization', ''), state.secret):
+            if self.path != '/checkpoint' or not secrets.compare_digest(self.headers.get('Authorization', ''), state.secret):
                 self.send_error(403)
                 return
-            try:
-                length = int(self.headers.get('Content-Length', '0'))
-                require(0 < length <= 12_000_000, 'tauri_ios_checkpoint_payload_invalid')
-                payload = json.loads(self.rfile.read(length))
-                require(isinstance(payload, dict), 'tauri_ios_checkpoint_payload_invalid')
-                state.accept(payload)
-                ok = True
-            except Failure as error:
-                state.failure, ok = str(error), False
-            except Exception:
-                state.failure, ok = 'tauri_ios_checkpoint_invalid', False
-            body = json.dumps({'ok': ok}).encode()
-            self.send_response(200 if ok else 409)
+            with exchange:
+                try:
+                    length = int(self.headers.get('Content-Length', '0'))
+                    require(0 < length <= 12_000_000, 'tauri_ios_checkpoint_payload_invalid')
+                    payload = json.loads(self.rfile.read(length))
+                    require(isinstance(payload, dict), 'tauri_ios_checkpoint_payload_invalid')
+                    reply = state.accept(payload)
+                    response = {'ok': True, **(reply or {})}
+                except Failure as error:
+                    state.failure, response = str(error), {'ok': False}
+                except Exception:
+                    state.failure, response = 'tauri_ios_checkpoint_invalid', {'ok': False}
+            body = json.dumps(response).encode()
+            self.send_response(200 if response['ok'] else 409)
             self.send_header('Content-Type', 'application/json')
+            self.send_header('Cache-Control', 'no-store')
             self.send_header('Content-Length', str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -1390,10 +1543,13 @@ def prepare_driver(private, config):
             'schemes': {'PocketUI': {'build': {'targets': {'DriverHost': 'all', 'PocketUITests': ['test']}},
                                      'test': {'targets': [{'name': 'PocketUITests', 'parallelizable': False}],
                                               'gatherCoverageData': False}}}}
+    if 'encryptedPort' in config:
+        # Disable automatic XCTest screen artifacts while the PEM form can be visible.
+        spec['schemes']['PocketUI']['test']['captureScreenshotsAutomatically'] = False
     write_json(private / 'project.json', spec)
 
 
-def run(project, app, output, *, source_sha=None, env=None):
+def run(project, app, output, *, source_sha=None, env=None, include_encrypted_key=False):
     batch_deadline = time.monotonic() + 1800
     env = os.environ if env is None else env
     output = Path(output).resolve()
@@ -1406,7 +1562,9 @@ def run(project, app, output, *, source_sha=None, env=None):
               'stage': 'input_validation', 'artifacts': {},
               'cases': {'ordinary': {'status': 'not_run'}, 'keyChange': {'status': 'not_run'}},
               'cleanup': {'simulatorDeleted': False, 'fixturesClosed': False, 'privateFilesRemoved': False}}
-    device, server, server_thread, ordinary, rotation, private, state = None, None, None, None, None, None, None
+    device, server, server_thread, ordinary, rotation, encrypted, private, state = (None,) * 8
+    if include_encrypted_key:
+        result['cases']['encryptedKey'] = {'status': 'not_run'}
     create_attempted = False
     peer_before_cleanup = {}
     device_name = 'herdr-tauri-ssh-' + uuid.uuid4().hex
@@ -1436,7 +1594,14 @@ def run(project, app, output, *, source_sha=None, env=None):
         rotation = SingleCommandFixture(rotate_after_probe=True, screen_proof=True, channel_deadline=batch_deadline).__enter__()
         result['cases']['ordinary']['fingerprint'] = ordinary.fingerprint
         result['cases']['keyChange']['fingerprints'] = {'A': rotation.fingerprint, 'B': rotation.rotated_fingerprint}
-        state = Checkpoints(ordinary, rotation, output, result)
+        if include_encrypted_key:
+            encrypted = EncryptedKeyFixture(screen_proof=True, channel_deadline=batch_deadline)
+            encrypted.__enter__()
+            result['cases']['encryptedKey']['fingerprint'] = encrypted.fingerprint
+            state = Checkpoints(ordinary, rotation, output, result, encrypted=encrypted,
+                                clipboard=lambda text: simulator_clipboard(device, text))
+        else:
+            state = Checkpoints(ordinary, rotation, output, result)
         server, server_thread = start_checkpoints(state)
         private = Path(tempfile.mkdtemp(prefix='herdr-tauri-ios-private-'))
         private.chmod(0o700)
@@ -1450,6 +1615,10 @@ def run(project, app, output, *, source_sha=None, env=None):
                   'fingerprintA': rotation.fingerprint, 'fingerprintB': rotation.rotated_fingerprint,
                   'rotationAlgorithm': rotation.public_key.split()[0],
                   'rotatedAlgorithm': rotation.rotated_public_key.split()[0]}
+        if encrypted is not None:
+            # Only public fixture metadata is included in the built XCTest resource.
+            config.update(encryptedPort=encrypted.port, encryptedFingerprint=encrypted.fingerprint,
+                          encryptedAlgorithm=encrypted.public_key.split()[0])
         result['stage'] = 'driver_prepare'
         prepare_driver(private, config)
         build = ['xcodebuild', '-project', str(private / 'PocketUI.xcodeproj'), '-scheme', 'PocketUI',
@@ -1471,9 +1640,11 @@ def run(project, app, output, *, source_sha=None, env=None):
         if state.failure is not None:
             result['runtimeDiagnostics'] = runtime_diagnostics(runtime_log, private)
             raise Failure(state.failure)
-        require(state.index == len(STAGES) and state.failure is None, 'tauri_ios_checkpoints_incomplete')
-        require(set(result.get('homeEntry', {})) == {'ordinary', 'keyChange'}, 'tauri_ios_home_entry_incomplete')
-        require(set(result['artifacts']) == set(PNG_FILES), 'tauri_ios_artifacts_incomplete')
+        require(state.index == len(state.stages) and state.failure is None, 'tauri_ios_checkpoints_incomplete')
+        expected_cases = {'ordinary', 'keyChange'} | ({'encryptedKey'} if include_encrypted_key else set())
+        expected_images = set(PNG_FILES) | ({ENCRYPTED_KEY_PNG} if include_encrypted_key else set())
+        require(set(result.get('homeEntry', {})) == expected_cases, 'tauri_ios_home_entry_incomplete')
+        require(set(result['artifacts']) == expected_images, 'tauri_ios_artifacts_incomplete')
         result['status'] = 'passed'
     except Failure as error:
         result['error'] = str(error)
@@ -1485,22 +1656,29 @@ def run(project, app, output, *, source_sha=None, env=None):
             server.shutdown()
             server.server_close()
             server_thread.join(timeout=5)
+        fixtures = (('ordinary', ordinary), ('keyChange', rotation), ('encryptedKey', encrypted))
         if state is not None:
             state.finalize_cases()
-            for name, fixture in (('ordinary', ordinary), ('keyChange', rotation)):
+            for name, fixture in fixtures:
                 if name in state.started_cases and fixture is not None:
                     try:
                         peer_before_cleanup[name] = failure_peer_snapshot(fixture)
                     except Exception:
                         pass
-        for fixture in (ordinary, rotation):
+        for _, fixture in fixtures:
             if fixture is not None:
                 fixture.close()
         result['cleanup']['fixturesClosed'] = all(f is None or f.snapshot()['connectionsClosed']
-                                                 for f in (ordinary, rotation))
+                                                 for _, f in fixtures)
         if not result['cleanup']['fixturesClosed']:
             result['status'], result['error'] = 'failed', 'tauri_ios_fixture_cleanup_failed'
         if device is not None:
+            if state is not None and state.clipboard_dirty:
+                try:
+                    simulator_clipboard(device, '')
+                except Failure:
+                    # The owned device must still be deleted, including its pasteboard.
+                    pass
             try:
                 command(['xcrun', 'simctl', 'shutdown', device], timeout=60)
             except Failure:
@@ -1527,7 +1705,7 @@ def run(project, app, output, *, source_sha=None, env=None):
                 result['status'], result['error'] = 'failed', 'tauri_ios_private_cleanup_failed'
         result['cleanup']['privateFilesRemoved'] = private is None or not private.exists()
         if result['status'] != 'passed':
-            for name, fixture in (('ordinary', ordinary), ('keyChange', rotation)):
+            for name, fixture in fixtures:
                 if name in peer_before_cleanup and fixture is not None:
                     report = {'beforeCleanup': peer_before_cleanup[name]}
                     try:
@@ -1545,9 +1723,11 @@ def main():
     parser.add_argument('--app', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--source-sha', default=None)
+    parser.add_argument('--include-encrypted-key', action='store_true')
     args = parser.parse_args()
     try:
-        result = run(args.project, args.app, args.output, source_sha=args.source_sha)
+        result = run(args.project, args.app, args.output, source_sha=args.source_sha,
+                     include_encrypted_key=args.include_encrypted_key)
     except Failure:
         print('tauri_ios_output_not_empty')
         return 1

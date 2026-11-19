@@ -655,6 +655,9 @@ final class Adapter {
     func sameMobileOwner(_ lhs: RevealedControl, _ rhs: RevealedControl) -> Bool {
         sameControlScope(lhs, rhs)
     }
+    func bindKeyField(_ field: NativeControlPolicy.KeyField, owner: RevealedControl) throws -> RevealedControl {
+        try encryptedField(field, rows: rows, owner: owner)
+    }
     func auth(_ previous: RevealedControl, ready: Bool = false) throws -> (password: RevealedControl, submit: RevealedControl) {
         try mobileAuth(port: 2222, ready: ready, previous: previous)
     }
@@ -692,7 +695,7 @@ final class Adapter {
             "func sameControlScope(_ scope:", "func mobileControl(_ anchor:", "func mobileBinding(_ anchor:",
             "func tapMobileButton(_ control:", "enum MobileWitnessObservation<Proof>", "func mobileWitness(_ targets:",
             "func visibleWitness(_ rows:", "func waitForMobileWitness<Proof>", "func mobileAuth(port:", "func mobilePassword(in rows:",
-            "func mobilePasswordObservation(in rows:",
+            "func mobilePasswordObservation(in rows:", "func encryptedField(_ field:",
             "func controlGeometry(_ owner:", "func controlVisibleFrame(_ owner:", "func routeTabsOcclusion(_ owner:",
             "func reportFormGeometry(_ failure:", "func failControlGeometry(_ failure:",
             "func tap(_ item:", "func fillPassword(_ item:",
@@ -817,6 +820,31 @@ let replacedView = row(passwordControl.web.snapshot, path: [0, 1])
 let replacedAuthOwner = RevealedControl(live: passwordControl.live, owner: passwordControl.owner,
     window: passwordControl.window, web: replacedView)
 check(!authCandidate.sameMobileOwner(confirmation, replacedAuthOwner), "an otherwise equal auth control in a different WebView must fail")
+for (kind, type, id, label) in [
+    (NativeControlPolicy.KeyField.pem, XCUIElement.ElementType.textView, "ssh-key", "私钥 PEM（仅本次使用）"),
+    (.pem, .textView, "", "私钥 PEM（仅本次使用）"),
+    (.passphrase, .secureTextField, "", "私钥口令 （加密私钥需要）"),
+    (.passphrase, .secureTextField, "ssh-passphrase", "私钥口令（加密私钥需要）")
+] {
+    let (candidate, _, live) = mobileCase(type, id: id, label: label)
+    let field = try candidate.bindKeyField(kind, owner: confirmation)
+    check(field.live.element === live && live.taps == 0, "a credential binds its own current scoped AX node without touching it")
+}
+for (candidate, _, live) in [
+    mobileCase(.textField, id: "ssh-passphrase", label: "私钥口令 （加密私钥需要）"),
+    mobileCase(.secureTextField, id: "", label: "私钥口令  （加密私钥需要）"),
+    mobileCase(.secureTextField, id: "ssh-unrelated", label: "私钥口令 （加密私钥需要）"),
+    mobileCase(.secureTextField, id: "ssh-passphrase", label: "私钥口令 （加密私钥需要）", raw: [[1, 0, 2]]),
+    mobileCase(.secureTextField, id: "ssh-passphrase", label: "私钥口令 （加密私钥需要）", queries: 2),
+    mobileCase(.secureTextField, id: "ssh-passphrase", label: "私钥口令 （加密私钥需要）", queriedFrame: movedFrame),
+    mobileCase(.secureTextField, id: "ssh-passphrase", label: "私钥口令 （加密私钥需要）", enabled: false)
+] {
+    check((try? candidate.bindKeyField(.passphrase, owner: confirmation)) == nil && live.taps == 0,
+          "an incorrect role, identity, owner, duplicate or unsettled credential cannot bind")
+}
+let (movedKey, _, movedKeyLive) = mobileCase(.secureTextField, id: "ssh-passphrase", label: "私钥口令（加密私钥需要）")
+check((try? movedKey.bindKeyField(.passphrase, owner: replacedAuthOwner)) == nil && movedKeyLive.taps == 0,
+      "the passphrase field cannot change the previously proven WebView")
 func authFixture(_ fieldSamples: [[Observed]], liveSnapshot: Snapshot = fieldAnchor.snapshot,
                  scope: [Int] = [0, 0], liveCopies: Int = 1, hits: Bool = true,
                  ready: Bool = false) -> (Adapter, Observations, Element, Element) {

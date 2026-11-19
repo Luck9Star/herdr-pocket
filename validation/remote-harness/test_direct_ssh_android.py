@@ -534,6 +534,8 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
         self.assertIn("'codex/acceptance/direct-ssh-android-*'", workflow)
         self.assertIn('options: [standard, encrypted-key]', workflow)
         self.assertIn('default: standard', workflow)
+        self.assertIn("if: ${{ inputs.auth_case == 'encrypted-key' }}", workflow)
+        self.assertIn('flutter build apk --debug --target-platform android-x64 --no-pub -t integration_test/android_direct_ssh_test.dart', workflow)
         self.assertIn('AUTH_CASE: ${{ inputs.auth_case }}', workflow)
         self.assertIn('case "${AUTH_CASE:-}" in', workflow)
         self.assertIn("''|standard) set -- ;;", workflow)
@@ -557,6 +559,79 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(result.stdout, '')
             self.assertNotIn(value, result.stderr)
+
+    def test_startup_observation_does_not_probe_app_before_install(self):
+        path = 'cache/herdr-direct-ssh-123'
+        with patch.object(runner, 'package_present', return_value=False), \
+             patch.object(runner, 'read_public_json') as read:
+            self.assertEqual(runner.encrypted_app_observation(path), (False, None, None))
+            read.assert_not_called()
+        with patch.object(runner, 'package_present', return_value=True), \
+             patch.object(runner, 'read_public_json', side_effect=[None, None]) as read:
+            self.assertEqual(runner.encrypted_app_observation(path), (True, None, None))
+            self.assertEqual(read.call_count, 2)
+            self.assertTrue(all(call.kwargs == {'package_known': True} for call in read.call_args_list))
+        with patch.object(runner, 'package_present', return_value=True), \
+             patch.object(runner, 'read_public_json', side_effect=[{'stage': 'encrypted_waiting_private'}, None]):
+            self.assertEqual(runner.encrypted_app_observation(path), (True, 'encrypted_waiting_private', None))
+        with patch.object(runner, 'package_present', return_value=True), \
+             patch.object(runner, 'read_public_json', return_value={'stage': 'private-key-content'}):
+            with self.assertRaises(runner.Failure): runner.encrypted_app_observation(path)
+        with patch.object(runner, 'package_present', return_value=True), \
+             patch.object(runner, 'read_public_json', side_effect=[{'stage': 'encrypted_waiting_private'},
+                 {'stage': 'fixture_validation', 'code': 'direct_ssh_android_ui_failed'}]):
+            self.assertEqual(runner.encrypted_app_observation(path),
+                             (True, 'encrypted_waiting_private', 'fixture_validation'))
+
+    def test_tool_progress_discards_untrusted_output_and_detects_split_markers(self):
+        import io
+        class Chunks:
+            def __init__(self):
+                self.parts = iter([b"running gradle task 'asse", b"mbledebug'\r\n", b'sensitive-test-key ',
+                    b'installing build/app/outputs/', b' loading /x/android_direct_ssh_test.dart', b''])
+            def read1(self, unused): return next(self.parts)
+        progress = runner.SanitizedToolProgress(Chunks())
+        result = progress.finish()
+        self.assertEqual(result['streamState'], 'eof')
+        self.assertTrue(result['markers']['gradleStarted'])
+        self.assertTrue(result['markers']['installationStarted'])
+        self.assertTrue(result['markers']['testLoading'])
+        self.assertNotIn('sensitive-test-key', json.dumps(result))
+        self.assertEqual(set(result['markers']), set(runner.TOOL_MARKERS))
+
+    def test_device_state_uses_fixed_values_without_echoing_adb_output(self):
+        for reply, expected in [(CompletedProcess([], 0, b'device\n', b''), 'device'),
+                                (CompletedProcess([], 1, b'', b'error: device offline'), 'offline'),
+                                (CompletedProcess([], 1, b'', b'error: device unauthorized'), 'unauthorized'),
+                                (CompletedProcess([], 1, b'sensitive-test-key', b''), 'unavailable')]:
+            with self.subTest(expected=expected), patch.object(runner, 'adb', return_value=reply):
+                self.assertEqual(runner.encrypted_device_state(), expected)
+        with patch.object(runner, 'adb', side_effect=__import__('subprocess').TimeoutExpired('adb', 30)):
+            self.assertEqual(runner.encrypted_device_state(), 'timeout')
+
+    def test_cleanup_checks_remain_independent_when_reverse_removal_fails(self):
+        calls = []
+        def fake_adb(*args, **unused):
+            calls.append(args)
+            if args[:2] == ('reverse', '--remove'):
+                raise __import__('subprocess').TimeoutExpired('adb', 30)
+            return CompletedProcess([], 0, b'', b'')
+        with patch.object(runner, 'adb', side_effect=fake_adb), \
+             patch.object(runner, 'package_present', side_effect=[True, False]), \
+             patch.object(runner, 'forward_set', return_value=set()):
+            cleanup, checks = runner.cleanup_encrypted_device('tcp:40001', set())
+        self.assertEqual(cleanup, {'reverseRemoved': False, 'packageRemoved': True, 'ownedForwardsRemoved': True})
+        self.assertEqual(checks, {'reverse': 'unproven', 'package': 'verified', 'forwards': 'verified'})
+        self.assertEqual(sum(call[:2] == ('reverse', '--remove') for call in calls), 1)
+        self.assertIn(('uninstall', runner.PACKAGE), calls)
+
+    def test_app_stage_is_fixed_and_failure_code_is_exact(self):
+        self.assertEqual(runner.safe_encrypted_app_stage({'stage':'encrypted_waiting_private'}), 'encrypted_waiting_private')
+        self.assertEqual(runner.safe_encrypted_app_stage({'stage':'encrypted_home', 'code':'direct_ssh_android_ui_failed'}, failure=True), 'encrypted_home')
+        for value in ({'stage':'sensitive-test-key'}, {'stage':'encrypted_home','secret':'x'},
+                      {'stage':'encrypted_home','code':'sensitive-test-key'}):
+            with self.subTest(value=value), self.assertRaises(runner.Failure):
+                runner.safe_encrypted_app_stage(value, failure=('code' in value))
 
     def test_result_is_exact_and_never_exports_credentials(self):
         value = {field: True for field in runner.ENCRYPTED_PUBLIC_FIELDS}
@@ -678,8 +753,8 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
                     ('shell', 'settings', 'get', 'secure', 'show_ime_with_hard_keyboard'): '1'}
                 return values.get(args, '')
             def fail_start(command, **options):
-                self.assertEqual(options['stdout'], runner.subprocess.DEVNULL)
-                self.assertEqual(options['stderr'], runner.subprocess.DEVNULL)
+                self.assertEqual(options['stdout'], runner.subprocess.PIPE)
+                self.assertEqual(options['stderr'], runner.subprocess.STDOUT)
                 define = next(x.split('=', 1)[1] for x in command if x.startswith('--dart-define-from-file='))
                 content = Path(define).read_text()
                 self.assertNotIn('sensitive-test-key', content)
@@ -775,7 +850,11 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
                 'columns': 12, 'rows': 10, 'terminalFocused': False, 'testInputRegistered': True,
                 'testClientSet': True, 'welcomeVisible': True, 'echoVisible': False}
             fake_module = types.SimpleNamespace(EncryptedKeyFixture=Mock(return_value=fixture))
-            process = Mock(pid=12345); process.poll.side_effect = [None, None, 1, 1, 1]; process.wait.return_value = 1
+            process = Mock(pid=12345); process.stdout = __import__('io').BytesIO(b'')
+            process.poll.side_effect = [None, None, 1, 1, 1, 1]
+            finished = {'value': False}
+            def wait(**unused): finished['value'] = True; return 1
+            process.wait.side_effect = wait
             def fake_text(*args):
                 values = {('devices',): 'List of devices attached\nemulator-5554 device',
                     ('shell', 'getprop', 'ro.kernel.qemu'): '1',
@@ -783,16 +862,18 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
                     ('shell', 'am', 'get-current-user'): '0',
                     ('shell', 'settings', 'get', 'secure', 'show_ime_with_hard_keyboard'): '1'}
                 return values.get(args, '')
-            def read_json(path, *unused):
+            def read_json(path, *unused, **kwargs):
+                if path.endswith('/stage.json'): return {'stage': 'encrypted_waiting_private'}
                 if path.endswith('encrypted-diagnostic.json'): return diagnostic
                 if path.endswith('encrypted-stage.json'): return {'phase': 'review'}
-                if path.endswith('failure.json'): return {'stage': 'encrypted_keyboard_show', 'code': 'direct_ssh_android_ui_failed'}
+                if path.endswith('failure.json') and finished['value']: return {'stage': 'encrypted_keyboard_show', 'code': 'direct_ssh_android_ui_failed'}
                 return None
             env = {'GITHUB_SHA': 'a'*40, 'GITHUB_RUN_ID': '123', 'RUNNER_TEMP': temp}
             args = types.SimpleNamespace(project=app, output=output)
             with patch.dict(sys.modules, {'tauri_encrypted_key_fixture': fake_module}), \
                  patch.object(runner, 'checked_paths', return_value=(app, output)), \
                  patch.object(runner, 'verify_prepared'), patch.object(runner, 'text', side_effect=fake_text), \
+                 patch.object(runner, 'encrypted_device_state', return_value='device'), \
                  patch.object(runner, 'package_present', side_effect=[False, True, False, False]), \
                  patch.object(runner, 'forward_set', return_value=set()), \
                  patch.object(runner, 'adb', return_value=CompletedProcess([], 0, b'', b'')), \
@@ -832,7 +913,8 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
             fixture.wait_for_connections_closed.return_value = True
             fixture.wait_for.return_value = True
             fake_module = types.SimpleNamespace(EncryptedKeyFixture=Mock(return_value=fixture))
-            process = Mock(pid=12345); process.poll.return_value = None
+            process = Mock(pid=12345); process.stdout = __import__('io').BytesIO(b'')
+            process.poll.return_value = None
             def wait(**unused): process.poll.return_value = 0; return 0
             process.wait.side_effect = wait
             def fake_text(*args):
@@ -851,7 +933,8 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
                 'terminalRectPt': [16, 144, 320, 300], 'enterRectPt': [300, 400, 54, 44], 'columns': 22, 'rows': 10,
                 'terminalFocused': False, 'testInputRegistered': True, 'testClientSet': True,
                 'welcomeVisible': True, 'echoVisible': True}
-            def read_json(path, *unused):
+            def read_json(path, *unused, **kwargs):
+                if path.endswith('/stage.json'): return {'stage': 'encrypted_waiting_private'}
                 if path.endswith('encrypted-diagnostic.json'): return diagnostic
                 if path.endswith('screen-request.json'): return {'valid': True} if current['round'] == 2 else None
                 if path.endswith('encrypted-stage.json'): return {'phase': 'review' if current['round'] == 0 else 'rejected'}
@@ -869,7 +952,8 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
             with patch.dict(sys.modules, {'tauri_encrypted_key_fixture': fake_module}), \
                  patch.object(runner, 'checked_paths', return_value=(app, output)), \
                  patch.object(runner, 'verify_prepared'), patch.object(runner, 'text', side_effect=fake_text), \
-                 patch.object(runner, 'package_present', side_effect=[False, True, True, False]), \
+                 patch.object(runner, 'encrypted_device_state', return_value='device'), \
+                 patch.object(runner, 'package_present', side_effect=[False, True, True, True, True, False]), \
                  patch.object(runner, 'forward_set', return_value=set()), \
                  patch.object(runner, 'adb', return_value=CompletedProcess([], 0, png, b'')) as adb, \
                  patch.object(runner, 'read_public_json', side_effect=read_json), \
@@ -877,6 +961,10 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
                  patch.object(runner.time, 'sleep'), patch.object(runner.subprocess, 'Popen', return_value=process):
                 report = runner.run_encrypted(args, env)
             self.assertEqual(report['status'], 'passed')
+            self.assertTrue(report['startup']['packageObserved'])
+            self.assertTrue(report['startup']['appStageObserved'])
+            self.assertTrue(report['startup']['privateInputDelivered'])
+            self.assertEqual(report['startup']['tool']['streamState'], 'eof')
             self.assertEqual(report['uiDiagnostic'], diagnostic)
             self.assertEqual(tuple(report['checkpoints']), ('review', 'rejected'))
             self.assertTrue(report['peerClosedBeforeDriverExit'])

@@ -128,7 +128,13 @@ void main() {
         expect(tester.testTextInput.isRegistered, isFalse);
         if (Directory(directory).existsSync())
           throw StateError('direct_ssh_android_exchange_exists');
+        void step(String next) {
+          stage = next;
+          publish('stage.json', {'stage': next});
+        }
+
         if (encrypted) {
+          step('encrypted_waiting_private');
           final incoming = File(
             '/data/user/0/$packageName/cache/herdr-key-$runId.json',
           );
@@ -163,11 +169,6 @@ void main() {
           }
           config.addAll(secret);
         }
-        void step(String next) {
-          stage = next;
-          publish('stage.json', {'stage': next});
-        }
-
         var surfaceConverted = false;
         Future<void> capture(String name) async {
           if (name == 'preconnect') return;

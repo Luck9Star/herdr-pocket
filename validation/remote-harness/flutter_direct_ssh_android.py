@@ -16,6 +16,7 @@ import subprocess
 import struct
 import sys
 import tempfile
+import threading
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -229,11 +230,11 @@ def checked_public_reply(reply, relative, limit):
     return value
 
 
-def read_public_json(relative, limit=4096):
+def read_public_json(relative, limit=4096, *, package_known=False):
     if not re.fullmatch(r'cache/herdr-direct-ssh-[0-9]+/(?:(?:rotation-|encrypted-)?(?:result|stage)|'
                         r'ordinary-mobile-stage|encrypted-diagnostic|failure|screen-request)\.json', relative):
         raise Failure('direct_android_public_path_invalid')
-    if not package_present():
+    if not package_known and not package_present():
         return None
     exists = adb('shell', '-T', 'run-as', PACKAGE, 'test', '-f', relative, check=False)
     if exists.returncode == 1 and not exists.stdout.strip() and not exists.stderr.strip():
@@ -666,6 +667,107 @@ def safe_encrypted_diagnostic(value):
     return value
 
 
+# Inspect only fixed tool events in memory. Raw tool output can contain
+# private UI data, so no line, fragment, exception message or log is retained.
+TOOL_MARKERS = {
+    'startupLock': (b'waiting for another flutter command',),
+    'gradleStarted': (b"running gradle task 'assembledebug'",),
+    'gradleCompleted': (b'built build/app/outputs/',),
+    'installationStarted': (b'installing build/app/outputs/',),
+    'testLoading': (b'loading ', b'android_direct_ssh_test.dart'),
+    'markerTestStarted': (b'terminal markers respect soft and hard line boundaries',),
+    'uiTestStarted': (b'android homepage host key rotation, ordinary ssh input, echo and disconnect',),
+    'gradleFailed': (b'build failed',),
+    'deviceOffline': (b'error: device offline',),
+}
+
+
+class SanitizedToolProgress:
+    def __init__(self, stream):
+        self._lock = threading.Lock()
+        self._markers = dict.fromkeys(TOOL_MARKERS, False)
+        self._state = 'running'
+        self._thread = threading.Thread(target=self._drain, args=(stream,), daemon=True)
+        self._thread.start()
+
+    def _drain(self, stream):
+        tail = b''
+        try:
+            while True:
+                chunk = stream.read1(4096)
+                if not isinstance(chunk, bytes):
+                    raise TypeError('invalid_tool_stream')
+                if not chunk:
+                    break
+                window = (tail + chunk).lower()
+                with self._lock:
+                    for name, patterns in TOOL_MARKERS.items():
+                        if all(pattern in window for pattern in patterns):
+                            self._markers[name] = True
+                tail = window[-512:]
+            state = 'eof'
+        except (OSError, ValueError, TypeError):
+            state = 'error'
+        finally:
+            tail = b''
+        with self._lock:
+            self._state = state
+
+    def snapshot(self):
+        with self._lock:
+            return {'streamState': self._state, 'markers': dict(self._markers)}
+
+    def finish(self):
+        self._thread.join(timeout=2)
+        return self.snapshot()
+
+
+def encrypted_device_state():
+    try:
+        result = adb('get-state', check=False)
+    except subprocess.TimeoutExpired:
+        return 'timeout'
+    except (Failure, OSError):
+        return 'error'
+    if result.returncode == 0 and not result.stderr and result.stdout.strip() == b'device':
+        return 'device'
+    if result.stderr.strip() == b'error: device offline' or result.stdout.strip() == b'offline':
+        return 'offline'
+    if result.stderr.strip() == b'error: device unauthorized':
+        return 'unauthorized'
+    return 'unavailable'
+
+
+ENCRYPTED_APP_STAGES = ENCRYPTED_UI_PHASES | {
+    'fixture_validation', 'encrypted_waiting_private', 'encrypted_home',
+    'encrypted_probe', 'encrypted_review', 'encrypted_rejected',
+    'encrypted_connect', 'encrypted_disconnect',
+}
+
+
+def safe_encrypted_app_stage(value, *, failure=False):
+    fields = {'stage', 'code'} if failure else {'stage'}
+    if (not isinstance(value, dict) or set(value) != fields
+            or type(value['stage']) is not str or value['stage'] not in ENCRYPTED_APP_STAGES
+            or (failure and value['code'] != 'direct_ssh_android_ui_failed')):
+        raise Failure('direct_android_encrypted_app_stage_invalid')
+    return value['stage']
+
+
+def encrypted_app_observation(relative, *, check_failure=True):
+    # Before installation, do not issue run-as/file probes or send credentials.
+    if not package_present():
+        return False, None, None
+    stage = read_public_json(relative + '/stage.json', 256, package_known=True)
+    name = safe_encrypted_app_stage(stage) if stage is not None else None
+    failure = None
+    if check_failure:
+        value = read_public_json(relative + '/failure.json', 256, package_known=True)
+        if value is not None:
+            failure = safe_encrypted_app_stage(value, failure=True)
+    return True, name, failure
+
+
 def deliver_encrypted_credentials(fixture, run_id):
     if not re.fullmatch(r'\d+', run_id):
         raise Failure('direct_android_invalid_run_id')
@@ -676,6 +778,44 @@ def deliver_encrypted_credentials(fixture, run_id):
     adb('shell', '-T', 'run-as', PACKAGE, 'tee', pending, data=payload)
     adb('shell', 'run-as', PACKAGE, 'chmod', '600', pending)
     adb('shell', 'run-as', PACKAGE, 'mv', pending, pending[:-8] + '.json')
+
+
+def cleanup_encrypted_device(reverse, before):
+    cleanup = {'reverseRemoved': reverse is None, 'packageRemoved': False,
+               'ownedForwardsRemoved': False}
+    checks = {'reverse': 'not_owned' if reverse is None else 'unproven',
+              'package': 'unproven', 'forwards': 'unproven'}
+    errors = (Failure, subprocess.SubprocessError, OSError, UnicodeError)
+    if reverse is not None:
+        try:
+            # One removal only; a failed or timed-out write is never replayed.
+            adb('reverse', '--remove', reverse)
+            remaining = text('reverse', '--list').splitlines()
+            cleanup['reverseRemoved'] = not any(reverse in line.split()[1:2] for line in remaining)
+            if cleanup['reverseRemoved']:
+                checks['reverse'] = 'verified'
+        except errors:
+            pass
+    try:
+        if package_present():
+            adb('shell', 'am', 'force-stop', PACKAGE)
+            adb('uninstall', PACKAGE)
+        cleanup['packageRemoved'] = not package_present()
+        if cleanup['packageRemoved']:
+            checks['package'] = 'verified'
+    except errors:
+        pass
+    try:
+        for line in forward_set() - before:
+            parts = line.split()
+            if len(parts) == 3 and parts[0] == SERIAL and re.fullmatch(r'tcp:\d+', parts[1]):
+                adb('forward', '--remove', parts[1])
+        cleanup['ownedForwardsRemoved'] = forward_set() == before
+        if cleanup['ownedForwardsRemoved']:
+            checks['forwards'] = 'verified'
+    except errors:
+        pass
+    return cleanup, checks
 
 
 def run_encrypted(args, env):
@@ -707,6 +847,11 @@ def run_encrypted(args, env):
     process = None
     private = None
     fixture_path = None
+    progress = None
+    startup = {'deviceState': 'not_checked', 'packageObserved': False,
+               'appStageObserved': False, 'appStage': 'not_observed',
+               'privateInputDelivered': False}
+    report['startup'] = startup
     try:
         phase = 'software_keyboard_setup'
         adb('shell', 'settings', 'put', 'secure', 'show_ime_with_hard_keyboard', '1')
@@ -735,24 +880,50 @@ def run_encrypted(args, env):
             command = ['flutter', 'test', '--no-pub', '--no-uninstall', '--reporter', 'expanded', '-d', SERIAL,
                        '--dart-define-from-file=' + str(defines), TARGET]
             phase = 'driver_start'
-            process = subprocess.Popen(command, cwd=app, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            process = subprocess.Popen(command, cwd=app, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
+            progress = SanitizedToolProgress(process.stdout)
             deadline = time.monotonic() + 1200
+            next_device_check = 0.0
             peer_confirmed = False
             credential_sent = False
             while process.poll() is None and time.monotonic() < deadline:
                 phase = 'await_device_result'
-                if not credential_sent and package_present():
-                    # Private app-cache IPC only: secrets never enter Dart
-                    # defines, build artifacts, exported logs or screenshots.
+                now = time.monotonic()
+                if now >= next_device_check:
+                    startup['deviceState'] = encrypted_device_state()
+                    if startup['deviceState'] != 'device':
+                        raise Failure('direct_android_encrypted_device_unavailable')
+                    next_device_check = now + 15
+                present, current_stage, early_failure = encrypted_app_observation(
+                    relative, check_failure=not credential_sent)
+                if not present:
+                    time.sleep(1)
+                    continue
+                startup['packageObserved'] = True
+                if current_stage is not None:
+                    startup['appStageObserved'] = True
+                    startup['appStage'] = current_stage
+                if not credential_sent:
+                    if early_failure is not None:
+                        report['failureStage'] = early_failure
+                        raise Failure('direct_android_device_test_failed')
+                    if current_stage is None:
+                        time.sleep(1)
+                        continue
+                    if current_stage != 'encrypted_waiting_private':
+                        raise Failure('direct_android_encrypted_startup_stage_invalid')
+                    # Send once, only after the real integration test is waiting.
+                    # Secrets never enter defines, build artifacts or exported logs.
                     deliver_encrypted_credentials(fixture, env['GITHUB_RUN_ID'])
                     credential_sent = True
-                screen = read_public_json(relative + '/screen-request.json')
+                    startup['privateInputDelivered'] = True
+                screen = read_public_json(relative + '/screen-request.json', package_known=True)
                 if screen is not None:
                     screen_checkpoint(screen, screens, fixture, None, relative, output, require_rotation=False)
-                diagnostic = read_public_json(relative + '/encrypted-diagnostic.json', 2048)
+                diagnostic = read_public_json(relative + '/encrypted-diagnostic.json', 2048, package_known=True)
                 if diagnostic is not None:
                     report['uiDiagnostic'] = safe_encrypted_diagnostic(diagnostic)
-                checkpoint = read_public_json(relative + '/encrypted-stage.json')
+                checkpoint = read_public_json(relative + '/encrypted-stage.json', package_known=True)
                 if checkpoint is not None:
                     name = checked_encrypted_stage(checkpoint, checkpoints)
                     if name is not None:
@@ -763,7 +934,7 @@ def run_encrypted(args, env):
                         pending = relative + '/encrypted-' + name + '-confirmed.new'
                         adb('shell', '-T', 'run-as', PACKAGE, 'tee', pending, data=reply)
                         adb('shell', 'run-as', PACKAGE, 'mv', pending, pending[:-4] + '.json')
-                public = read_public_json(relative + '/encrypted-result.json')
+                public = read_public_json(relative + '/encrypted-result.json', package_known=True)
                 if public is not None:
                     report['device'] = safe_encrypted_result(json.dumps(public))
                     if not credential_sent or tuple(checkpoints) != ('review', 'rejected'):
@@ -796,9 +967,8 @@ def run_encrypted(args, env):
                 if not isinstance(failure, dict):
                     failure = read_public_json(relative + '/stage.json', 256)
                 if isinstance(failure, dict):
-                    stage = failure.get('stage', '')
-                    if isinstance(stage, str) and re.fullmatch(r'[a-z_]{1,40}', stage):
-                        report['failureStage'] = stage
+                    report['failureStage'] = safe_encrypted_app_stage(
+                        failure, failure='code' in failure)
                 diagnostic = read_public_json(relative + '/encrypted-diagnostic.json', 2048)
                 if diagnostic is not None:
                     report['uiDiagnostic'] = safe_encrypted_diagnostic(diagnostic)
@@ -818,6 +988,8 @@ def run_encrypted(args, env):
         primary = str(error) if isinstance(error, Failure) else 'direct_android_runner_failed'
         report['failureCode'] = primary
         report['diagnostic'] = safe_failure(error, phase)
+        if process is not None:
+            startup['deviceState'] = encrypted_device_state()
     finally:
         report['lastPhase'] = phase
         report['protocol'] = fixture.snapshot()
@@ -832,22 +1004,17 @@ def run_encrypted(args, env):
                 os.killpg(process.pid, signal.SIGKILL)
                 process.wait(timeout=10)
         cleanup['flutterToolStopped'] = process is None or process.poll() is not None
-        try:
-            if reverse is not None:
-                adb('reverse', '--remove', reverse)
-            remaining = text('reverse', '--list').splitlines()
-            cleanup['reverseRemoved'] = reverse is None or not any(reverse in line.split()[1:2] for line in remaining)
-            if package_present():
-                adb('shell', 'am', 'force-stop', PACKAGE)
-                adb('uninstall', PACKAGE)
-            cleanup['packageRemoved'] = not package_present()
-            for line in forward_set() - before:
-                parts = line.split()
-                if len(parts) == 3 and parts[0] == SERIAL and re.fullmatch(r'tcp:\d+', parts[1]):
-                    adb('forward', '--remove', parts[1])
-            cleanup['ownedForwardsRemoved'] = forward_set() == before
-        except Failure:
-            report['cleanupCode'] = 'direct_android_adb_cleanup_failed'
+        if process is not None:
+            exit_code = process.poll()
+            if type(exit_code) is int and -255 <= exit_code <= 255:
+                startup['toolExitCode'] = exit_code
+        if progress is not None:
+            startup['tool'] = progress.finish()
+            # EOF proves no inherited tool writer still holds this pipe open.
+            cleanup['flutterToolStopped'] = (cleanup['flutterToolStopped'] and
+                                             startup['tool']['streamState'] == 'eof')
+        device_cleanup, report['cleanupChecks'] = cleanup_encrypted_device(reverse, before)
+        cleanup.update(device_cleanup)
         fixture.close()
         cleanup['fixtureClosed'] = fixture.snapshot()['connectionsClosed']
         cleanup['temporaryKeyRemoved'] = (fixture_path is None or not fixture_path.exists()) and not getattr(fixture, 'private_key', '') and not getattr(fixture, 'passphrase', '')

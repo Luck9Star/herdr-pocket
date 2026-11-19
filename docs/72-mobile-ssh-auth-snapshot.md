@@ -57,6 +57,12 @@ R7 验收范围为受控回环密码认证与 XCTest 输入。活动终端在三
 
 [后续活动终端与切页验证](73-mobile-ssh-terminal-navigation.md)记录两壳在本地回环中的看板、网络和设置往返，以及同尺寸键盘开合对照。
 
+## Tauri Android 加密私钥与主机换钥
+
+2026-11-19，作业 `135472506072` 在 API 35 x86_64 模拟器上通过 `encrypted-key-rotation`，源码为 `7d81500817e0afbc42f8924585be8a380ad4cf38`。Tauri Android WebView 连接同一受控回环端点。首次确认 A，遇到 B 时拒绝连接，取消核对后仍保留 A。显式重探并确认 B 后，临时加密 OpenSSH Ed25519 私钥对应的公钥才获接受。[正式作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44498717182/job/135472506072)
+
+服务端记录 `A → B → B → B`。前三条连接各有 0 次认证尝试、0 次 PTY 请求、0 字节输入。第四条连接记录 2 次认证尝试、1 次成功、1 次 PTY、1 次 shell，收到 9 字节、送出 102 字节。1080×2340 设备原图的终端区域通过 OCR，回显标记紧接两行合成词。驱动主动断开并清空凭据，四条连接均已关闭，浏览器、应用、forward、reverse 和夹具连接五项清理通过。输入来自 CDP。[原始报告、三张原图、校验清单与复跑来源](evidence/tauri-android-encrypted-key-rotation-20261119/README.md)
+
 ## Flutter Android 加密私钥独立验收
 
 2026-11-19，[R5 作业 135408718366](https://github.com/Luck9Star/herdr-pocket/actions/runs/44479715559/job/135408718366)在 Android API 35 模拟器通过加密 OpenSSH Ed25519 私钥路径，源码为 `36a9228df84e344ff9f9f4b4e2fecd92dd177246`。此前上表的 Flutter Android R2 已覆盖普通密码和主机换钥；R5 是独立私钥单项，并未重复换钥。

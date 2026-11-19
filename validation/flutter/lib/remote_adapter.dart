@@ -1057,6 +1057,15 @@ class RemoteReadOnlyAdapter {
       await _wait(a,client.authenticated);
       e.diagnosticPhase = 'authenticated';
       if (!e.hostKeyChecked || !e.hostKeyMatched) throw const RemoteFailure('host_key_mismatch');
+      if (onDashboard != null) {
+        // A one-shot board may be waiting for pane selection with no active watch.
+        void peerEnded() {
+          if (_valid(a) && identical(a.client,client) && a.failure == null) {
+            _fail(a,const RemoteFailure('observe_ended'));
+          }
+        }
+        unawaited(client.done.then<void>((_) => peerEnded(),onError:(Object _,StackTrace __) => peerEnded()));
+      }
       Future<RemoteDashboard> snapshot({bool observation=false,bool watch=false}) async {
         final previous = a.snapshotTail;
         final release = Completer<void>();

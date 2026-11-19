@@ -21,6 +21,7 @@ FLUTTER_VERSION = '3.47.9'
 FLUTTER_COMMIT = 'c197ca5199e9ee5661e865596c9c07294dfab51c'
 MARKER = '.herdr-android-device-test.json'
 BASELINE = 'tool/android-device-baseline.lock'
+CONNECT_DIAGNOSTIC_TEST = Path('test/android_connect_diagnostic_test.dart')
 SDK_ADDITIONS = {'integration_test', 'flutter_driver', 'fuchsia_remote_debug_protocol'}
 # Extra SDK integration-test dependencies are explicitly isolated from the
 # product lock. Any existing package drift or unlisted addition fails closed.
@@ -58,7 +59,7 @@ def checked_app(destination, env):
     value = json.loads(marker.read_text(encoding='utf-8'))
     if value.get('kind') != 'herdr-flutter-validation' or value.get('sourceCommit') != env['GITHUB_SHA']:
         raise DevicePreparationFailure('android_device_scaffold_source_mismatch')
-    for relative in ('lib', 'tool', 'pubspec.yaml', 'pubspec.lock', 'candidate-manifest.json', 'pubspec_overrides.yaml', 'candidate', 'candidate/terminal_view', 'android/app/build.gradle.kts'):
+    for relative in ('lib', 'test', 'tool', 'pubspec.yaml', 'pubspec.lock', 'candidate-manifest.json', 'pubspec_overrides.yaml', 'candidate', 'candidate/terminal_view', 'android/app/build.gradle.kts'):
         scoped_path(app, relative)
     return app
 
@@ -122,7 +123,8 @@ def candidate_boundary(app, lock_text):
 def prepare(destination, env=None):
     env = os.environ if env is None else env
     app = checked_app(destination, env)
-    if any((app / path).exists() or (app / path).is_symlink() for path in (MARKER, BASELINE, 'integration_test')):
+    if any((app / path).exists() or (app / path).is_symlink()
+           for path in (MARKER, BASELINE, 'integration_test', CONNECT_DIAGNOSTIC_TEST)):
         raise DevicePreparationFailure('android_device_preparation_already_exists')
     original = (SOURCE / 'pubspec.yaml').read_text(encoding='utf-8')
     expected_pubspec = terminal_view_ime.reference_pubspec(original)
@@ -147,6 +149,8 @@ def prepare(destination, env=None):
     (app / BASELINE).parent.mkdir(exist_ok=True)
     (app / BASELINE).write_text(baseline, encoding='utf-8')
     shutil.copytree(SOURCE / 'integration_test', app / 'integration_test')
+    # The widget cases exercise the device driver's shared tap implementation.
+    shutil.copy2(SOURCE / 'device_test' / CONNECT_DIAGNOSTIC_TEST.name, app / CONNECT_DIAGNOSTIC_TEST)
     (app / 'pubspec.yaml').write_text(replacement, encoding='utf-8')
     proof = {'schemaVersion': 1, 'kind': 'herdr-flutter-android-integration', 'sourceSHA': env['GITHUB_SHA'],
         'flutterVersion': FLUTTER_VERSION, 'flutterCommit': FLUTTER_COMMIT,
@@ -154,7 +158,8 @@ def prepare(destination, env=None):
         'gradleSha256': gradle_digest, 'productionDartSources': sources, 'lockVerified': False,
         'jvmTargetPolicy': 'inherited unchanged from generated app and shared device-keys.gradle',
         'nativeSigner': 'production AndroidDeviceKeyStore and Bouncy Castle software Ed25519; no test signer',
-        'integrationTestSha256': digest(app / 'integration_test/android_pairing_observe_test.dart')}
+        'integrationTestSha256': digest(app / 'integration_test/android_pairing_observe_test.dart'),
+        'connectDiagnosticTestSha256': digest(app / CONNECT_DIAGNOSTIC_TEST)}
     native = Path('android/app/src/main/kotlin/dev/herdr/herdr_flutter_probe')
     proof['productionAndroidChannels'] = {str(native / name): digest(app / native / name) for name in
         PRODUCTION_CHANNELS}
@@ -165,14 +170,15 @@ def prepare(destination, env=None):
 def verify_lock(destination, env=None):
     env = os.environ if env is None else env
     app = checked_app(destination, env)
-    for relative in (MARKER, BASELINE, 'integration_test/android_pairing_observe_test.dart'):
+    for relative in (MARKER, BASELINE, 'integration_test/android_pairing_observe_test.dart', CONNECT_DIAGNOSTIC_TEST):
         scoped_path(app, relative)
     proof = json.loads((app / MARKER).read_text(encoding='utf-8'))
     if proof.get('sourceSHA') != env['GITHUB_SHA'] or proof.get('kind') != 'herdr-flutter-android-integration':
         raise DevicePreparationFailure('android_device_preparation_source_mismatch')
     if (digest(app / BASELINE) != proof['baselineLockSha256'] or digest(app / 'pubspec.yaml') != proof['preparedPubspecSha256'] or
             digest(app / 'android/app/build.gradle.kts') != proof['gradleSha256'] or
-            digest(app / 'integration_test/android_pairing_observe_test.dart') != proof['integrationTestSha256']):
+            digest(app / 'integration_test/android_pairing_observe_test.dart') != proof['integrationTestSha256'] or
+            digest(app / CONNECT_DIAGNOSTIC_TEST) != proof['connectDiagnosticTestSha256']):
         raise DevicePreparationFailure('android_device_preparation_changed')
     production_sources(app)
     old_text = (app / BASELINE).read_text(encoding='utf-8')

@@ -164,7 +164,17 @@ Future<void> tapControlAtStablePoint(
       await tester.pump(const Duration(milliseconds: 100));
       final current = finder.evaluate().toList();
       if (current.length != 1 || !identical(current.single, element)) {
-        if (candidate != null) fail('direct_ssh_control_not_ready_$name');
+        if (candidate != null) {
+          onObservation?.call(
+            current.isEmpty
+                ? 'missing'
+                : current.length > 1
+                ? 'multiple'
+                : 'replaced',
+            false,
+          );
+          fail('direct_ssh_control_not_ready_$name');
+        }
         candidate = null;
         point = null;
         continue;
@@ -556,6 +566,31 @@ Future<void> runDirectSshUi(
   step('report_data_set');
 }
 
+Future<void> finishAndroidEncryptedPassphrase(WidgetTester tester) async {
+  final editor = find.descendant(
+    of: control('direct-passphrase'),
+    matching: find.byType(EditableText),
+  );
+  final focus = tester.widget<EditableText>(editor).focusNode;
+  // Observe the actual IME opening before completing the edit. A zero inset
+  // immediately after enterText may mean the platform has yet to resize.
+  await until(
+    tester,
+    () => focus.hasFocus && tester.view.viewInsets.bottom > 0,
+    timeoutReason: 'direct_ssh_encrypted_passphrase_ime_open_timeout',
+  );
+  await tester.testTextInput.receiveAction(TextInputAction.done);
+  await until(tester, () {
+    if (focus.hasFocus ||
+        tester.view.viewInsets.bottom != 0 ||
+        editor.evaluate().length != 1) {
+      return false;
+    }
+    final form = Scrollable.maybeOf(tester.element(editor));
+    return form != null && !form.position.isScrollingNotifier.value;
+  }, timeoutReason: 'direct_ssh_encrypted_passphrase_layout_timeout');
+}
+
 Future<void> runEncryptedDirectSshUi(
   WidgetTester tester, {
   required IntegrationTestWidgetsFlutterBinding binding,
@@ -718,10 +753,15 @@ Future<void> runEncryptedDirectSshUi(
   await tap(tester, 'direct-auth-key');
   await pasteKey();
   final passphrase = control('direct-passphrase');
+  final android = platform == 'android-api35-emulator';
   expect(tester.widget<TextField>(passphrase).obscureText, isTrue);
   await tester.ensureVisible(passphrase);
   await tester.enterText(passphrase, 'invalid-fixture-passphrase');
   await tester.pump();
+  if (android) {
+    step('encrypted_prepare_rejection');
+    await finishAndroidEncryptedPassphrase(tester);
+  }
   await tap(tester, 'direct-connect', requireEnabled: true);
   await until(
     tester,
@@ -739,6 +779,10 @@ Future<void> runEncryptedDirectSshUi(
   config.remove('passphrase');
   await tester.pump();
   expect(tester.widget<TextField>(passphrase).obscureText, isTrue);
+  if (android) {
+    step('encrypted_prepare_connect');
+    await finishAndroidEncryptedPassphrase(tester);
+  }
   step('encrypted_connect');
   String? lastConnectDiagnostic;
   void connectDiagnostic(String status, bool stable) {

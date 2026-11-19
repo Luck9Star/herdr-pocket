@@ -24,6 +24,8 @@
 
 **从这里开始**　[阶段交接：已完成、未完成与恢复顺序](https://github.com/Luck9Star/herdr-pocket/blob/85c150b24dca14412cf01075b832c1014547a3aa/docs/56-project-status-and-handoff.md) · [原型分支与源码](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation) · [历史下载、验收与复测步骤](https://github.com/Luck9Star/herdr-pocket/blob/e9ddfc8d03593e03a6ae539b3f0679a9adf3c84f/docs/53-mobile-connection-diagnostics.md) · [Penpot 手机配对交互原型](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8e75ef79937)
 
+**参与贡献**　[报告故障或建议](https://github.com/Luck9Star/herdr-pocket/issues/new/choose) · [贡献指南与诊断分享说明](CONTRIBUTING.md)
+
 **手机闭环 · 2026-11-07**　Flutter 和 Tauri 已在 Android API 35 x86_64 云模拟器上走通设备配对审查、SSH 认证、看板、选定 pane 的持续观察和停止。主机摘要显示已知受阻数、状态未知数、原会话和最后同步时间；返回列表保留上次快照。[验收结果、两轮失败及复测](docs/34-mobile-host-task-summary.md)
 
 两份 arm64-v8a 测试包来自同一源码 `e54f23c`，已下载并核对 APK 哈希、原生来源及包内字节。[Flutter 下载](https://github.com/Luck9Star/herdr-pocket/actions/runs/42328109342/artifacts/13556637167) · [Tauri 下载](https://github.com/Luck9Star/herdr-pocket/actions/runs/42328109342/artifacts/13556314095) · [7 项云任务](https://github.com/Luck9Star/herdr-pocket/actions/runs/42328109342) · [实测数据](docs/evidence/mobile-pair-gui/host-board-cloud-20261107.json)

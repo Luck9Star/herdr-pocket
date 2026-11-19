@@ -1,6 +1,6 @@
 # 桌面分屏窗口变化验收
 
-2026-11-19，Flutter 的 [D2 窄桌面与窗口变化](08-ui-design-plan.md#3-首轮画板与状态清单)在正常主机工作台完成 Widget 回归。收窄时保留活动终端与输入焦点，暂停另一侧。拉宽后恢复原来的左右位置：**因窗口收窄而被暂停、此前仍在实时观察的副侧自动恢复只读观察**，等待同一目标的新完整帧；手动暂停或从未观察的面板不自动恢复。早期版本（`3ff4d23`）拉宽后副侧一律显示旧画面并标为已暂停，须手动恢复，此为历史行为。Ubuntu 官方作业已在 Flutter Widget 中验证两条真实 OpenSSH/herdr 回环的分屏、焦点和输入隔离。macOS 无界面回环也已复验，macOS 原生窗口内两条真实连接的分屏与窗口变化仍待验收。
+2026-11-19，Flutter 的 [D2 窄桌面与窗口变化](08-ui-design-plan.md#3-首轮画板与状态清单)在正常主机工作台完成 Widget 回归。收窄时保留活动终端与输入焦点，暂停另一侧。拉宽后恢复原来的左右位置：**因窗口收窄而被暂停、此前仍在实时观察的副侧自动恢复只读观察**，等待同一目标的新完整帧；手动暂停或从未观察的面板不自动恢复。早期版本（`3ff4d23`）拉宽后副侧一律显示旧画面并标为已暂停，须手动恢复，此为历史行为。Ubuntu 官方作业已在 Flutter Widget 中验证两条真实 OpenSSH/herdr 回环的分屏、焦点和输入隔离。macOS 无界面回环也已复验。macOS 原生双连接的分屏与窗口变化在当前环境下未验证。详见[macOS 原生窗口签名限制](#macos-原生窗口签名限制)。
 
 ## Flutter 窗口与键盘回归
 
@@ -131,6 +131,30 @@ printf '%s  %s\n' "$herdr_digest" "$herdr_bin" | shasum -a 256 -c &&
   cmp "$pair_run/report.json" docs/evidence/dual-overlay-20261115/macos-two-paired-hosts.json
 ```
 
+
+## macOS 原生窗口签名限制
+
+**未验证 — 环境受限。** 2026-11-19 的 Flutter stock 托管 macOS arm64 作业停在第一台主机的设备身份创建阶段，尚未取得公开配对请求，也未到达主机授权、双 SSH 实窗、分屏或窗口变化。上述无界面双回环独立记录。
+
+两次作业均在原生窗口完成第一台主机的公开资料预览、明确填表和逐项回读，覆盖端口、账号、命名会话、连接路径和主机公钥，并核对完整指纹。复核复选框经一次实际点击从未勾选变为已勾选，同一创建按钮随即切换到启用外观。驱动随后执行一次创建操作。[R10 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44494129879/job/135456886644) · [R11 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44498417528/job/135471493490)
+
+| 作业来源 | 创建后的原生观察 | 原始工件 |
+| --- | --- | --- |
+| R10，`2e38d94e41d3144faebd951b343af7da644e292d` | 到达 `keyA`，同窗找不到「复制当前公开请求」。结果未知。 | [原始 ZIP](evidence/macos-s06-signing-20261119/mac-s06-r10.zip) · [Actions 工件 14514054134](https://github.com/Luck9Star/herdr-pocket/actions/runs/44494129879/artifacts/14514054134) |
+| R11，`643ec9d46f82bf3c15f5a8bb79a39fff60eabc70` | 产品报告设备身份创建结果未知，记为 `deviceCreationUnknown`。工件只记录这一阶段，未取得底层 `OSStatus`。本轮专用 AppKit 通道已释放。 | [原始 ZIP](evidence/macos-s06-signing-20261119/mac-s06-r11.zip) · [Actions 工件 14517390000](https://github.com/Luck9Star/herdr-pocket/actions/runs/44498417528/artifacts/14517390000) |
+
+R11 读取了本轮实际构建应用的签名与 entitlement。应用为 ad hoc 签名，未发现团队标识、应用标识、Keychain 访问组、应用组或 provisioning profile。当前构建缺少产品所需的 Data Protection Keychain 签名访问组。产品用 `kSecUseDataProtectionKeychain` 调用 `SecItemAdd`，Apple 规定该钥匙串的访问组由代码签名 entitlement 决定，并由 provisioning profile 授权。[产品密钥存储源码](../validation/pairing/native/apple/DeviceKeys.swift#L20-L38) · [原生错误返回源码](../validation/flutter/native/apple/DeviceKeyChannel.swift#L22-L34) · [Apple TN3137](https://developer.apple.com/documentation/technotes/tn3137-on-mac-keychains)
+
+两份 ZIP 各只含 Actions 脱敏结果 `result.json`。校验后可直接读取原件。[SHA-256 清单](evidence/macos-s06-signing-20261119/SHA256SUMS)
+
+```sh
+cd docs/evidence/macos-s06-signing-20261119
+shasum -a 256 -c SHA256SUMS
+unzip -p mac-s06-r10.zip result.json
+unzip -p mac-s06-r11.zip result.json
+```
+
+按仅使用现有环境的决定，本轮到此归档。恢复验收需要在正确签名的 macOS 登录环境中运行同一产品的 Data Protection Keychain 路径，随后在同一次原生窗口运行中完成两条真实配对连接、键盘切换、窗口收窄与回宽、服务端 PTY 和输入计数及清理。若扩展环境，签名与钥匙串授权由用户掌控。
 
 ## Ubuntu 官方 Flutter 双 SSH 验证
 

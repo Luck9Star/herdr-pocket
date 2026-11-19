@@ -90,6 +90,7 @@ class ScaffoldTests(unittest.TestCase):
             self.assertEqual(dart.count("if (desktop) Text('HPAX:H"),2)
             self.assertEqual(dart.count("if (desktop && keyAuth) Text('HPKEY:K"),1)
             self.assertEqual(dart.count("Text('HPCLEAR:K"),3)
+            self.assertEqual(dart.count("Text('HPCLOSE:L${closeLocalConfirmed ? 1 : 0}F${closeCleanupFailed ? 1 : 0}"),1)
 
     def test_unknown_project_or_missing_marker_is_not_modified(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -210,7 +211,8 @@ class ScaffoldTests(unittest.TestCase):
         swift=(Path(__file__).parent/'macos_secure_xcuitest.swift').read_text()
         connected=swift[swift.index('private func connectedDisconnect'):swift.index('private func peerObservationWindow')]
         self.assertIn('node.value as? String',connected)
-        self.assertIn('["Esc", "Ctrl-C", "Enter"]',connected)
+        self.assertIn('$0 == "已连接"',connected)
+        self.assertNotIn('["Esc", "Ctrl-C", "Enter"]',connected)
         self.assertIn('!element(app, addressLabel).exists',connected)
         self.assertIn('Date().addingTimeInterval(30)',connected)
         window=swift[swift.index('private func peerObservationWindow'):swift.index('func testSystemMasking')]
@@ -243,13 +245,29 @@ class ScaffoldTests(unittest.TestCase):
         result=swift[swift.index('private func verifyClearedCredentials'):swift.index('private func typeOrdinaryOnce')]
         self.assertIn('HPCLEAR:K1P1',result)
         self.assertIn('app.secureTextFields.count == secureEditors',result)
-        self.assertIn('app.staticTexts["本机已断开"].waitForExistence',result)
+        self.assertIn('let title = "本机已断开"',result)
+        self.assertIn('[$0.label, $0.value as? String ?? ""]',result)
+        self.assertIn('closed = titlePublished && text.contains { $0.contains("HPCLOSE:L1F0") }',result)
+        self.assertIn('returnHome.count == 1 && returnHome.firstMatch.isEnabled',result)
         self.assertIn('try assertNoSecrets(app, secrets)',result)
         masking=swift[swift.index('func testSystemMasking'):swift.index('func testPasswordSSH')]
         self.assertLess(masking.index('try probeAndReview(app'),masking.index('secureField(app, "direct-secret")'))
         reopened=swift[swift.index('func testReturnAndReopen'):]
         self.assertLess(reopened.index('phase: "returnReopened")'),reopened.index('let reopened = secureField'))
         self.assertIn('verifyClearedCredentials(app, secureEditors: 1)',reopened)
+
+    def test_reopened_target_requires_actual_input_and_exact_controller_readback(self):
+        swift = (Path(__file__).parent / 'macos_secure_xcuitest.swift').read_text()
+        target = swift[swift.index('private func enterTarget'):swift.index('private func clickEntryBack')]
+        self.assertLess(target.index('requireFreshForm(app'), target.index('typeOrdinaryOnce(app, field: address'))
+        self.assertIn('phase: phase + "Address", controllerBit: 0', target)
+        self.assertIn('phase: phase + "Port", controllerBit: portBit', target)
+        self.assertIn('phase: phase + "User", controllerBit: 3', target)
+        helper = swift[swift.index('private func verifyOrdinaryValue'):swift.index('private func targetDiagnostics')]
+        self.assertIn('(field.value as? String) == value', helper)
+        self.assertIn('matching?[controllerBit] == true', helper)
+        self.assertEqual(helper.count('app.typeText(value)'), 1)
+        self.assertIn('value: sentinel, phase: "sentinel", replace: true)', swift)
 
     def test_fingerprint_mouse_fallback_requires_unique_visible_target_and_actual_confirmation(self):
         swift=(Path(__file__).parent/'macos_secure_xcuitest.swift').read_text()

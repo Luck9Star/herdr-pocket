@@ -338,25 +338,54 @@ final class SecureCredentialUITests: XCTestCase {
     }
 
     private func verifyLocalDisconnect(_ app: XCUIApplication, secrets: [String]) throws {
-        XCTAssertTrue(app.staticTexts["本机已断开"].waitForExistence(timeout: 15), "disconnect did not return to form")
+        let returnHome = app.buttons.matching(NSPredicate(format: "label == %@", "返回首页"))
+        let title = "本机已断开"
+        let deadline = Date().addingTimeInterval(15)
+        var closed = false
+        repeat {
+            let text = try snapshotNodes(app).flatMap { [$0.label, $0.value as? String ?? ""] }
+            let titlePublished = text.contains { value in
+                value == title || value.hasPrefix(title + "\n") || value.hasPrefix(title + " ") ||
+                    value.hasPrefix(title + "；")
+            }
+            closed = titlePublished && text.contains { $0.contains("HPCLOSE:L1F0") } &&
+                returnHome.count == 1 && returnHome.firstMatch.isEnabled
+            if closed { break }
+            usleep(100_000)
+        } while Date() < deadline
+        XCTAssertTrue(closed, "disconnect did not return to form")
         try verifyClearedCredentials(app)
         try assertNoSecrets(app, secrets)
     }
 
-    private func typeOrdinaryOnce(_ app: XCUIApplication, field: XCUIElement, value: String, phase: String, replace: Bool = false) throws {
+    private func verifyOrdinaryValue(_ app: XCUIApplication, field: XCUIElement, value: String, phase: String,
+                                     controllerBit: Int? = nil) throws {
+        var verified = false
+        for _ in 0..<20 {
+            if field.exists && (field.value as? String) == value {
+                verified = true
+                break
+            }
+            // The disposable app independently checks exact fixture target values.
+            if field.exists, let controllerBit {
+                let matching = try targetDiagnostics(app, phase: phase, emit: false)
+                verified = matching?[controllerBit] == true
+                if verified { break }
+            }
+            usleep(100_000)
+        }
+        print("HP_XCUI_INPUT=phase:\(phase),target:\(verified ? 1 : 0)")
+        fflush(stdout)
+        if !verified { try? targetDiagnostics(app, phase: "inputFailure") }
+        XCTAssertTrue(verified, "ordinary field target not read back")
+    }
+
+    private func typeOrdinaryOnce(_ app: XCUIApplication, field: XCUIElement, value: String, phase: String,
+                                  replace: Bool = false, controllerBit: Int? = nil) throws {
         tap(app, field)
         if replace { app.typeKey("a", modifierFlags: .command) }
         app.typeText(value)
-        var nodes = try snapshotNodes(app)
-        for _ in 0..<20 {
-            if nodes.contains(where: { ($0.value as? String ?? "") == value }) { break }
-            usleep(100_000);nodes = try snapshotNodes(app)
-        }
-        let count = nodes.filter { ($0.value as? String ?? "") == value }.count
-        print("HP_XCUI_INPUT=phase:\(phase),target:\(min(count,10000))")
-        fflush(stdout)
-        if count == 0 { try? targetDiagnostics(app, phase: "inputFailure") }
-        XCTAssertGreaterThan(count, 0, "ordinary field target not read back")
+        try verifyOrdinaryValue(app, field: field, value: value, phase: phase, controllerBit: controllerBit)
     }
 
     @discardableResult
@@ -394,7 +423,7 @@ final class SecureCredentialUITests: XCTestCase {
         let address = element(app, addressLabel).descendants(matching: .textField).firstMatch
         let portField = element(app, "端口").descendants(matching: .textField).firstMatch
         let userField = element(app, "用户名").descendants(matching: .textField).firstMatch
-        try typeOrdinaryOnce(app, field: address, value: host, phase: phase + "Address")
+        try typeOrdinaryOnce(app, field: address, value: host, phase: phase + "Address", controllerBit: 0)
         mark(phase + "AddressTyped")
         tap(app, portField)
         app.typeKey(XCUIKeyboardKey.end, modifierFlags: [])
@@ -409,16 +438,10 @@ final class SecureCredentialUITests: XCTestCase {
         XCTAssertTrue(cleared?.count == 13 && cleared?[11] == true, "default port was not cleared")
         mark(phase + "PortCleared")
         app.typeText(String(port))
-        var nodes = try snapshotNodes(app)
-        for _ in 0..<20 {
-            if nodes.contains(where: { ($0.value as? String ?? "") == String(port) }) { break }
-            usleep(100_000);nodes = try snapshotNodes(app)
-        }
-        let portCount = nodes.filter { ($0.value as? String ?? "") == String(port) }.count
-        print("HP_XCUI_INPUT=phase:\(phase)Port,target:\(min(portCount,10000))");fflush(stdout)
-        XCTAssertGreaterThan(portCount, 0, "ordinary field target not read back")
+        let portBit = phase == "key" ? 2 : 1
+        try verifyOrdinaryValue(app, field: portField, value: String(port), phase: phase + "Port", controllerBit: portBit)
         mark(phase + "PortTyped")
-        try typeOrdinaryOnce(app, field: userField, value: username, phase: phase + "User")
+        try typeOrdinaryOnce(app, field: userField, value: username, phase: phase + "User", controllerBit: 3)
         mark(phase + "UsernameTyped")
     }
 
@@ -539,15 +562,11 @@ final class SecureCredentialUITests: XCTestCase {
             let nodes = try snapshotNodes(app)
             let statusSeen = nodes.contains { node in
                 [node.label, node.value as? String ?? ""].contains {
-                    $0.contains("已连接 · 输入直接发送到远端 shell")
+                    $0 == "已连接" || $0.contains("已连接 · 输入直接发送到远端 shell")
                 }
             }
-            let keysSeen = ["Esc", "Ctrl-C", "Enter"].allSatisfy { name in
-                let button = app.buttons.matching(NSPredicate(format: "label == %@", name))
-                return button.count == 1 && stableHit(button.firstMatch) && button.firstMatch.isEnabled
-            }
-            let connectedPage = statusSeen || (keysSeen && !element(app, addressLabel).exists)
-            if connectedPage && disconnect.count == 1 && stableHit(disconnect.firstMatch) && disconnect.firstMatch.isEnabled {
+            if statusSeen && !element(app, addressLabel).exists &&
+                disconnect.count == 1 && stableHit(disconnect.firstMatch) && disconnect.firstMatch.isEnabled {
                 return disconnect.firstMatch
             }
             usleep(100_000)

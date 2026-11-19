@@ -1,0 +1,1826 @@
+{
+  "unit": "logical-point",
+  "tolerance": 2,
+  "boards": [
+    {
+      "id": "disconnected-390",
+      "width": 390,
+      "height": 844,
+      "anchors": {
+        "system-status": {
+          "x": 0,
+          "y": 0,
+          "width": 390,
+          "height": 47,
+          "role": "system"
+        },
+        "system-bottom": {
+          "x": 0,
+          "y": 810,
+          "width": 390,
+          "height": 34,
+          "role": "system"
+        },
+        "app-header": {
+          "x": 0,
+          "y": 47,
+          "width": 390,
+          "height": 56,
+          "role": "geometry"
+        },
+        "back": {
+          "x": 16,
+          "y": 53,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "closed-feedback": {
+          "x": 24,
+          "y": 123,
+          "width": 342,
+          "height": 66,
+          "role": "geometry"
+        },
+        "host": {
+          "x": 24,
+          "y": 263,
+          "width": 342,
+          "height": 48,
+          "role": "hit"
+        },
+        "username": {
+          "x": 24,
+          "y": 347,
+          "width": 246,
+          "height": 48,
+          "role": "hit"
+        },
+        "port": {
+          "x": 282,
+          "y": 347,
+          "width": 84,
+          "height": 48,
+          "role": "hit"
+        },
+        "probe": {
+          "x": 24,
+          "y": 415,
+          "width": 342,
+          "height": 48,
+          "role": "hit"
+        },
+        "return-home": {
+          "x": 24,
+          "y": 499,
+          "width": 342,
+          "height": 48,
+          "role": "hit"
+        }
+      }
+    },
+    {
+      "id": "disconnected-remote-exit-390",
+      "width": 390,
+      "height": 844,
+      "anchors": {
+        "system-status": {
+          "x": 0,
+          "y": 0,
+          "width": 390,
+          "height": 47,
+          "role": "system"
+        },
+        "system-bottom": {
+          "x": 0,
+          "y": 810,
+          "width": 390,
+          "height": 34,
+          "role": "system"
+        },
+        "app-header": {
+          "x": 0,
+          "y": 47,
+          "width": 390,
+          "height": 56,
+          "role": "geometry"
+        },
+        "back": {
+          "x": 16,
+          "y": 53,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "closed-feedback": {
+          "x": 24,
+          "y": 123,
+          "width": 342,
+          "height": 66,
+          "role": "geometry"
+        },
+        "host": {
+          "x": 24,
+          "y": 263,
+          "width": 342,
+          "height": 48,
+          "role": "hit"
+        },
+        "username": {
+          "x": 24,
+          "y": 347,
+          "width": 246,
+          "height": 48,
+          "role": "hit"
+        },
+        "port": {
+          "x": 282,
+          "y": 347,
+          "width": 84,
+          "height": 48,
+          "role": "hit"
+        },
+        "probe": {
+          "x": 24,
+          "y": 415,
+          "width": 342,
+          "height": 48,
+          "role": "hit"
+        },
+        "return-home": {
+          "x": 24,
+          "y": 499,
+          "width": 342,
+          "height": 48,
+          "role": "hit"
+        }
+      }
+    },
+    {
+      "id": "disconnect-failed-390",
+      "width": 390,
+      "height": 844,
+      "anchors": {
+        "system-status": {
+          "x": 0,
+          "y": 0,
+          "width": 390,
+          "height": 47,
+          "role": "system"
+        },
+        "system-bottom": {
+          "x": 0,
+          "y": 810,
+          "width": 390,
+          "height": 34,
+          "role": "system"
+        },
+        "app-header": {
+          "x": 0,
+          "y": 47,
+          "width": 390,
+          "height": 56,
+          "role": "geometry"
+        },
+        "back": {
+          "x": 16,
+          "y": 53,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "stop-failed-feedback": {
+          "x": 24,
+          "y": 123,
+          "width": 342,
+          "height": 66,
+          "role": "geometry"
+        },
+        "host": {
+          "x": 24,
+          "y": 263,
+          "width": 342,
+          "height": 48,
+          "role": "hit"
+        },
+        "username": {
+          "x": 24,
+          "y": 347,
+          "width": 246,
+          "height": 48,
+          "role": "hit"
+        },
+        "port": {
+          "x": 282,
+          "y": 347,
+          "width": 84,
+          "height": 48,
+          "role": "hit"
+        },
+        "probe": {
+          "x": 24,
+          "y": 415,
+          "width": 342,
+          "height": 48,
+          "role": "hit"
+        },
+        "return-home": {
+          "x": 24,
+          "y": 499,
+          "width": 342,
+          "height": 48,
+          "role": "hit"
+        }
+      }
+    },
+    {
+      "id": "returned-390",
+      "width": 390,
+      "height": 844,
+      "anchors": {
+        "system-status": {
+          "x": 0,
+          "y": 0,
+          "width": 390,
+          "height": 47,
+          "role": "system"
+        },
+        "system-bottom": {
+          "x": 0,
+          "y": 810,
+          "width": 390,
+          "height": 34,
+          "role": "system"
+        },
+        "home-brand": {
+          "x": 24,
+          "y": 63,
+          "width": 342,
+          "height": 44,
+          "role": "geometry"
+        },
+        "closed-feedback": {
+          "x": 24,
+          "y": 119,
+          "width": 342,
+          "height": 44,
+          "role": "geometry"
+        },
+        "home-empty-card": {
+          "x": 24,
+          "y": 179,
+          "width": 342,
+          "height": 268,
+          "role": "geometry"
+        },
+        "home-add": {
+          "x": 40,
+          "y": 323,
+          "width": 310,
+          "height": 48,
+          "role": "hit"
+        },
+        "home-direct-ssh": {
+          "x": 40,
+          "y": 383,
+          "width": 310,
+          "height": 48,
+          "role": "hit"
+        },
+        "home-tabs": {
+          "x": 0,
+          "y": 754,
+          "width": 390,
+          "height": 56,
+          "role": "geometry"
+        },
+        "tab-board": {
+          "x": 0,
+          "y": 754,
+          "width": 97.5,
+          "height": 56,
+          "role": "hit"
+        },
+        "tab-terminal": {
+          "x": 97.5,
+          "y": 754,
+          "width": 97.5,
+          "height": 56,
+          "role": "hit"
+        },
+        "tab-network": {
+          "x": 195,
+          "y": 754,
+          "width": 97.5,
+          "height": 56,
+          "role": "hit"
+        },
+        "tab-settings": {
+          "x": 292.5,
+          "y": 754,
+          "width": 97.5,
+          "height": 56,
+          "role": "hit"
+        }
+      }
+    },
+    {
+      "id": "disconnected-320",
+      "width": 320,
+      "height": 640,
+      "anchors": {
+        "system-status": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 24,
+          "role": "system"
+        },
+        "system-bottom": {
+          "x": 0,
+          "y": 616,
+          "width": 320,
+          "height": 24,
+          "role": "system"
+        },
+        "app-header": {
+          "x": 0,
+          "y": 24,
+          "width": 320,
+          "height": 56,
+          "role": "geometry"
+        },
+        "back": {
+          "x": 8,
+          "y": 30,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "closed-feedback": {
+          "x": 16,
+          "y": 100,
+          "width": 288,
+          "height": 66,
+          "role": "geometry"
+        },
+        "host": {
+          "x": 16,
+          "y": 240,
+          "width": 288,
+          "height": 48,
+          "role": "hit"
+        },
+        "username": {
+          "x": 16,
+          "y": 324,
+          "width": 192,
+          "height": 48,
+          "role": "hit"
+        },
+        "port": {
+          "x": 220,
+          "y": 324,
+          "width": 84,
+          "height": 48,
+          "role": "hit"
+        },
+        "probe": {
+          "x": 16,
+          "y": 392,
+          "width": 288,
+          "height": 48,
+          "role": "hit"
+        },
+        "return-home": {
+          "x": 16,
+          "y": 476,
+          "width": 288,
+          "height": 48,
+          "role": "hit"
+        }
+      }
+    },
+    {
+      "id": "disconnected-remote-exit-320",
+      "width": 320,
+      "height": 640,
+      "anchors": {
+        "system-status": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 24,
+          "role": "system"
+        },
+        "system-bottom": {
+          "x": 0,
+          "y": 616,
+          "width": 320,
+          "height": 24,
+          "role": "system"
+        },
+        "app-header": {
+          "x": 0,
+          "y": 24,
+          "width": 320,
+          "height": 56,
+          "role": "geometry"
+        },
+        "back": {
+          "x": 8,
+          "y": 30,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "closed-feedback": {
+          "x": 16,
+          "y": 100,
+          "width": 288,
+          "height": 84,
+          "role": "geometry"
+        },
+        "host": {
+          "x": 16,
+          "y": 258,
+          "width": 288,
+          "height": 48,
+          "role": "hit"
+        },
+        "username": {
+          "x": 16,
+          "y": 342,
+          "width": 192,
+          "height": 48,
+          "role": "hit"
+        },
+        "port": {
+          "x": 220,
+          "y": 342,
+          "width": 84,
+          "height": 48,
+          "role": "hit"
+        },
+        "probe": {
+          "x": 16,
+          "y": 410,
+          "width": 288,
+          "height": 48,
+          "role": "hit"
+        },
+        "return-home": {
+          "x": 16,
+          "y": 494,
+          "width": 288,
+          "height": 48,
+          "role": "hit"
+        }
+      }
+    },
+    {
+      "id": "disconnect-failed-320",
+      "width": 320,
+      "height": 640,
+      "anchors": {
+        "system-status": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 24,
+          "role": "system"
+        },
+        "system-bottom": {
+          "x": 0,
+          "y": 616,
+          "width": 320,
+          "height": 24,
+          "role": "system"
+        },
+        "app-header": {
+          "x": 0,
+          "y": 24,
+          "width": 320,
+          "height": 56,
+          "role": "geometry"
+        },
+        "back": {
+          "x": 8,
+          "y": 30,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "stop-failed-feedback": {
+          "x": 16,
+          "y": 100,
+          "width": 288,
+          "height": 66,
+          "role": "geometry"
+        },
+        "host": {
+          "x": 16,
+          "y": 240,
+          "width": 288,
+          "height": 48,
+          "role": "hit"
+        },
+        "username": {
+          "x": 16,
+          "y": 324,
+          "width": 192,
+          "height": 48,
+          "role": "hit"
+        },
+        "port": {
+          "x": 220,
+          "y": 324,
+          "width": 84,
+          "height": 48,
+          "role": "hit"
+        },
+        "probe": {
+          "x": 16,
+          "y": 392,
+          "width": 288,
+          "height": 48,
+          "role": "hit"
+        },
+        "return-home": {
+          "x": 16,
+          "y": 476,
+          "width": 288,
+          "height": 48,
+          "role": "hit"
+        }
+      }
+    },
+    {
+      "id": "returned-320",
+      "width": 320,
+      "height": 640,
+      "anchors": {
+        "system-status": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 24,
+          "role": "system"
+        },
+        "system-bottom": {
+          "x": 0,
+          "y": 616,
+          "width": 320,
+          "height": 24,
+          "role": "system"
+        },
+        "home-brand": {
+          "x": 16,
+          "y": 40,
+          "width": 288,
+          "height": 44,
+          "role": "geometry"
+        },
+        "closed-feedback": {
+          "x": 16,
+          "y": 96,
+          "width": 288,
+          "height": 44,
+          "role": "geometry"
+        },
+        "home-empty-card": {
+          "x": 16,
+          "y": 156,
+          "width": 288,
+          "height": 268,
+          "role": "geometry"
+        },
+        "home-add": {
+          "x": 32,
+          "y": 300,
+          "width": 256,
+          "height": 48,
+          "role": "hit"
+        },
+        "home-direct-ssh": {
+          "x": 32,
+          "y": 360,
+          "width": 256,
+          "height": 48,
+          "role": "hit"
+        },
+        "home-tabs": {
+          "x": 0,
+          "y": 560,
+          "width": 320,
+          "height": 56,
+          "role": "geometry"
+        },
+        "tab-board": {
+          "x": 0,
+          "y": 560,
+          "width": 80,
+          "height": 56,
+          "role": "hit"
+        },
+        "tab-terminal": {
+          "x": 80,
+          "y": 560,
+          "width": 80,
+          "height": 56,
+          "role": "hit"
+        },
+        "tab-network": {
+          "x": 160,
+          "y": 560,
+          "width": 80,
+          "height": 56,
+          "role": "hit"
+        },
+        "tab-settings": {
+          "x": 240,
+          "y": 560,
+          "width": 80,
+          "height": 56,
+          "role": "hit"
+        }
+      }
+    },
+    {
+      "id": "disconnected-1440",
+      "width": 1440,
+      "height": 900,
+      "anchors": {
+        "app-sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 224,
+          "height": 900,
+          "role": "geometry"
+        },
+        "sidebar-toggle": {
+          "x": 8,
+          "y": 8,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-board": {
+          "x": 8,
+          "y": 68,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-terminal": {
+          "x": 8,
+          "y": 120,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-network": {
+          "x": 8,
+          "y": 172,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-settings": {
+          "x": 8,
+          "y": 224,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "page-header": {
+          "x": 224,
+          "y": 0,
+          "width": 1216,
+          "height": 56,
+          "role": "geometry"
+        },
+        "back": {
+          "x": 232,
+          "y": 6,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "closed-feedback": {
+          "x": 264,
+          "y": 76,
+          "width": 560,
+          "height": 66,
+          "role": "geometry"
+        },
+        "host": {
+          "x": 264,
+          "y": 216,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        },
+        "username": {
+          "x": 264,
+          "y": 300,
+          "width": 464,
+          "height": 48,
+          "role": "hit"
+        },
+        "port": {
+          "x": 740,
+          "y": 300,
+          "width": 84,
+          "height": 48,
+          "role": "hit"
+        },
+        "probe": {
+          "x": 264,
+          "y": 368,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        },
+        "return-home": {
+          "x": 264,
+          "y": 452,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        }
+      }
+    },
+    {
+      "id": "disconnected-remote-exit-1440",
+      "width": 1440,
+      "height": 900,
+      "anchors": {
+        "app-sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 224,
+          "height": 900,
+          "role": "geometry"
+        },
+        "sidebar-toggle": {
+          "x": 8,
+          "y": 8,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-board": {
+          "x": 8,
+          "y": 68,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-terminal": {
+          "x": 8,
+          "y": 120,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-network": {
+          "x": 8,
+          "y": 172,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-settings": {
+          "x": 8,
+          "y": 224,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "page-header": {
+          "x": 224,
+          "y": 0,
+          "width": 1216,
+          "height": 56,
+          "role": "geometry"
+        },
+        "back": {
+          "x": 232,
+          "y": 6,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "closed-feedback": {
+          "x": 264,
+          "y": 76,
+          "width": 560,
+          "height": 66,
+          "role": "geometry"
+        },
+        "host": {
+          "x": 264,
+          "y": 216,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        },
+        "username": {
+          "x": 264,
+          "y": 300,
+          "width": 464,
+          "height": 48,
+          "role": "hit"
+        },
+        "port": {
+          "x": 740,
+          "y": 300,
+          "width": 84,
+          "height": 48,
+          "role": "hit"
+        },
+        "probe": {
+          "x": 264,
+          "y": 368,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        },
+        "return-home": {
+          "x": 264,
+          "y": 452,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        }
+      }
+    },
+    {
+      "id": "disconnect-failed-1440",
+      "width": 1440,
+      "height": 900,
+      "anchors": {
+        "app-sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 224,
+          "height": 900,
+          "role": "geometry"
+        },
+        "sidebar-toggle": {
+          "x": 8,
+          "y": 8,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-board": {
+          "x": 8,
+          "y": 68,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-terminal": {
+          "x": 8,
+          "y": 120,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-network": {
+          "x": 8,
+          "y": 172,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-settings": {
+          "x": 8,
+          "y": 224,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "page-header": {
+          "x": 224,
+          "y": 0,
+          "width": 1216,
+          "height": 56,
+          "role": "geometry"
+        },
+        "back": {
+          "x": 232,
+          "y": 6,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "stop-failed-feedback": {
+          "x": 264,
+          "y": 76,
+          "width": 560,
+          "height": 66,
+          "role": "geometry"
+        },
+        "host": {
+          "x": 264,
+          "y": 216,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        },
+        "username": {
+          "x": 264,
+          "y": 300,
+          "width": 464,
+          "height": 48,
+          "role": "hit"
+        },
+        "port": {
+          "x": 740,
+          "y": 300,
+          "width": 84,
+          "height": 48,
+          "role": "hit"
+        },
+        "probe": {
+          "x": 264,
+          "y": 368,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        },
+        "return-home": {
+          "x": 264,
+          "y": 452,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        }
+      }
+    },
+    {
+      "id": "returned-1440",
+      "width": 1440,
+      "height": 900,
+      "anchors": {
+        "app-sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 224,
+          "height": 900,
+          "role": "geometry"
+        },
+        "sidebar-toggle": {
+          "x": 8,
+          "y": 8,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-board": {
+          "x": 8,
+          "y": 68,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-terminal": {
+          "x": 8,
+          "y": 120,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-network": {
+          "x": 8,
+          "y": 172,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-settings": {
+          "x": 8,
+          "y": 224,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "closed-feedback": {
+          "x": 264,
+          "y": 62,
+          "width": 560,
+          "height": 44,
+          "role": "geometry"
+        },
+        "home-empty-card": {
+          "x": 264,
+          "y": 122,
+          "width": 560,
+          "height": 268,
+          "role": "geometry"
+        },
+        "home-add": {
+          "x": 280,
+          "y": 266,
+          "width": 528,
+          "height": 48,
+          "role": "hit"
+        },
+        "home-direct-ssh": {
+          "x": 280,
+          "y": 326,
+          "width": 528,
+          "height": 48,
+          "role": "hit"
+        }
+      }
+    },
+    {
+      "id": "disconnected-980",
+      "width": 980,
+      "height": 780,
+      "anchors": {
+        "app-sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 224,
+          "height": 780,
+          "role": "geometry"
+        },
+        "sidebar-toggle": {
+          "x": 8,
+          "y": 8,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-board": {
+          "x": 8,
+          "y": 68,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-terminal": {
+          "x": 8,
+          "y": 120,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-network": {
+          "x": 8,
+          "y": 172,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-settings": {
+          "x": 8,
+          "y": 224,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "page-header": {
+          "x": 224,
+          "y": 0,
+          "width": 756,
+          "height": 56,
+          "role": "geometry"
+        },
+        "back": {
+          "x": 232,
+          "y": 6,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "closed-feedback": {
+          "x": 264,
+          "y": 76,
+          "width": 560,
+          "height": 66,
+          "role": "geometry"
+        },
+        "host": {
+          "x": 264,
+          "y": 216,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        },
+        "username": {
+          "x": 264,
+          "y": 300,
+          "width": 464,
+          "height": 48,
+          "role": "hit"
+        },
+        "port": {
+          "x": 740,
+          "y": 300,
+          "width": 84,
+          "height": 48,
+          "role": "hit"
+        },
+        "probe": {
+          "x": 264,
+          "y": 368,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        },
+        "return-home": {
+          "x": 264,
+          "y": 452,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        }
+      }
+    },
+    {
+      "id": "disconnected-remote-exit-980",
+      "width": 980,
+      "height": 780,
+      "anchors": {
+        "app-sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 224,
+          "height": 780,
+          "role": "geometry"
+        },
+        "sidebar-toggle": {
+          "x": 8,
+          "y": 8,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-board": {
+          "x": 8,
+          "y": 68,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-terminal": {
+          "x": 8,
+          "y": 120,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-network": {
+          "x": 8,
+          "y": 172,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-settings": {
+          "x": 8,
+          "y": 224,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "page-header": {
+          "x": 224,
+          "y": 0,
+          "width": 756,
+          "height": 56,
+          "role": "geometry"
+        },
+        "back": {
+          "x": 232,
+          "y": 6,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "closed-feedback": {
+          "x": 264,
+          "y": 76,
+          "width": 560,
+          "height": 66,
+          "role": "geometry"
+        },
+        "host": {
+          "x": 264,
+          "y": 216,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        },
+        "username": {
+          "x": 264,
+          "y": 300,
+          "width": 464,
+          "height": 48,
+          "role": "hit"
+        },
+        "port": {
+          "x": 740,
+          "y": 300,
+          "width": 84,
+          "height": 48,
+          "role": "hit"
+        },
+        "probe": {
+          "x": 264,
+          "y": 368,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        },
+        "return-home": {
+          "x": 264,
+          "y": 452,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        }
+      }
+    },
+    {
+      "id": "disconnect-failed-980",
+      "width": 980,
+      "height": 780,
+      "anchors": {
+        "app-sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 224,
+          "height": 780,
+          "role": "geometry"
+        },
+        "sidebar-toggle": {
+          "x": 8,
+          "y": 8,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-board": {
+          "x": 8,
+          "y": 68,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-terminal": {
+          "x": 8,
+          "y": 120,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-network": {
+          "x": 8,
+          "y": 172,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-settings": {
+          "x": 8,
+          "y": 224,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "page-header": {
+          "x": 224,
+          "y": 0,
+          "width": 756,
+          "height": 56,
+          "role": "geometry"
+        },
+        "back": {
+          "x": 232,
+          "y": 6,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "stop-failed-feedback": {
+          "x": 264,
+          "y": 76,
+          "width": 560,
+          "height": 66,
+          "role": "geometry"
+        },
+        "host": {
+          "x": 264,
+          "y": 216,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        },
+        "username": {
+          "x": 264,
+          "y": 300,
+          "width": 464,
+          "height": 48,
+          "role": "hit"
+        },
+        "port": {
+          "x": 740,
+          "y": 300,
+          "width": 84,
+          "height": 48,
+          "role": "hit"
+        },
+        "probe": {
+          "x": 264,
+          "y": 368,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        },
+        "return-home": {
+          "x": 264,
+          "y": 452,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        }
+      }
+    },
+    {
+      "id": "returned-980",
+      "width": 980,
+      "height": 780,
+      "anchors": {
+        "app-sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 224,
+          "height": 780,
+          "role": "geometry"
+        },
+        "sidebar-toggle": {
+          "x": 8,
+          "y": 8,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-board": {
+          "x": 8,
+          "y": 68,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-terminal": {
+          "x": 8,
+          "y": 120,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-network": {
+          "x": 8,
+          "y": 172,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-settings": {
+          "x": 8,
+          "y": 224,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "closed-feedback": {
+          "x": 264,
+          "y": 62,
+          "width": 560,
+          "height": 44,
+          "role": "geometry"
+        },
+        "home-empty-card": {
+          "x": 264,
+          "y": 122,
+          "width": 560,
+          "height": 268,
+          "role": "geometry"
+        },
+        "home-add": {
+          "x": 280,
+          "y": 266,
+          "width": 528,
+          "height": 48,
+          "role": "hit"
+        },
+        "home-direct-ssh": {
+          "x": 280,
+          "y": 326,
+          "width": 528,
+          "height": 48,
+          "role": "hit"
+        }
+      }
+    },
+    {
+      "id": "disconnected-700",
+      "width": 700,
+      "height": 900,
+      "anchors": {
+        "app-sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 64,
+          "height": 900,
+          "role": "geometry"
+        },
+        "sidebar-toggle": {
+          "x": 10,
+          "y": 8,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-board": {
+          "x": 10,
+          "y": 68,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-terminal": {
+          "x": 10,
+          "y": 120,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-network": {
+          "x": 10,
+          "y": 172,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-settings": {
+          "x": 10,
+          "y": 224,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "page-header": {
+          "x": 64,
+          "y": 0,
+          "width": 636,
+          "height": 56,
+          "role": "geometry"
+        },
+        "back": {
+          "x": 72,
+          "y": 6,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "closed-feedback": {
+          "x": 104,
+          "y": 76,
+          "width": 556,
+          "height": 66,
+          "role": "geometry"
+        },
+        "host": {
+          "x": 104,
+          "y": 216,
+          "width": 556,
+          "height": 48,
+          "role": "hit"
+        },
+        "username": {
+          "x": 104,
+          "y": 300,
+          "width": 460,
+          "height": 48,
+          "role": "hit"
+        },
+        "port": {
+          "x": 576,
+          "y": 300,
+          "width": 84,
+          "height": 48,
+          "role": "hit"
+        },
+        "probe": {
+          "x": 104,
+          "y": 368,
+          "width": 556,
+          "height": 48,
+          "role": "hit"
+        },
+        "return-home": {
+          "x": 104,
+          "y": 452,
+          "width": 556,
+          "height": 48,
+          "role": "hit"
+        }
+      }
+    },
+    {
+      "id": "disconnected-remote-exit-700",
+      "width": 700,
+      "height": 900,
+      "anchors": {
+        "app-sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 64,
+          "height": 900,
+          "role": "geometry"
+        },
+        "sidebar-toggle": {
+          "x": 10,
+          "y": 8,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-board": {
+          "x": 10,
+          "y": 68,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-terminal": {
+          "x": 10,
+          "y": 120,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-network": {
+          "x": 10,
+          "y": 172,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-settings": {
+          "x": 10,
+          "y": 224,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "page-header": {
+          "x": 64,
+          "y": 0,
+          "width": 636,
+          "height": 56,
+          "role": "geometry"
+        },
+        "back": {
+          "x": 72,
+          "y": 6,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "closed-feedback": {
+          "x": 104,
+          "y": 76,
+          "width": 556,
+          "height": 66,
+          "role": "geometry"
+        },
+        "host": {
+          "x": 104,
+          "y": 216,
+          "width": 556,
+          "height": 48,
+          "role": "hit"
+        },
+        "username": {
+          "x": 104,
+          "y": 300,
+          "width": 460,
+          "height": 48,
+          "role": "hit"
+        },
+        "port": {
+          "x": 576,
+          "y": 300,
+          "width": 84,
+          "height": 48,
+          "role": "hit"
+        },
+        "probe": {
+          "x": 104,
+          "y": 368,
+          "width": 556,
+          "height": 48,
+          "role": "hit"
+        },
+        "return-home": {
+          "x": 104,
+          "y": 452,
+          "width": 556,
+          "height": 48,
+          "role": "hit"
+        }
+      }
+    },
+    {
+      "id": "disconnect-failed-700",
+      "width": 700,
+      "height": 900,
+      "anchors": {
+        "app-sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 64,
+          "height": 900,
+          "role": "geometry"
+        },
+        "sidebar-toggle": {
+          "x": 10,
+          "y": 8,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-board": {
+          "x": 10,
+          "y": 68,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-terminal": {
+          "x": 10,
+          "y": 120,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-network": {
+          "x": 10,
+          "y": 172,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-settings": {
+          "x": 10,
+          "y": 224,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "page-header": {
+          "x": 64,
+          "y": 0,
+          "width": 636,
+          "height": 56,
+          "role": "geometry"
+        },
+        "back": {
+          "x": 72,
+          "y": 6,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "stop-failed-feedback": {
+          "x": 104,
+          "y": 76,
+          "width": 556,
+          "height": 66,
+          "role": "geometry"
+        },
+        "host": {
+          "x": 104,
+          "y": 216,
+          "width": 556,
+          "height": 48,
+          "role": "hit"
+        },
+        "username": {
+          "x": 104,
+          "y": 300,
+          "width": 460,
+          "height": 48,
+          "role": "hit"
+        },
+        "port": {
+          "x": 576,
+          "y": 300,
+          "width": 84,
+          "height": 48,
+          "role": "hit"
+        },
+        "probe": {
+          "x": 104,
+          "y": 368,
+          "width": 556,
+          "height": 48,
+          "role": "hit"
+        },
+        "return-home": {
+          "x": 104,
+          "y": 452,
+          "width": 556,
+          "height": 48,
+          "role": "hit"
+        }
+      }
+    },
+    {
+      "id": "returned-700",
+      "width": 700,
+      "height": 900,
+      "anchors": {
+        "app-sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 64,
+          "height": 900,
+          "role": "geometry"
+        },
+        "sidebar-toggle": {
+          "x": 10,
+          "y": 8,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-board": {
+          "x": 10,
+          "y": 68,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-terminal": {
+          "x": 10,
+          "y": 120,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-network": {
+          "x": 10,
+          "y": 172,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-settings": {
+          "x": 10,
+          "y": 224,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "closed-feedback": {
+          "x": 104,
+          "y": 62,
+          "width": 556,
+          "height": 44,
+          "role": "geometry"
+        },
+        "home-empty-card": {
+          "x": 104,
+          "y": 122,
+          "width": 556,
+          "height": 268,
+          "role": "geometry"
+        },
+        "home-add": {
+          "x": 120,
+          "y": 266,
+          "width": 524,
+          "height": 48,
+          "role": "hit"
+        },
+        "home-direct-ssh": {
+          "x": 120,
+          "y": 326,
+          "width": 524,
+          "height": 48,
+          "role": "hit"
+        }
+      }
+    }
+  ]
+}

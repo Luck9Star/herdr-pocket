@@ -1,0 +1,18 @@
+npm notice run herdr-pocket-tauri-probe@0.1.0 build
+npm notice run npm run prepare:fixtures && vite build
+npm notice run herdr-pocket-tauri-probe@0.1.0 prepare:fixtures
+npm notice run node scripts/prepare-fixtures.mjs
+Shared fixture and font hashes verified.
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 74 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                             39.16 kB │ gzip: 10.83 kB
+dist/assets/xterm-CmFhZUpU.css              44.93 kB │ gzip:  8.43 kB
+dist/assets/index-BYCTb82b.css              60.24 kB │ gzip:  5.99 kB
+dist/assets/fixture-workbench-CFqVu2Qu.js   13.75 kB │ gzip:  5.76 kB
+dist/assets/index-D-VOyvvd.js              251.53 kB │ gzip: 81.86 kB
+dist/assets/xterm-5sRGXqx2.js              361.55 kB │ gzip: 96.36 kB
+
+✓ built in 286ms

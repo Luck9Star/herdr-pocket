@@ -159,4 +159,10 @@ Android API 35 x86_64 模拟器上的正式作业通过普通连接、换钥和�
 
 普通案完成八次操作，依次打开与收起键盘、进入看板与返回终端、进入网络与返回终端、进入设置与返回终端。导航后的第二次打开键盘前后，系统采样从 `owned_hidden` 到 `owned_visible`，编辑器激活状态从 `false` 到 `true`。两次都核对到同一条活连接，累计成功认证、PTY 和 Shell 各一次，输入仍为零。三案随后均核对输入回显、主动断开及五项清理，包括浏览器、应用、端口正反向转发和夹具连接。
 
-三张原始系统图均保留对应门禁 JSON。键盘图通过夹具标记、隐藏认证表单和零输入检查，普通与换钥回显图通过标记、令牌及回显顺序检查。实体设备、系统输入法组词、真实跨网及加密私钥与换钥的组合仍待验证。 [键盘原图](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r7/ime-keyboard-opened-native.png) · [普通连接原图](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r7/ssh-terminal-android.png) · [换钥原图](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r7/ssh-rotation-terminal-android.png)
+三张原始系统图均保留对应门禁 JSON。键盘图通过夹具标记、隐藏认证表单和零输入检查，普通与换钥回显图通过标记、令牌及回显顺序检查。R7 当时未覆盖加密私钥换钥。实体设备、系统输入法组词和真实跨网仍待验证。[键盘原图](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r7/ime-keyboard-opened-native.png) · [普通连接原图](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r7/ssh-terminal-android.png) · [换钥原图](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r7/ssh-rotation-terminal-android.png)
+
+## 2026-11-20 · Flutter 与 Tauri Android 同源复验
+
+同一提交 `2e8c3557e2e51ae62b423f9e25a9f1fc5d72cecf` 的两壳密码案，在 API 35 x86_64 模拟器分别完成打开和收起键盘，以及看板、网络、设置的进入和返回，共八项。两侧各自保持原认证会话、一次 PTY 和一次 shell，切页期间输入为零，返回原终端后才提交回显标记。服务端确认主动断开后的会话结束，两壳分别有加密私钥及换钥组合的独立证据。[同源验收与官方 ZIP](evidence/ordinary-ssh-android-same-source-20261120/README.md)
+
+本轮密码回显的 Flutter ADB 原图拍于键盘收起后，Tauri ADB 原图拍于键盘打开时。归档索引保留这两张原图、同次截图门禁及 Tauri 的 WebView 图。R7 的键盘原图仍对应上方历史场景。实体设备、真实中文组字和真实跨网仍待验收。[原图成员及 SHA-256](evidence/ordinary-ssh-android-same-source-20261120/official-index.json)

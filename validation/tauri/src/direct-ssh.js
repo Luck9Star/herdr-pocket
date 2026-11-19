@@ -1,10 +1,24 @@
 /** Direct SSH lifecycle. Never replay writes or retain credentials between attempts. */
+const exitSignals = new Set(['ABRT','ALRM','FPE','HUP','ILL','INT','KILL','PIPE','QUIT','SEGV','TERM','USR1','USR2','other']);
+function hasRemoteExitReport({exitStatus, exitSignal}) {
+  return (Number.isInteger(exitStatus) && exitStatus >= 0 && exitStatus <= 0xFFFFFFFF) || exitSignals.has(exitSignal);
+}
+
+export function directSshCloseFeedback({phase, remoteReported}) {
+  if (phase === 'pending') return {title:'正在断开…', detail:''};
+  if (phase === 'failed') return {title:'本机连接关闭失败', detail:'会话可能仍在。可返回首页。'};
+  return {
+    title:'本机已断开',
+    detail:remoteReported ? '远端已报告结束，凭据已清空。重连时请重新填写。' : '凭据已清空，重连时请重新填写。',
+  };
+}
+
 export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
   let generation = 0;
-  let sessionId = null;
+  let session = null;
+  let retirement = null;
   let ready = false;
   let connecting = false;
-  let sequence = 0;
   let reviewed = null;
   // What the refused handshake actually presented, and the pin that was in effect.
   let presentedFingerprint = null;
@@ -30,22 +44,40 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
     presentedFingerprint = null;
     return key;
   }
-  async function close() {
+  function publishClose(outcome, reason, showOutcome) {
+    const {title, detail} = directSshCloseFeedback(outcome);
+    onStatus(detail ? `${title}；${detail}` : title, false, reason, showOutcome ? {close:outcome} : undefined);
+  }
+  async function close({showOutcome = false} = {}) {
+    if (!session && retirement) return;
     const current = ++generation;
     ready = false;
     connecting = false;
-    const id = sessionId;
-    sessionId = null;
-    let closed = false;
-    if (id) {
-      try { await invoke('ssh_shell_close', {sessionId: id}); closed = true; } catch {}
+    const connection = session;
+    session = null;
+    if (!connection) return;
+    const outcome = {phase:'pending', remoteReported:connection.remoteReported};
+    if (showOutcome) {
+      retirement = {connection, outcome};
+      publishClose(outcome, 'closing', true);
     }
-    if (current === generation) onStatus('已断开；重新连接需要再次输入凭据。', false, undefined, {closed});
+    let reason;
+    try {
+      const response = await invoke('ssh_shell_close', {sessionId:connection.id});
+      // The native command returns unit only after local retirement.
+      if (response !== null && response !== undefined) reason = 'close_unconfirmed';
+    } catch {
+      reason = 'close_failed';
+    }
+    if (current !== generation) return;
+    outcome.phase = reason ? 'failed' : 'confirmed';
+    publishClose(outcome, reason, showOutcome);
   }
   async function open(target, credentials, confirmed) {
     if (!confirmed || !sameTarget(target, reviewed)) throw Error('review_required');
     if (!!credentials.password === !!credentials.privateKeyPem) throw Error('credential_required');
     const connectionTarget = Object.freeze({host: target.host, port: Number(target.port), username: target.username});
+    retirement = null;
     const closing = close();
     const guard = generation;
     await closing;
@@ -53,14 +85,27 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
     const current = ++generation;
     const key = {publicKey: reviewed.publicKey, fingerprint: reviewed.fingerprint};
     const early = [];
-    let assigned = null;
-    sequence = 0;
+    const connection = {id:null, sequence:0, reachedReady:false, remoteReported:false};
     const channel = channelFactory();
     function deliver(event) {
-      if (current !== generation || !assigned || event?.sessionId !== assigned || !Number.isSafeInteger(event.seq) || event.seq <= sequence) return;
-      sequence = event.seq;
+      if (!connection.id || event?.sessionId !== connection.id || !Number.isSafeInteger(event.seq) || event.seq <= connection.sequence) return;
+      if (current !== generation) {
+        // The native channel and command reply can arrive in either order.
+        // Only the same retirement can accept a genuine exit report.
+        if (retirement?.connection === connection && event.kind === 'exit' && hasRemoteExitReport(event)) {
+          connection.sequence = event.seq;
+          const {outcome} = retirement;
+          if (!outcome.remoteReported) {
+            outcome.remoteReported = true;
+            if (outcome.phase === 'confirmed') publishClose(outcome, undefined, true);
+          }
+        }
+        return;
+      }
+      connection.sequence = event.seq;
       if (event.kind === 'ready') {
         connecting = false; ready = true;
+        connection.reachedReady = true;
         // A reviewed connection that actually succeeds is the only thing that
         // replaces the trust in effect; seeing a probed key never is.
         pinnedFingerprint = key.fingerprint || pinnedFingerprint;
@@ -70,9 +115,9 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
         const seq = event.seq;
         let acknowledged = false;
         onData(new Uint8Array(event.data), () => {
-          if (acknowledged || current !== generation || assigned !== sessionId) return;
+          if (acknowledged || current !== generation || session !== connection) return;
           acknowledged = true;
-          void invoke('ssh_shell_ack', {sessionId:assigned, seq}).catch(() => {
+          void invoke('ssh_shell_ack', {sessionId:connection.id, seq}).catch(() => {
             if (current === generation) { ready = false; onStatus('终端数据确认失败；请断开后重新连接。', false); }
           });
         });
@@ -84,6 +129,11 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
         blocked = true;
       }
       else if (event.kind === 'exit' || event.kind === 'error') {
+        if (event.kind === 'exit') connection.remoteReported ||= hasRemoteExitReport(event);
+        if (connection.reachedReady && (event.kind === 'exit' || ['close_failed','close_timeout'].includes(event.error))) {
+          void close({showOutcome:true});
+          return;
+        }
         connecting = false; ready = false;
         const messages = {host_key_mismatch:'主机公钥与已核对的指纹不一致，连接已拒绝。请重新探测并核对。', authentication_failed:'认证失败，请检查用户名和认证方式后重试。', rsa_sha2_required:'服务器未提供 RSA SHA-2 用户认证，当前 RSA 私钥无法登录。'};
         if (event.error === 'host_key_mismatch') {
@@ -91,11 +141,11 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
           invalidateReview();
           blocked = true;
         }
-        onStatus(event.kind === 'exit' ? '远端会话已结束。' : messages[event.error] || '连接失败或已中断，请核查连接资料。', false, event.error || event.kind,
+        onStatus(event.kind === 'exit' ? '会话已结束。' : messages[event.error] || '连接失败或已中断，请核查连接资料。', false, event.error || event.kind,
           event.error === 'host_key_mismatch' ? {presentedFingerprint, pinnedFingerprint, blocked: true} : undefined);
       }
     }
-    channel.onmessage = event => { if (!assigned) early.push(event); else deliver(event); };
+    channel.onmessage = event => { if (!connection.id) early.push(event); else deliver(event); };
     const authentication = credentials.password
       ? {password: credentials.password}
       : {privateKeyPem: credentials.privateKeyPem, ...(credentials.privateKeyPassphrase ? {privateKeyPassphrase: credentials.privateKeyPassphrase} : {})};
@@ -107,28 +157,29 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
     try { id = await invoke('ssh_shell_open', {config, onEvent: channel}); }
     catch { if (current === generation) { connecting = false; onStatus('连接未能启动，请核查连接资料。', false, 'error'); } return false; }
     if (current !== generation) { try { await invoke('ssh_shell_close', {sessionId: id}); } catch {} return false; }
-    assigned = id; sessionId = id;
+    connection.id = id;
+    session = connection;
     for (const event of early) deliver(event);
     return true;
   }
   function write(bytes, stillCurrent = () => true) {
-    const id = sessionId, current = generation;
+    const id = session?.id, current = generation;
     if (!ready || !id || !bytes.length) return;
     // Serialize chunks; a failed/unknown write stops the queue and is never retried.
     for (let offset = 0; offset < bytes.length; offset += 4096) {
       const chunk = Array.from(bytes.slice(offset, offset + 4096));
       writes = writes.then(async () => {
-        if (current !== generation || !ready || sessionId !== id || !stillCurrent()) return;
+        if (current !== generation || !ready || session?.id !== id || !stillCurrent()) return;
         try { await invoke('ssh_shell_write', {sessionId: id, bytes: chunk}); }
-        catch { ready = false; onStatus('输入结果未知；已停止发送，请核查远端状态。', false); }
+        catch { if (current === generation) { ready = false; onStatus('输入结果未知；已停止发送，请核查远端状态。', false); } }
       });
     }
   }
   async function resize(cols, rows) {
-    const id = sessionId, current = generation;
+    const id = session?.id, current = generation;
     if (!ready || !id) return false;
-    try { await invoke('ssh_shell_resize', {sessionId:id, cols, rows}); return current === generation && id === sessionId && ready; }
-    catch { if (current === generation && id === sessionId) { ready = false; onStatus('终端尺寸更新失败；请检查连接。', false); } return false; }
+    try { await invoke('ssh_shell_resize', {sessionId:id, cols, rows}); return current === generation && id === session?.id && ready; }
+    catch { if (current === generation && id === session?.id) { ready = false; onStatus('终端尺寸更新失败；请检查连接。', false); } return false; }
   }
   return {probe, invalidateReview, open, close, write, resize, isReady: () => ready, isActive: () => ready || connecting,
     isBlocked: () => blocked, pinnedFingerprint: () => pinnedFingerprint,

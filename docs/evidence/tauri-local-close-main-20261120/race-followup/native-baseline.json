@@ -1,0 +1,44 @@
+{
+  "artifacts": [
+    {
+      "platform": "linux",
+      "run": 44597653045,
+      "artifact": 14567286532,
+      "archiveSha256": "a300d405fe92f75213bc6248bd80540e8fd65f4f4c76751e86de515a2c178663",
+      "sourceSHA": "f4427b47e60647fc1b4dc6f9cd4dc47a7b445659",
+      "status": "passed",
+      "scope": "native application and isolated loopback SSH",
+      "fingerprintReviewed": true,
+      "returnedHome": true,
+      "authentication": "password",
+      "credentialFieldsCleared": true,
+      "peer": {
+        "authAccepted": true,
+        "ptyRequested": true,
+        "shellRequested": true,
+        "markerReceived": true,
+        "sessionClosed": true,
+        "connections": 2,
+        "connectionsClosed": true
+      }
+    },
+    {
+      "platform": "android",
+      "run": 44597651198,
+      "artifact": 14565294360,
+      "archiveSha256": "4fd5898921f3d6d3a7610f16715cb6659cd875c2521f35bd80a499b3cba0e56a",
+      "sourceSHA": "f4427b47e60647fc1b4dc6f9cd4dc47a7b445659",
+      "status": "passed",
+      "scope": "synthetic loopback SSH and owned API35 Android WebView; CDP input is not real IME composition",
+      "fingerprintReviewed": true,
+      "returnedHome": true,
+      "connected": true,
+      "terminalInputReceived": true,
+      "terminalEchoRendered": true,
+      "disconnected": true,
+      "passwordCleared": true,
+      "rotationConnected": true,
+      "encryptedKeyConnected": true
+    }
+  ]
+}

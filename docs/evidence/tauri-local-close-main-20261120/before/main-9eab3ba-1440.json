@@ -1,0 +1,36 @@
+{
+  "viewport": [
+    1440,
+    900
+  ],
+  "mode": "normal",
+  "fixture": "loopback HTTP and synthetic IPC; no real SSH",
+  "engine": "Playwright WebKit 26.5",
+  "states": {
+    "connected": {
+      "disconnect": {
+        "rect": [
+          349.609375,
+          868.8125,
+          81.609375,
+          44
+        ],
+        "visible": true,
+        "hit": true,
+        "text": "断开连接",
+        "background": "rgb(255, 255, 255)",
+        "disabled": false
+      },
+      "sha256": "5c5ee63b9d186eb2866b60bf4ee3550a2111c443b1d85c15d12adfffd55e1a4a"
+    }
+  },
+  "checks": {
+    "disconnectEdges": [
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "errors": []
+}

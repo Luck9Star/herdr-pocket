@@ -1,0 +1,16 @@
+✔ pending ordinary close retains confirmed when target receives an input event (22.514083ms)
+✔ pending ordinary close retains failed when target receives an input event (7.469708ms)
+✔ back while ordinary SSH open is pending restores the target after retiring its late session (7.666583ms)
+✔ cancelled opening stays cancelled on network after late success and permits a new connection (7.196542ms)
+✔ cancelled opening stays cancelled on network after late failure and permits a new connection (7.424709ms)
+✔ cancelled opening stays cancelled on settings after late success and permits a new connection (8.592292ms)
+✔ cancelled opening stays cancelled on settings after late failure and permits a new connection (7.377ms)
+✔ after a completed close a deliberate target edit can be freshly probed without replay (7.382708ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 116.559125

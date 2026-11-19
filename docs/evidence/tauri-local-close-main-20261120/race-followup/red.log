@@ -1,0 +1,48 @@
+✖ pending ordinary close retains its result when target receives an input event (17.912125ms)
+✖ back while ordinary SSH open is pending restores the target after retiring its late session (7.619334ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 62.568166
+
+✖ failing tests:
+
+test at ../../../../../../private/tmp/herdr-tauri-races-r1/source/validation/tauri/test/direct-dashboard-gui.test.mjs:2283:1
+✖ pending ordinary close retains its result when target receives an input event (17.912125ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + 'pending'
+  - 'failed'
+
+      at TestContext.<anonymous> (file:///private/tmp/herdr-tauri-races-r1/source/validation/tauri/test/direct-dashboard-gui.test.mjs:2297:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'pending',
+    expected: 'failed',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ../../../../../../private/tmp/herdr-tauri-races-r1/source/validation/tauri/test/direct-dashboard-gui.test.mjs:2305:1
+✖ back while ordinary SSH open is pending restores the target after retiring its late session (7.619334ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  'auth' !== 'target'
+
+      at TestContext.<anonymous> (file:///private/tmp/herdr-tauri-races-r1/source/validation/tauri/test/direct-dashboard-gui.test.mjs:2321:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'auth',
+    expected: 'target',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

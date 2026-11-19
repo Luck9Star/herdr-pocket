@@ -1,0 +1,599 @@
+{
+  "viewport": [
+    390,
+    844
+  ],
+  "mode": "normal",
+  "fixture": "loopback HTTP and synthetic IPC; no real SSH",
+  "engine": "Playwright WebKit 26.5",
+  "states": {
+    "connected": {
+      "feedback": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "\n          本机已断开凭据已清空，重连时请重新填写。\n        ",
+        "background": "rgb(238, 242, 255)",
+        "disabled": false
+      },
+      "title": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "本机已断开",
+        "background": "rgba(0, 0, 0, 0)",
+        "disabled": false
+      },
+      "detail": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "凭据已清空，重连时请重新填写。",
+        "background": "rgba(0, 0, 0, 0)",
+        "disabled": false
+      },
+      "host": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "",
+        "background": "rgb(255, 255, 255)",
+        "disabled": false
+      },
+      "username": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "",
+        "background": "rgb(255, 255, 255)",
+        "disabled": false
+      },
+      "port": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "",
+        "background": "rgb(255, 255, 255)",
+        "disabled": false
+      },
+      "probe": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "探测并核对主机密钥",
+        "background": "rgb(241, 245, 249)",
+        "disabled": true
+      },
+      "returnHome": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "返回首页",
+        "background": "rgb(255, 255, 255)",
+        "disabled": false
+      },
+      "homeFeedback": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "普通 SSH 已断开",
+        "background": "rgba(0, 0, 0, 0)",
+        "disabled": false
+      },
+      "homeCard": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "还没有主机添加主机后，在这里查看会话和任务状态。添加主机普通 SSH 终端",
+        "background": "rgb(255, 255, 255)",
+        "disabled": false
+      },
+      "navigation": {
+        "rect": [
+          0,
+          788,
+          390,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "text": "看板\n终端\n网络\n设置",
+        "background": "rgb(248, 250, 252)",
+        "disabled": false
+      },
+      "disconnect": {
+        "rect": [
+          306,
+          52,
+          60,
+          44
+        ],
+        "visible": true,
+        "hit": true,
+        "text": "断开",
+        "background": "rgb(255, 241, 242)",
+        "disabled": false
+      },
+      "sha256": "437908e657feaf33d798c115de65c758309087f92122bcf125694fb58dc159ea"
+    },
+    "disconnected": {
+      "feedback": {
+        "rect": [
+          24,
+          123,
+          342,
+          66
+        ],
+        "visible": true,
+        "hit": true,
+        "text": "本机已断开\n\n凭据已清空，重连时请重新填写。",
+        "background": "rgb(238, 242, 255)",
+        "disabled": false
+      },
+      "title": {
+        "rect": [
+          36,
+          132,
+          318,
+          22
+        ],
+        "visible": true,
+        "hit": true,
+        "text": "本机已断开",
+        "background": "rgba(0, 0, 0, 0)",
+        "disabled": false
+      },
+      "detail": {
+        "rect": [
+          36,
+          154,
+          318,
+          22
+        ],
+        "visible": true,
+        "hit": true,
+        "text": "凭据已清空，重连时请重新填写。",
+        "background": "rgba(0, 0, 0, 0)",
+        "disabled": false
+      },
+      "host": {
+        "rect": [
+          24,
+          263,
+          342,
+          48
+        ],
+        "visible": true,
+        "hit": true,
+        "text": "",
+        "background": "rgb(255, 255, 255)",
+        "disabled": false
+      },
+      "username": {
+        "rect": [
+          24,
+          347,
+          246,
+          48
+        ],
+        "visible": true,
+        "hit": true,
+        "text": "",
+        "background": "rgb(255, 255, 255)",
+        "disabled": false
+      },
+      "port": {
+        "rect": [
+          282,
+          347,
+          84,
+          48
+        ],
+        "visible": true,
+        "hit": true,
+        "text": "",
+        "background": "rgb(255, 255, 255)",
+        "disabled": false
+      },
+      "probe": {
+        "rect": [
+          24,
+          415,
+          342,
+          48
+        ],
+        "visible": true,
+        "hit": true,
+        "text": "探测并核对主机密钥",
+        "background": "rgb(79, 70, 229)",
+        "disabled": false
+      },
+      "returnHome": {
+        "rect": [
+          24,
+          499,
+          342,
+          48
+        ],
+        "visible": true,
+        "hit": true,
+        "text": "返回首页",
+        "background": "rgb(255, 255, 255)",
+        "disabled": false
+      },
+      "homeFeedback": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "普通 SSH 已断开",
+        "background": "rgba(0, 0, 0, 0)",
+        "disabled": false
+      },
+      "homeCard": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "还没有主机添加主机后，在这里查看会话和任务状态。添加主机普通 SSH 终端",
+        "background": "rgb(255, 255, 255)",
+        "disabled": false
+      },
+      "navigation": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "⌂看板⌨终端在线◎网络⚙设置",
+        "background": "rgb(255, 255, 255)",
+        "disabled": false
+      },
+      "disconnect": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "断开断开连接",
+        "background": "rgb(255, 241, 242)",
+        "disabled": true
+      },
+      "sha256": "b2c7a032a1bf086e24a4ea6fbaca4897e322c70ee6a7d1a942dc6dac1d1df5aa"
+    },
+    "returned": {
+      "feedback": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "\n          本机已断开凭据已清空，重连时请重新填写。\n        ",
+        "background": "rgb(238, 242, 255)",
+        "disabled": false
+      },
+      "title": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "本机已断开",
+        "background": "rgba(0, 0, 0, 0)",
+        "disabled": false
+      },
+      "detail": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "凭据已清空，重连时请重新填写。",
+        "background": "rgba(0, 0, 0, 0)",
+        "disabled": false
+      },
+      "host": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "",
+        "background": "rgb(255, 255, 255)",
+        "disabled": false
+      },
+      "username": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "",
+        "background": "rgb(255, 255, 255)",
+        "disabled": false
+      },
+      "port": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "",
+        "background": "rgb(255, 255, 255)",
+        "disabled": false
+      },
+      "probe": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "探测并核对主机密钥",
+        "background": "rgb(79, 70, 229)",
+        "disabled": false
+      },
+      "returnHome": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "返回首页",
+        "background": "rgb(241, 245, 249)",
+        "disabled": false
+      },
+      "homeFeedback": {
+        "rect": [
+          24,
+          119,
+          342,
+          44
+        ],
+        "visible": true,
+        "hit": true,
+        "text": "本机已断开",
+        "background": "rgb(238, 242, 255)",
+        "disabled": false
+      },
+      "homeCard": {
+        "rect": [
+          24,
+          179,
+          342,
+          268
+        ],
+        "visible": true,
+        "hit": true,
+        "text": "还没有主机\n\n添加主机后，在这里查看会话和任务状态。\n\n添加主机\n普通 SSH 终端",
+        "background": "rgb(255, 255, 255)",
+        "disabled": false
+      },
+      "navigation": {
+        "rect": [
+          0,
+          788,
+          390,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "text": "看板\n终端\n网络\n设置",
+        "background": "rgb(248, 250, 252)",
+        "disabled": false
+      },
+      "disconnect": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "text": "断开断开连接",
+        "background": "rgb(255, 241, 242)",
+        "disabled": true
+      },
+      "sha256": "2e331320948e51ace81b1582d5eb19254edf1da4b720ea828524099d2d8eda79"
+    }
+  },
+  "checks": {
+    "disconnectEdgesInitial": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "disconnectEdges": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "designDeltas": {
+      "feedback": 0,
+      "host": 0,
+      "username": 0,
+      "port": 0,
+      "probe": 0,
+      "returnHome": 0
+    },
+    "probeEdges": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "returnEdges": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "returnedDesignDeltas": {
+      "homeFeedback": 0,
+      "homeCard": 0
+    },
+    "homeAddEdges": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "homeSshEdges": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "singleSession": true,
+    "staleExitDidNotAffectNewSession": true
+  },
+  "errors": [],
+  "ipc": {
+    "events": [
+      {
+        "command": "config_document_platform"
+      },
+      {
+        "command": "host_init"
+      },
+      {
+        "command": "host_list"
+      },
+      {
+        "command": "network_list"
+      },
+      {
+        "command": "ssh_host_key_probe"
+      },
+      {
+        "command": "ssh_shell_open",
+        "sessionId": "fixture-session-1"
+      },
+      {
+        "command": "ssh_shell_ack",
+        "sessionId": "fixture-session-1"
+      },
+      {
+        "command": "ssh_shell_resize",
+        "sessionId": "fixture-session-1"
+      },
+      {
+        "command": "ssh_shell_close",
+        "sessionId": "fixture-session-1",
+        "result": "confirmed"
+      },
+      {
+        "command": "ssh_host_key_probe"
+      },
+      {
+        "command": "ssh_shell_open",
+        "sessionId": "fixture-session-2"
+      },
+      {
+        "command": "ssh_shell_ack",
+        "sessionId": "fixture-session-2"
+      },
+      {
+        "command": "ssh_shell_resize",
+        "sessionId": "fixture-session-2"
+      },
+      {
+        "command": "ssh_shell_close",
+        "sessionId": "fixture-session-2",
+        "result": "confirmed"
+      }
+    ],
+    "errors": []
+  },
+  "passed": true
+}

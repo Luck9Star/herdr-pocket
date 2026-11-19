@@ -26,7 +26,7 @@ class Element {
   setAttribute(k,v){this.attrs[k]=v;}
   descendants(){return this.children.flatMap(c=>[c,...c.descendants()]);}
   querySelectorAll(selector){return selector==='input[type=password]'?this.descendants().filter(n=>n.tagName==='input'&&n.type==='password'):[];}
-  querySelector(selector){return selector==='[role=status]'?this.descendants().find(n=>n.attrs.role==='status'):null;}
+  querySelector(selector){return selector==='[role=status]'?this.descendants().find(n=>n.attrs.role==='status'):selector.startsWith('#')?this.descendants().find(n=>n.id===selector.slice(1)):null;}
 }
 async function identityUI({supported=true,unknownWrite=false,readError=false,publicMode=false,existing=false,replaceBeforeDelete=false,deferredSerialization=false,nodeAction=null,nodeFails=false,nodeStateOverride=null}={}) {
   const {initNetworkUI}=await import('../src/network-ui.js');const previous={document:globalThis.document,window:globalThis.window,confirm:globalThis.confirm};
@@ -118,4 +118,73 @@ test('network summary shows real provider, node and bindings; management starts 
     const rerendered=panel.descendants().find(n=>n.tagName==='details'&&n.className==='network-profile-management');
     assert.equal(rerendered.open,true);
   } finally {globalThis.document=previous.document;globalThis.window=previous.window;globalThis.confirm=previous.confirm;}
+});
+
+
+test('desktop active SSH shows network empty only after a successful authoritative read', async () => {
+  const {initNetworkUI}=await import('../src/network-ui.js');
+  const previous={document:globalThis.document,window:globalThis.window};
+  const panel=new Element('section'),open=new Element('button');panel.hidden=true;
+  globalThis.document={hidden:false,getElementById:id=>id==='network-panel'?panel:open,createElement:tag=>new Element(tag),createElementNS:(_ns,tag)=>new Element(tag),addEventListener(){}};
+  globalThis.window={addEventListener(){}};
+  let resolveRead, mode='pending', writes=0, active=true;
+  const invoke=async name=>{if(name==='network_list') {if(mode==='pending')return new Promise(resolve=>{resolveRead=resolve;});if(mode==='failed')throw Error('unavailable');if(mode==='malformed')return {revision:'r1',profiles:[],bindings:[],preferences:{terminalFontSize:null}};if(mode==='orphan')return {revision:'r1',profiles:[],bindings:[{hostId:'h1',profileId:'missing'}],preferences:{terminalFontSize:14}};if(mode==='populated')return {revision:'r2',profiles:[{id:'p1',label:'已有配置',provider:'zerotier',enabled:true,revision:1,settings:{networkId:'1234567890abcdef'}}],bindings:[]};return {revision:'r1',profiles:[],bindings:[],preferences:{terminalFontSize:14}};}if(name==='network_save')writes++;throw Error(name);};
+  const find=text=>panel.descendants().find(n=>n.textContent===text), flush=()=>new Promise(resolve=>setImmediate(resolve));
+  try {
+    const ui=initNetworkUI({native:true,invoke,getHosts:()=>[],onAffected:async()=>{},showEmpty:()=>active});
+    open.onclick();await flush();assert.equal(!!find('还没有网络配置'),false);
+    resolveRead({revision:'r1',profiles:[],bindings:[],preferences:{terminalFontSize:14}});mode='empty';await flush();assert.ok(find('还没有网络配置'));
+    active=false;ui.reconcile();assert.equal(!!find('还没有网络配置'),false);assert.ok(find('新增网络配置'));
+    active=true;ui.reconcile();assert.ok(find('还没有网络配置'));
+    find('添加网络配置').onclick();assert.ok(find('新增网络'));assert.equal(writes,0);
+    const draft=find('新增网络');active=false;ui.reconcile();assert.equal(find('新增网络'),draft);active=true;
+    find('取消').onclick();await flush();assert.ok(find('还没有网络配置'));
+    find('管理网络与共享设备').onclick();assert.ok(find('审查 ZeroTier 共享设备'));assert.ok(find('新增网络配置'));
+    open.onclick();mode='empty';open.onclick();await flush();assert.ok(find('还没有网络配置'));
+    open.onclick();mode='pending';open.onclick();await flush();assert.equal(!!find('还没有网络配置'),false);assert.ok(find('正在读取网络配置…'));
+    resolveRead({revision:'r1',profiles:[],bindings:[],preferences:{terminalFontSize:14}});mode='empty';await flush();assert.ok(find('还没有网络配置'));
+    open.onclick();mode='failed';open.onclick();await flush();assert.equal(!!find('还没有网络配置'),false);assert.ok(find('网络配置读取失败，当前状态未知；请稍后核对。'));
+    open.onclick();mode='populated';open.onclick();await flush();assert.equal(!!find('还没有网络配置'),false);assert.ok(find('已有配置 · ZeroTier'));assert.ok(find('新增网络配置'));
+    open.onclick();mode='pending';open.onclick();await flush();ui.reconcile();assert.ok(find('正在读取网络配置…'));assert.equal(!!find('已有配置 · ZeroTier'),false);
+    resolveRead({revision:'r2',profiles:[{id:'p1',label:'已有配置',provider:'zerotier',enabled:true,revision:1,settings:{networkId:'1234567890abcdef'}}],bindings:[]});await flush();assert.ok(find('已有配置 · ZeroTier'));
+    open.onclick();mode='orphan';open.onclick();await flush();assert.equal(!!find('还没有网络配置'),false);assert.ok(find('新增网络配置'));
+    open.onclick();mode='malformed';open.onclick();await flush();assert.equal(!!find('还没有网络配置'),false);
+    open.onclick();mode='pending';open.onclick();await flush();open.onclick();resolveRead({revision:'r1',profiles:[],bindings:[],preferences:{terminalFontSize:14}});await flush();assert.equal(panel.hidden,true);
+    mode='failed';open.onclick();await flush();assert.equal(!!find('还没有网络配置'),false);assert.ok(find('网络配置读取失败，当前状态未知；请稍后核对。'));
+
+  } finally {globalThis.document=previous.document;globalThis.window=previous.window;}
+});
+
+test('retired or pending network reads cannot republish the previous catalog on reconcile or resize', async () => {
+  const {initNetworkUI}=await import('../src/network-ui.js');
+  const previous={document:globalThis.document,window:globalThis.window};
+  const panel=new Element('section'),open=new Element('button');panel.hidden=true;
+  let resize;
+  globalThis.document={hidden:false,getElementById:id=>id==='network-panel'?panel:open,createElement:tag=>new Element(tag),createElementNS:(_ns,tag)=>new Element(tag),addEventListener(){}};
+  globalThis.window={addEventListener(){},matchMedia:()=>({addEventListener:(_type,fn)=>{resize=fn;}})};
+  const pending=[];let mode='empty', writes=0;
+  const empty={revision:'r1',profiles:[],bindings:[],preferences:{terminalFontSize:14}};
+  const invoke=async name=>{if(name==='network_list'){if(mode==='pending')return new Promise((resolve,reject)=>pending.push({resolve,reject}));if(mode==='failed')throw Error('unavailable');return empty;}if(name==='network_save')writes++;throw Error(name);};
+  const find=text=>panel.descendants().find(n=>n.textContent===text),flush=()=>new Promise(resolve=>setImmediate(resolve));
+  try {
+    const ui=initNetworkUI({native:true,invoke,getHosts:()=>[],onAffected:async()=>{},showEmpty:()=>true});
+    open.onclick();await flush();assert.ok(find('还没有网络配置'));
+    const retiredAdd=find('添加网络配置');
+    open.onclick();mode='pending';open.onclick();await flush();
+    assert.ok(find('正在读取网络配置…'));ui.reconcile();resize();
+    assert.equal(!!find('还没有网络配置'),false);assert.equal(!!find('添加网络配置'),false);
+    retiredAdd.onclick();assert.equal(!!find('新增网络'),false);assert.equal(writes,0);
+    pending.shift().resolve(empty);mode='empty';await flush();assert.ok(find('还没有网络配置'));
+    mode='pending';ui.refresh();await flush();ui.reconcile();resize();assert.equal(!!find('还没有网络配置'),false);
+    pending.shift().reject(Error('unavailable'));await flush();ui.reconcile();resize();
+    assert.equal(!!find('还没有网络配置'),false);assert.ok(find('网络配置读取失败，当前状态未知；请稍后核对。'));
+    mode='empty';ui.refresh();await flush();find('添加网络配置').onclick();const draft=find('新增网络');
+    const name=panel.descendants().find(n=>n.placeholder==='配置名称');name.value='未保存草稿';
+    mode='pending';ui.refresh();await flush();ui.reconcile();resize();assert.equal(find('新增网络'),draft);assert.equal(name.value,'未保存草稿');
+    pending.shift().resolve(empty);mode='empty';await flush();assert.equal(find('新增网络'),draft);assert.equal(name.value,'未保存草稿');
+    find('取消').onclick();await flush();assert.ok(find('还没有网络配置'));
+    mode='pending';open.onclick();open.onclick();await flush();open.onclick();pending.shift().resolve(empty);await flush();
+    assert.equal(panel.hidden,true);mode='failed';open.onclick();await flush();ui.reconcile();resize();
+    assert.equal(!!find('还没有网络配置'),false);assert.ok(find('网络配置读取失败，当前状态未知；请稍后核对。'));
+  } finally {globalThis.document=previous.document;globalThis.window=previous.window;}
 });

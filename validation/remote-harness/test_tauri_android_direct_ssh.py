@@ -168,9 +168,11 @@ class DirectSshAndroidTests(unittest.TestCase):
                 return 'staged' if 'sshSetupLayout' in expression else super().evaluate(expression)
         browser=MobileBrowser()
         fixture=KeyFixture()
-        with patch.object(driver, 'mobile_setup') as verify, patch.object(driver, 'require_first_probe') as probe:
+        with patch.object(driver, 'mobile_setup') as verify, patch.object(driver, 'require_first_probe') as probe, \
+             patch.object(driver, 'native_active_tap', side_effect=lambda b, selector: b.click(selector)) as native:
             result=driver.exercise_ui(browser, fixture, encrypted_key=True)
         self.assertTrue(result['returnedHome'])
+        self.assertEqual([c.args[1] for c in native.call_args_list], ['#ssh-disconnect', '#ssh-return-home'])
         self.assertEqual(probe.call_count,2)
         actions=browser.actions
         self.assertNotIn(('click','#ssh-review'), actions)
@@ -192,8 +194,10 @@ class DirectSshAndroidTests(unittest.TestCase):
         state=RotationState()
         fixture=RotationFixture(state)
         browser=MobileRotation(state)
-        with patch.object(driver,'mobile_setup') as verify, patch.object(driver,'require_first_probe'):
+        with patch.object(driver,'mobile_setup') as verify, patch.object(driver,'require_first_probe'), \
+             patch.object(driver,'native_active_tap',side_effect=lambda b, selector: b.click(selector)) as native:
             driver.exercise_key_change_ui(browser,fixture)
+        self.assertEqual([c.args[1] for c in native.call_args_list], ['#ssh-disconnect', '#ssh-return-home'])
         self.assertEqual([a[1] for a in browser.actions if a[0]=='click' and a[1] in
                           ('#ssh-trust-confirm','#ssh-connect','#ssh-key-cancel')],
                          ['#ssh-trust-confirm','#ssh-connect','#ssh-key-cancel','#ssh-trust-confirm','#ssh-connect'])
@@ -201,7 +205,7 @@ class DirectSshAndroidTests(unittest.TestCase):
                          [('trust',{'fingerprint':fixture.fingerprint}),('refused',{'fingerprint':fixture.rotated_fingerprint,
                           'prior':fixture.fingerprint}),('trust',{'fingerprint':fixture.rotated_fingerprint,
                           'prior':fixture.fingerprint})])
-        self.assertEqual(fixture.stages,[2,3,3,4])
+        self.assertEqual(fixture.stages,[2,3,3,4,4])
 
     def test_initial_peer_gate_cannot_accept_an_early_authentication_attempt(self):
         facts={'hostKey':'A','closed':True,
@@ -226,12 +230,15 @@ class DirectSshAndroidTests(unittest.TestCase):
         expression=browser.evaluate.call_args.args[0]
         driver.mobile_setup(browser,fixture,'refused',fingerprint=rotated,prior=fingerprint)
         refused=browser.evaluate.call_args.args[0]
+        driver.mobile_setup(browser,fixture,'closed')
+        closed=browser.evaluate.call_args.args[0]
         browser.evaluate.return_value='staged'
         self.assertTrue(driver.staged_setup(browser))
         layout=browser.evaluate.call_args.args[0]
         script=r'''const assert=require('node:assert/strict');
 const check=()=>%s;
 const checkRefused=()=>%s;
+const checkClosed=()=>%s;
 const choose=()=>%s;
 const element=(innerText='',options={})=>({innerText,hidden:false,value:'',disabled:false,
   tagName:'DIV', getClientRects(){return this.hidden?[]:[0];}, ...options});
@@ -276,11 +283,21 @@ global.matchMedia=()=>({matches:narrow});
 const route=nodes['home-ssh'], title=nodes['ssh-step-title'], review=nodes['ssh-review'];
 route.hasAttribute=()=>Object.hasOwn(route.dataset,'sshStep');
 route.dataset.sshStep='target';title.innerText='普通 SSH';
+Object.assign(nodes, {'ssh-target-fields':element(), 'ssh-trust-review':element('',{hidden:true}),
+  'ssh-closed-feedback':element(), 'ssh-closed-title':element('本机已断开'),
+  'ssh-closed-detail':element('凭据已清空，重连时请重新填写。'),
+  'ssh-return-home':button('返回首页'), 'ssh-step-back':button('返回'),
+  'ssh-probe':button('探测并核对主机密钥')});
+assert.equal(checkClosed(),true);
+nodes['ssh-closed-detail'].innerText='远端已报告结束，凭据已清空。';assert.ok(!checkClosed());
+nodes['ssh-closed-detail'].innerText='凭据已清空，重连时请重新填写。';
+nodes['ssh-password'].value='stale';assert.ok(!checkClosed());nodes['ssh-password'].value='';
+nodes['ssh-return-home'].disabled=true;assert.ok(!checkClosed());nodes['ssh-return-home'].disabled=false;
 assert.equal(choose(),'staged');
 delete route.dataset.sshStep;title.hidden=true;review.hidden=false;review.type='checkbox';
 assert.equal(choose(),null);
 narrow=false;assert.equal(choose(),'legacy');
-''' % (expression,refused,layout)
+''' % (expression,refused,closed,layout)
         result=subprocess.run(['node','-e',script],capture_output=True,text=True,timeout=10)
         self.assertEqual(result.returncode,0,result.stderr)
 
@@ -658,12 +675,18 @@ class ActiveNavigationTests(unittest.TestCase):
              patch.object(driver,'_framebuffer_png',return_value=(b'',(850,1500))),patch.object(driver,'adb') as adb:
             driver.native_active_tap(browser,'#ssh-focus')
             adb.assert_called_once_with('shell','input','tap','210','280')
+            adb.reset_mock();browser.evaluate.side_effect=None;browser.evaluate.return_value=geometry
+            driver.native_active_tap(browser,'#ssh-disconnect')
+            adb.assert_called_once_with('shell','input','tap','210','280')
+            adb.reset_mock();browser.evaluate.side_effect=[None,geometry,geometry]
+            driver.native_active_tap(browser,'#ssh-return-home')
+            adb.assert_called_once_with('shell','input','tap','210','280')
             adb.reset_mock();browser.evaluate.side_effect=[geometry,{**geometry,'hit':False}]
             with self.assertRaisesRegex(driver.GuiFailure,'direct_active_tap_unproven'):
                 driver.native_active_tap(browser,'#ssh-focus')
             adb.assert_not_called()
             with self.assertRaisesRegex(driver.GuiFailure,'direct_active_tap_unproven'):
-                driver.native_active_tap(browser,'#ssh-disconnect')
+                driver.native_active_tap(browser,'#unsupported')
             adb.assert_not_called()
 
     def test_preexisting_owned_keyboard_is_dismissed_before_native_focus_tap(self):
@@ -702,6 +725,44 @@ class ActiveNavigationTests(unittest.TestCase):
             browser.evaluate.return_value={**good,'unexpected':'private text'}
             with self.assertRaises(driver.GuiFailure) as caught: driver.active_view(browser,fixture,'ssh')
             self.assertEqual(caught.exception.active_diagnostic,{})
+
+    @unittest.skipUnless(shutil.which('node'), 'Node is needed to evaluate the device DOM predicate')
+    def test_active_settings_checks_visible_status_and_target_owned_by_route(self):
+        browser=Mock()
+        with patch.object(driver,'wait_for',side_effect=lambda probe,code,timeout: probe()):
+            driver.active_view(browser,Fixture(),'settings')
+        test_dom=r"""
+          const source=require('node:fs').readFileSync(0,'utf8');
+          const target='fixture@127.0.0.1:2222',label='普通 SSH 会话保持连接';
+          const element=(textContent='',children={},visible=true)=>({
+            textContent,checkVisibility:()=>visible,querySelector:s=>children[s],hidden:false,
+          });
+          global.getComputedStyle=()=>({paddingBottom:'0px'});
+          function read({active=true,heading=true,endpoint=target,card=true,own=true}={}){
+            const headline=element(label,{},heading);
+            const status=element(label+'切到看板、网络或设置不会断开；显式断开后才结束。',
+              {':scope > strong':headline},active);
+            const address=element(endpoint),targetCard=element('',{':scope > #ssh-settings-endpoint':address},card);
+            const settings=element('设置',own?{
+              ':scope > #ssh-settings-active[role="status"]':status,
+              ':scope > #ssh-settings-target':targetCard,
+            }:{});
+            const byId={'home-settings':settings,'ssh-settings-active':status,'ssh-settings-endpoint':address,
+              'ssh-live':element(),'nav-settings':{getAttribute:()=>'true'}};
+            global.document={getElementById:id=>byId[id],querySelector:()=>null};
+            return eval(source).sectionContent;
+          }
+          process.stdout.write(JSON.stringify({
+            mobile:read(),hiddenStatus:read({active:false}),hiddenHeading:read({heading:false}),
+            hiddenTarget:read({card:false}),wrongTarget:read({endpoint:'other'}),outsideRoute:read({own:false}),
+          }));
+        """
+        evaluated=subprocess.run(['node','-e',test_dom],input=browser.evaluate.call_args.args[0],
+                                 check=True,capture_output=True,text=True)
+        self.assertEqual(json.loads(evaluated.stdout),{
+            'mobile':True,'hiddenStatus':False,'hiddenHeading':False,
+            'hiddenTarget':False,'wrongTarget':False,'outsideRoute':False,
+        })
 
     def test_diagnostic_keeps_only_bounded_geometry_and_peer_counts(self):
         fixture=Mock();fixture.snapshot.return_value=self.peer();browser=Mock()

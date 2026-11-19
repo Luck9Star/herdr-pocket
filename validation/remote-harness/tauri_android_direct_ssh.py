@@ -564,8 +564,8 @@ def mobile_setup(browser, fixture, step, *, fingerprint=None, prior=None, method
       if (spec.step==='target'||spec.step==='closed') return shown(target)&&!shown(trust)&&!shown(auth)&&closedSecrets()&&
         text('ssh-step-title')==='普通 SSH'&&shown(one('ssh-step-back'))&&
         button('ssh-probe','探测并核对主机密钥')&&
-        (spec.step!=='closed'||(text('ssh-closed-feedback')?.replace(/\s/g,'')===
-          '已断开连接本次凭据已清空。重新连接时请重新填写。'&&button('ssh-return-home','返回首页')))&&
+        (spec.step!=='closed'||(shown(one('ssh-closed-feedback'))&&text('ssh-closed-title')==='本机已断开'&&
+          text('ssh-closed-detail')==='凭据已清空，重连时请重新填写。'&&button('ssh-return-home','返回首页')))&&
         (spec.prior===null || text('ssh-prior-fingerprint')?.replace(/\s/g,'')==='保留的旧指纹：'+spec.prior);
       if (text('ssh-reviewed-endpoint')!==spec.target || shown(target)) return false;
       if (spec.step==='trust') return shown(trust)&&!shown(auth)&&closedSecrets()&&
@@ -662,10 +662,14 @@ def active_view(browser, fixture, section, keyboard=False):
       const focused=document.activeElement===document.querySelector('#ssh-terminal .xterm-helper-textarea');
       const panel=one('network-panel'),heading=panel?.querySelector(':scope > h2');
       const networkButton=[...(panel?.querySelectorAll(':scope > button')||[])].find(e=>e.textContent.trim()==='新增网络配置');
+      const settingsStatus=route?.querySelector(':scope > #ssh-settings-active[role="status"]');
+      const settingsLabel=settingsStatus?.querySelector(':scope > strong');
+      const settingsTarget=route?.querySelector(':scope > #ssh-settings-target');
+      const settingsEndpoint=settingsTarget?.querySelector(':scope > #ssh-settings-endpoint');
       const sectionContent=ssh || (spec.section==='dashboard'?shown(one('home-dashboard')):
         spec.section==='network'?shown(panel)&&shown(heading)&&heading.textContent.trim()==='网络配置'&&shown(networkButton):
-        spec.section==='settings'?shown(one('ssh-settings-active'))&&one('ssh-settings-active').textContent.trim()==='普通 SSH 会话保持连接'&&
-          shown(one('ssh-settings-endpoint'))&&one('ssh-settings-endpoint').textContent.trim()===spec.target:false);
+        spec.section==='settings'?shown(settingsStatus)&&shown(settingsLabel)&&settingsLabel.textContent.trim()==='普通 SSH 会话保持连接'&&
+          shown(settingsTarget)&&shown(settingsEndpoint)&&settingsEndpoint.textContent.trim()===spec.target:false);
       return {route:shown(route),live:!!live&&!live.hidden,
         title:!ssh||shown(title)&&title.textContent.trim()==='普通 SSH',
         badge:!ssh||hit(badge)&&badge.textContent.trim()==='已连接',
@@ -690,10 +694,12 @@ def active_view(browser, fixture, section, keyboard=False):
 
 
 def native_active_tap(browser, selector):
-    """Tap only the observed active SSH controls through Android's input dispatcher."""
-    if selector not in ('#ssh-focus','#ssh-hide-keyboard'):
+    """Tap an observed SSH control through Android's input dispatcher."""
+    if selector not in ('#ssh-focus','#ssh-hide-keyboard','#ssh-disconnect','#ssh-return-home'):
         raise GuiFailure('direct_active_tap_unproven')
-    expression=r"""(()=>{const e=document.querySelector(%s),r=e?.getBoundingClientRect(),v=visualViewport;
+    if selector == '#ssh-return-home':
+        browser.evaluate("document.querySelector('#ssh-return-home')?.scrollIntoView({block:'center'})")
+    expression=r"""(()=>{const nodes=document.querySelectorAll(%s),e=nodes.length===1?nodes[0]:null,r=e?.getBoundingClientRect(),v=visualViewport;
       if(!e||e.disabled||!e.checkVisibility({checkOpacity:true,checkVisibilityCSS:true})||!r||!v)return null;
       const x=r.left+r.width/2,y=r.top+r.height/2,h=document.elementFromPoint(x,y);
       return {point:[x,y],rect:[r.left,r.top,r.width,r.height],viewport:[innerWidth,innerHeight],
@@ -870,7 +876,8 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
     if fixture.snapshot().get('sessionClosed') is not False:
         raise GuiFailure('direct_session_ended_before_disconnect')
     if progress is not None: progress['stage']='disconnect'
-    browser.click('#ssh-disconnect')
+    if staged: native_active_tap(browser, '#ssh-disconnect')
+    else: browser.click('#ssh-disconnect')
     if staged:
         mobile_setup(browser, fixture, 'closed')
     else:
@@ -885,12 +892,13 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
     wait_for(lambda: fixture.snapshot().get('connectionsClosed') is True,
              'direct_peer_close_missing', timeout=60)
     closed = fixture.snapshot()['connectionEvents']
-    browser.click('#ssh-return-home' if staged else '#show-remote')
+    if staged: native_active_tap(browser, '#ssh-return-home')
+    else: browser.click('#show-remote')
     if dashboard_add_selector(browser, failure='direct_return_home_missing') != entry:
         raise GuiFailure('direct_return_home_missing')
     if staged:
         wait_for(lambda: browser.evaluate("""(()=>{const m=document.querySelectorAll('#host-ssh-disconnected'),e=m[0];
-          return m.length===1&&!e.hidden&&e.getClientRects().length>0&&e.innerText.trim()==='普通 SSH 已断开';})()""") is True,
+          return m.length===1&&!e.hidden&&e.getClientRects().length>0&&e.innerText.trim()==='本机已断开';})()""") is True,
                  'direct_return_home_missing')
     after_return = fixture.snapshot()
     if after_return.get('connectionsClosed') is not True or after_return.get('connectionEvents') != closed:
@@ -1019,13 +1027,21 @@ def exercise_key_change_ui(browser, fixture, *, encrypted_key=False, evidence_di
              'direct_rotation_terminal_echo_missing', timeout=60)
     terminal_proof=(capture_terminal_proof(browser,fixture,evidence_dir,stem='ssh-rotation-terminal-android')
                     if getattr(fixture,'screen_token',None) else None)
-    browser.click('#ssh-disconnect')
+    if staged: native_active_tap(browser, '#ssh-disconnect')
+    else: browser.click('#ssh-disconnect')
     if staged:
         mobile_setup(browser, fixture, 'closed')
     else:
         wait_for(lambda: '已断开' in (browser.read('#ssh-status') or ''), 'direct_rotation_disconnect_ui_missing', timeout=60)
     fixture.wait_for_connections_closed(minimum=4, timeout=30)
     evidence_4 = _rotation_stage(fixture, 4)
+    if staged:
+        native_active_tap(browser, '#ssh-return-home')
+        wait_for(lambda: browser.evaluate("""(()=>{const m=document.querySelectorAll('#host-ssh-disconnected'),e=m[0];
+          return m.length===1&&!e.hidden&&e.getClientRects().length>0&&e.innerText.trim()==='本机已断开';})()""") is True,
+                 'direct_return_home_missing')
+        if _rotation_stage(fixture, 4) != evidence_4:
+            raise GuiFailure('direct_return_home_peer_changed')
     result = {'probeReviewed':True,'refusalBlocked':True,'reviewNoExits':True,'cancelKeptTrust':True,
               'reprobePresented':True,'connected':True,'terminalInputReceived':True,'terminalEchoRendered':True,
               'disconnected':True,'passwordCleared':True,

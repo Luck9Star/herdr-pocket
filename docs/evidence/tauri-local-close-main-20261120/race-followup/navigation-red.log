@@ -1,0 +1,82 @@
+✖ cancelled opening stays cancelled on network after late success and permits a new connection (23.25025ms)
+✖ cancelled opening stays cancelled on network after late failure and permits a new connection (7.896375ms)
+✖ cancelled opening stays cancelled on settings after late success and permits a new connection (7.721917ms)
+✖ cancelled opening stays cancelled on settings after late failure and permits a new connection (7.288875ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 0
+ℹ fail 4
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 84.149333
+
+✖ failing tests:
+
+test at ../../../../../../private/tmp/herdr-tauri-races-r1/source/validation/tauri/test/direct-dashboard-gui.test.mjs:2336:84
+✖ cancelled opening stays cancelled on network after late success and permits a new connection (23.25025ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  true !== false
+
+      at TestContext.<anonymous> (file:///private/tmp/herdr-tauri-races-r1/source/validation/tauri/test/direct-dashboard-gui.test.mjs:2348:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ../../../../../../private/tmp/herdr-tauri-races-r1/source/validation/tauri/test/direct-dashboard-gui.test.mjs:2336:84
+✖ cancelled opening stays cancelled on network after late failure and permits a new connection (7.896375ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  true !== false
+
+      at TestContext.<anonymous> (file:///private/tmp/herdr-tauri-races-r1/source/validation/tauri/test/direct-dashboard-gui.test.mjs:2348:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ../../../../../../private/tmp/herdr-tauri-races-r1/source/validation/tauri/test/direct-dashboard-gui.test.mjs:2336:84
+✖ cancelled opening stays cancelled on settings after late success and permits a new connection (7.721917ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  true !== false
+
+      at TestContext.<anonymous> (file:///private/tmp/herdr-tauri-races-r1/source/validation/tauri/test/direct-dashboard-gui.test.mjs:2348:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ../../../../../../private/tmp/herdr-tauri-races-r1/source/validation/tauri/test/direct-dashboard-gui.test.mjs:2336:84
+✖ cancelled opening stays cancelled on settings after late failure and permits a new connection (7.288875ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  true !== false
+
+      at TestContext.<anonymous> (file:///private/tmp/herdr-tauri-races-r1/source/validation/tauri/test/direct-dashboard-gui.test.mjs:2348:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

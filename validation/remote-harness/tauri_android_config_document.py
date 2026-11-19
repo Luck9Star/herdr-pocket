@@ -20,6 +20,7 @@ from tauri_android_direct_ssh import _connect_ready
 PICKERS = {'com.android.documentsui', 'com.google.android.documentsui'}
 ARCHIVE = 'herdr-pocket.hpkt'
 CORRUPT = 'herdr-pocket-corrupt.hpkt'
+DOWNLOADS = '/storage/emulated/0/Download'
 FONT = 19
 CONTROL_FONT = 13
 MAX_ARCHIVE = 65586
@@ -34,7 +35,8 @@ ERRORS = {'unsafe_runner', 'unowned_device', 'invalid_display', 'install_unconfi
           'picker_hierarchy_invalid', 'picker_target_unconfirmed', 'picker_directory_unconfirmed',
           'picker_return_unconfirmed', 'archive_read_failed',
           'archive_invalid', 'tamper_guard_failed', 'catalog_read_failed', 'catalog_mismatch',
-          'catalog_changed', 'configuration_ui_unconfirmed'}
+          'catalog_changed', 'configuration_ui_unconfirmed', 'shared_storage_mount_unconfirmed',
+          'download_parent_unconfirmed', 'download_folder_create_failed'}
 
 
 def require(condition, error):
@@ -278,7 +280,7 @@ def exercise(browser, picker, folder, report):
         browser.fill(PANEL + ' > fieldset:nth-of-type(2) input[type=password]', password)
         button('解密并预览')
 
-    folder_path = '/sdcard/Download/' + folder
+    folder_path = f'{DOWNLOADS}/{folder}'
     report['stage'] = 'set_export_preference'
     password = secrets.token_hex(16)
     checked(browser, "document.querySelector('#host-empty')?.hidden === false")
@@ -362,6 +364,23 @@ def exercise(browser, picker, folder, report):
     report['restoredPreference'] = FONT
 
 
+def wait_download_storage(report):
+    # Android can report boot completion before MediaProvider provisions the shared folders.
+    def mounted():
+        volumes = adb('shell', 'sm', 'list-volumes', 'emulated', check=False, timeout=5)
+        primary = [fields for row in volumes.splitlines()
+                   if (fields := row.split())[:1] == ['emulated;0']]
+        return len(primary) == 1 and len(primary[0]) == 3 and primary[0][1] == 'mounted'
+
+    report['stage'] = 'shared_storage_mount'
+    wait_for(mounted, 'shared_storage_mount_unconfirmed', timeout=45)
+    report['stage'] = 'download_parent'
+    command = (f'if [ -d {DOWNLOADS} ] && [ ! -L {DOWNLOADS} ] && '
+               f'[ -w {DOWNLOADS} ] && [ -x {DOWNLOADS} ]; then printf download_ready; fi')
+    wait_for(lambda: adb('shell', command, check=False, timeout=5) == 'download_ready',
+             'download_parent_unconfirmed', timeout=45)
+
+
 def device_run(apk, report):
     avd = Path(os.environ.get('ANDROID_AVD_HOME', '/nonexistent')).resolve()
     root = Path(os.environ.get('RUNNER_TEMP', '/nonexistent')).resolve()
@@ -380,7 +399,7 @@ def device_run(apk, report):
     report['androidApi'] = 35
     picker = Picker(report)
     folder = 'hp-config-' + secrets.token_hex(12)
-    directory = '/sdcard/Download/' + folder
+    directory = f'{DOWNLOADS}/{folder}'
     browser = None
     forward_socket = None
     install_attempted = False
@@ -424,8 +443,15 @@ def device_run(apk, report):
         report['stage'] = 'prepare_device'
         with apk.open('rb') as stream:
             report['apkSha256'] = hashlib.file_digest(stream, 'sha256').hexdigest()
-        adb('shell', 'mkdir', directory)
+        wait_download_storage(report)
+        report['stage'] = 'download_folder_create'
+        try:
+            adb('shell', 'mkdir', directory)
+        except GuiFailure:
+            # Do not retry or touch this path when exclusive creation was unconfirmed.
+            raise GuiFailure('download_folder_create_failed') from None
         owned_directory = True
+        report['stage'] = 'install_app'
         install_attempted = True
         require(adb('install', str(apk), timeout=90).splitlines()[-1:] == ['Success'] and installed(),
                 'install_unconfirmed')

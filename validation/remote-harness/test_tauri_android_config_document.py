@@ -135,7 +135,7 @@ class EvidenceTests(unittest.TestCase):
                 config.device_run(Path('synthetic.apk'), {})
             adb.assert_not_called()
 
-    def test_partial_install_keeps_first_failure_and_cleans_owned_folder(self):
+    def check_device_setup(self, *, mount_ready=True, download_ready=True, mkdir_fails=False):
         with tempfile.TemporaryDirectory() as root:
             avd = Path(root) / 'avd'
             avd.mkdir()
@@ -144,7 +144,8 @@ class EvidenceTests(unittest.TestCase):
             env = {'GITHUB_ACTIONS': 'true', 'GITHUB_REF': 'refs/heads/codex/local',
                    'ANDROID_SERIAL': config.SERIAL, 'ANDROID_AVD_HOME': str(avd),
                    'RUNNER_TEMP': root}
-            folders = []
+            report = {'cleanup': {}}
+            events, folders = [], []
             installed = False
 
             def adb(*args, **kwargs):
@@ -158,10 +159,26 @@ class EvidenceTests(unittest.TestCase):
                     return fixed[args]
                 if args[:4] == ('shell', 'pm', 'list', 'packages'):
                     return 'package:' + config.PACKAGE if installed else ''
+                if args == ('shell', 'sm', 'list-volumes', 'emulated'):
+                    events.append('volume')
+                    state = 'mounted' if mount_ready and events.count('volume') > 1 else 'checking'
+                    return f'emulated;10 mounted null\nemulated;0 {state} null'
+                if args[0] == 'shell' and len(args) == 2 and '/storage/emulated/0/Download' in args[1]:
+                    events.append('parent')
+                    self.assertIn('! -L', args[1])
+                    if download_ready and events.count('parent') > 1:
+                        events.append('parent-ready')
+                        return 'download_ready'
+                    return ''
                 if args[:2] == ('shell', 'mkdir'):
+                    events.append('mkdir')
+                    if 'parent-ready' not in events or mkdir_fails:
+                        raise GuiFailure('untrusted_android_detail')
+                    self.assertRegex(args[2], r'^/storage/emulated/0/Download/hp-config-[0-9a-f]{24}$')
                     folders.append(args[2])
                     return ''
                 if args[0] == 'install':
+                    events.append('install')
                     installed = True
                     raise GuiFailure('install_unconfirmed')
                 if args[0] == 'uninstall':
@@ -172,18 +189,52 @@ class EvidenceTests(unittest.TestCase):
                     return ''
                 if args[:2] == ('shell', 'rmdir'):
                     self.assertEqual(folders.pop(), args[2])
+                    events.append('folder-removed')
                     return ''
                 if args[:3] == ('shell', 'am', 'force-stop') or args[:4] == ('shell', 'test', '!', '-e'):
                     return ''
                 self.fail('unexpected ADB command')
 
-            report = {'cleanup': {}}
-            with patch.dict(os.environ, env, clear=True), patch.object(config, 'adb', side_effect=adb):
-                with self.assertRaisesRegex(GuiFailure, '^install_unconfirmed$'):
+            def bounded_wait(probe, error, *, timeout=25):
+                for _ in range(3):
+                    value = probe()
+                    if value:
+                        return value
+                raise GuiFailure(error)
+
+            with patch.dict(os.environ, env, clear=True), patch.object(config, 'adb', side_effect=adb), \
+                    patch.object(config, 'wait_for', side_effect=bounded_wait):
+                with self.assertRaises(GuiFailure) as error:
                     config.device_run(apk, report)
-            self.assertEqual(report['cleanup'], {'hierarchyFile': True, 'application': False,
-                                                 'downloadFolder': True})
             self.assertEqual(folders, [])
+            return report, events, str(error.exception)
+
+    def test_waits_for_mount_then_download_parent_before_allocating_and_cleans_owned_folder(self):
+        report, events, code = self.check_device_setup()
+        self.assertEqual(code, 'install_unconfirmed')
+        self.assertEqual(events, ['volume', 'volume', 'parent', 'parent', 'parent-ready', 'mkdir',
+                                  'install', 'folder-removed'])
+        self.assertEqual(report['cleanup'], {'hierarchyFile': True, 'application': False,
+                                             'downloadFolder': True})
+
+    def test_mount_or_download_parent_unready_never_allocates_and_never_installs(self):
+        for scenario, option in (('shared_storage_mount', 'mount_ready'),
+                                 ('download_parent', 'download_ready')):
+            with self.subTest(scenario=scenario):
+                report, events, code = self.check_device_setup(**{option: False})
+                self.assertEqual((report['stage'], code), (scenario, scenario + '_unconfirmed'))
+                self.assertNotIn('mkdir', events)
+                self.assertNotIn('install', events)
+                self.assertEqual(report['cleanup'], {'hierarchyFile': True})
+
+    def test_failed_mkdir_is_classified_without_retry_or_cleanup_of_unowned_path(self):
+        report, events, code = self.check_device_setup(mkdir_fails=True)
+        self.assertEqual((report['stage'], code), ('download_folder_create', 'download_folder_create_failed'))
+        self.assertEqual(config.public_error(GuiFailure(code)), code)
+        self.assertEqual(events.count('mkdir'), 1)
+        self.assertNotIn('install', events)
+        self.assertNotIn('folder-removed', events)
+        self.assertEqual(report['cleanup'], {'hierarchyFile': True})
 
 
 if __name__ == '__main__':

@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Tauri Android R5 IME 修前修后官方对照；两整案均为 failed，仅截图证据链自洽",
+  "cases": [
+    {
+      "case": "before",
+      "productSourceSHA": "b11e2b94c18ca5b11e876fc93fc71c9c806b6e7d",
+      "driverSourceSHA": "301f64d8cd2bd7ef6f9a96ed500f5d61c39b49fe",
+      "zipSha256": "3bae7c91ae9bfbc591eec3da62b827af12b79979eb5ff67d8668cc2089fcadee",
+      "overallStatus": "failed",
+      "errorCode": "direct_active_ui_invalid",
+      "failureStage": "active_keyboard_opened",
+      "image": "before-keyboard-opened-native.png",
+      "imageSha256": "e817d8e551ca9aefbbfa8f855c1497f40a7402eb669765dfb37b7755cdbec2d9",
+      "gateFile": "before-keyboard-opened-native.json",
+      "terminalBounds": [99, 500, 875, 1429],
+      "focusButton": [325, 118, 44, 44],
+      "hideButton": [0, 0, 0, 0],
+      "observation": "键盘可见且终端延伸到键盘下方（未收缩缺陷布局），「收起键盘」按钮框为零，辅助行不可见"
+    },
+    {
+      "case": "after",
+      "productSourceSHA": "b11e2b94c18ca5b11e876fc93fc71c9c806b6e7d",
+      "driverSourceSHA": "e40d4cdfb0d9e57fe214fa1c63e8f55a8c651a0a0",
+      "zipSha256": "835ef04521ccb0f701ebe299683c902cb43a9cebb64f18a12455c6370b6aebd6",
+      "overallStatus": "failed",
+      "errorCode": "direct_active_ui_invalid",
+      "failureStage": "terminal_input",
+      "image": "after-keyboard-opened-native.png",
+      "imageSha256": "148c3c89c5e11b2bd7bc59522c307a469cef4a920cbdaf688590d1322fb46682",
+      "gateFile": "after-keyboard-opened-native.json",
+      "terminalBounds": [99, 500, 875, 769],
+      "focusButton": [0, 0, 0, 0],
+      "hideButton": [325, 118, 44, 44],
+      "observation": "键盘可见，终端收缩到键盘上方，「收起键盘」按钮 44×44 且旁边断开控件分离，辅助行可见"
+    }
+  ],
+  "shared": {
+    "viewport": [393, 851],
+    "framebufferPixels": [1080, 2340],
+    "apiLevel": 35,
+    "abi": "x86_64",
+    "imageTag": "google_apis",
+    "imageRevision": 9,
+    "emulatorVersion": "Android emulator version 37.2.13.0 (build_id 16740729) (CL:N/A)",
+    "captureEngine": "adb exec-out screencap -p",
+    "ocrEngine": "tesseract 5.3.4",
+    "peerCounters": {
+      "connections": 2,
+      "authAttempts": 1,
+      "authSuccesses": 1,
+      "ptyRequests": 1,
+      "shellRequests": 1,
+      "inputBytes": 0,
+      "closed": false
+    },
+    "limits": [
+      "模拟器回环夹具与 ADB/CDP 驱动，非系统中文输入法组词，非实体设备",
+      "两整案均 failed：修前断在 active_keyboard_opened，修后八步导航后在 terminal_input 二次开键盘失败，无第二次完整采样，不推测具体原因",
+      "gate 文件内 status=passed 仅指单张截图门禁合格，整案状态以上述 overallStatus 为准"
+    ]
+  }
+}

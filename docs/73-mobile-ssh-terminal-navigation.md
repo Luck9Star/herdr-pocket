@@ -2,7 +2,7 @@
 
 2026-11-19，本地验证通过两壳的活动终端、模拟键盘开合和设置往返。用户约定是从活动终端切到看板、网络或设置的实际页面后，保留原 SSH 会话和回显。切走时禁止终端输入，从底栏返回终端时保持键盘收起。主动断开才关闭本轮测试会话。
 
-两壳修前使用 `0705b9b70ac1cda2b58b20e0ebaf7596cbd8ebcb`。Flutter 修后为 `b6f89a3bcf317bdf69211d6a3c11ce7c7f491b71`，包含 `e47b593`。Tauri 首版布局修后为 `ea1694c29e3d9f5a12fca35875d54c3b9396ea55`。画板来自 `c063e785da173ad41bc740cf0dc64eaa8ccce3fb` 的[冻结设计](../design/penpot/direct-ssh-mobile.md)。Flutter Android、Flutter iOS 均通过本批原生模拟器导航验收。Tauri Android R3 复现系统键盘已打开但网页状态未同步，修后同一源码已通过 Android 和 iOS [原生模拟器 R4](#tauri-android-与-ios-原生模拟器-r4)。[普通 SSH 原生证据](72-mobile-ssh-auth-snapshot.md)
+两壳修前使用 `0705b9b70ac1cda2b58b20e0ebaf7596cbd8ebcb`。Flutter 修后为 `b6f89a3bcf317bdf69211d6a3c11ce7c7f491b71`，包含 `e47b593`。Tauri 首版布局修后为 `ea1694c29e3d9f5a12fca35875d54c3b9396ea55`。画板来自 `c063e785da173ad41bc740cf0dc64eaa8ccce3fb` 的[冻结设计](../design/penpot/direct-ssh-mobile.md)。Flutter Android、Flutter iOS 均通过本批原生模拟器导航验收。Tauri Android R3 复现系统键盘已打开但网页状态未同步，修后同一源码已通过 Android 和 iOS [原生模拟器 R4](#tauri-android-与-ios-原生模拟器-r4)。R4 之后的一次[键盘布局回归对照](#tauri-android-r5-键盘修前后官方对照)按整案失败归档。[普通 SSH 原生证据](72-mobile-ssh-auth-snapshot.md)
 
 ## 同尺寸画面与测量
 
@@ -137,3 +137,18 @@ node docs/evidence/mobile-ssh-terminal-navigation-20261119/android-ime-browser/v
 | --- | --- | --- |
 | Android，1080 × 2340 px | [终端原始像素](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r4/ssh-terminal-android.png) | [终端原始像素](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r4/ssh-rotation-terminal-android.png) |
 | iOS，1320 × 2868 px | [终端原始像素](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-ios-r4/ordinary-terminal.png) | [终端原始像素](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-ios-r4/key-change-terminal.png) |
+
+## Tauri Android R5 键盘修前后官方对照
+
+本节归档一次修前／修后对照运行的官方证据。两个整案均以失败告终，仅截图证据链自洽，不作为通过依据；此前的 R4 通过证据保持不变。两端产品同为 `b11e2b94c18ca5b11e876fc93fc71c9c806b6e7d`，驱动分别为 `301f64d8cd2bd7ef6f9a96ed500f5d61c39b49fe`（修前）与 `e40d4cdfb0d9e57fe214fa1c63e8f55a8c651a0a0`（修后），后者把产品布局修复合入同一截图驱动。环境均为 API 35 `pixel_5` x86_64 Google APIs 镜像、393 × 851 视口，自有模拟器起灭，系统输入法采样确认键盘归属本应用。
+
+两张图都是键盘打开瞬间的系统原屏（`adb exec-out screencap`），通过标记 OCR、隐藏认证表单与零输入门禁；回环服务端仅观测到一次成功认证与一条保持的 Shell，输入始终为零。修前图终端延伸到键盘下方，「收起键盘」按钮框为零；修后图终端收缩到键盘上方，「收起键盘」按钮为 44 × 44 且与断开控件分离，辅助行可见。两图的逐行像素与官方工件内原图一致，未做任何改写。
+
+修前整案在 `active_keyboard_opened` 阶段失败（`direct_active_ui_invalid`），与未修复布局缺少可命中收起控件相符。修后整案完成八步导航后在 `terminal_input` 二次开键盘失败，同错误码，但证据中没有第二次完整采样，不推测具体原因。两案限制相同：模拟器回环夹具与 ADB/CDP 驱动，非系统中文输入法组词，非实体设备，未验证真实跨网。
+
+| 对照 | 键盘打开瞬间 | 整案状态 |
+| --- | --- | --- |
+| 修前（b11e2b9） | [系统原屏](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r5/before-keyboard-opened-native.png) | 失败于 `active_keyboard_opened` |
+| 修后（e40d4cd 驱动） | [系统原屏](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r5/after-keyboard-opened-native.png) | 失败于 `terminal_input` |
+
+索引与逐文件 SHA256 见 [证据索引](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r5/official-index.json)。

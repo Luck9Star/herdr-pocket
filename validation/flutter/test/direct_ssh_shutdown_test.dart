@@ -18,6 +18,13 @@ class _Session extends Fake implements SSHSession {
   final List<String> events;
   final input = StreamController<Uint8List>();
   final peerClosed = Completer<void>();
+  int? remoteExitCode;
+
+  @override
+  int? get exitCode => remoteExitCode;
+
+  @override
+  SSHSessionExitSignal? get exitSignal => null;
 
   @override
   StreamSink<Uint8List> get stdin => input.sink;
@@ -93,6 +100,54 @@ const _mobile = TargetPlatformVariant({
 final _disconnect = find.byKey(const ValueKey('direct-disconnect'));
 
 void main() {
+  for (final outcome in ['exit', 'no-exit', 'timeout']) {
+    final confirmed = outcome == 'exit';
+    testWidgets('desktop close reports only verified channel retirement: $outcome', (tester) async {
+      tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(980, 780);
+      addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);
+      final tokens = (await tester.runAsync(DesignTokens.load))!;
+      var notifications = 0;
+      await tester.pumpWidget(MaterialApp(theme: tokens.theme.copyWith(platform: TargetPlatform.macOS), home: Builder(builder: (context) =>
+        TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => DirectSshPage(
+          tokens: tokens, onReturnAfterDisconnect: () => notifications++))), child: const Text('open')))));
+      await tester.tap(find.text('open')); await tester.pumpAndSettle();
+      final dynamic state = tester.state(find.byType(DirectSshPage));
+      final events = <String>[]; final session = _connect(state, events); await tester.pump();
+      await tester.tap(find.widgetWithText(TextButton, '断开')); await tester.pump();
+      expect(find.text('正在关闭连接'), findsOneWidget);
+      expect(find.byKey(const ValueKey('direct-return-home')).hitTestable(), findsOneWidget);
+      if (confirmed) { session.remoteExitCode = 0; session.peerClosed.complete(); await tester.pump(); await tester.pump(); }
+      else if (outcome == 'no-exit') { session.peerClosed.complete(); await tester.pump(); await tester.pump(); }
+      else { await tester.pump(const Duration(seconds: 4)); }
+      expect(find.text(confirmed ? '已断开连接' : '远端关闭未确认'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('direct-return-home'))); await tester.pumpAndSettle();
+      expect(notifications, confirmed ? 1 : 0);
+      if (outcome == 'timeout') session.peerClosed.complete();
+      await tester.pumpWidget(const SizedBox());
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('unconfirmed desktop close stays unconfirmed after mobile resize and back', (tester) async {
+    tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(980, 780);
+    addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);
+    final tokens = (await tester.runAsync(DesignTokens.load))!; var notifications = 0;
+    await tester.pumpWidget(MaterialApp(theme: tokens.theme.copyWith(platform: TargetPlatform.iOS), home: Builder(builder: (context) =>
+      TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => DirectSshPage(tokens: tokens,
+        onReturnAfterDisconnect: () => notifications++))), child: const Text('open')))));
+    await tester.tap(find.text('open')); await tester.pumpAndSettle();
+    final dynamic state = tester.state(find.byType(DirectSshPage));
+    final session = _connect(state, <String>[]); await tester.pump();
+    await tester.tap(find.widgetWithText(TextButton, '断开')); await tester.pump();
+    session.peerClosed.complete(); await tester.pump(); await tester.pump();
+    tester.view.physicalSize = const Size(390, 844); await tester.pumpAndSettle();
+    expect(find.text('远端关闭未确认'), findsOneWidget);
+    expect(find.byKey(const ValueKey('direct-return-home')).hitTestable(), findsOneWidget);
+    await tester.binding.handlePopRoute(); await tester.pumpAndSettle();
+    expect(notifications, 0); await tester.pumpWidget(const SizedBox());
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('explicit disconnect drains only the retiring session', (
     tester,
   ) async {

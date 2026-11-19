@@ -199,3 +199,11 @@ unzip -p mac-s06-r11.zip result.json
 同源 guarded 使用隔离受保护输入扩展，两端实际收到 9/1 字节，绑定正确，两视图主动停止并等待本地取消完成。两种模式的 PTY 均保持 119 × 40，观察到 0 次 resize。临时授权、进程和密钥清理均通过。关闭 A 后 B 推进与退出前独立对端关闭确认由 stock 用例覆盖。[guarded 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44518193618/job/135542178535)
 
 R1 未确认最终关闭。R2 云端通过，本机显式等待取消时仍复现 `network_transport_failed`。R3 修正关闭顺序后，本机真实回环连续通过 5/5。归档基线与 R3 的 Flutter 产品树一致，主代理对该共享适配器的 M3-05 独立复跑也通过。此处覆盖固定 Widget 视口和隔离回环，原生窗口、窗口宽度往返、物理输入法及真实网络提供方仍待验证。[两个官方 ZIP、SHA-256 与本机复验](evidence/flutter-desktop-shared-host-close-20261119/README.md)
+
+## Tauri 分屏键盘退出与窗口变化
+
+**D1 逐键退出通过（Ubuntu 24.04 原生 GTK，固定宽屏，隔离 SSH/herdr）。** 2026-11-19，guarded R6 在 `c14af9d0bec0a5451318378bf5abaf1c94fd25b9` 上从首页配对两条连接。B 收到明确输入的 1 字节后，真实 WebDriver 键盘按下一次 `Ctrl+Shift+F6`。焦点移到 A 原有的「设为输入焦点」按钮，当前选中的终端保持 B，B 退出逐键输入，两侧均处于只读观察，原目标和连接保留。随后 A 明确发送一次草稿，SSH 对端最终收到 9／1 字节，退出驱动前两条连接均已关闭。[guarded R6 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44524014037/job/135562342657) · [原件、六项断言与复核方法](evidence/tauri-gtk-focus-resize-r6-20261119/README.md)
+
+**D2 逐键期间收窄与回宽通过（WebKit 和 Chromium，受控 IPC）。** 1440 → 700 → 1440 时，B 保留原 xterm 编辑器、焦点及输入资格，A 因布局暂停，回宽后等待同一目标的新完整帧再恢复只读观察。另一路手动暂停 A 后，回宽仍保持暂停。两种浏览器运行生产前端和 xterm，连接、输入受理与帧由夹具提供。guarded R6 只在固定宽屏验证 D1。[D2 原图、报告与复跑](evidence/tauri-active-input-split-resize-20261119/README.md) · [D1 浏览器修前后](evidence/tauri-desktop-focus-escape-20261119/README.md)
+
+**D2 stock 部分通过（Ubuntu 24.04 原生 GTK，只读观察）。** 首次作业在准备 GTK 依赖时遇到 APT HTTP 503。同源第二次作业通过原生窗口 1440 → 700 → 1440，保留两条原连接与终端，收窄暂停 A，回宽后两侧显示新帧，远端零输入。接着从「返回主机看板」暂停两侧，回终端时 A 的诊断状态为 `disconnected`，B 为 `paused`，完整作业失败。手动暂停后的窗口往返、仅恢复选中侧及正常收尾的两端关闭仍待验证。原生 GTK 逐键期间窗口变化、物理输入法、系统密钥库与真实网络提供方也仍待验。[stock 首次作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44524007838/job/135559686242) · [同源重跑与原件](evidence/tauri-gtk-focus-resize-r6-20261119/README.md#stock-窗口往返与手动暂停断点)

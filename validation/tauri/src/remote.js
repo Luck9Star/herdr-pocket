@@ -867,8 +867,8 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     }});
   let sshBackSection = 'dashboard';
   const ssh = initDirectSshUI({native, invoke, clipboardRead, keyboardRequest, terminalCursor:theme.terminal.cursor,
-    onBack: disconnected => {
-      navigateHome(disconnected ? 'dashboard' : sshBackSection);
+    onBack: (disconnected, returnToDashboard) => {
+      navigateHome(disconnected || returnToDashboard ? 'dashboard' : sshBackSection);
       if (disconnected) $('host-ssh-disconnected').hidden = false;
     },
     channelFactory:()=>new Channel(), terminalFactory:options=>createUnicodeTerminal(Terminal,options)});

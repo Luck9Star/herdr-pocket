@@ -18,11 +18,16 @@ const enabled = String.fromEnvironment('HERDR_IOS_DIRECT_SSH');
 const runId = String.fromEnvironment('HERDR_IOS_RUN_ID');
 const targetJson = String.fromEnvironment('HERDR_IOS_DIRECT_TARGET');
 const rotationTargetJson = String.fromEnvironment('HERDR_IOS_ROTATION_TARGET');
+const encryptedCase = String.fromEnvironment('HERDR_IOS_ENCRYPTED_KEY_CASE');
+const encryptedTargetJson = String.fromEnvironment(
+  'HERDR_IOS_ENCRYPTED_KEY_TARGET',
+);
 final directory = '${Directory.systemTemp.path}/herdr-direct-ssh-$runId';
 
 Map<String, dynamic> target({
   String encoded = targetJson,
   bool rotating = false,
+  bool encrypted = false,
 }) {
   if (!Platform.isIOS ||
       !kDebugMode ||
@@ -35,7 +40,7 @@ Map<String, dynamic> target({
     'host',
     'port',
     'username',
-    'password',
+    if (!encrypted) 'password',
     'fingerprint',
     if (rotating) 'rotatedFingerprint',
   };
@@ -47,8 +52,9 @@ Map<String, dynamic> target({
       value['port'] < 1024 ||
       value['port'] > 65535 ||
       value['username'] != 'fixture' ||
-      value['password'] is! String ||
-      !RegExp(r'^[0-9a-f]{32}$').hasMatch(value['password']) ||
+      (!encrypted &&
+          (value['password'] is! String ||
+              !RegExp(r'^[0-9a-f]{32}$').hasMatch(value['password']))) ||
       value['fingerprint'] is! String ||
       !RegExp(r'^SHA256:[A-Za-z0-9+/]{43}$').hasMatch(value['fingerprint']) ||
       (rotating &&
@@ -66,6 +72,44 @@ void publish(String name, Object value) {
   final pending = File('${dir.path}/$name.pending')
     ..writeAsStringSync(jsonEncode(value), flush: true);
   pending.renameSync('${dir.path}/$name');
+}
+
+Future<Map<String, bool>> checkIosCredentialSwitches(
+  WidgetTester tester,
+  String fingerprint,
+) async {
+  final dynamic state = tester.state(find.byType(DirectSshPage));
+  Future<void> fill(String field) async {
+    final finder = control(field);
+    await tester.ensureVisible(finder);
+    await tester.enterText(finder, 'mode-switch-only');
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(finder).controller!.text.isNotEmpty,
+      isTrue,
+    );
+  }
+
+  bool empty() => state.secret.text.isEmpty && state.passphrase.text.isEmpty;
+  bool trusted() =>
+      state.fingerprint == fingerprint && state.checkedTarget == state.target;
+  expect(state.keyAuth, isFalse);
+  expect(trusted(), isTrue);
+  await fill('direct-secret');
+  await tap(tester, 'direct-auth-key');
+  final passwordCleared = state.keyAuth == true && empty() && trusted();
+  expect(passwordCleared, isTrue);
+  await fill('direct-secret');
+  await fill('direct-passphrase');
+  await tap(tester, 'direct-auth-password');
+  final keyCleared = state.keyAuth == false && empty();
+  expect(keyCleared, isTrue);
+  expect(trusted(), isTrue);
+  return {
+    'passwordToKeyCleared': passwordCleared,
+    'keyToPasswordCleared': keyCleared,
+    'sameTrust': trusted(),
+  };
 }
 
 void main() {
@@ -119,13 +163,15 @@ void main() {
         final type = details.exception.runtimeType.toString();
         final source = RegExp(r'direct_ssh_ui_steps\.dart:(\d+)')
             .firstMatch(details.stack?.toString() ?? '');
-        final excerpt = details
-            .exceptionAsString()
-            .split('\n')
-            .take(3)
-            .map(safe)
-            .where((line) => line.isNotEmpty)
-            .toList();
+        final excerpt = encryptedCase == '1'
+            ? <String>[]
+            : details
+                  .exceptionAsString()
+                  .split('\n')
+                  .take(3)
+                  .map(safe)
+                  .where((line) => line.isNotEmpty)
+                  .toList();
         publish('framework-error.json', {
           'exceptionClass':
               {
@@ -156,9 +202,20 @@ void main() {
       final previousLayoutReporter = FlutterError.onError;
       final overflows = <Map<String, Object?>>[];
       try {
+        if (encryptedCase != '' && encryptedCase != '1') {
+          throw StateError('direct_ssh_ios_invalid_case');
+        }
         final config = target();
         final rotation = target(encoded: rotationTargetJson, rotating: true);
-        if (rotation['port'] == config['port']) {
+        final encrypted = encryptedCase == '1'
+            ? target(encoded: encryptedTargetJson, encrypted: true)
+            : null;
+        final ports = [
+          config['port'],
+          rotation['port'],
+          if (encrypted != null) encrypted['port'],
+        ];
+        if (ports.toSet().length != ports.length) {
           throw StateError('direct_ssh_ios_peers_not_independent');
         }
         fixtureValidated = true;
@@ -275,9 +332,14 @@ void main() {
             });
             return;
           }
-          if (name == 'connected' || name == 'rotation-connected') {
-            final tag = name == 'connected' ? 'ordinary' : 'key-rotation';
-            final peer = name == 'connected' ? config : rotation;
+          if (name == 'connected' ||
+              name == 'rotation-connected' ||
+              name == 'encrypted-connected') {
+            final (tag, peer) = switch (name) {
+              'encrypted-connected' => ('encrypted', encrypted!),
+              'rotation-connected' => ('key-rotation', rotation),
+              _ => ('ordinary', config),
+            };
             final expectedTarget =
                 '${peer['username']}@${peer['host']}:${peer['port']}';
             for (var attempt = 1; attempt <= 12; attempt++) {
@@ -312,9 +374,9 @@ void main() {
           if (name != 'preconnect') return;
           final secret = find.byKey(const ValueKey('direct-secret'));
           final state = tester.state(find.byType(DirectSshPage)) as dynamic;
-          if (secret.evaluate().length != 1 ||
-              !tester.widget<TextField>(secret).obscureText || state.keyAuth == true)
-            return;
+          expect(secret, findsOneWidget);
+          expect(tester.widget<TextField>(secret).obscureText, isTrue);
+          expect(state.keyAuth, isFalse);
           // Allow Flutter's brief last-character reveal to expire before any
           // screenshot; the runner only sees the approved synthetic fixture.
           await tester.pump(const Duration(seconds: 2));
@@ -349,26 +411,79 @@ void main() {
           publish: publish,
           capture: capture,
         );
-        step('return_home');
-        final back = find.bySemanticsIdentifier('direct-back').hitTestable();
-        expect(back, findsOneWidget);
-        await tester.tap(back);
-        final home = find.byType(HostCatalogPage);
-        final shortcut = find.descendant(
-          of: home,
-          matching: find.byKey(const ValueKey('hosts-direct-ssh')),
-        );
-        final ssh = find.byType(DirectSshPage, skipOffstage: false);
-        await until(
-          tester,
-          () =>
-              ssh.evaluate().isEmpty &&
-              home.evaluate().length == 1 &&
-              shortcut.hitTestable().evaluate().length == 1,
-          timeoutReason: 'direct_ssh_ios_return_home_timeout',
-        );
-        expect(tester.takeException(), isNull);
-        step('returned_home');
+        Future<void> returnHome() async {
+          step('return_home');
+          final back = find.bySemanticsIdentifier('direct-back').hitTestable();
+          expect(back, findsOneWidget);
+          await tester.tap(back);
+          final home = find.byType(HostCatalogPage);
+          final shortcut = find.descendant(
+            of: home,
+            matching: find.byKey(const ValueKey('hosts-direct-ssh')),
+          );
+          final ssh = find.byType(DirectSshPage, skipOffstage: false);
+          await until(
+            tester,
+            () =>
+                ssh.evaluate().isEmpty &&
+                home.evaluate().length == 1 &&
+                shortcut.hitTestable().evaluate().length == 1,
+            timeoutReason: 'direct_ssh_ios_return_home_timeout',
+          );
+          expect(tester.takeException(), isNull);
+          step('returned_home');
+        }
+
+        await returnHome();
+        if (encrypted != null) {
+          step('encrypted_waiting_private');
+          final file = File('$directory/encrypted-credentials.json');
+          await until(tester, file.existsSync);
+          dynamic data;
+          try {
+            data = jsonDecode(file.readAsStringSync());
+          } catch (_) {
+            throw StateError('direct_ssh_ios_invalid_encrypted_credentials');
+          } finally {
+            file.deleteSync();
+          }
+          expect(file.existsSync(), isFalse);
+          if (data is! Map<String, dynamic> ||
+              data.length != 2 ||
+              !data.containsKey('privateKey') ||
+              !data.containsKey('passphrase') ||
+              data['privateKey'] is! String ||
+              (data['privateKey'] as String).length > 8192 ||
+              !RegExp(
+                r'^-----BEGIN OPENSSH PRIVATE KEY-----\n[A-Za-z0-9+/=\n]+\n-----END OPENSSH PRIVATE KEY-----\n?$',
+              ).hasMatch(data['privateKey']) ||
+              data['passphrase'] is! String ||
+              !RegExp(r'^[0-9a-f]{32}$').hasMatch(data['passphrase'])) {
+            throw StateError('direct_ssh_ios_invalid_encrypted_credentials');
+          }
+          encrypted.addAll(data);
+          await runEncryptedDirectSshUi(
+            tester,
+            binding: binding,
+            config: encrypted,
+            directory: directory,
+            platform: 'ios-simulator',
+            step: step,
+            publish: publish,
+            capture: (name) => name == 'connected'
+                ? capture('encrypted-connected')
+                : Future<void>.value(),
+            afterTrust: () async {
+              final modes = await checkIosCredentialSwitches(
+                tester,
+                encrypted['fingerprint'] as String,
+              );
+              publish('encrypted-mode-switch.json', modes);
+            },
+          );
+          await returnHome();
+          step('encrypted_returned_home');
+        }
       } catch (error, stack) {
         if (fixtureValidated) {
           final detail = error.toString();

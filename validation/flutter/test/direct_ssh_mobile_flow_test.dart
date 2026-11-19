@@ -6,7 +6,7 @@ import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/direct_ssh_page.dart';
 import 'package:herdr_flutter_probe/main.dart' as app;
 import 'package:terminal_view/terminal_view.dart';
-import 'direct_ssh_widget_test.dart' show mockClipboard, waitFor;
+import 'direct_ssh_widget_test.dart' show tapAndWaitForOrdinaryDisconnect, mockClipboard, waitFor;
 
 void main() {
   for (final width in [320.0, 390.0]) {
@@ -67,7 +67,7 @@ void main() {
       await tester.ensureVisible(key('direct-connect')); await tester.tap(key('direct-connect')); await tester.pump();
       await waitFor(tester, find.byType(TerminalView));
       expect(state.secret.text, isEmpty); expect(state.passphrase.text, isEmpty);
-      await tester.tap(find.text('断开')); await tester.pumpAndSettle();
+      await tapAndWaitForOrdinaryDisconnect(tester);
       expect(key('direct-secret'), findsNothing); expect(state.secret.text, isEmpty);
       await tester.enterText(key('direct-host'), 'changed.invalid'); await tester.pump();
       expect(state.fingerprint, isNull); expect(state.checkedTarget, isNull);
@@ -107,7 +107,7 @@ void main() {
       await waitFor(tester, find.byType(TerminalView));
       final dynamic state = tester.state(find.byType(DirectSshPage));
       expect(state.secret.text, isEmpty); expect(state.passphrase.text, isEmpty);
-      await tester.tap(find.text('断开')); await tester.pumpAndSettle();
+      await tapAndWaitForOrdinaryDisconnect(tester);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     }, variant: TargetPlatformVariant.only(TargetPlatform.iOS),
@@ -178,8 +178,7 @@ void main() {
     expect(state.activeTarget, target);
     expect(state.connectHostKeyMatched, isTrue);
     expect(state.secret.text.isEmpty && state.passphrase.text.isEmpty, isTrue);
-    await tester.tap(find.text('断开'));
-    await tester.pumpAndSettle();
+    await tapAndWaitForOrdinaryDisconnect(tester);
     expect(tester.takeException(), isNull);
   }, variant: TargetPlatformVariant.only(TargetPlatform.android),
     skip: Platform.environment['HERDR_MOBILE_ENCRYPTED_PORT'] == null || Platform.environment['HERDR_MOBILE_ENCRYPTED_KEY'] == null);

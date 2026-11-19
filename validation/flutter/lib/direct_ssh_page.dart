@@ -159,7 +159,26 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     if (checkedTarget != target) { mobileAuth = false; fingerprint = null; algorithm = null; checkedTarget = null; hostKeyReviewRequired = false; hostKeyChange = null; secret.clear(); passphrase.clear(); }
     if (mounted) setState(() {});
   }
-  void stop({String? message, bool notify = true}) {
+  Future<void> _retireActiveSession(SSHSession session, SSHClient transport, SSHSocket connection) async {
+    const limit = Duration(seconds: 3);
+    final elapsed = Stopwatch()..start();
+    try {
+      // Close stdin after delivering its queued bytes. Keep the original
+      // transport reading until the peer closes the channel.
+      await Future.wait<void>([session.stdin.close(), session.done], eagerError: true).timeout(limit);
+      await transport.close().timeout(limit - elapsed.elapsed);
+    } catch (_) {
+      connection.destroy();
+    }
+  }
+
+  void disconnect() {
+    userDisconnected = mobileLayout && connected;
+    mobileAuth = false;
+    stop(message: '已断开；未重放输入。', drainInput: connected);
+  }
+
+  void stop({String? message, bool notify = true, bool drainInput = false}) {
     cancelKeyPaste();
     if (busy && connectPhase != DirectSshConnectPhase.idle && connectFailure == null) connectFailure = DirectSshConnectFailure.cancelled;
     epoch++; connected = false; busy = false; pendingTarget = null; activeTarget = null;
@@ -169,8 +188,20 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     if (targetScroll.hasClients) targetScroll.jumpTo(0);
     retireTerminal();
     secret.clear(); passphrase.clear();
-    unawaited(stdout?.cancel()); unawaited(stderr?.cancel()); stdout = null; stderr = null;
-    shell?.close(); shell = null; client?.close(); client = null; socket?.destroy(); socket = null;
+    final retiredStdout = stdout, retiredStderr = stderr;
+    final session = shell, transport = client, connection = socket;
+    stdout = null; stderr = null; shell = null; client = null; socket = null;
+    void cancelOutput() {
+      unawaited(retiredStdout?.cancel()); unawaited(retiredStderr?.cancel());
+    }
+    if (drainInput && session != null && transport != null && connection != null) {
+      unawaited(_retireActiveSession(session, transport, connection).whenComplete(cancelOutput));
+    } else {
+      cancelOutput();
+      session?.close();
+      unawaited(transport?.close().catchError((Object _, StackTrace __) {}));
+      connection?.destroy();
+    }
     if (message != null) status = message;
     if (notify && mounted) setState(() {});
   }
@@ -405,7 +436,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     backgroundColor: widget.tokens.color('canvas'),
     shape: Border(bottom: BorderSide(color: widget.tokens.color('border'))),
     title: Text(title, maxLines: mobileLargeText ? 2 : 1), automaticallyImplyLeading: false,
-    actions: [if (showStop) TextButton(onPressed: () { mobileAuth = false; stop(message: '已断开；未重放输入。'); }, child: const Text('断开'))],
+    actions: [if (showStop) TextButton(onPressed: disconnect, child: const Text('断开'))],
     leading: canGoBack ? Padding(padding: EdgeInsets.only(left: mobileMargin - 8), child: SizedBox(width: 44, height: 44,
       child: Center(child: SizedBox(width: 44, height: 44, child: MergeSemantics(child: Semantics(identifier: 'direct-back', label: '返回',
         child: Theme(data: Theme.of(context).copyWith(platform: TargetPlatform.android), child: BackButton(onPressed: onBack)))))))) : null);
@@ -738,11 +769,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  onPressed: () {
-                    userDisconnected = true;
-                    mobileAuth = false;
-                    stop(message: '已断开；未重放输入。');
-                  },
+                  onPressed: disconnect,
                   child: const Text('断开'),
                 ),
               ),
@@ -1113,7 +1140,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       leading: hostKeyChange == null && (ModalRoute.of(context)?.impliesAppBarDismissal ?? false)
         ? MergeSemantics(child: Semantics(identifier: 'direct-back', label: '返回主机列表', child: BackButton(onPressed: mobileLayout && mobileAuth && !connected
           ? backFromMobileAuth : null))) : null,
-      actions: [if (busy || connected) TextButton(onPressed: () { userDisconnected = mobileLayout && connected; mobileAuth = false; stop(message: '已断开；未重放输入。'); }, child: const Text('断开'))]),
+      actions: [if (busy || connected) TextButton(onPressed: disconnect, child: const Text('断开'))]),
     body: SafeArea(child: hostKeyChange != null ? (mobileLayout ? mobileHostKeyChangeView() : hostKeyChangeView()) : connected && mobileLayout ? IndexedStack(
       index: settingsActive ? 1 : 0, children: [mobileTerminalWorkspace(), mobileActiveSettings()]) : connected ? LayoutBuilder(
       builder: (context, constraints) => SingleChildScrollView(primary: false, child: SizedBox(

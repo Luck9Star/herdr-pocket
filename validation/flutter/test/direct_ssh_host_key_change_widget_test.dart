@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/direct_ssh_page.dart';
 import 'package:terminal_view/terminal_view.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
-import 'direct_ssh_widget_test.dart' show waitFor;
+import 'direct_ssh_widget_test.dart' show tapAndWaitForOrdinaryDisconnect, waitFor;
 import 'herdr_workflow_visual_test.dart' show loadVisualTokens, visualApp, save, size;
 
 /// Each case spawns its own rotation peer; a second key change uses a fresh peer
@@ -172,7 +172,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('direct-connect'))); await tester.pump();
       await waitFor(tester, find.byType(TerminalView));
       evidence['independentReviewReconnects'] = true;
-      await tester.tap(find.text('断开')); await tester.pumpAndSettle();
+      await tapAndWaitForOrdinaryDisconnect(tester);
       expect(state.fingerprint, first.newFingerprint);
 
       // The mobile disconnected view requires another explicit probe before credentials.

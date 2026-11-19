@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:dartssh2/dartssh2.dart' show SSHClient, SSHSession;
+import 'package:dartssh2/dartssh2.dart' show SSHClient, SSHSession, SSHSocket;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
@@ -20,6 +20,27 @@ Future<void> waitFor(WidgetTester tester, Finder finder) async {
     await tester.pump();
   }
   expect(finder, findsOneWidget);
+}
+
+Future<void> tapAndWaitForOrdinaryDisconnect(WidgetTester tester) async {
+  final dynamic page = tester.state(find.byType(DirectSshPage));
+  final connection = page.socket as SSHSocket;
+  bool? closed;
+  unawaited(connection.done.then<void>((_) {
+    closed = true;
+  }, onError: (Object _, StackTrace __) {
+    closed = false;
+  }));
+  await tester.tap(find.text('断开'));
+  await tester.pump();
+  // Socket events are real while Flutter's widget-test timers use fake time.
+  // Advance frames until the original socket has finished its write side.
+  for (var i = 0; i < 80 && closed == null; i++) {
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await tester.pump();
+  }
+  expect(closed, isTrue, reason: 'the retired SSH socket must close normally');
+  await tester.pumpAndSettle();
 }
 
 Future<void> pumpOrdinaryHome(WidgetTester tester, DesignTokens tokens) => tester.pumpWidget(

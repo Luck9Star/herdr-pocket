@@ -250,7 +250,19 @@ void main() {
       expect(journals.every((j) => j.prepares == 0), isTrue);
     }
     stage('s06_stop_both');
-    for (final view in guarded ? views : [views[1]]) { await tap('remote-cancel', owner: view); }
+    if (guarded) {
+      for (final view in views) { await tap('remote-cancel', owner: view); }
+    } else {
+      final beforeStop = adapters[1].generation;
+      final survivor = views[1];
+      await tap('remote-cancel', owner: survivor);
+      expect(find.descendant(of: survivor, matching: find.byKey(const ValueKey('remote-cancel'))), findsNothing);
+      expect(adapters[1].generation, beforeStop + 1);
+      stage('s06_confirm_final_close');
+      File('${exchange.path}/final-close-request').createSync(exclusive: true);
+      await until(File('${exchange.path}/final-close-ack').existsSync);
+      expect(adapters[1].generation, beforeStop + 1);
+    }
     expect(adapters.every((a) => a.evidence.connectionCount == 1), isTrue);
     expect(tester.takeException(), isNull);
     final result = <String, dynamic>{
@@ -258,6 +270,7 @@ void main() {
         'bothVisible', 'independentFrames', 'bothAdvanced', 'singleInputFocus',
         'focusDoesNotRestoreInput', 'lateInputRejected', 'stoppedBoth']) name: true,
       if (!guarded) 'focusedTabClosedPeerAdvanced': true,
+      if (!guarded) 'stockPeersClosedBeforeDriverExit': true,
       'sides': [for (final adapter in adapters) {'connectionCount': adapter.evidence.connectionCount,
         'frameCount': adapter.evidence.frameCount, 'deltaFrames': adapter.evidence.deltaFrames,
         'inputAccepted': guarded}],

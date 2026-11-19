@@ -11,9 +11,11 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   let probeRevision = 0;
   let probing = false;
   let submitting = false;
+  let openingCancelled = false;
   let pasteRevision = 0;
   let retainedTrust = false;
   let closeResult = null;
+  let pendingTargetValues = null;
 
   let terminal = null;
   let resizeWatch = null;
@@ -79,6 +81,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       if (outcome) {
         if (outcome.phase === 'pending') {
           closeResult = outcome;
+          pendingTargetValues = Object.fromEntries(['ssh-host','ssh-port','ssh-user'].map(id => [id, $(id).value]));
           clearSecrets();
           resetReview();
         } else if (closeResult !== outcome) {
@@ -86,6 +89,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
           return;
         }
       }
+      if (outcome && outcome.phase !== 'pending') pendingTargetValues = null;
       $('ssh-status').textContent = message;
       $('ssh-disconnect').disabled = !ready;
       $('ssh-focus').disabled = !ready;
@@ -233,6 +237,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   function applyLock(ready = controller.isReady(), blockedView = !$('ssh-key-change').hidden) {
     const unavailable = !native || ready || blockedView || controller.isActive() || submitting || closeResult?.phase === 'pending';
     const locked = unavailable || probing || controller.isBlocked() || !reviewMatches() || !$('ssh-review').checked;
+    for (const id of ['ssh-host','ssh-port','ssh-user']) $(id).disabled = closeResult?.phase === 'pending';
     for (const id of ['ssh-password','ssh-key','ssh-passphrase','ssh-auth-method','ssh-auth-password','ssh-auth-key','ssh-paste-key']) {
       const field = $(id);
       if (field) field.disabled = locked;
@@ -289,6 +294,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       clearSecrets();
       resetReview();
       closeResult = null;
+      pendingTargetValues = null;
       showSetupNotice(false);
       refreshStep();
     };
@@ -296,7 +302,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       if (closeResult) leaveTarget(true);
     };
     $('ssh-step-back').onclick = () => {
-      if (controller.isActive() || submitting) {
+      if (controller.isActive() || (submitting && !openingCancelled)) {
         resetReview();
         disconnect();
       } else if (evidence && $('ssh-review').checked) {
@@ -364,6 +370,10 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     }
   };
   for (const id of ['ssh-host','ssh-port','ssh-user']) $(id).addEventListener('input', () => {
+    if (closeResult?.phase === 'pending') {
+      if (pendingTargetValues) $(id).value = pendingTargetValues[id];
+      return;
+    }
     closeResult = null;
     clearSecrets();
     resetReview();
@@ -441,6 +451,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       return;
     }
     submitting = true;
+    openingCancelled = false;
     closeResult = null;
     applyLock();
     const password = $('ssh-password').value, privateKeyPem = $('ssh-key').value, passphrase = $('ssh-passphrase').value;
@@ -470,17 +481,26 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       showSetupNotice(true);
     } finally {
       submitting = false;
+      openingCancelled = false;
       applyLock();
     }
   };
   // Cancelling keeps the pin that was in effect and leaves the target blocked:
   // the same target must be probed and confirmed again before anything is used.
   const disconnect = (requested = false) => {
+    const cancellingOpen = !requested && submitting && !controller.isReady();
     clearSecrets();
     if (closeResult?.phase === 'pending' || (requested && !controller.isReady())) return;
     $('ssh-disconnect').disabled = true;
     if (!requested && compact()) resetReview();
     void controller.close({showOutcome:requested});
+    if (cancellingOpen) {
+      openingCancelled = true;
+      $('ssh-status').textContent = '已取消连接。';
+      showSetupNotice(false);
+      applyView(false, false);
+      applyLock();
+    }
     if (!requested) scrollToStep();
   };
   $('ssh-disconnect').onclick = () => disconnect(true);
@@ -534,6 +554,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       clearSecrets();
       const outcome = closeResult;
       closeResult = null;
+      pendingTargetValues = null;
       if (outcome) {
         $('ssh-status').textContent = '尚未连接。';
         showSetupNotice(false);

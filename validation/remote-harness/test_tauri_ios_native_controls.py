@@ -44,25 +44,28 @@ class NativeControlPolicyTests(unittest.TestCase):
                 return self.source[start:index + 1]
         self.fail("unterminated production method: " + signature)
 
-    def test_encrypted_paste_checks_the_draft_before_any_optional_menu_query(self):
+    def test_encrypted_paste_starts_with_one_bound_system_editor_gesture(self):
         consent = self.production_method('func tapNativePasteConsent(')
         draft = self.production_method('func encryptedDraft(')
         self.assertNotIn('allElementsBoundByIndex', consent)
+        self.assertNotIn('tapMobileButton(before.paste,', draft)
+        self.assertNotIn('productPaste', draft)
+        self.assertEqual(draft.count('.press(forDuration:'), 1)
+        self.assertLess(draft.index('try reveal(before.pem.live.element'), draft.index('.press(forDuration:'))
+        self.assertLess(draft.index('try post("encrypted_key_clipboard_"'), draft.index('.press(forDuration:'))
         poll = draft.split('repeat {', 1)[1].split('} while Date() < deadline', 1)[0]
         self.assertLess(poll.index('!credentialEmpty('), poll.index('nativePasteMenu('))
         self.assertLess(poll.index('!credentialEmpty('), poll.index('tapNativePasteConsent('))
         self.assertIn('if !confirmed', poll)
-        self.assertLess(poll.index('else if pasteOverlayVisible(rows)'), poll.index('else if method == "productPaste"'))
-        self.assertLess(poll.index('visibleWitness(connection,'), poll.index('.press(forDuration:'))
-        self.assertEqual(draft.count('try tapMobileButton(before.paste,'), 1)
-        self.assertEqual(draft.count('.press(forDuration:'), 1)
+        self.assertIn('try require(confirmed,', poll)
+        self.assertIn('\"pasteMethod\": \"systemEditMenu\"', draft)
 
-    def test_missing_post_touch_root_sample_cannot_authorize_a_paste_action(self):
+    def test_missing_post_touch_window_sample_cannot_authorize_a_paste_action(self):
         draft = self.production_method('func encryptedDraft(')
         poll = draft.split('repeat {', 1)[1].split('} while Date() < deadline', 1)[0]
-        self.assertNotIn('let rows = try observedNodes()', poll)
+        self.assertNotIn('observedNodes()', poll)
         unavailable, observed = poll.split('lastSnapshotUnavailable = false', 1)
-        self.assertIn('guard let rows = try pasteObservedNodes()', unavailable)
+        self.assertIn('guard let rows = try pasteObservedNodes(in: field)', unavailable)
         self.assertIn('"snapshot_unavailable"', unavailable)
         self.assertIn('continue', unavailable)
         self.assertNotIn('tapNativePasteConsent(', unavailable)
@@ -70,7 +73,7 @@ class NativeControlPolicyTests(unittest.TestCase):
         self.assertIn('tapNativePasteConsent(', observed)
         self.assertLess(draft.index('try require(!lastSnapshotUnavailable'), draft.index('let pasted = try encryptedForm'))
 
-    def test_post_touch_snapshot_recovers_passively_but_invalid_trees_and_strict_reads_fail(self):
+    def test_post_touch_observation_uses_the_exact_window_and_never_reuses_a_stale_tree(self):
         program = r'''
 import Foundation
 enum Role { case application, window, webView, field }
@@ -86,26 +89,35 @@ struct Row: XCUIElementSnapshot {
 }
 struct Observed {
     let snapshot: any XCUIElementSnapshot
-    let path: [Int]
-    let window: CGRect?
-    let windowPath: [Int]
-    let webs: [CGRect]
-    let webPath: [Int]
+    var path: [Int]
+    var window: CGRect? = nil
+    var windowPath: [Int] = []
+    var webs: [CGRect] = []
+    var webPath: [Int] = []
 }
-enum SampleFailure: Error, Equatable { case unknownRoot, treeLimit }
-final class App {
+struct RevealedControl { let window: Observed }
+enum SampleFailure: Error, Equatable { case unavailable, treeLimit }
+final class Element {
     var samples: [Row?]
     var reads = 0
     init(_ samples: [Row?]) { self.samples = samples }
     func snapshot() throws -> any XCUIElementSnapshot {
         reads += 1
-        guard let row = samples.removeFirst() else { throw SampleFailure.unknownRoot }
+        guard let row = samples.removeFirst() else { throw SampleFailure.unavailable }
         return row
     }
 }
 final class Adapter {
-    let app: App
-    init(_ samples: [Row?]) { app = App(samples) }
+    let app = Element([nil])
+    let window: Element
+    init(_ samples: [Row?]) { window = Element(samples) }
+    func resolveByPath(_ row: Observed) -> Element {
+        precondition(row.path == [1])
+        return window
+    }
+    func sameIdentity(_ lhs: any XCUIElementSnapshot, _ rhs: any XCUIElementSnapshot) -> Bool {
+        lhs.elementType == rhs.elementType
+    }
     func require(_ truth: Bool, _ code: String) throws {
         if !truth {
             precondition(code == "native_tree_limit")
@@ -113,27 +125,30 @@ final class Adapter {
         }
     }
 ''' + "\n".join(self.production_method(name) for name in (
-            'func observedNodes() throws', 'func observedNodes(from root:', 'func pasteObservedNodes() throws')) + r'''
+            'func observedNodes() throws', 'func observedNodes(from root:', 'func pasteObservedNodes(in')) + r'''
 }
 let field = Row(elementType: .field)
 let web = Row(elementType: .webView, children: [field])
 let window = Row(elementType: .window, children: [web])
-let root = Row(elementType: .application, children: [window])
-let recovery = Adapter([nil, root, nil])
-let unavailable = try recovery.pasteObservedNodes()
-precondition(unavailable == nil && recovery.app.reads == 1)
-let observed = try recovery.pasteObservedNodes()!
-precondition(recovery.app.reads == 2 && observed.last?.path == [0, 0, 0])
-precondition(observed.last?.windowPath == [0] && observed.last?.webPath == [0, 0])
-let latest = try recovery.pasteObservedNodes()
-precondition(latest == nil && recovery.app.reads == 3, "an unavailable latest observation cannot reuse the old tree")
-let untouched = Adapter([nil])
-do { _ = try untouched.observedNodes(); fatalError("normal observations remain strict") }
-catch SampleFailure.unknownRoot { precondition(untouched.app.reads == 1) }
-let oversized = Row(elementType: .application, children: Array(repeating: field, count: 9999))
+let wrongRole = Row(elementType: .application, children: [web])
+let movedWindow = Row(elementType: .window, frame: window.frame.offsetBy(dx: 5, dy: 0), children: [web])
+let expected = RevealedControl(window: Observed(snapshot: window, path: [1]))
+let recovery = Adapter([nil, wrongRole, movedWindow, window, nil])
+for _ in 0..<3 {
+    let unavailable = try recovery.pasteObservedNodes(in: expected)
+    precondition(unavailable == nil)
+}
+let observed = try recovery.pasteObservedNodes(in: expected)!
+precondition(observed.last?.path == [1, 0, 0])
+precondition(observed.last?.windowPath == [1] && observed.last?.webPath == [1, 0])
+let latest = try recovery.pasteObservedNodes(in: expected)
+precondition(latest == nil && recovery.window.reads == 5 && recovery.app.reads == 0)
+do { _ = try recovery.observedNodes(); fatalError("normal application observations remain strict") }
+catch SampleFailure.unavailable { precondition(recovery.app.reads == 1) }
+let oversized = Row(elementType: .window, children: Array(repeating: field, count: 9999))
 let invalid = Adapter([oversized])
-do { _ = try invalid.pasteObservedNodes(); fatalError("a tree-limit failure must not be swallowed") }
-catch SampleFailure.treeLimit { precondition(invalid.app.reads == 1) }
+do { _ = try invalid.pasteObservedNodes(in: expected); fatalError("a tree-limit failure must not be swallowed") }
+catch SampleFailure.treeLimit { precondition(invalid.window.reads == 1 && invalid.app.reads == 0) }
 '''
         self.compile_and_run(program)
 

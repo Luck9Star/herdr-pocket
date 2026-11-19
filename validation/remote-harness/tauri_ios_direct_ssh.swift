@@ -815,16 +815,17 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func pasteObservedNodes() throws -> [Observed]? {
-        // The optional post-touch sample may be unavailable during a native transition.
-        // Only snapshot acquisition is optional. An invalid tree still fails the test.
-        guard let root = try? app.snapshot() else { return nil }
-        return try observedNodes(from: root)
+    private func pasteObservedNodes(in control: RevealedControl) throws -> [Observed]? {
+        // Sample only the bound window while the native edit menu is open.
+        let window = control.window
+        guard let root = try? resolveByPath(window).snapshot(),
+              sameIdentity(root, window.snapshot), root.frame == window.snapshot.frame else { return nil }
+        return try observedNodes(from: root, path: window.path)
     }
 
     @MainActor
-    private func observedNodes(from root: any XCUIElementSnapshot) throws -> [Observed] {
-        var pending: [(any XCUIElementSnapshot, [Int], CGRect?, [Int], [CGRect], [Int])] = [(root, [], nil, [], [], [])]
+    private func observedNodes(from root: any XCUIElementSnapshot, path: [Int] = []) throws -> [Observed] {
+        var pending: [(any XCUIElementSnapshot, [Int], CGRect?, [Int], [CGRect], [Int])] = [(root, path, nil, [], [], [])]
         var result: [Observed] = []
         while let (node, path, inheritedWindow, inheritedWindowPath, inheritedWebs, inheritedWebPath) = pending.popLast() {
             let isWindow = node.elementType == .window
@@ -2706,7 +2707,7 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func encryptedForm(port: Int, owner: RevealedControl, notice: String? = nil) throws ->
-        (pem: RevealedControl, passphrase: RevealedControl, paste: RevealedControl, submit: RevealedControl) {
+        (pem: RevealedControl, passphrase: RevealedControl, submit: RevealedControl) {
         var targets: [(String?, String, Bool)] = [("ssh-step-title", "SSH 账号认证", false),
             ("ssh-reviewed-endpoint", target(port), false), ("ssh-approved-note", "本次主机密钥已确认", false),
             ("ssh-paste-key", "粘贴私钥", true), ("ssh-connect", "连接 SSH", true)]
@@ -2721,7 +2722,7 @@ final class TauriDirectSSHUITests: XCTestCase {
             [.textField, .secureTextField, .textView].contains($0.snapshot.elementType) }
         try require(passwords.allSatisfy { !NativeFramePolicy.valid($0.snapshot.frame) && credentialEmpty($0.snapshot) },
                     "native_encrypted_key_method_unproven")
-        return (try encryptedField(.pem, rows: rows, owner: submit), try encryptedField(.passphrase, rows: rows, owner: submit), paste, submit)
+        return (try encryptedField(.pem, rows: rows, owner: submit), try encryptedField(.passphrase, rows: rows, owner: submit), submit)
     }
 
     private func credentialEmpty(_ field: any XCUIElementSnapshot) -> Bool {
@@ -2806,33 +2807,46 @@ final class TauriDirectSSHUITests: XCTestCase {
                     !before.submit.live.snapshot.isEnabled, "native_encrypted_key_credentials_retained")
         try phase("paste")
         try trace("prepare")
+        let failure = "native_encrypted_key_paste_unproven"
+        let field = try reveal(before.pem.live.element, matching: before.pem, protectRouteTabs: true,
+                               mobileOwnerFailure: failure)
+        try require(field.owner.snapshot.isEnabled && field.live.snapshot.isEnabled &&
+                    credentialEmpty(field.owner.snapshot) && credentialEmpty(field.live.snapshot), failure)
         let beforePaste = try observedNodes()
-        let staleMenu = try nativePasteMenu(beforePaste, owner: before.pem)
-        try require(staleMenu == nil && !pasteOverlayVisible(beforePaste), "native_encrypted_key_paste_unproven")
+        let drafts = connectionRows(beforePaste, in: field).filter { sameIdentity($0.snapshot, field.owner.snapshot) }
+        try require(drafts.count == 1 && drafts.first?.path == field.owner.path &&
+                    drafts.first?.snapshot.frame == field.live.snapshot.frame && drafts.first?.snapshot.isEnabled == true &&
+                    drafts.first.map { credentialEmpty($0.snapshot) } == true, failure)
+        let staleMenu = try nativePasteMenu(beforePaste, owner: field)
+        try require(staleMenu == nil && !pasteOverlayVisible(beforePaste), failure)
         try trace("prepared")
         try post("encrypted_key_clipboard_" + attempt)
-        try trace("product_entered")
-        try tapMobileButton(before.paste, "native_encrypted_key_paste_unproven")
-        try trace("product_returned")
+        try trace("edit_entered")
+        // Start with the system editor on the empty PEM field. The product's
+        // Clipboard API button is a separate action and is never sent here.
+        field.live.element.press(forDuration: 0.8)
+        try trace("edit_returned")
         let deadline = Date().addingTimeInterval(12)
         var confirmed = false
-        var method = "productPaste"
-        let fallbackNotice = "无法读取剪贴板，可在私钥框用系统粘贴。"
+        var populated = false
         var lastSnapshotUnavailable = false
         try trace("snapshot_entered")
         repeat {
-            guard let rows = try pasteObservedNodes() else {
+            if app.state != .runningForeground {
+                try trace("observation", "not_foreground")
+                Thread.sleep(forTimeInterval: 0.2)
+                continue
+            }
+            guard let rows = try pasteObservedNodes(in: field) else {
                 lastSnapshotUnavailable = true
                 try trace("observation", "snapshot_unavailable")
                 Thread.sleep(forTimeInterval: 0.2)
                 continue
             }
             lastSnapshotUnavailable = false
-            let connection = connectionRows(rows, in: before.pem)
-            let drafts = connection.filter { sameIdentity($0.snapshot, before.pem.owner.snapshot) }
-            if app.state != .runningForeground {
-                try trace("observation", "not_foreground")
-            } else if connection.isEmpty {
+            let connection = connectionRows(rows, in: field)
+            let drafts = connection.filter { sameIdentity($0.snapshot, field.owner.snapshot) }
+            if connection.isEmpty {
                 try trace("observation", "owner_missing")
             } else if drafts.isEmpty {
                 try trace("observation", "field_missing")
@@ -2841,37 +2855,27 @@ final class TauriDirectSSHUITests: XCTestCase {
             } else if let draft = drafts.first {
                 if !credentialEmpty(draft.snapshot) {
                     try trace("observation", "field_populated")
+                    try require(confirmed, failure)
+                    populated = true
                     break
                 }
                 try trace("observation", "field_empty")
-                if let candidate = try nativePasteMenu(rows, owner: before.pem) {
+                if let candidate = try nativePasteMenu(rows, owner: field) {
                     try trace("observation", "menu_observed")
                     if !confirmed {
-                        let event = method == "productPaste" ? "consent" : "edit_consent"
-                        try trace(event + "_entered")
-                        let result = try tapNativePasteConsent(candidate.menu, action: candidate.action, owner: before.pem)
+                        try trace("edit_consent_entered")
+                        let result = try tapNativePasteConsent(candidate.menu, action: candidate.action, owner: field)
                         confirmed = result == .tapped
-                        try trace(event + "_returned", result.rawValue)
+                        try trace("edit_consent_returned", result.rawValue)
                     }
                 } else if pasteOverlayVisible(rows) {
                     try trace("observation", "overlay_observed")
-                } else if method == "productPaste",
-                          visibleWitness(connection, [("ssh-credential-note", fallbackNotice, false)]) != nil {
-                    try trace("observation", "read_failure_visible")
-                    try trace("edit_entered")
-                    // Follow the product's explicit fallback on the still-empty, bound PEM field.
-                    let field = try reveal(before.pem.live.element, matching: before.pem, protectRouteTabs: true,
-                                           mobileOwnerFailure: "native_encrypted_key_paste_unproven").live
-                    try require(credentialEmpty(field.snapshot) && field.snapshot.isEnabled, "native_encrypted_key_paste_unproven")
-                    field.element.press(forDuration: 0.8)
-                    try trace("edit_returned")
-                    method = "systemEditMenu"
-                    confirmed = false
                 }
             }
             Thread.sleep(forTimeInterval: 0.2)
         } while Date() < deadline
         try require(!lastSnapshotUnavailable, "native_encrypted_key_paste_snapshot_unavailable")
+        try require(populated, failure)
         try trace("form_entered")
         let pasted = try encryptedForm(port: port, owner: owner)
         let ready = !credentialEmpty(pasted.pem.live.snapshot) && credentialEmpty(pasted.passphrase.live.snapshot) &&
@@ -2879,7 +2883,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         try trace("form_observed", ready ? "ready" : "unproven")
         try require(ready, "native_encrypted_key_paste_unproven")
         try phase("passphrase")
-        guard let passphrase = try post("encrypted_key_" + attempt + "_ready", ["pasteMethod": method], expectingPassphrase: true) else {
+        guard let passphrase = try post("encrypted_key_" + attempt + "_ready", ["pasteMethod": "systemEditMenu"], expectingPassphrase: true) else {
             throw NSError(domain: "checkpoint_rejected", code: 1)
         }
         encryptedPassphrases.append(passphrase)

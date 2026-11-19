@@ -61,6 +61,71 @@ return {text:focusPreserved && hit(final) ? row.textContent.replace(/\u00a0/g,' 
 """
 
 
+FIRST_DIRECT_KEY_SCRIPT = r"""
+const [panels, targets, action] = arguments;
+const one = (root, selector) => {
+    const matches = root?.querySelectorAll(selector);
+    return matches?.length === 1 ? matches[0] : null;
+};
+const root = one(document, '#view-content');
+const views = panels.map(selector => one(root, ':scope > ' + selector));
+const [a, b] = views;
+const visible = element => !!element && !element.closest('[hidden]') &&
+    !!element.getClientRects().length && getComputedStyle(element).visibility === 'visible';
+const originalTargetsActive = !document.hidden && !document.querySelector('dialog[open]') &&
+    visible(one(document, '#remote-page')) && root?.dataset.split === '2' &&
+    root.querySelectorAll(':scope > [data-role="workbench-panel"]').length === 2 &&
+    views.every((view, index) => visible(view) &&
+        one(view, ':scope > .panel-head + p')?.textContent.split(' · ').slice(-2)
+            .join(' · ') === targets[index].join(' · ') &&
+        one(view, '.tab-connection-actions')?.dataset.state === 'active');
+const selectedB = a?.dataset.focus === 'false' && b?.dataset.focus === 'true';
+const [aEditor, editor] = views.map(view => one(view, '.terminal-host textarea.xterm-helper-textarea'));
+const aReadOnly = aEditor?.readOnly === true && aEditor.getAttribute('inputmode') === 'none' &&
+    one(a, '.tab-mobile-controls')?.dataset.mode === 'observe';
+const bReadOnly = editor?.readOnly === true && editor.getAttribute('inputmode') === 'none';
+const bEditorWritable = visible(editor) && !editor.disabled && !editor.readOnly &&
+    editor.getAttribute('inputmode') === 'text';
+const bEditorFocused = !!editor && document.activeElement === editor;
+const documentFocused = document.hasFocus();
+const controls = one(b, '.tab-mobile-controls');
+const bMode = controls?.dataset.mode;
+const bModeReady = visible(controls) && bMode === 'direct' &&
+    one(controls, ':scope > p[role="status"]')?.textContent === '逐键输入已启用；每次输入单独发送。';
+const receipt = one(b, '[data-role="input-receipt"]:not([hidden]) > p')?.textContent;
+const bReceipt = !receipt ? 'absent' :
+    receipt.includes(` · pane：${targets[1][0]} · terminal：${targets[1][1]} · 受理 1 字节。`) ? 'matched' : 'other';
+
+let record = window.__s06FirstDirectKey;
+if (action === 'prepare' && !record && originalTargetsActive && selectedB && aReadOnly &&
+    visible(editor) && bReadOnly && bMode === 'observe' && bReceipt === 'absent') {
+    record = {editor, keyDowns: 0, matched: false};
+    window.__s06FirstDirectKey = record;
+}
+const originalEditorB = !!record && editor === record.editor;
+if (action === 'arm' && originalEditorB && !record.onKey && originalTargetsActive && selectedB && aReadOnly &&
+    documentFocused && bEditorFocused && bEditorWritable && bModeReady && bReceipt === 'absent') {
+    // Observe delivery without stopping, re-targeting or synthesizing the key.
+    record.onKey = event => {
+        record.keyDowns++;
+        record.matched = event.key === 'b' && event.isTrusted && !event.repeat && !event.isComposing &&
+            !event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey &&
+            document.hasFocus() && event.target === record.editor && document.activeElement === record.editor &&
+            !record.editor.readOnly && record.editor.getAttribute('inputmode') === 'text';
+    };
+    document.addEventListener('keydown', record.onKey, {capture: true, passive: true});
+}
+const result = {originalTargetsActive, selectedB, originalEditorB, aReadOnly, bReadOnly,
+    documentFocused, bEditorFocused, bEditorWritable, bModeReady, bMode, bReceipt,
+    armed: !!record?.onKey, keyDowns: record?.keyDowns ?? 0, trustedKeyOnOriginalB: record?.matched === true};
+if (action === 'finish' && record) {
+    if (record.onKey) document.removeEventListener('keydown', record.onKey, true);
+    delete window.__s06FirstDirectKey;
+}
+return result;
+"""
+
+
 DIRECT_EXIT_SCRIPT = r"""
 const [panels, targets, arm] = arguments;
 const one = (root, selector) => {
@@ -363,6 +428,81 @@ class SplitDriver:
         actions.extend({'type': 'keyUp', 'value': key} for key in reversed(modifiers))
         self.driver.call('POST', self.driver.session + '/actions', {'actions': [
             {'type': 'key', 'id': 's06-native-keyboard', 'actions': actions}]})
+
+    def first_direct_key(self, panels, targets, wires):
+        ready = ('originalTargetsActive', 'selectedB', 'originalEditorB', 'aReadOnly',
+                 'documentFocused', 'bEditorFocused', 'bEditorWritable', 'bModeReady', 'armed')
+        boolean_fields = (*ready, 'bReadOnly', 'trustedKeyOnOriginalB')
+        report = {'stage': 'before_mode', 'keyboardAttempted': False,
+                  'beforeMode': None, 'beforeKey': None, 'afterKey': None}
+
+        def read(action):
+            state = self.read(FIRST_DIRECT_KEY_SCRIPT, panels, targets, action)
+            if not isinstance(state, dict):
+                raise GuiFailure('s06_tauri_direct_key_observation_invalid')
+            return {**{field: state.get(field) is True for field in boolean_fields},
+                    'bMode': state.get('bMode') if state.get('bMode') in ('observe', 'draft', 'direct') else None,
+                    'bReceipt': state.get('bReceipt') if state.get('bReceipt') in ('absent', 'matched', 'other') else None,
+                    'keyDowns': state.get('keyDowns') if type(state.get('keyDowns')) is int and
+                    0 <= state['keyDowns'] <= 64 else None}
+
+        def peer_inputs():
+            result = []
+            for index, wire in enumerate(wires):
+                try:
+                    data = bounded_wire(wire, 4096)
+                except (GuiFailure, OSError):
+                    result.append({'byteCount': None, 'match': 'unavailable'})
+                else:
+                    match = 'empty' if not data else 'expected' if index == 1 and data == b'b' else 'other'
+                    result.append({'byteCount': len(data), 'match': match})
+            return result
+
+        def arm():
+            current = report['beforeKey'] = read('arm')
+            return (all(current[field] for field in ready) and current['bMode'] == 'direct' and
+                    current['bReceipt'] == 'absent' and current['keyDowns'] == 0)
+
+        def received():
+            a, b = (peer['match'] for peer in peer_inputs())
+            if a != 'empty' or b not in ('empty', 'expected'):
+                raise GuiFailure('s06_tauri_direct_peer_bytes_mismatch')
+            return b == 'expected'
+
+        def confirmed():
+            current = report['afterKey'] = read('sample')
+            return (all(current[field] for field in ready) and current['bMode'] == 'direct' and
+                    current['bReceipt'] == 'matched' and current['keyDowns'] == 1 and current['trustedKeyOnOriginalB'])
+
+        try:
+            report['peerBefore'] = peer_inputs()
+            if any(peer['match'] != 'empty' for peer in report['peerBefore']):
+                raise GuiFailure('s06_tauri_direct_peer_bytes_mismatch')
+            before = report['beforeMode'] = read('prepare')
+            if not all(before[field] for field in ('originalEditorB', 'aReadOnly', 'bReadOnly')):
+                raise GuiFailure('s06_tauri_direct_key_original_editor_missing')
+            self.named('逐键输入', panels[1] + ' .tab-mode-actions')
+            report['stage'] = 'before_key'
+            wait_for(arm, 's06_tauri_direct_key_not_ready')
+            report['peerBefore'] = peer_inputs()
+            if any(peer['match'] != 'empty' for peer in report['peerBefore']):
+                raise GuiFailure('s06_tauri_direct_peer_bytes_mismatch')
+            report['stage'] = 'native_key'
+            report['keyboardAttempted'] = True
+            self.keyboard('b')
+            report['stage'] = 'peer_input'
+            wait_for(received, 's06_tauri_direct_input_missing')
+            report['stage'] = 'key_receipt'
+            wait_for(confirmed, 's06_tauri_direct_key_delivery_unconfirmed')
+            report['stage'] = 'confirmed'
+        finally:
+            try:
+                report['afterKey'] = read('finish')
+            except (GuiFailure, OSError):
+                pass
+            if self.output is not None:
+                report['peerAfter'] = peer_inputs()
+                (self.output / 's06-tauri-first-direct-key.json').write_text(json.dumps(report, sort_keys=True))
 
     def escape_direct_input(self, panels, targets):
         before = ('originalTargetsActive', 'selectedB', 'directXterm', 'bReceiptMatched', 'aFocusButtonReady')
@@ -967,11 +1107,7 @@ def exercise(args, root, env, configs, approvals, expected):
                 stage = 'input_focus'
                 direct_resize_evidence = None
                 if guarded:
-                    ui.named('逐键输入', panels[1] + ' .tab-mode-actions')
-                    wait_for(lambda: ui.read('return document.querySelector(arguments[0]+" .tab-mobile-controls")?.dataset.mode;', panels[1]) == 'direct',
-                             's06_tauri_direct_mode_not_ready')
-                    ui.keyboard('b')
-                    wait_for(lambda: bounded_wire(other / 'received.bin', 4096) == b'b', 's06_tauri_direct_input_missing')
+                    ui.first_direct_key(panels, targets, (root / 'received.bin', other / 'received.bin'))
                     stage = 'direct_resize'
                     direct_resize_evidence = exercise_direct_resize(ui, panels, targets, approvals, check_bytes)
                     stage = 'direct_escape'

@@ -146,6 +146,7 @@ for (const [field, owners] of [
     assert.doesNotMatch(panel.descendants().map(n=>n.textContent).join(' '),/opaque-id-|synthetic-passphrase|将关闭.*标签/);
     assert.doesNotMatch(impact(),/研发|运维|本机主机 3/);
     choose(0,'replace');choose(1,'add');
+    assert.match(impact(),/旧标签.*保留.*最后画面.*手动关闭/);
     assert.match(impact(),/标签 1 · 研发 · w1:p1.*观察已暂停.*输入已关闭/);
     assert.match(impact(),/标签 3 · 研发 · w1:p2.*正在观察.*草稿输入已启用/);
     assert.doesNotMatch(impact(),/运维|本机主机 3/);

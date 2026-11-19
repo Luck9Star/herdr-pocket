@@ -138,7 +138,7 @@ export function initConfigTransfer({ native, invoke, getHosts, refreshHosts, onA
         } else {
           const list = el('ul');
           for (const {label, state, input} of tabs) list.append(el('li', `${label} · ${state} · ${input}`));
-          contents.push(el('p', '当前选择影响以下工作台标签。'), list);
+          contents.push(el('p', '确认后将停止以下标签的连接；旧标签会保留最后画面供查看，可手动关闭，不能重新连接或发送。'), list);
         }
         affected.replaceChildren(...contents);
       }

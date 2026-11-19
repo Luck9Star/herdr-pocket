@@ -69,8 +69,11 @@ test('MT06 MT12: affected host must close and reopen; unrelated tab stays availa
   const invoke=async()=>{};
   try {
     const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{username:'u',host:id,port:22},hostFingerprint:'key',deviceFingerprint:'device'}),channelFactory:()=>({}),terminalFactory:()=>{}});
-    ui.create(direct.hostId,direct);const b=ui.create(mesh.hostId,mesh);
+    ui.create(direct.hostId,direct);const c=ui.create(direct.hostId,target('direct-pane-c'));const b=ui.create(mesh.hostId,mesh);
     ui.affected([direct.hostId]);await flush();
+    assert.equal(ui.tabImpacts([direct.hostId]).length,2);
+    await ui.select(c);const second=nodes['view-content'].all().find(n=>n.tagName==='input');second.checked=true;second.onchange();
+    assert.equal(nodes['view-content'].all().find(n=>n.textContent==='连接').disabled,true);
     const review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();
     assert.equal(nodes['view-content'].all().find(n=>n.textContent==='连接').disabled,true);
     await ui.select(b);const other=nodes['view-content'].all().find(n=>n.tagName==='input');other.checked=true;other.onchange();
@@ -1281,4 +1284,35 @@ for(const pending of ['ack','pause'])test(`explicit stop retires UI input withou
   h.ui.background();await flush();
   assert.equal(h.calls.filter(c=>c.name==='remote_tab_cancel').length,1,'ordinary background revocation stays hard');
  }finally{h.restore();}
+});
+
+test('import retains the last frame, locks affected tabs and leaves other hosts alone',async()=>{
+  const oldDocument=globalThis.document;
+  const nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content'].map(id=>[id,new Element('div')]));
+  globalThis.document={hidden:false,activeElement:null,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};
+  const calls=[],channels=[],observed=[];let terminal;
+  const invoke=(name,args)=>{calls.push({name,args});if(name==='remote_tab_reserve')return Promise.resolve(9);if(name==='remote_tab_observe'){observed.push(args);return new Promise(()=>{});}return Promise.resolve();};
+  const fakeTerminal=()=>terminal={options:{},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(){},write(bytes,done){this.last=bytes;done();},reset(){},resize(){},dispose(){this.disposed=true;},onData(fn){this.data=fn;}};
+  try {
+    const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{username:'u',host:id,port:22},hostFingerprint:'key',deviceFingerprint:'device'}),channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:fakeTerminal});
+    const a=target('direct-pane-a'),b=target('mesh-pane-b');const old=ui.create(a.hostId,a);
+    const find=label=>nodes['view-content'].all().find(n=>n.textContent===label);
+    let review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();find('连接').onclick();await flush();await flush();
+    const generation=observed[0].generation;channels[0].onmessage({kind:'observation',generation,snapshot:{epoch:1,phase:'starting'}});
+    channels[0].onmessage({kind:'frame',generation,epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});await flush();
+    const oldTerminal=terminal,frame=oldTerminal.last;assert.ok(frame);const other=ui.create(b.hostId,b);
+    await ui.select(other);review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();find('连接').onclick();await flush();await flush();
+    assert.ok(calls.some(c=>c.name==='remote_tab_observe' && c.args.tabId===other));
+    ui.prepareAffected([a.hostId]);ui.affected([a.hostId]);await flush();await ui.select(old);
+    assert.equal(nodes['view-tabs'].children.length,2);assert.equal(oldTerminal.last,frame);assert.equal(oldTerminal.disposed,undefined);
+    assert.equal(find('连接').disabled,true);const count=calls.length;
+    channels[0].onmessage({kind:'frame',generation,epoch:1,frame:{seq:2,full:false,cols:80,rows:24,bytes:[66]}});oldTerminal.data?.('x');await flush();
+    assert.equal(oldTerminal.last,frame);assert.equal(calls.slice(count).filter(c=>c.name==='remote_tab_ack' || c.name==='remote_tab_input_send').length,0);
+    find('关闭此标签').onclick();await flush();assert.equal(oldTerminal.disposed,true);assert.equal(nodes['view-tabs'].children.length,1);
+    assert.ok(!calls.some(c=>c.name==='remote_tab_cancel' && c.args.tabId===other));
+    const fresh=ui.create(a.hostId,a);assert.notEqual(fresh,old);await ui.select(fresh);
+    review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();find('连接').onclick();await flush();await flush();
+    assert.ok(calls.some(c=>c.name==='remote_tab_reserve' && c.args.tabId===fresh));
+    assert.ok(!calls.some(c=>c.name==='remote_tab_reserve' && c.args.tabId===old && c.args.clientGeneration!==observed[0].clientGeneration));
+  } finally {globalThis.document=oldDocument;}
 });

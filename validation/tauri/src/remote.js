@@ -930,7 +930,6 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   $('home-open-ssh').onclick=()=>{ if(!ssh.isActive()) sshBackSection='dashboard'; setHomeSection('ssh'); };
   const closeConfigTransfer=initConfigTransfer({native, invoke, getHosts:()=>hostRecords, getTabImpacts:workspace.tabImpacts, refreshHosts, onAffected:ids=>{workspace.prepareAffected(ids);if(ids.includes(activeHostId))cancel('配置操作涉及此主机；观察已停止，请重新核对。');}, onSettled:ids=>workspace.affected(ids), onApplied:async result=>{
     const affected=[...result.removedIds,...result.retired.map(h=>h.id)];
-    workspace.affected(affected);
     if(affected.includes(activeHostId)) { hostNavigation++; cancel('配置已替换；旧观察已停止，新目标需重新配对。'); activeHostId=null; clearSnapshot(); }
   }});
   $('host-return-home').addEventListener('pointerdown',()=>workspace.prepareHide());

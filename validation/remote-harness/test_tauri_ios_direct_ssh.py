@@ -1063,6 +1063,54 @@ class CaptureDiagnosticsTests(unittest.TestCase):
 
 
 class HomeDiagnosticsTests(unittest.TestCase):
+    def test_manual_shortcut_diagnostic_is_pre_action_and_strictly_redacted(self):
+        class Peer:
+            connections = 0
+
+            def snapshot(self):
+                return {'connections': self.connections}
+
+        reason = {'reason': 'card_button_parent', 'visibleCandidates': 1, 'visibleAddMarkers': 0,
+                  'candidateSizePt': [360, 48], 'liveSizePt': None, 'buttonGapPt': None}
+        event = {'stage': 'native_failure', 'nativeCheckpoint': 'encrypted_key_open_add',
+                 'nativeFailureCode': 'native_encrypted_key_home_shortcut_unproven', 'shortcutDiagnostic': reason}
+        invalid = 'tauri_ios_native_diagnostic_invalid'
+        with tempfile.TemporaryDirectory() as directory:
+            peer = Peer()
+            state = ios.Checkpoints(None, None, directory, {}, encrypted=peer)
+            stage = ios.ENCRYPTED_KEY_STAGES.index('encrypted_key_probe')
+            for payload in (event, {**event, 'stage': 'native_progress'}):
+                with self.assertRaisesRegex(ios.Failure, invalid):
+                    state.accept(payload)
+            state.index = stage
+            for payload in ({**event, 'nativeCheckpoint': 'encrypted_key_host'},
+                            {**event, 'nativeFailureCode': 'native_encrypted_key_home_shortcut_no_progress'},
+                            {**event, 'nativeFailureCode': 'native_home_alert_present'},
+                            {**event, 'label': 'PRIVATE'}):
+                with self.assertRaisesRegex(ios.Failure, invalid):
+                    state.accept(payload)
+            for change in ({'reason': 'PRIVATE'}, {'reason': []}, {'rawTree': 'PRIVATE'},
+                           {'visibleCandidates': True}, {'visibleAddMarkers': 10001},
+                           {'buttonGapPt': '12'}, {'candidateSizePt': [40, 346, 360, 48]},
+                           {'liveSizePt': [-1, 48]}, {'liveSizePt': [360, 'PRIVATE']}):
+                with self.subTest(change=change), self.assertRaisesRegex(ios.Failure, invalid):
+                    state.accept({**event, 'shortcutDiagnostic': {**reason, **change}})
+            peer.connections = 1
+            with self.assertRaisesRegex(ios.Failure, invalid):
+                state.accept(event)
+            peer.connections = 0
+            state.result['navigationTrace'] = {'encryptedKey': [{'performed': True}]}
+            with self.assertRaisesRegex(ios.Failure, invalid):
+                state.accept(event)
+            del state.result['navigationTrace']
+            self.assertNotIn('shortcutDiagnostic', state.result)
+            self.assertNotIn('PRIVATE', json.dumps(state.result))
+            state.accept(event)
+            self.assertEqual(state.result['shortcutDiagnostic'], reason)
+            self.assertEqual(state.index, stage)
+            self.assertEqual(state.failure, 'tauri_ios_native_check_failed')
+            self.assertNotIn('navigationTrace', state.result)
+
     def test_manual_compact_home_accepts_only_one_bound_direct_shortcut(self):
         class NoPeer:
             def snapshot(self):

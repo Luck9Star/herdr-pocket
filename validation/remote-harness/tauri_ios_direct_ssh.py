@@ -314,6 +314,32 @@ def public_home_readiness(value, home, *, manual_key=False):
     return json.loads(json.dumps(value))
 
 
+def public_shortcut_diagnostic(value, code):
+    reasons = {'card_anchors_unproven', 'candidate_count', 'add_choice_visible', 'candidate_identity',
+               'card_scope', 'card_button_parent', 'card_text_parent', 'card_tree_order',
+               'card_vertical_geometry', 'card_horizontal_geometry',
+               'page_not_clear', 'app_not_foreground', 'alert_present', 'live_path_unresolved',
+               'live_snapshot_unavailable', 'live_owner_unresolved', 'live_scope_changed', 'live_identity_changed',
+               'live_geometry_changed', 'button_size_or_role', 'button_disabled', 'button_not_hittable', 'button_occluded'}
+    allowed = {'native_encrypted_key_home_shortcut_unproven': reasons,
+               'native_home_identity_unproven': {'page_not_clear'},
+               'native_home_not_foreground': {'app_not_foreground'},
+               'native_home_alert_present': {'alert_present'}}
+    counts = {'visibleCandidates', 'visibleAddMarkers'}
+    sizes = {'candidateSizePt', 'liveSizePt'}
+    invalid = 'tauri_ios_native_diagnostic_invalid'
+    require(type(value) is dict and set(value) == counts | sizes | {'reason', 'buttonGapPt'}
+            and type(value['reason']) is str and value['reason'] in allowed.get(code, ())
+            and all(type(value[key]) is int and 0 <= value[key] <= 10000 for key in counts), invalid)
+    for size in sizes:
+        pair = value[size]
+        require(pair is None or type(pair) is list and len(pair) == 2
+                and all(type(n) is int and 0 <= n <= 10000 for n in pair), invalid)
+    gap = value['buttonGapPt']
+    require(gap is None or type(gap) is int and abs(gap) <= 10000, invalid)
+    return json.loads(json.dumps(value))
+
+
 def public_password_observation(value):
     """Export fixed AX classifications without raw text, coordinates or values."""
     code = 'tauri_ios_native_diagnostic_invalid'
@@ -1152,6 +1178,7 @@ class Checkpoints:
     def accept(self, payload):
         stage = payload.get('stage')
         require('passwordObservation' not in payload or stage == 'native_failure', 'tauri_ios_native_diagnostic_invalid')
+        require('shortcutDiagnostic' not in payload or stage == 'native_failure', 'tauri_ios_native_diagnostic_invalid')
         if stage == 'native_active_diagnostic':
             invalid = 'tauri_ios_active_diagnostic_invalid'
             require(set(payload) == {'stage', 'nativeCheckpoint', 'detail'} and self.failure is None
@@ -1468,14 +1495,22 @@ class Checkpoints:
                 code = payload.get('nativeFailureCode')
                 require(type(code) is str and code in NATIVE_FAILURES, 'tauri_ios_native_diagnostic_invalid')
                 observation = 'passwordObservation' in payload
+                shortcut = 'shortcutDiagnostic' in payload
+                keys = {'stage', 'nativeCheckpoint', 'nativeFailureCode'}
+                if shortcut:
+                    require(self.encrypted is not None and phase == 'encrypted_key_open_add'
+                            and self.index == self.stages.index('encrypted_key_probe')
+                            and not self.result.get('navigationTrace', {}).get('encryptedKey')
+                            and self.encrypted.snapshot()['connections'] == 0
+                            and set(payload) == keys | {'shortcutDiagnostic'}, 'tauri_ios_native_diagnostic_invalid')
+                    self.result['shortcutDiagnostic'] = public_shortcut_diagnostic(payload['shortcutDiagnostic'], code)
                 if code.startswith('native_encrypted_'):
-                    require(self.encrypted is not None and set(payload) == {'stage', 'nativeCheckpoint', 'nativeFailureCode'},
+                    require(self.encrypted is not None and set(payload) == (keys | {'shortcutDiagnostic'} if shortcut else keys),
                             'tauri_ios_native_diagnostic_invalid')
                 if code in ('native_encrypted_key_empty_add_unproven', 'native_encrypted_key_home_shortcut_unproven',
                             'native_encrypted_key_home_shortcut_no_progress'):
                     require(phase == 'encrypted_key_open_add', 'tauri_ios_native_diagnostic_invalid')
                 if observation or code in MOBILE_PASSWORD_FAILURES:
-                    keys = {'stage', 'nativeCheckpoint', 'nativeFailureCode'}
                     if observation:
                         keys.add('passwordObservation')
                     require(code in MOBILE_PASSWORD_FAILURES and phase in MOBILE_PASSWORD_PHASES and set(payload) == keys,

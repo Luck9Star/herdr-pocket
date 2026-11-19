@@ -121,7 +121,8 @@ let frames = [CGRect(x: 40, y: 100, width: 120, height: 30), CGRect(x: 40, y: 18
               CGRect(x: 40, y: 210, width: 330, height: 20), CGRect(x: 40, y: 322, width: 360, height: 48),
               CGRect(x: 40, y: 262, width: 360, height: 48)]
 func selected(_ item: Fact = fallback, paths route: [[Int]] = paths, geometry: [CGRect] = frames,
-              extra: Fact? = nil, extraFrame: CGRect = .zero) -> Int? {
+              extra: Fact? = nil, extraFrame: CGRect = .zero, cardSeen: Bool = true,
+              issue: NativeControlPolicy.ShortcutEvidence.Issue? = nil) -> Int? {
     var facts = [brand, title, hint, item, add]
     var allPaths = route, allFrames = geometry
     var owners = Array(repeating: window, count: 5), webs = Array(repeating: web, count: 5)
@@ -132,37 +133,56 @@ func selected(_ item: Fact = fallback, paths route: [[Int]] = paths, geometry: [
         owners.append([1])
         webs.append([1, 0])
     }
-    return NativeControlPolicy.compactHomeShortcut(facts, paths: allPaths, windows: owners, webs: webs,
-                                                  frames: allFrames, card: [0, 1, 2, 3, 4])
+    var evidence = NativeControlPolicy.ShortcutEvidence()
+    let index = NativeControlPolicy.compactHomeShortcut(facts, paths: allPaths, windows: owners, webs: webs,
+                                                       frames: allFrames, card: cardSeen ? [0, 1, 2, 3, 4] : nil,
+                                                       evidence: &evidence)
+    precondition(evidence.issue == issue)
+    if let issue {
+        let payload = evidence.publicFields(issue)
+        precondition(payload["reason"] as? String == issue.rawValue)
+        precondition((try! JSONSerialization.data(withJSONObject: payload)).count < 256)
+        if issue == .candidateCount { precondition(payload["visibleCandidates"] as? Int == 2) }
+        if issue == .addChoice { precondition(payload["visibleAddMarkers"] as? Int == 1) }
+    }
+    return index
 }
 precondition(selected() == 3 && selected(explicit) == 3)
-precondition(selected(wrong) == nil)
+precondition(selected(wrong, issue: .addChoice) == nil)
 precondition(selected(extra: wrong) == 3)
-precondition(selected(extra: wrong, extraFrame: frames[3]) == nil)
-precondition(selected(extra: fallback, extraFrame: frames[3]) == nil)
-precondition(selected(extra: addDetail, extraFrame: frames[2]) == nil)
+precondition(selected(extra: wrong, extraFrame: frames[3], issue: .candidateCount) == nil)
+precondition(selected(extra: fallback, extraFrame: frames[3], issue: .candidateCount) == nil)
+precondition(selected(extra: addDetail, extraFrame: frames[2], issue: .addChoice) == nil)
+precondition(selected(cardSeen: false, issue: .anchors) == nil)
 var offCard = paths
 offCard[3] = web + [9, 2]
-precondition(selected(paths: offCard) == nil)
+precondition(selected(paths: offCard, issue: .buttonParent) == nil)
+var offText = paths
+offText[1] = web + [0, 2]
+precondition(selected(paths: offText, issue: .textParent) == nil)
 var wrongOrder = paths
 wrongOrder.swapAt(3, 4)
-precondition(selected(paths: wrongOrder) == nil)
+precondition(selected(paths: wrongOrder, issue: .order) == nil)
 var misplaced = frames
 misplaced[3] = frames[3].offsetBy(dx: 3, dy: 0)
-precondition(selected(geometry: misplaced) == nil)
+precondition(selected(geometry: misplaced, issue: .horizontalGeometry) == nil)
 misplaced[3] = frames[3].offsetBy(dx: 0, dy: 25)
-precondition(selected(geometry: misplaced) == nil)
+precondition(selected(geometry: misplaced, issue: .verticalGeometry) == nil)
 let geometry: [String: Any] = ["role": "button", "enabled": true, "hittable": true, "ownerResolved": true,
-    "fullyVisible": true, "frame": [40.0, 322.0, 360.0, 48.0]]
+    "centerVisible": true, "fullyVisible": true, "frame": [40.0, 322.0, 360.0, 48.0]]
 precondition(NativeHomeReadiness.compactEntryReady(geometry, witnessed: frames[3]))
-for flag in ["enabled", "hittable", "ownerResolved", "fullyVisible"] {
+typealias Issue = NativeControlPolicy.ShortcutEvidence.Issue
+precondition(NativeControlPolicy.ShortcutEvidence.actionIssue(geometry, witnessed: frames[3]) == nil)
+for (flag, issue) in [("enabled", Issue.disabled), ("hittable", .hit), ("ownerResolved", .owner),
+                      ("fullyVisible", .occluded), ("centerVisible", .occluded)] {
     var blocked = geometry
     blocked[flag] = false
-    precondition(!NativeHomeReadiness.compactEntryReady(blocked, witnessed: frames[3]))
+    precondition(NativeControlPolicy.ShortcutEvidence.actionIssue(blocked, witnessed: frames[3]) == issue)
 }
 var undersized = geometry
 undersized["frame"] = [40.0, 322.0, 360.0, 47.0]
 precondition(!NativeHomeReadiness.compactEntryReady(undersized, witnessed: frames[3]))
+precondition(NativeControlPolicy.ShortcutEvidence.actionIssue(undersized, witnessed: frames[3]) == .small)
 precondition(!NativeHomeReadiness.compactEntryReady(geometry, witnessed: frames[3].insetBy(dx: 0, dy: 1)))
 ''')
 
@@ -218,6 +238,8 @@ final class Adapter {
     var app: App { App(staticTexts: Query(launch: launch)) }
     var lastHomeSample: [String: Any]?
     var manualHomeCardSeen = false
+    var shortcutEvidence = NativeControlPolicy.ShortcutEvidence()
+    var shortcutIssue: NativeControlPolicy.ShortcutEvidence.Issue?
     var nativePhase = "ordinary_open_add"
     init(_ launch: Launch) { self.launch = launch }
     func navigationState(publish: Bool = true) throws -> [String: Any] {
@@ -245,8 +267,8 @@ final class Adapter {
                 "noKnownErrors": state != .loading && state != .error, "credentialsEmpty": true,
                 "windowCount": 1, "webViewCount": 3, "inputCount": 0, "compactEmptyHome": launch.compact && state == .ready]
     }
-    func require(_ condition: Bool, _ code: String) throws {
-        if !condition { throw Rejected(code: code) }
+    func require(_ condition: Bool, _ code: String, shortcutIssue: NativeControlPolicy.ShortcutEvidence.Issue? = nil) throws {
+        if !condition { self.shortcutIssue = shortcutIssue; throw Rejected(code: code) }
     }
     func post(_ name: String, _ value: [String: Any]) throws { launch.posts.append((name, value)) }
     func navigate(_ member: String, compactRoute: Bool) throws -> (String, String, String) {
@@ -264,13 +286,14 @@ final class Adapter {
             "func awaitEmptyHome()", "func openHomeSSH()")) + r'''
 }
 func verify(_ launch: Launch, _ outcome: String, _ failure: String? = nil, states: [String],
-            manualKey: Bool = false, clicks: [String]? = nil) -> [String: Any] {
+            manualKey: Bool = false, clicks: [String]? = nil, issue: NativeControlPolicy.ShortcutEvidence.Issue? = nil) -> [String: Any] {
     Clock.time = 0
     var caught: String?
     let adapter = Adapter(launch)
     if manualKey { adapter.nativePhase = "encrypted_key_open_add" }
     do { try adapter.run() } catch let rejection as Rejected { caught = rejection.code } catch { fatalError() }
     precondition(caught == failure)
+    precondition(adapter.shortcutIssue == issue)
     precondition(launch.clicks == (clicks ?? (failure == nil ? (launch.compact ? ["emptyAdd", "sshChoice"] : ["headerAdd"]) : [])))
     precondition(launch.posts.map { $0.0 } == (failure == nil ? ["native_home", "native_home_entry"] : ["native_home"]))
     let trace = launch.posts[0].1["readiness"] as! [String: Any]
@@ -294,6 +317,11 @@ precondition(lateError.waits.count == 1 && lateError.sampled == 2)
 let alert = Launch([(.alert, 0)])
 _ = verify(alert, "alert", "native_home_alert_present", states: ["alert"])
 precondition(alert.waits.isEmpty && alert.sampled == 1)
+let manualAlert = Launch([(.alert, 0)])
+_ = verify(manualAlert, "alert", "native_home_alert_present", states: ["alert"], manualKey: true, issue: .alert)
+let manualBackground = Launch([(.notForeground, 0)])
+_ = verify(manualBackground, "not_foreground", "native_home_not_foreground", states: ["not_foreground"],
+           manualKey: true, issue: .foreground)
 let wrongPage = Launch([(.unexpected, 0)])
 _ = verify(wrongPage, "unexpected", "native_home_identity_unproven", states: ["unexpected"])
 precondition(wrongPage.waits.isEmpty)
@@ -310,15 +338,15 @@ let entry = shortcut.posts.last!.1
 precondition(entry["member"] as? String == "ordinaryShortcut" && entry["route"] as? String == "directSSH" &&
              entry["enteredAddPage"] as? Bool == false)
 let noCompactHome = Launch([(.ready, 0)])
-_ = verify(noCompactHome, "ready", "native_encrypted_key_home_shortcut_unproven", states: ["ready"], manualKey: true)
+_ = verify(noCompactHome, "ready", "native_encrypted_key_home_shortcut_unproven", states: ["ready"], manualKey: true, issue: .anchors)
 let mixedShortcut = Launch([(.shell, 0), (.ready, 0)])
 mixedShortcut.manualHomeCardWithoutShortcut = true
-_ = verify(mixedShortcut, "shell", "native_encrypted_key_home_shortcut_unproven", states: ["shell"], manualKey: true)
+_ = verify(mixedShortcut, "shell", "native_encrypted_key_home_shortcut_unproven", states: ["shell"], manualKey: true, issue: .anchors)
 precondition(mixedShortcut.sampled == 1 && mixedShortcut.waits.isEmpty)
 let noOwner = Launch([(.ready, 0)])
 noOwner.compact = true
 noOwner.shortcutArrival = "missing"
-_ = verify(noOwner, "ready", "native_encrypted_key_home_shortcut_unproven", states: ["ready"], manualKey: true)
+_ = verify(noOwner, "ready", "native_encrypted_key_home_shortcut_unproven", states: ["ready"], manualKey: true, issue: .path)
 for wrongArrival in ["emptyHome", "addChoice", "unexpected"] {
     let missedTap = Launch([(.ready, 0)])
     missedTap.compact = true

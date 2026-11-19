@@ -273,21 +273,33 @@ Future<void> runLinuxOrdinary(
     () =>
         terminalView.evaluate().isEmpty &&
         bound.evaluate().isEmpty &&
-        control('direct-form').evaluate().length == 1,
+        control('direct-form').evaluate().length == 1 &&
+        control('direct-status').evaluate().length == 1 &&
+        tester.widget<Text>(control('direct-status')).data == '本机已断开',
     'linux_direct_disconnect_timeout',
   );
-  expect(find.text('已断开；未重放输入。'), findsOneWidget);
+  expect(control('direct-closed-feedback').hitTestable(), findsOneWidget);
   expect(
-    credential.text.isEmpty &&
-        tester.widget<FilledButton>(connect).onPressed == null,
-    isTrue,
+    find.descendant(
+      of: control('direct-closed-feedback'),
+      matching: find.text('凭据已清空，重连时请重新填写。'),
+    ),
+    findsOneWidget,
+  );
+  expect(credential.text, isEmpty);
+  expect(password, findsNothing);
+  expect(control('direct-passphrase'), findsNothing);
+  expect(connect, findsNothing);
+  expect(
+    tester.widget<FilledButton>(control('direct-probe')).onPressed,
+    isNotNull,
   );
   await checkpoint('disconnect', const {});
 
   step('return_home');
   await tapControl(
     tester,
-    find.byType(BackButton),
+    control('direct-return-home'),
     'linux_return_home',
     reveal: false,
   );
@@ -297,6 +309,11 @@ Future<void> runLinuxOrdinary(
         page.evaluate().isEmpty &&
         control('hosts-direct-ssh').hitTestable().evaluate().length == 1,
     'linux_direct_return_home_timeout',
+  );
+  expect(control('home-ssh-closed').hitTestable(), findsOneWidget);
+  expect(
+    tester.widget<Text>(control('home-ssh-closed-title')).data,
+    '本机已断开',
   );
   expect(tester.takeException(), isNull);
   await checkpoint('complete', const {});

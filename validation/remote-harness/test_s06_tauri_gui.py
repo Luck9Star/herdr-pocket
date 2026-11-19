@@ -18,6 +18,26 @@ except ModuleNotFoundError as missing:
 
 @unittest.skipIf(observed_tick is None, 'pairing requirements are installed in the native GUI workflow')
 class TauriSplitEvidenceTests(unittest.TestCase):
+    def test_pairing_opens_once_from_the_visible_empty_or_saved_board_entry(self):
+        board = '#host-home:not([hidden]) #home-dashboard:not([hidden])'
+        choice = '#host-home:not([hidden]) #home-add:not([hidden]) #add-herdr'
+        form = '#remote-page:not([hidden]) #remote-setup[open] #remote-host'
+        for empty_board, entry in (
+            (True, board + ' #host-empty:not([hidden]) #host-empty-add'),
+            (False, 'body:has(' + board + ' #host-list .saved-host-card) #host-open-remote'),
+        ):
+            driver = MagicMock()
+            ui = SplitDriver(driver)
+            ui.open_pairing(empty_board=empty_board)
+            self.assertEqual([(event[0], event[1]) for event in driver.mock_calls],
+                             [('click', (entry,)), ('click', (choice,)), ('wait_control', (form,))])
+            driver.reset_mock()
+            driver.click.side_effect = GuiFailure('webdriver_click_element_not_interactable')
+            with self.assertRaisesRegex(GuiFailure, '^webdriver_click_element_not_interactable$'):
+                ui.open_pairing(empty_board=empty_board)
+            driver.click.assert_called_once_with(entry)
+            driver.wait_control.assert_not_called()
+
     def test_first_key_requires_same_ready_editor_and_records_both_peer_byte_counts(self):
         ready = {'originalTargetsActive': True, 'selectedB': True, 'originalEditorB': True,
                  'aReadOnly': True, 'documentFocused': True, 'bEditorFocused': True,

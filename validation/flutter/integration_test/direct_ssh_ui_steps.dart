@@ -97,19 +97,43 @@ Future<void> openDirectSshFromHome(WidgetTester tester) async {
 }
 
 bool hasMarker(Terminal terminal, String marker) {
-  final bytes = marker.codeUnits;
+  final expected = marker.codeUnits;
+  if (expected.isEmpty) return false;
+  final candidate = <int>[];
   for (var y = 0; y < terminal.viewHeight; y++) {
     final line = terminal.buffer.lines[y];
-    for (var x = 0; x + bytes.length <= terminal.viewWidth; x++) {
-      if (List.generate(
-            bytes.length,
-            (i) => line.getCodePoint(x + i),
-          ).join(',') ==
-          bytes.join(','))
+    // Only a terminal soft wrap continues the previous line. Hard newlines
+    // must not combine unrelated output into a successful marker.
+    if (!line.isWrapped) candidate.clear();
+    for (var x = 0; x < terminal.viewWidth; x++) {
+      candidate.add(line.getCodePoint(x));
+      if (candidate.length > expected.length) candidate.removeAt(0);
+      if (candidate.length == expected.length &&
+          List.generate(
+            expected.length,
+            (i) => candidate[i] == expected[i],
+          ).every((match) => match)) {
         return true;
+      }
     }
   }
   return false;
+}
+
+Future<void> waitForEncryptedIdleTerminal(
+  WidgetTester tester,
+  Terminal terminal, {
+  required double Function() keyboardInset,
+  required void Function() observe,
+}) async {
+  final view = find.byType(TerminalView);
+  await until(tester, () {
+    observe();
+    return view.hitTestable().evaluate().length == 1 &&
+        control('direct-disconnect').hitTestable().evaluate().length == 1 &&
+        identical(tester.widget<TerminalView>(view).terminal, terminal) &&
+        keyboardInset() == 0;
+  }, timeoutReason: 'direct_ssh_encrypted_idle_ime_timeout');
 }
 
 Future<void> verifyOrdinaryMobileControls(
@@ -414,6 +438,76 @@ Future<void> runEncryptedDirectSshUi(
     });
   }
 
+  String? lastDiagnostic;
+  void diagnostic(String phase, [Terminal? terminal]) {
+    final views = find.byType(TerminalView);
+    final toggle = control('direct-keyboard-toggle');
+    final disconnect = control('direct-disconnect');
+    final enter = control('direct-key-enter');
+    final surface = ui.PlatformDispatcher.instance.implicitView!;
+    final oneView = views.evaluate().length == 1;
+    final oneToggle = toggle.evaluate().length == 1;
+    final oneEnter = enter.evaluate().length == 1;
+    final tooltip = oneToggle
+        ? tester.widget<IconButton>(toggle).tooltip
+        : null;
+    final rect = oneView ? tester.getRect(views) : null;
+    final enterRect = oneEnter ? tester.getRect(enter) : null;
+    final value = {
+      'phase': phase,
+      'terminalCount': views.evaluate().length,
+      'terminalHit': oneView && views.hitTestable().evaluate().length == 1,
+      'disconnectHit': disconnect.hitTestable().evaluate().length == 1,
+      'toggleHit': oneToggle && toggle.hitTestable().evaluate().length == 1,
+      'enterHit': oneEnter && enter.hitTestable().evaluate().length == 1,
+      'headerHit': find.text('普通 SSH').hitTestable().evaluate().isNotEmpty,
+      'toggleState': tooltip == '打开键盘'
+          ? 'open'
+          : tooltip == '收起键盘'
+          ? 'close'
+          : tooltip == null
+          ? 'missing'
+          : 'other',
+      'insetBottomPx': surface.viewInsets.bottom.round(),
+      'viewSizePx': [
+        surface.physicalSize.width.round(),
+        surface.physicalSize.height.round(),
+      ],
+      'terminalRectPt': rect == null
+          ? null
+          : [
+              rect.left.round(),
+              rect.top.round(),
+              rect.width.round(),
+              rect.height.round(),
+            ],
+      'enterRectPt': enterRect == null
+          ? null
+          : [
+              enterRect.left.round(),
+              enterRect.top.round(),
+              enterRect.width.round(),
+              enterRect.height.round(),
+            ],
+      'columns': terminal?.viewWidth ?? 0,
+      'rows': terminal?.viewHeight ?? 0,
+      'terminalFocused':
+          oneView &&
+          (tester.widget<TerminalView>(views).focusNode?.hasFocus ?? false),
+      'testInputRegistered': tester.testTextInput.isRegistered,
+      'testClientSet': tester.testTextInput.setClientArgs != null,
+      'welcomeVisible':
+          terminal != null && hasMarker(terminal, 'POCKET-ANDROID-READY'),
+      'echoVisible':
+          terminal != null && hasMarker(terminal, 'POCKET-ANDROID-SSH-OK'),
+    };
+    final encoded = jsonEncode(value);
+    if (encoded != lastDiagnostic) {
+      publish('encrypted-diagnostic.json', value);
+      lastDiagnostic = encoded;
+    }
+  }
+
   Future<void> pasteKey() async {
     try {
       await tester.runAsync(
@@ -507,19 +601,57 @@ Future<void> runEncryptedDirectSshUi(
   expect(tester.widget<TextField>(passphrase).obscureText, isTrue);
   step('encrypted_connect');
   await tap(tester, 'direct-connect', requireEnabled: true);
-  await until(tester, () => find.byType(TerminalView).evaluate().length == 1);
-  final terminal = tester
-      .widget<TerminalView>(find.byType(TerminalView))
-      .terminal;
-  await until(tester, () => hasMarker(terminal, 'POCKET-ANDROID-READY'));
+  step('encrypted_wait_terminal');
+  await until(tester, () {
+    diagnostic('encrypted_wait_terminal');
+    return find.byType(TerminalView).evaluate().length == 1;
+  });
+  final terminalView = find.byType(TerminalView);
+  final terminal = tester.widget<TerminalView>(terminalView).terminal;
+  step('encrypted_wait_welcome');
+  await until(tester, () {
+    diagnostic('encrypted_wait_welcome', terminal);
+    return hasMarker(terminal, 'POCKET-ANDROID-READY');
+  });
   expect(state.secret.text.isEmpty, isTrue);
   expect(state.passphrase.text.isEmpty, isTrue);
-  await toggleOrdinaryKeyboard(tester, show: true);
+  final surface = ui.PlatformDispatcher.instance.implicitView!;
+  step('encrypted_wait_idle_ime');
+  await waitForEncryptedIdleTerminal(
+    tester,
+    terminal,
+    keyboardInset: () => surface.viewInsets.bottom,
+    observe: () => diagnostic('encrypted_wait_idle_ime', terminal),
+  );
+  step('encrypted_keyboard_show');
+  try {
+    await toggleOrdinaryKeyboard(tester, show: true);
+  } finally {
+    diagnostic('encrypted_keyboard_show', terminal);
+  }
+  step('encrypted_input');
+  diagnostic('encrypted_input', terminal);
   tester.testTextInput.enterText('hp-check');
   await tester.pump();
-  await tapControl(tester, control('direct-key-enter'), 'terminal-enter');
-  await until(tester, () => hasMarker(terminal, 'POCKET-ANDROID-SSH-OK'));
-  await toggleOrdinaryKeyboard(tester, show: false);
+  step('encrypted_enter');
+  try {
+    await tapControl(tester, control('direct-key-enter'), 'terminal-enter');
+  } finally {
+    diagnostic('encrypted_enter', terminal);
+  }
+  step('encrypted_wait_echo');
+  await until(tester, () {
+    diagnostic('encrypted_wait_echo', terminal);
+    return hasMarker(terminal, 'POCKET-ANDROID-SSH-OK');
+  });
+  step('encrypted_keyboard_hide');
+  try {
+    await toggleOrdinaryKeyboard(tester, show: false);
+  } finally {
+    diagnostic('encrypted_keyboard_hide', terminal);
+  }
+  step('encrypted_capture');
+  diagnostic('encrypted_capture', terminal);
   await capture('connected');
   step('encrypted_disconnect');
   await tapControl(

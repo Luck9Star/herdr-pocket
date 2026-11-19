@@ -82,6 +82,29 @@ void publish(String name, Object value) {
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  test('terminal markers respect soft and hard line boundaries', () {
+    for (final width in [8, 12, 20, 40]) {
+      final terminal = Terminal()..resize(width, 24);
+      terminal.write('POCKET-ANDROID-READY\r\n\$ ');
+      expect(
+        hasMarker(terminal, 'POCKET-ANDROID-READY'),
+        isTrue,
+        reason: 'soft-wrapped welcome at $width columns',
+      );
+      expect(hasMarker(terminal, 'POCKET-ANDROID-SSH-OK'), isFalse);
+      final echo = Terminal()..resize(width, 24);
+      echo.write('\r\n\x1b[32mPOCKET-ANDROID-SSH-OK\x1b[0m\r\n');
+      expect(
+        hasMarker(echo, 'POCKET-ANDROID-SSH-OK'),
+        isTrue,
+        reason: 'soft-wrapped remote echo at $width columns',
+      );
+    }
+    final split = Terminal()..resize(12, 24);
+    split.write('POCKET-AND\r\nROID-READY');
+    expect(hasMarker(split, 'POCKET-ANDROID-READY'), isFalse);
+    expect(hasMarker(split, ''), isFalse);
+  });
   testWidgets(
     'Android homepage host key rotation, ordinary SSH input, echo and disconnect',
     (tester) async {

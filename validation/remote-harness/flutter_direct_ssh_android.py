@@ -231,7 +231,7 @@ def checked_public_reply(reply, relative, limit):
 
 def read_public_json(relative, limit=4096):
     if not re.fullmatch(r'cache/herdr-direct-ssh-[0-9]+/(?:(?:rotation-|encrypted-)?(?:result|stage)|'
-                        r'ordinary-mobile-stage|failure|screen-request)\.json', relative):
+                        r'ordinary-mobile-stage|encrypted-diagnostic|failure|screen-request)\.json', relative):
         raise Failure('direct_android_public_path_invalid')
     if not package_present():
         return None
@@ -635,6 +635,37 @@ def checked_encrypted_stage(value, completed):
     return name
 
 
+ENCRYPTED_UI_PHASES = {
+    'encrypted_wait_terminal', 'encrypted_wait_welcome', 'encrypted_wait_idle_ime',
+    'encrypted_keyboard_show', 'encrypted_input', 'encrypted_enter',
+    'encrypted_wait_echo', 'encrypted_keyboard_hide', 'encrypted_capture',
+}
+ENCRYPTED_UI_BOOLEAN_FIELDS = {
+    'terminalHit', 'disconnectHit', 'toggleHit', 'enterHit', 'headerHit', 'terminalFocused',
+    'testInputRegistered', 'testClientSet', 'welcomeVisible', 'echoVisible',
+}
+
+
+def safe_encrypted_diagnostic(value):
+    fields = {'phase', 'terminalCount', 'toggleState', 'insetBottomPx', 'viewSizePx',
+              'terminalRectPt', 'enterRectPt', 'columns', 'rows'} | ENCRYPTED_UI_BOOLEAN_FIELDS
+    if (not isinstance(value, dict) or set(value) != fields
+            or type(value['phase']) is not str or value['phase'] not in ENCRYPTED_UI_PHASES
+            or value['toggleState'] not in ('open', 'close', 'missing', 'other')
+            or any(type(value[key]) is not bool for key in ENCRYPTED_UI_BOOLEAN_FIELDS)
+            or any(type(value[key]) is not int or not 0 <= value[key] <= 10000
+                   for key in ('terminalCount', 'insetBottomPx', 'columns', 'rows'))
+            or not isinstance(value['viewSizePx'], list) or len(value['viewSizePx']) != 2
+            or any(type(n) is not int or not 1 <= n <= 10000 for n in value['viewSizePx'])
+            or any(rect is not None and
+                   (not isinstance(rect, list) or len(rect) != 4
+                    or any(type(n) is not int or not -10000 <= n <= 10000 for n in rect)
+                    or rect[2] < 0 or rect[3] < 0)
+                   for rect in (value['terminalRectPt'], value['enterRectPt']))):
+        raise Failure('direct_android_encrypted_diagnostic_invalid')
+    return value
+
+
 def deliver_encrypted_credentials(fixture, run_id):
     if not re.fullmatch(r'\d+', run_id):
         raise Failure('direct_android_invalid_run_id')
@@ -718,6 +749,9 @@ def run_encrypted(args, env):
                 screen = read_public_json(relative + '/screen-request.json')
                 if screen is not None:
                     screen_checkpoint(screen, screens, fixture, None, relative, output, require_rotation=False)
+                diagnostic = read_public_json(relative + '/encrypted-diagnostic.json', 2048)
+                if diagnostic is not None:
+                    report['uiDiagnostic'] = safe_encrypted_diagnostic(diagnostic)
                 checkpoint = read_public_json(relative + '/encrypted-stage.json')
                 if checkpoint is not None:
                     name = checked_encrypted_stage(checkpoint, checkpoints)
@@ -759,10 +793,15 @@ def run_encrypted(args, env):
                 raise Failure('direct_android_flutter_timeout') from None
             if code:
                 failure = read_public_json(relative + '/failure.json', 256)
+                if not isinstance(failure, dict):
+                    failure = read_public_json(relative + '/stage.json', 256)
                 if isinstance(failure, dict):
                     stage = failure.get('stage', '')
                     if isinstance(stage, str) and re.fullmatch(r'[a-z_]{1,40}', stage):
                         report['failureStage'] = stage
+                diagnostic = read_public_json(relative + '/encrypted-diagnostic.json', 2048)
+                if diagnostic is not None:
+                    report['uiDiagnostic'] = safe_encrypted_diagnostic(diagnostic)
                 raise Failure('direct_android_device_test_failed')
             if not peer_confirmed:
                 raise Failure('direct_android_peer_confirmation_missing')

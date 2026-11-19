@@ -330,7 +330,7 @@ class GuardTests(unittest.TestCase):
     def test_exchange_allows_only_fixed_public_filenames(self):
         with patch.object(runner, 'package_present', return_value=False):
             for name in ('rotation-stage.json', 'rotation-result.json', 'ordinary-mobile-stage.json',
-                         'encrypted-stage.json', 'encrypted-result.json'):
+                         'encrypted-stage.json', 'encrypted-result.json', 'encrypted-diagnostic.json'):
                 self.assertIsNone(runner.read_public_json('cache/herdr-direct-ssh-123/' + name))
             for name in ('../defines.json', 'rotation-rejected-confirmed.json', 'rotation-secret.json',
                          'ordinary-mobile-keyboard_shown-confirmed.json', 'ordinary-mobile-result.json',
@@ -598,6 +598,23 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(runner.Failure):
                 runner.checked_encrypted_stage(value, completed)
 
+    def test_encrypted_diagnostic_only_exports_fixed_token_free_metrics(self):
+        data = {'phase': 'encrypted_wait_idle_ime', 'terminalCount': 1,
+            'terminalHit': True, 'disconnectHit': True, 'toggleHit': True, 'enterHit': False, 'headerHit': True,
+            'toggleState': 'close', 'insetBottomPx': 400, 'viewSizePx': [1080, 2400],
+            'terminalRectPt': [16, 144, 320, 300], 'enterRectPt': [300, 400, 54, 44], 'columns': 12, 'rows': 10,
+            'terminalFocused': False, 'testInputRegistered': True, 'testClientSet': True,
+            'welcomeVisible': True, 'echoVisible': False}
+        self.assertEqual(runner.safe_encrypted_diagnostic(data), data)
+        for mutation in ({'privateKey': 'sensitive-test-key'}, {'phase': 'other'},
+                         {'toggleState': 'sensitive-test-phrase'}, {'terminalHit': 1},
+                         {'insetBottomPx': -1}, {'columns': True}, {'viewSizePx': [0, 1]},
+                         {'terminalRectPt': [0, 0, -1, 10]}, {'terminalRectPt': 'secret'}):
+            with self.subTest(mutation=mutation), self.assertRaises(runner.Failure):
+                runner.safe_encrypted_diagnostic({**data, **mutation})
+        with self.assertRaises(runner.Failure):
+            runner.safe_encrypted_diagnostic({key: value for key, value in data.items() if key != 'phase'})
+
     def test_private_ipc_is_single_write_and_never_appears_in_arguments(self):
         fixture = Mock(private_key='sensitive-test-key', passphrase='sensitive-test-phrase')
         with patch.object(runner, 'adb') as adb:
@@ -733,6 +750,63 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
                 self.assertEqual(len(creations), 0 if scenario == 'existing' else 1)
                 self.assertFalse(Path(key_temp.name).exists())
 
+    def test_device_failure_preserves_only_whitelisted_stage_and_metrics(self):
+        from screen_proof_token import SCREEN_WORDS
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); app = root / 'app'; app.mkdir(); output = root / 'public'
+            key_temp = tempfile.TemporaryDirectory(dir=temp)
+            fixture = MagicMock(port=40001, username='fixture', private_key='sensitive-test-key',
+                passphrase='sensitive-test-phrase', fingerprint='SHA256:public',
+                screen_token=' '.join(SCREEN_WORDS[:8]), echo_marker='POCKET-ANDROID-SSH-OK')
+            fixture._temp = key_temp; fixture.__enter__.return_value = fixture
+            def exit_fixture(*unused):
+                fixture.private_key = fixture.passphrase = ''
+                key_temp.cleanup()
+            fixture.__exit__.side_effect = exit_fixture
+            probe = dict(id=1, hostKey='A', authAttempts=0, authSuccesses=0,
+                ptyRequests=0, shellRequests=0, inputBytes=0, outputBytes=0,
+                authAccepted=False, markerReceived=False, sessionClosed=False, closed=True)
+            fixture.snapshot.return_value = dict(connections=1, connectionsClosed=True, connectionEvents=[probe])
+            fixture.wait_for_connections_closed.return_value = True
+            diagnostic = {'phase': 'encrypted_keyboard_show', 'terminalCount': 1,
+                'terminalHit': True, 'disconnectHit': True, 'toggleHit': True, 'enterHit': False, 'headerHit': True,
+                'toggleState': 'close', 'insetBottomPx': 400, 'viewSizePx': [1080, 2400],
+                'terminalRectPt': [16, 144, 320, 300], 'enterRectPt': [300, 400, 54, 44],
+                'columns': 12, 'rows': 10, 'terminalFocused': False, 'testInputRegistered': True,
+                'testClientSet': True, 'welcomeVisible': True, 'echoVisible': False}
+            fake_module = types.SimpleNamespace(EncryptedKeyFixture=Mock(return_value=fixture))
+            process = Mock(pid=12345); process.poll.side_effect = [None, None, 1, 1, 1]; process.wait.return_value = 1
+            def fake_text(*args):
+                values = {('devices',): 'List of devices attached\nemulator-5554 device',
+                    ('shell', 'getprop', 'ro.kernel.qemu'): '1',
+                    ('shell', 'getprop', 'ro.build.version.sdk'): '35',
+                    ('shell', 'am', 'get-current-user'): '0',
+                    ('shell', 'settings', 'get', 'secure', 'show_ime_with_hard_keyboard'): '1'}
+                return values.get(args, '')
+            def read_json(path, *unused):
+                if path.endswith('encrypted-diagnostic.json'): return diagnostic
+                if path.endswith('encrypted-stage.json'): return {'phase': 'review'}
+                if path.endswith('failure.json'): return {'stage': 'encrypted_keyboard_show', 'code': 'direct_ssh_android_ui_failed'}
+                return None
+            env = {'GITHUB_SHA': 'a'*40, 'GITHUB_RUN_ID': '123', 'RUNNER_TEMP': temp}
+            args = types.SimpleNamespace(project=app, output=output)
+            with patch.dict(sys.modules, {'tauri_encrypted_key_fixture': fake_module}), \
+                 patch.object(runner, 'checked_paths', return_value=(app, output)), \
+                 patch.object(runner, 'verify_prepared'), patch.object(runner, 'text', side_effect=fake_text), \
+                 patch.object(runner, 'package_present', side_effect=[False, True, False, False]), \
+                 patch.object(runner, 'forward_set', return_value=set()), \
+                 patch.object(runner, 'adb', return_value=CompletedProcess([], 0, b'', b'')), \
+                 patch.object(runner, 'read_public_json', side_effect=read_json), \
+                 patch.object(runner.time, 'sleep'), patch.object(runner.subprocess, 'Popen', return_value=process):
+                with self.assertRaisesRegex(runner.Failure, 'direct_android_device_test_failed'):
+                    runner.run_encrypted(args, env)
+            result = json.loads((output/'result.json').read_text())
+            self.assertEqual(result['failureStage'], 'encrypted_keyboard_show')
+            self.assertEqual(result['uiDiagnostic'], diagnostic)
+            self.assertNotIn('sensitive-test-key', json.dumps(result))
+            self.assertNotIn('sensitive-test-phrase', json.dumps(result))
+            self.assertFalse(Path(key_temp.name).exists())
+
     def test_complete_case_requires_review_rejection_ocr_and_live_peer_confirmation(self):
         from screen_proof_token import SCREEN_WORDS
         with tempfile.TemporaryDirectory() as temp:
@@ -771,7 +845,14 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
             current = {'round': 0}
             device = {key: True for key in runner.ENCRYPTED_PUBLIC_FIELDS}
             device.update(schemaVersion=1, platform='android-api35-emulator', physicalImeVerified=False)
+            diagnostic = {'phase': 'encrypted_capture', 'terminalCount': 1,
+                'terminalHit': True, 'disconnectHit': True, 'toggleHit': True, 'enterHit': False, 'headerHit': True,
+                'toggleState': 'open', 'insetBottomPx': 0, 'viewSizePx': [1080, 2400],
+                'terminalRectPt': [16, 144, 320, 300], 'enterRectPt': [300, 400, 54, 44], 'columns': 22, 'rows': 10,
+                'terminalFocused': False, 'testInputRegistered': True, 'testClientSet': True,
+                'welcomeVisible': True, 'echoVisible': True}
             def read_json(path, *unused):
+                if path.endswith('encrypted-diagnostic.json'): return diagnostic
                 if path.endswith('screen-request.json'): return {'valid': True} if current['round'] == 2 else None
                 if path.endswith('encrypted-stage.json'): return {'phase': 'review' if current['round'] == 0 else 'rejected'}
                 if path.endswith('encrypted-result.json'):
@@ -796,6 +877,7 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
                  patch.object(runner.time, 'sleep'), patch.object(runner.subprocess, 'Popen', return_value=process):
                 report = runner.run_encrypted(args, env)
             self.assertEqual(report['status'], 'passed')
+            self.assertEqual(report['uiDiagnostic'], diagnostic)
             self.assertEqual(tuple(report['checkpoints']), ('review', 'rejected'))
             self.assertTrue(report['peerClosedBeforeDriverExit'])
             self.assertTrue(report['cleanup']['temporaryKeyRemoved'])

@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import {createDirectSsh} from '../src/direct-ssh.js';
 const target = {host:'example.test',port:22,username:'alice'};
 const key = {host:'example.test',port:22,publicKey:'ssh-ed25519 AAAA',fingerprint:'SHA256:test'};
-function harness() {
+function harness({closeReply} = {}) {
   const calls=[], statuses=[], data=[]; let channel, resolveOpen;
-  const invoke = async (command,args) => { calls.push({command,args}); if (command==='ssh_host_key_probe') return key; if (command==='ssh_shell_open') return new Promise(resolve => { resolveOpen=resolve; }); };
+  const invoke = async (command,args) => { calls.push({command,args}); if (command==='ssh_host_key_probe') return key; if (command==='ssh_shell_open') return new Promise(resolve => { resolveOpen=resolve; }); if (command==='ssh_shell_close') return closeReply; };
   const ssh=createDirectSsh({invoke,channelFactory:()=>channel={},onStatus:(...v)=>statuses.push(v),onData:bytes=>data.push([...bytes])});
   return {ssh,calls,statuses,data,get channel(){return channel;},resolveOpen:id=>resolveOpen(id)};
 }
@@ -43,6 +43,32 @@ test('early events bind to returned identity, input waits for ready and preserve
 test('cancel before open resolves closes the late session and discards events',async()=>{
   const h=harness(); const {pending}=await opening(h); await h.ssh.close(); h.channel.onmessage({sessionId:'s1',seq:1,kind:'ready'});h.resolveOpen('s1');await pending;
   assert.equal(h.ssh.isReady(),false);assert.ok(h.calls.some(c=>c.command==='ssh_shell_close' && c.args.sessionId==='s1'));
+});
+
+test('explicit close accepts only a unit or void acknowledgement', async () => {
+  for (const [name, closeReply, closed] of [
+    ['Rust unit', null, true],
+    ['JavaScript void', undefined, true],
+    ['false', false, false],
+    ['uncontracted boolean', true, false],
+    ['uncontracted object', {closed: true}, false],
+    ['uncontracted string', 'ok', false],
+  ]) {
+    const h = harness({closeReply});
+    const {pending} = await opening(h);
+    h.resolveOpen('s1');
+    await pending;
+    h.channel.onmessage({sessionId:'s1', seq:1, kind:'ready'});
+    await h.ssh.close({explicit:true});
+    assert.deepEqual(h.statuses.at(-1).slice(1), [
+      false, closed ? undefined : 'close_unconfirmed', {closed, explicit:true},
+    ], name);
+    h.channel.onmessage({sessionId:'s1', seq:2, kind:'ready'});
+    h.ssh.write(new Uint8Array([65]));
+    assert.equal(h.ssh.isReady(), false, name);
+    assert.equal(h.calls.filter(call => call.command === 'ssh_shell_close').length, 1, name);
+    assert.equal(h.calls.filter(call => call.command === 'ssh_shell_write').length, 0, name);
+  }
 });
 test('edits invalidate pin and authentication must be exactly one method',async()=>{
   const h=harness();await h.ssh.probe(target);h.ssh.invalidateReview();await assert.rejects(h.ssh.open(target,{password:'x'},true),/review_required/);

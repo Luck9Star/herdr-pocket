@@ -5,6 +5,7 @@ import copy
 import hashlib
 import json
 import os
+import plistlib
 from pathlib import Path
 import re
 import secrets
@@ -254,6 +255,72 @@ class MacosS06Checks(unittest.TestCase):
         self.assertEqual(facts['targetReview'], {'A': {'before': before, 'after': after}, 'B': {'before': before}})
         self.assertEqual(facts['fixedFailure'], 'public_pair_review_state_unconfirmed')
         self.assertNotIn('private', json.dumps(facts))
+
+    def test_creation_diagnostics_publish_only_fixed_peer_states(self):
+        log = ("HP_S06_NATIVE_PAIR_CREATION=A,requestReady\n"
+               "HP_S06_NATIVE_PAIR_CREATION=B,deviceCreationUnknown\n"
+               "HP_S06_NATIVE_PAIR_CREATION=B,requestReady,private-data\n"
+               "HP_S06_NATIVE_PAIR_CREATION=B,privateValue\n"
+               "HP_S06_NATIVE_PAIR_CREATION=C,requestReady\n"
+               "HP_S06_NATIVE_FAILURE=public_pair_device_creation_unknown\n")
+        facts = log_facts(log)
+        self.assertEqual(facts['pairCreation'], {'A': 'requestReady', 'B': 'deviceCreationUnknown'})
+        self.assertEqual(facts['fixedFailure'], 'public_pair_device_creation_unknown')
+        self.assertNotIn('private', json.dumps(facts))
+
+    def test_signing_facts_are_only_booleans_from_the_owned_built_product(self):
+        with tempfile.TemporaryDirectory() as work:
+            app = Path(work) / 'fixture.app'
+            (app / 'Contents').mkdir(parents=True)
+            (app / 'Contents/embedded.provisionprofile').touch()
+            private = plistlib.dumps({
+                'com.apple.application-identifier': 'PRIVATE-ID',
+                'keychain-access-groups': ['PRIVATE-GROUP'],
+                'com.apple.security.application-groups': ['PRIVATE-APP-GROUP'],
+                'private-value': 'ignored',
+            })
+            signed = subprocess.CompletedProcess([], 0, private, b'TeamIdentifier=ABCDEF1234\nAuthority=private\n')
+            with patch('macos_s06_diagnostics.subprocess.run', return_value=signed) as call:
+                facts = runner.app_signing_facts(app)
+            self.assertEqual(facts, {
+                'appFound': True, 'signatureMetadataRead': True, 'adHocSignature': False,
+                'teamIdentifierPresent': True, 'provisioningProfilePresent': True,
+                'entitlementsRead': True, 'applicationIdentifierDeclared': True,
+                'keychainAccessGroupsDeclared': True, 'applicationGroupsDeclared': True,
+            })
+            self.assertEqual(call.call_args.args[0][-1], str(app))
+            self.assertNotIn('private', json.dumps(facts).lower())
+            malformed = subprocess.CompletedProcess([], 0, b'invalid entitlement data', b'Signature=adhoc\n')
+            with patch('macos_s06_diagnostics.subprocess.run', return_value=malformed):
+                facts = runner.app_signing_facts(app)
+            self.assertIs(facts['entitlementsRead'], False)
+            self.assertIs(facts['adHocSignature'], True)
+            self.assertIs(facts['keychainAccessGroupsDeclared'], False)
+            with patch('macos_s06_diagnostics.subprocess.run') as call:
+                self.assertEqual(runner.app_signing_facts(app.with_name('missing.app')), {'appFound': False})
+                call.assert_not_called()
+
+    @unittest.skipUnless(shutil.which('swiftc'), 'requires local Swift')
+    def test_creation_classifier_distinguishes_known_phases_from_unknown_or_conflict(self):
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            driver = root / 'main.swift'
+            driver.write_text('''let ready = "等待主机审查 · 授权结果未知；公开请求有效 600 秒"
+let validation = "核验连接资料未完成 · 未创建设备身份"
+let storage = "创建设备身份未完成 · 设备安全存储不可用或创建结果未知 · 请核验原身份，不会重放创建"
+let saving = "保存本机密钥引用未完成 · 设备安全存储不可用或创建结果未知 · 请核验原身份，不会重放创建"
+precondition(MacosS06CreationState.classify([ready, "核对后，交给主机确认"]) == .requestReady)
+precondition(MacosS06CreationState.classify([validation]) == .validationFailed)
+precondition(MacosS06CreationState.classify([storage]) == .deviceCreationUnknown)
+precondition(MacosS06CreationState.classify([saving]) == .handleSaveUnknown)
+precondition(MacosS06CreationState.classify([ready, storage]) == .observationConflict)
+precondition(MacosS06CreationState.classify([storage + " appended"]) == nil)
+precondition(MacosS06CreationState.classify(["资料已填入未审查表单 · 请独立核验指纹与目标后再创建设备身份"]) == nil)
+''')
+            executable = root / 'check-creation'
+            subprocess.run(['swiftc', runner.HERE / 'macos_s06_fixture.swift', driver, '-o', executable],
+                           check=True, timeout=30)
+            subprocess.run([executable], check=True, timeout=5)
 
     def test_generated_native_focus_color_comes_from_app_tokens(self):
         with tempfile.TemporaryDirectory() as temporary:

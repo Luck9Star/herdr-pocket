@@ -1,9 +1,11 @@
 """Translate private Xcode output to bounded, fixed macOS S06 diagnostics."""
 import json
 from pathlib import Path
+import plistlib
 import re
 import subprocess
 import tempfile
+from xml.parsers.expat import ExpatError
 
 TEST_SELECTION = 'RunnerTests/MacosS06UITests/testTwoPairedPeersInNativeWindow'
 STAGES = ('entered', 'channelConfigured', 'releaseRead', 'releaseDecoded', 'targetsValidated',
@@ -17,6 +19,9 @@ PAIR_AX_COUNTS = ('named', 'expectedRole', 'withinRegion', 'hittable', 'enabled'
 PAIR_INPUT_STEPS = {'click', 'focus', 'typing', 'typed', 'copy', 'verified'}
 PAIR_READ_BITS = ('ownerAXBeforeExact', 'ownerAXAfterExact', 'ownedEditorPresent',
                   'ownedEditorAXExact', 'clipboardChanged', 'clipboardExact')
+PAIR_CREATION_STATES = {'requestReady', 'validationFailed', 'intentSaveFailed', 'deviceCreationUnknown',
+                        'handleSaveUnknown', 'publicKeyReadUnknown', 'profileSaveUnknown',
+                        'bridgeUnavailable', 'observationConflict', 'unresolved'}
 CHANNEL_FAILURES = {'scope_invalid', 'message_rejected', 'topic_occupied', 'prepare_denied',
                     'item_rejected', 'write_denied', 'read_unavailable', 'cleanup_failed'}
 FAILURES = {'private_channel_send_failed', 'private_channel_receive_failed',
@@ -32,6 +37,11 @@ FAILURES = {'private_channel_send_failed', 'private_channel_receive_failed',
             'public_pair_review_controls_unbound', 'public_pair_review_geometry_unstable',
             'public_pair_review_pixels_unavailable', 'public_pair_review_state_unconfirmed',
             'public_pair_create_active_before_review', 'public_pair_create_inactive_after_review',
+            'public_pair_target_validation_failed', 'public_pair_creation_intent_failed',
+            'public_pair_device_creation_unknown', 'public_pair_created_handle_save_unknown',
+            'public_pair_device_public_key_unknown', 'public_pair_profile_save_unknown',
+            'public_pair_storage_bridge_unavailable', 'public_pair_creation_observations_conflict',
+            'public_pair_creation_unresolved', 'public_request_copy_control_missing',
             'reviewed_host_response_unavailable', 'reviewed_host_response_invalid',
             'peer_close_unconfirmed_while_window_running', 'peer_close_receipt_invalid', 'native_visible_peer_marker_missing',
             'native_visible_peer_marker_mismatch', 'native_visible_tick_invalid',
@@ -108,6 +118,14 @@ def log_facts(text):
                                    'buttonBrandFilled': filled == '1'}
     if review:
         facts['targetReview'] = review
+    pattern = r'^HP_S06_NATIVE_PAIR_CREATION=([AB]),([a-zA-Z]+)[ \t]*$'
+    creation = {peer: state for peer, state in re.findall(pattern, text, re.M) if state in PAIR_CREATION_STATES}
+    if creation:
+        facts['pairCreation'] = creation
+    pattern = r'^HP_S06_NATIVE_PAIR_CREATE_APPEARANCE=([AB]),(active|inactive|unavailable)[ \t]*$'
+    appearance = {peer: state for peer, state in re.findall(pattern, text, re.M) if peer in creation}
+    if appearance:
+        facts['pairCreateAppearance'] = appearance
     lower = text.lower()
     facts['startupFlags'] = [name for name, patterns in STARTUP.items() if any(p in lower for p in patterns)]
     lines = {int(line) for line in re.findall(r'RunnerTests\.swift:(\d{1,5}):(?:\d+:)?\s*error:', text)}
@@ -120,6 +138,44 @@ def checked_summary(raw):
         return {}
     return {key: raw[key] for key in SUMMARY_FIELDS
             if type(raw.get(key)) is int and 0 <= raw[key] <= 1024}
+
+
+def app_signing_facts(bundle):
+    """Inspect only this job's built app; neither contents nor identifiers leave this function."""
+    found = bundle.is_dir() and not bundle.is_symlink()
+    facts = {'appFound': found}
+    if not found:
+        return facts
+    facts['provisioningProfilePresent'] = (bundle / 'Contents/embedded.provisionprofile').is_file()
+    try:
+        signed = subprocess.run(
+            ['/usr/bin/codesign', '--display', '--verbose=4', '--entitlements', '-', '--xml', str(bundle)],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=8, check=False)
+    except (OSError, subprocess.SubprocessError):
+        facts['signatureMetadataRead'] = False
+        return facts
+    readable = signed.returncode == 0 and len(signed.stdout) <= 65536 and len(signed.stderr) <= 65536
+    facts['signatureMetadataRead'] = readable
+    if not readable:
+        return facts
+    facts['adHocSignature'] = bool(re.search(rb'^Signature=adhoc[ \t]*$', signed.stderr, re.M))
+    facts['teamIdentifierPresent'] = bool(re.search(rb'^TeamIdentifier=[A-Z0-9]{10}[ \t]*$', signed.stderr, re.M))
+    try:
+        raw = signed.stdout.strip()
+        entitlements = plistlib.loads(raw) if raw else {}
+    except (ValueError, TypeError, plistlib.InvalidFileException, ExpatError):
+        entitlements = None
+    facts['entitlementsRead'] = isinstance(entitlements, dict)
+    entitlements = entitlements if facts['entitlementsRead'] else {}
+    def has_group(key):
+        groups = entitlements.get(key)
+        return isinstance(groups, list) and any(isinstance(group, str) and bool(group) for group in groups)
+    facts['applicationIdentifierDeclared'] = any(
+        isinstance(entitlements.get(key), str) and bool(entitlements[key])
+        for key in ('com.apple.application-identifier', 'application-identifier'))
+    facts['keychainAccessGroupsDeclared'] = has_group('keychain-access-groups')
+    facts['applicationGroupsDeclared'] = has_group('com.apple.security.application-groups')
+    return facts
 
 
 def xcresult_summary(bundle):

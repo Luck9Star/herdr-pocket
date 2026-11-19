@@ -12,7 +12,7 @@ import tempfile
 import time
 
 from macos_secure_xcuitest import install_test_semantics_hook, prepare
-from macos_s06_diagnostics import CHANNEL_FAILURES, TEST_SELECTION, diagnostics
+from macos_s06_diagnostics import CHANNEL_FAILURES, TEST_SELECTION, app_signing_facts, diagnostics
 from paired_dual_demo import prepared_pairing_hosts
 from paired_gui import GuiFailure, bounded_wire, fixture_terminal_id, owned_process, wait_for
 from s06_tauri_gui import peer_connection_evidence
@@ -296,6 +296,8 @@ def run(app, binary, output):
                 finally:
                     native = diagnostics(private_test_log, bundle, proc.poll() if proc else None)
                     result['nativeDiagnostics'] = native
+                    built_app = root / 'derived/Build/Products/Debug/herdr_flutter_probe.app'
+                    result['appSigning'] = app_signing_facts(built_app)
                     if last := native.get('lastLoggedStage'):
                         result['nativeStage'] = last
                 ui = checked_ui_result(json.loads(channel.receive('result') or b'null'))

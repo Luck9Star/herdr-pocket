@@ -425,6 +425,57 @@ final class MacosS06UITests: XCTestCase {
         return verified.button
     }
 
+    private func waitForPairCreation(index: Int, create: XCUIElement, createFrame: CGRect) throws {
+        let peer = index == 0 ? "A" : "B"
+        let region = window.frame
+        let names = Array(MacosS06CreationState.uiMessages.keys)
+        let message = NSPredicate(format: "label IN %@ OR value IN %@ OR identifier IN %@", names, names, names)
+        let scrollAfter = Date().addingTimeInterval(1)
+        var scrolled = false
+        var appearance = "unavailable"
+        func sampleCreation() -> MacosS06CreationState? {
+            guard app.state == .runningForeground, app.windows.count == 1, window.frame == region else {
+                return nil
+            }
+            let visible = window.descendants(matching: .any).matching(message).allElementsBoundByIndex
+                .filter { within(region, $0) && $0.isHittable }
+                .flatMap { [$0.label, $0.identifier, $0.value as? String ?? ""] }
+            return MacosS06CreationState.classify(visible)
+        }
+        func sampleAppearance() -> String? {
+            guard let brand, create.exists, create.isHittable, create.frame == createFrame,
+                  region.contains(createFrame),
+                  let image = NSBitmapImageRep(data: window.screenshot().pngRepresentation)?.cgImage,
+                  create.exists, create.frame == createFrame else { return nil }
+            // Crop the stable window rather than screenshot a button that
+            // can disappear while the request branch replaces it.
+            let scaleX = CGFloat(image.width) / region.width
+            let scaleY = CGFloat(image.height) / region.height
+            let pixels = CGRect(x: (createFrame.minX - region.minX) * scaleX,
+                y: (createFrame.minY - region.minY) * scaleY,
+                width: createFrame.width * scaleX, height: createFrame.height * scaleY)
+            guard let crop = image.cropping(to: pixels.integral),
+                  let filled = MacosS06FocusOutline.filledButton(in: crop, brand: brand) else { return nil }
+            return filled ? "active" : "inactive"
+        }
+        let state = (try? until("creation_outcome_wait", seconds: 20) { () -> MacosS06CreationState? in
+            if let observed = sampleCreation() { return observed }
+            if !scrolled && app.state == .runningForeground && app.windows.count == 1 && window.frame == region {
+                appearance = sampleAppearance() ?? appearance
+                // The fixed phase notice is at the top of the pairing form.
+                // Look there without invoking any second creation action.
+                if Date() >= scrollAfter {
+                    scroll(.whole, 1400, pairing: true)
+                    scrolled = true
+                }
+            }
+            return nil
+        }) ?? .unresolved
+        trace("PAIR_CREATION", "\(peer),\(state.rawValue)")
+        trace("PAIR_CREATE_APPEARANCE", "\(peer),\(appearance)")
+        if let failure = state.failureCode { throw Failure.check(failure) }
+    }
+
     private func request(_ peer: Peer, index: Int) throws {
         try click("配对添加", in: .main, pair: .entry)
         try importPublicProfile(peer)
@@ -443,10 +494,13 @@ final class MacosS06UITests: XCTestCase {
         _ = try reveal("网络 provider（仅配置，入网未知）\n直连配置", publicValue: true)
         _ = try reveal(peer.fingerprint, kind: .staticText, pair: .fingerprint)
         let create = try explicitlyReviewTarget(index: index)
+        let createFrame = create.frame
         mark(index == 0 ? "keyA" : "keyB")
         create.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
+        try waitForPairCreation(index: index, create: create, createFrame: createFrame)
         clipboard.clearContents()
-        try click("复制当前公开请求", pair: .copy)
+        try reveal("复制当前公开请求", kind: .button, enabled: true, pair: .copy,
+                   missing: "public_request_copy_control_missing").click()
         let request = try until("public_request_unavailable") {
             guard let text = self.clipboard.string(forType: .string),
                   text.utf8.count <= 2048, text.starts(with: "{") else { return nil as String? }

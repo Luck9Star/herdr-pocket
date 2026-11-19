@@ -166,3 +166,7 @@ Android API 35 x86_64 模拟器上的正式作业通过普通连接、换钥和�
 同一提交 `2e8c3557e2e51ae62b423f9e25a9f1fc5d72cecf` 的两壳密码案，在 API 35 x86_64 模拟器分别完成打开和收起键盘，以及看板、网络、设置的进入和返回，共八项。两侧各自保持原认证会话、一次 PTY 和一次 shell，切页期间输入为零，返回原终端后才提交回显标记。服务端确认主动断开后的会话结束，两壳分别有加密私钥及换钥组合的独立证据。[同源验收与官方 ZIP](evidence/ordinary-ssh-android-same-source-20261120/README.md)
 
 本轮密码回显的 Flutter ADB 原图拍于键盘收起后，Tauri ADB 原图拍于键盘打开时。归档索引保留这两张原图、同次截图门禁及 Tauri 的 WebView 图。R7 的键盘原图仍对应上方历史场景。实体设备、真实中文组字和真实跨网仍待验收。[原图成员及 SHA-256](evidence/ordinary-ssh-android-same-source-20261120/official-index.json)
+
+## 2026-11-20 · Flutter iOS 模拟器 R2
+
+Flutter `b3c1182` 的密码案在 iPhone 11 / iOS 26.2 模拟器实际完成键盘开合及看板、网络、设置往返。八个检查点均由对端记录同一条认证会话，累计一次认证、一次 PTY 和一次 shell，导航期间零输入。返回原终端后才提交回显，主动断开并返回首页。原屏 OCR 同时核对回显与活动目标。系统键盘开合已有证据，实体设备和中文输入法组字仍待验证。[Flutter 原件与检查点](evidence/ordinary-ssh-ios-local-result-20261120/README.md#flutter-连接回显与关闭)

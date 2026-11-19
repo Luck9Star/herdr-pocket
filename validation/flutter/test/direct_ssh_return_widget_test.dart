@@ -86,6 +86,8 @@ void main() {
       if (saved) { await tester.binding.handlePopRoute(); } else { await tester.tap(key('direct-return-home')); }
       await tester.pumpAndSettle();
       expect(key('home-ssh-closed'), findsOneWidget);
+      expect(find.text('本机已断开'), findsOneWidget);
+      expect(find.text('本机连接关闭失败'), findsNothing);
       if (saved) {
         expect(find.text('Saved host'), findsOneWidget);
         await tester.ensureVisible(key('hosts-add')); await tester.tap(key('hosts-add')); await tester.pumpAndSettle();
@@ -155,7 +157,8 @@ void main() {
       expect(key('home-ssh-closed'), findsNothing); expect(homeState.sshClosedNotice, isFalse);
       await edgeDrag(320);
       expect(key('direct-form'), findsNothing); expect(key('home-ssh-closed'), findsOneWidget);
-      expect(homeState.sshClosedNotice, isTrue);
+      expect(homeState.sshClosedNotice, isTrue); expect(homeState.sshClosedSucceeded, isTrue);
+      expect(find.text('本机已断开'), findsOneWidget);
       if (saved) expect(find.text('Saved host'), findsOneWidget);
       await tester.tap(find.text('设置').last); await tester.pumpAndSettle();
       await tester.tap(find.text('看板').last); await tester.pumpAndSettle();
@@ -164,5 +167,21 @@ void main() {
     }, variant: TargetPlatformVariant.only(TargetPlatform.iOS),
       skip: Platform.environment['HERDR_DIRECT_SSH_FIXTURE_PORT'] == null);
   }
-
+  testWidgets('a failed local disconnect keeps its failure on the home board', (tester) async {
+    tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    final catalog = HostCatalog(storage: MemoryCatalogStorage(), clock: () => 1000); await catalog.load();
+    await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: HostCatalogPage(
+      tokens: tokens, catalog: catalog, offlineBuilder: (_) => const SizedBox())));
+    await tester.pumpAndSettle();
+    final dynamic homeState = tester.state(find.byType(HostCatalogPage));
+    homeState.setState(() { homeState.sshClosedNotice = true; homeState.sshClosedSucceeded = false; });
+    await tester.pumpAndSettle();
+    expect(find.text('本机连接关闭失败'), findsOneWidget);
+    expect(find.text('会话可能仍在。'), findsOneWidget);
+    expect(find.text('会话可能仍在。可返回首页。'), findsNothing);
+    expect(find.text('本机已断开'), findsNothing);
+    expect(tester.takeException(), isNull); await tester.pumpWidget(const SizedBox()); catalog.dispose();
+  }, variant: TargetPlatformVariant({TargetPlatform.iOS, TargetPlatform.android}));
 }

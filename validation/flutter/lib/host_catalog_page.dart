@@ -39,7 +39,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   late final summaries = HostTaskSummaries(catalog);
   String? notice;
   bool busy = false;
-  bool sshClosedNotice = false;
+  bool sshClosedNotice = false, sshClosedSucceeded = false;
   final sshNavigator = GlobalKey<NavigatorState>();
   final sshVisible = ValueNotifier<bool>(false);
   bool sshRouteOpen = false;
@@ -80,7 +80,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   }
   Future<void> open([HostProfile? profile]) async {
     if (busy || !catalog.ready || catalog.writing || profile?.enabled == false) return;
-    if (sshClosedNotice) setState(() => sshClosedNotice = false);
+    if (sshClosedNotice) setState(() { sshClosedNotice = false; sshClosedSucceeded = false; });
     if (profile != null && profile.hasIdentity) {
       if (profile.requiresNetworkBinding) { setState(() { notice = '请先通过主机的“选择／解除网络绑定”选择相同 provider 的本机网络，再新建视图；不会使用系统直连。'; }); return; }
       tabs.open(profile,networks:catalog.networkProfiles,adapter:widget.adapterFactory?.call(profile));
@@ -323,7 +323,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
 
   Future<void> openDirectSsh() async {
     tabs.select(null);
-    if (sshClosedNotice) setState(() => sshClosedNotice = false);
+    if (sshClosedNotice) setState(() { sshClosedNotice = false; sshClosedSucceeded = false; });
     if (sshRouteOpen) {
       setState(() => sshVisible.value = true);
       return;
@@ -356,8 +356,8 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
             tabs.closeHost(id);
           }
         },
-        onReturnAfterDisconnect: () {
-          if (mounted) setState(() => sshClosedNotice = true);
+        onReturnAfterDisconnect: (succeeded) {
+          if (mounted) setState(() { sshClosedNotice = true; sshClosedSucceeded = succeeded; });
         },
       ),
     );
@@ -373,7 +373,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   }
 
   Future<void> chooseConnection() async {
-    if (sshClosedNotice) setState(() => sshClosedNotice = false);
+    if (sshClosedNotice) setState(() { sshClosedNotice = false; sshClosedSucceeded = false; });
     final choice = await Navigator.push<String>(context, MaterialPageRoute(builder: (context) {
       final margin = MediaQuery.sizeOf(context).width < 360 ? 16.0 : 24.0;
       final large = MediaQuery.textScalerOf(context).scale(1) > 1;
@@ -432,7 +432,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
             setState(() => sshVisible.value = true);
             return;
           }
-          setState(() { destination = i; sshClosedNotice = false; });
+          setState(() { destination = i; sshClosedNotice = false; sshClosedSucceeded = false; });
           if (i != 1) tabs.select(null);
         },
         child: Semantics(label: entries[i].$2, button: true, selected: i == 0, child: Stack(alignment: Alignment.topCenter, children: [
@@ -448,10 +448,14 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   Widget sshDisconnectedNotice() => Container(key: const ValueKey('home-ssh-closed'),
     constraints: const BoxConstraints(minHeight: 44), alignment: Alignment.centerLeft,
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-    decoration: BoxDecoration(color: widget.tokens.color('brandSoft'), borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: widget.tokens.color('brandBorder'))),
-    child: Semantics(liveRegion: true, child: Text('普通 SSH 已断开',
-      style: TextStyle(color: widget.tokens.color('brand'), fontWeight: FontWeight.bold))));
+    decoration: BoxDecoration(color: widget.tokens.color(sshClosedSucceeded ? 'brandSoft' : 'dangerSoft'), borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: widget.tokens.color(sshClosedSucceeded ? 'brandBorder' : 'dangerBorder'))),
+    child: Semantics(liveRegion: true, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(sshClosedSucceeded ? '本机已断开' : '本机连接关闭失败', key: const ValueKey('home-ssh-closed-title'),
+        style: TextStyle(color: widget.tokens.color(sshClosedSucceeded ? 'brand' : 'dangerText'), fontWeight: FontWeight.bold)),
+      if (!sshClosedSucceeded) Text('会话可能仍在。',
+        style: TextStyle(fontSize: 13, color: widget.tokens.color('textSecondary'))),
+    ])));
   Widget emptyMobileBoard() {
     final margin = MediaQuery.sizeOf(context).width < 360 ? 16.0 : 24.0;
     final large = largeMobileText;
@@ -1040,6 +1044,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
           setState(() {
             destination = index;
             sshClosedNotice = false;
+            sshClosedSucceeded = false;
           });
           if (index != 1) tabs.select(null);
         },

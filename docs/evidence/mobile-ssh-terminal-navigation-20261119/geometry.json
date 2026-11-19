@@ -1117,10 +1117,21 @@
             80,
             56
           ],
-          "actual": null,
-          "delta": null,
-          "centerHit": null,
-          "result": "missing"
+          "actual": [
+            0.0,
+            560.0,
+            80.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass",
+          "measurementSource": "flutterNavigationTapTargets"
         },
         "tab-terminal": {
           "role": "hit",
@@ -1153,10 +1164,21 @@
             80,
             56
           ],
-          "actual": null,
-          "delta": null,
-          "centerHit": null,
-          "result": "missing"
+          "actual": [
+            160.0,
+            560.0,
+            80.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass",
+          "measurementSource": "flutterNavigationTapTargets"
         },
         "tab-settings": {
           "role": "hit",
@@ -1183,8 +1205,7 @@
         }
       },
       "counts": {
-        "pass": 16,
-        "missing": 2
+        "pass": 18
       }
     },
     {
@@ -1714,10 +1735,21 @@
             80,
             56
           ],
-          "actual": null,
-          "delta": null,
-          "centerHit": null,
-          "result": "missing"
+          "actual": [
+            0.0,
+            560.0,
+            80.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass",
+          "measurementSource": "flutterNavigationTapTargets"
         },
         "tab-terminal": {
           "role": "hit",
@@ -1750,10 +1782,21 @@
             80,
             56
           ],
-          "actual": null,
-          "delta": null,
-          "centerHit": null,
-          "result": "missing"
+          "actual": [
+            160.0,
+            560.0,
+            80.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass",
+          "measurementSource": "flutterNavigationTapTargets"
         },
         "tab-settings": {
           "role": "hit",
@@ -1780,8 +1823,7 @@
         }
       },
       "counts": {
-        "pass": 9,
-        "missing": 2
+        "pass": 11
       }
     },
     {
@@ -5004,10 +5046,21 @@
             97.5,
             56
           ],
-          "actual": null,
-          "delta": null,
-          "centerHit": null,
-          "result": "missing"
+          "actual": [
+            0.0,
+            754.0,
+            97.5,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass",
+          "measurementSource": "flutterNavigationTapTargets"
         },
         "tab-terminal": {
           "role": "hit",
@@ -5040,10 +5093,21 @@
             97.5,
             56
           ],
-          "actual": null,
-          "delta": null,
-          "centerHit": null,
-          "result": "missing"
+          "actual": [
+            195.0,
+            754.0,
+            97.5,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass",
+          "measurementSource": "flutterNavigationTapTargets"
         },
         "tab-settings": {
           "role": "hit",
@@ -5070,8 +5134,7 @@
         }
       },
       "counts": {
-        "pass": 16,
-        "missing": 2
+        "pass": 18
       }
     },
     {
@@ -5601,10 +5664,21 @@
             97.5,
             56
           ],
-          "actual": null,
-          "delta": null,
-          "centerHit": null,
-          "result": "missing"
+          "actual": [
+            0.0,
+            754.0,
+            97.5,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass",
+          "measurementSource": "flutterNavigationTapTargets"
         },
         "tab-terminal": {
           "role": "hit",
@@ -5637,10 +5711,21 @@
             97.5,
             56
           ],
-          "actual": null,
-          "delta": null,
-          "centerHit": null,
-          "result": "missing"
+          "actual": [
+            195.0,
+            754.0,
+            97.5,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass",
+          "measurementSource": "flutterNavigationTapTargets"
         },
         "tab-settings": {
           "role": "hit",
@@ -5667,8 +5752,7 @@
         }
       },
       "counts": {
-        "pass": 9,
-        "missing": 2
+        "pass": 11
       }
     },
     {
@@ -7794,7 +7878,22 @@
     "Flutter 顶栏源矩形包含顶部安全区，比较时剔除顶部安全区。",
     "Flutter 基线使用旧 TerminalView 可视外框对照终端面板；文本标签未与新容器比较。",
     "Flutter 基线设置不可达。两壳比较仅包括同设备同键盘状态的画面。",
-    "Flutter 看板和网络底栏未分别采集实测矩形或中心命中，功能可达性见回环记录。",
+    "Flutter 看板与网络底栏的 8 项矩形和中心命中来自单独的 Widget 回环重采。各页 image 和 sourceGeometrySha256 仍指原截图批次。",
     "容器中心落在空白不参与命中门槛。可触锚点需实际中心命中且至少 44×44 pt。"
-  ]
+  ],
+  "measurementSources": {
+    "flutterNavigationTapTargets": {
+      "sourceCommit": "6075d7f2fd884e38af6f8e80152ec24b8507ab75",
+      "testPath": "validation/flutter/test/direct_ssh_mobile_terminal_test.dart",
+      "designSourceBlob": "a1bebc83f488a673077ee64f0613d36c0ef27dca",
+      "archive": "flutter-navigation-anchors.json",
+      "archiveSha256": "eff81789f25074524767408e7849fe7084463a6e006a55e94db0287f1fe72122",
+      "sourceTestLogSha256": "ea611a43c2423a34920f16c8b506479354390c81377456bb1f9c1fa68a192cb3",
+      "sourcePeerLogSha256": "26d3cb01d0325a04081d83ffef0eb4cc94d187a0a2aca418a3a064579e9d93a3",
+      "sourceReadmeSha256": "b513141ffe03a010d7d8e8f308e24fbc96c01a19ffac42aa675e2c68bbba98c3",
+      "scope": "独立 Widget 回环实测，默认测试字体，DPR 1，仅记录矩形和中心命中",
+      "passedWidgetCases": 2,
+      "nativeDeviceTest": false
+    }
+  }
 }

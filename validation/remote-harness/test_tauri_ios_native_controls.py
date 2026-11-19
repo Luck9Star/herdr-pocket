@@ -406,6 +406,7 @@ final class XCUIElement {
     var inputValue: String?
     var forcedReadback: String?
     var exists = false
+    var onTap: (() -> Void)?
     var descendantsByRole: [ElementType: [XCUIElement]] = [:]
     var identity: [String: String] = [:]
     func descendants(matching role: ElementType) -> Query {
@@ -414,7 +415,7 @@ final class XCUIElement {
     func coordinate(withNormalizedOffset: CGVector) -> XCUICoordinate {
         XCUICoordinate(element: self, offset: withNormalizedOffset)
     }
-    func tap() { taps += 1; directTaps += 1 }
+    func tap() { taps += 1; directTaps += 1; onTap?() }
     func waitForExistence(timeout: Double) -> Bool { true }
     func swipeDown() { }
     func swipeUp() { }
@@ -485,8 +486,9 @@ struct Query {
 struct App {
     let frame: CGRect
     let input = Element()
+    let keyboard = Element()
     var webViews: Query { Query() }
-    var keyboards: Query { Query() }
+    var keyboards: Query { Query(allElementsBoundByIndex: keyboard.exists ? [keyboard] : []) }
     func typeText(_ text: String) { input.typeText(text) }
 }
 struct ScreenShot { let pngRepresentation = Data([1]) }
@@ -575,10 +577,11 @@ final class Adapter {
         }
     }
     func nativeOcclusions() -> [CGRect] {
-        guard let observations = observations, !observations.occlusionSamples.isEmpty else { return blockers }
+        guard let observations = observations, !observations.occlusionSamples.isEmpty else { return blockers + keyboardFrames() }
         return observations.occlusionSamples.removeFirst()
     }
     func statusBarFrames() -> [CGRect] { blockers.filter { $0.minY == app.frame.minY } }
+    func phase(_ step: String) throws { nativePhase = "ordinary_" + step }
     func post(_ topic: String, _ payload: [String: Any]) throws { observations?.checkpoints.append((topic, payload)) }
     func role(_ type: XCUIElement.ElementType) -> String {
         if type == .secureTextField { return "secureTextField" }
@@ -622,6 +625,10 @@ final class Adapter {
         return LiveControl(snapshot: snapshot, hittable: live.hittable, element: live.element)
     }
     func liveControl(_ element: XCUIElement) -> LiveControl? {
+        if element === app.keyboard && element.exists {
+            let frame = CGRect(x: 0, y: app.frame.height - 284, width: app.frame.width, height: 284)
+            return LiveControl(snapshot: snapshot(.keyboard, frame: frame, label: ""), hittable: true, element: element)
+        }
         if element === current.element { return observations?.live(current) ?? current }
         return pathControls.values.first { $0.element === element }
     }
@@ -660,6 +667,14 @@ final class Adapter {
     func fillPort(_ text: String) throws { try fillForm("port", text) }
     func fillField(_ name: String, _ text: String) throws { try fillForm(name, text) }
     func tapProbe() throws { _ = try tapForm("probe") }
+    func exerciseActiveFlow(_ owner: RevealedControl) throws { try activeFlow(port: 2222, owner: owner) }
+    func exerciseActiveRoute(_ owner: RevealedControl, returning: Bool = false) throws {
+        _ = try activeRoute(from: returning ? .board : .terminal, to: returning ? .terminal : .board, port: 2222, owner: owner)
+    }
+    func activeScreenshot(_ owner: RevealedControl) throws {
+        mobileFlow = true
+        try screenshot("ordinary_terminal", port: 2222, activeOwner: owner)
+    }
     func terminalScreenshot() throws { try screenshot("ordinary_terminal", port: 2222) }
     func reviewScreenshot() throws { try screenshot("key_change_review", port: 2222, reviewPage: true) }
     func scope(_ item: Snapshot, _ rows: [Observed], _ page: Observed) throws -> NativeViewPolicy.Scope {
@@ -675,9 +690,9 @@ final class Adapter {
             "func mobileLiveControl(_ owner:", "func sameControlScope(_ lhs:",
             "func sameControlScope(_ scope:", "func mobileControl(_ anchor:", "func mobileBinding(_ anchor:",
             "func tapMobileButton(_ control:", "enum MobileWitnessObservation<Proof>", "func mobileWitness(_ targets:",
-            "func waitForMobileWitness<Proof>", "func mobileAuth(port:", "func mobilePassword(in rows:",
+            "func visibleWitness(_ rows:", "func waitForMobileWitness<Proof>", "func mobileAuth(port:", "func mobilePassword(in rows:",
             "func mobilePasswordObservation(in rows:",
-            "func controlGeometry(_ owner:", "func routeTabsOcclusion(_ owner:",
+            "func controlGeometry(_ owner:", "func controlVisibleFrame(_ owner:", "func routeTabsOcclusion(_ owner:",
             "func reportFormGeometry(_ failure:", "func failControlGeometry(_ failure:",
             "func tap(_ item:", "func fillPassword(_ item:",
             "func safeFrame(_ anchors:", "func captureDiagnostic(_ anchor:", "func exactObserved(_ rows:",
@@ -685,7 +700,8 @@ final class Adapter {
             "func waitForCaptureKeyboardToHide(reviewSample:", "func stableCaptureLayout(_ before:",
             "func terminalCaptureFrame(_ anchors:", "struct TerminalHeader {", "func terminalHeader(_ title:", "func screenshot(_ stage:",
             "func connectionRows(_ rows:", "func connectionStatus(_ rows:", "func submitConnection(_ attempt:",
-            "func fillForm(_ name:", "func pageScope(_ item:")) + r'''
+            "func fillForm(_ name:", "func pageScope(_ item:", "func keyboardFrames()", "func activePage(_ page:",
+            "func activeAction(_ action:", "func activeRoute(from source:", "func activeKeyboard(open:", "func activeFlow(port:")) + r'''
 }
 let screen = CGRect(x: 0, y: 0, width: 390, height: 844)
 let oldFrame = CGRect(x: 24, y: 430, width: 342, height: 42)
@@ -962,6 +978,144 @@ func checkPasswordAXAliases() throws {
 }
 do { try checkPasswordAXAliases() }
 catch let failure as Rejected { failures.append("verified WebKit mapping failed before completing the auth gate: \(failure.reason)") }
+func checkActiveFlow() throws {
+    let bar = CGRect(x: 0, y: 0, width: 390, height: 54)
+    let window = row(snapshot(.window, frame: screen, label: ""), path: [0])
+    let web = row(snapshot(.webView, frame: screen, label: ""), path: [0, 0])
+    let otherWeb = row(snapshot(.webView, frame: screen, label: ""), path: [0, 1], web: [0, 1])
+    let header = CGRect(x: 16, y: 64, width: 180, height: 44)
+    let button = CGRect(x: 296, y: 64, width: 78, height: 44)
+    let endpoint = CGRect(x: 85, y: 120, width: 180, height: 28)
+    let terminalTitle = row(snapshot(.staticText, frame: header, identifier: "ssh-active-title", label: "普通 SSH"), path: [0, 0, 1])
+    let terminalEndpoint = row(snapshot(.staticText, frame: endpoint, label: "fixture-target"), path: [0, 0, 2])
+    let status = row(snapshot(.staticText, frame: CGRect(x: 15, y: 120, width: 60, height: 28), label: "已连接"), path: [0, 0, 3])
+    let disconnect = row(snapshot(.button, frame: button, identifier: "ssh-disconnect", label: "断开连接"), path: [0, 0, 4])
+    let keyboardFrame = CGRect(x: 318, y: 113, width: 52, height: 44)
+    let open = row(snapshot(.button, frame: keyboardFrame, identifier: "ssh-focus", label: "打开键盘"), path: [0, 0, 5])
+    let close = row(snapshot(.button, frame: keyboardFrame, identifier: "ssh-hide-keyboard", label: "收起键盘"), path: [0, 0, 6])
+    let boardTitle = row(snapshot(.staticText, frame: header, label: "还没有主机"), path: [0, 0, 10])
+    let boardAction = row(snapshot(.button, frame: button, identifier: "host-empty-add", label: "添加主机"), path: [0, 0, 11])
+    let networkTitle = row(snapshot(.staticText, frame: header, label: "网络配置"), path: [0, 0, 12])
+    let networkAction = row(snapshot(.button, frame: button, label: "新增网络配置"), path: [0, 0, 13])
+    let settingsTitle = row(snapshot(.staticText, frame: header, label: "设置"), path: [0, 0, 14])
+    let settingsActive = row(snapshot(.group, frame: endpoint, identifier: "ssh-settings-active", label: ""), path: [0, 0, 15])
+    let settingsStatus = row(snapshot(.staticText, frame: endpoint, label: "普通 SSH 会话保持连接"), path: [0, 0, 15, 0])
+    let settingsEndpoint = row(snapshot(.staticText, frame: endpoint.offsetBy(dx: 0, dy: 38), label: "fixture-target"), path: [0, 0, 16])
+    let tabs = [("show-remote", "看板"), ("nav-terminal", "终端"), ("nav-network", "网络"), ("nav-settings", "设置")]
+        .enumerated().map { index, names in
+            row(snapshot(index == 2 ? .toggle : .button, frame: CGRect(x: index * 94, y: 780, width: 94, height: 48),
+                identifier: names.0, label: names.1), path: [0, 0, 20 + index])
+        }
+    let terminal = [window, web, terminalTitle, terminalEndpoint, status, disconnect]
+    let closed = terminal + [open] + tabs
+    let opened = terminal + [close]
+    let board = [window, web, boardTitle, boardAction] + tabs
+    let network = [window, web, networkTitle, networkAction] + tabs
+    let settings = [window, web, settingsTitle, settingsActive, settingsStatus, settingsEndpoint] + tabs
+
+    func fixture(_ samples: [[Observed]], badTab: String? = nil, autoFocus: Bool = false,
+                 helpers: [Observed] = []) -> (Adapter, Observations, RevealedControl, [Element]) {
+        let app = App(frame: screen)
+        let observations = Observations(samples)
+        let controls = [disconnect, open, close] + tabs + helpers
+        var bound: [[Int]: LiveControl] = [:]
+        var elements: [Element] = []
+        for control in controls {
+            let element = Element()
+            let raw = control.snapshot
+            element.identity = ["identifier": raw.identifier, "label": raw.label]
+            if raw.identifier == "ssh-focus" { element.onTap = { app.keyboard.exists = true } }
+            if raw.identifier == "ssh-hide-keyboard" { element.onTap = { app.keyboard.exists = false } }
+            if raw.identifier == "nav-terminal" && autoFocus { element.onTap = { app.keyboard.exists = true } }
+            let adjustedFrame = raw.identifier == badTab ? raw.frame.offsetBy(dx: 0, dy: -20) : raw.frame
+            let live = snapshot(raw.elementType, frame: adjustedFrame, identifier: raw.identifier, label: raw.label)
+            observations.webSurface.descendantsByRole[raw.elementType, default: []].append(element)
+            bound[control.path] = LiveControl(snapshot: live, hittable: true, element: element)
+            elements.append(element)
+        }
+        let anchor = bound[disconnect.path]!
+        let adapter = Adapter(app: app, current: anchor, rows: samples.last ?? closed, blockers: [bar],
+                              observations: observations, nativePhase: "ordinary_terminal_capture", pathControls: bound)
+        return (adapter, observations, RevealedControl(live: anchor, owner: disconnect, window: window, web: web), elements)
+    }
+    let (candidate, trace, owner, elements) = fixture(
+        [closed, opened, opened, closed, closed, board, board, closed, closed, network, network, closed,
+         closed, settings, settings, closed])
+    try candidate.exerciseActiveFlow(owner)
+    let steps = ["keyboard_opened", "keyboard_closed", "board", "terminal_from_board", "network",
+                 "terminal_from_network", "settings", "terminal_from_settings"]
+    check(trace.checkpoints.map { $0.0 } == Array(repeating: "ordinary_active", count: 8) &&
+          trace.checkpoints.compactMap { $0.1["step"] as? String } == steps &&
+          trace.checkpoints.compactMap { $0.1["keyboardVisible"] as? Bool } == [true] + Array(repeating: false, count: 7) &&
+          elements.map(\.directTaps) == [0, 1, 1, 1, 3, 1, 1] &&
+          elements.allSatisfy { $0.inputs.isEmpty && $0.drags.isEmpty } && candidate.app.input.inputs.isEmpty,
+          "all six route legs and both keyboard transitions must use their unique verified native controls without input")
+
+    let wrongTarget = row(snapshot(.staticText, frame: endpoint, identifier: "ssh-live-endpoint", label: "other-target"),
+                          path: terminalEndpoint.path)
+    let foreignBoard = [window, web, otherWeb] + [boardTitle, boardAction].map {
+        row($0.snapshot, path: [0, 1, $0.path.last!], web: [0, 1])
+    } + tabs
+    let duplicateBoardTab = row(tabs[0].snapshot, path: [0, 0, 24])
+    let obscuredTab = row(snapshot(.button, frame: CGRect(x: 15, y: 32, width: 70, height: 42),
+                          identifier: "show-remote", label: "看板"), path: tabs[0].path)
+    let oldTerminal = [window, web, row(snapshot(.staticText, frame: header, label: "普通 SSH 终端")),
+                       row(snapshot(.staticText, frame: endpoint, label: "fixture-target · SSH 已连接"), path: [0, 0, 2])] + tabs
+    let failuresToTry: [([[Observed]], String?, Int, String)] = [
+        ([closed.map { $0.path == terminalEndpoint.path ? wrongTarget : $0 }], nil, 0, "native_mobile_setup_unproven"),
+        ([oldTerminal], nil, 0, "native_mobile_setup_unproven"),
+        ([closed + [duplicateBoardTab]], nil, 0, "native_active_action_unproven"),
+        ([closed.map { $0.path == tabs[0].path ? obscuredTab : $0 }], nil, 0, "native_active_action_unproven"),
+        ([closed], "show-remote", 0, "native_active_action_unproven"),
+        ([closed, foreignBoard], nil, 1, "native_active_owner_unproven"),
+        ([closed, board + [disconnect]], nil, 1, "native_active_page_unproven"),
+    ]
+    for (samples, badTab, allowedTaps, code) in failuresToTry {
+        let (invalid, trace, owner, elements) = fixture(samples, badTab: badTab)
+        do { try invalid.exerciseActiveRoute(owner); failures.append("unsafe active flow accepted: \(code)") }
+        catch let failure as Rejected { check(failure.reason == code, "unexpected active flow verdict: \(failure.reason)") }
+        check(elements.map(\.directTaps).reduce(0, +) == allowedTaps && trace.checkpoints.isEmpty &&
+              invalid.app.input.inputs.isEmpty, "reject the disputed view without extra taps, input, or evidence")
+    }
+
+    let (focused, focusedTrace, focusedOwner, focusedElements) = fixture([board, closed], autoFocus: true)
+    do { try focused.exerciseActiveRoute(focusedOwner, returning: true); failures.append("automatic keyboard focus accepted") }
+    catch let failure as Rejected { check(failure.reason == "native_terminal_keyboard_visible", "return must preserve closed keyboard") }
+    check(focusedElements[4].directTaps == 1 && focused.app.input.inputs.isEmpty && focusedTrace.checkpoints.isEmpty,
+          "an unexpected keyboard after a real return cannot yield evidence or input")
+
+    let helpers = ["Esc", "Tab", "上方向键", "下方向键"].enumerated().map { index, label in
+        row(snapshot(.button, frame: CGRect(x: 16 + index * 48, y: 700, width: 44, height: 44), label: label),
+            path: [0, 0, 30 + index])
+    }
+    let ready = closed + helpers
+    let (capture, captureTrace, captureOwner, captureElements) = fixture([ready, ready, ready], helpers: helpers)
+    try capture.activeScreenshot(captureOwner)
+    let shot = captureTrace.checkpoints.first { $0.0 == "ordinary_terminal" }?.1
+    let compact = shot?["activeHeaderBounds"] as? [String: Any]
+    let controls = shot?["controlBounds"] as? [String: Any]
+    check(shot?["boundSource"] as? String == "terminal_control_bounds" &&
+          shot?["terminalFrame"] as? [Double] == [0, 157, 390, 543] &&
+          compact?["disconnectHittable"] as? Bool == true && controls?["keyboardFrame"] as? [Double] == [318, 113, 52, 44] &&
+          captureElements.allSatisfy { $0.taps == 0 && $0.drags.isEmpty } && capture.app.input.inputs.isEmpty,
+          "the current header and same-row endpoint/keyboard control bound the actual screenshot crop without interaction")
+
+    let reordered = row(snapshot(.staticText, frame: CGRect(x: 85, y: 102, width: 180, height: 46),
+                         identifier: "ssh-live-endpoint", label: "fixture-target"), path: terminalEndpoint.path)
+    let shiftedHeader = row(snapshot(.staticText, frame: header.offsetBy(dx: 0, dy: 1),
+                            identifier: "ssh-active-title", label: "普通 SSH"), path: terminalTitle.path)
+    let changed = ready.map { $0.path == terminalTitle.path ? shiftedHeader : $0 }
+    let aliased = ready.map { $0.path == terminalEndpoint.path ? reordered : $0 }
+    for (samples, reason) in [([ready, ready, changed], "native_capture_geometry_changed"),
+                              ([aliased], "native_terminal_header_unproven")] {
+        let (unstable, trace, owner, _) = fixture(samples, helpers: helpers)
+        do { try unstable.activeScreenshot(owner); failures.append("unproven compact capture exported") }
+        catch let failure as Rejected { check(failure.reason == reason, "unexpected compact capture verdict: \(failure.reason)") }
+        check(!trace.checkpoints.contains { $0.0 == "ordinary_terminal" }, "unstable or overlapping compact capture must not be published")
+    }
+}
+do { try checkActiveFlow() }
+catch let failure as Rejected { failures.append("valid active flow failed: \(failure.reason)") }
 func expectTap(_ frame: CGRect, treeFrame: CGRect? = nil, blockers: [CGRect],
                appFrame: CGRect = screen, windowFrame: CGRect = screen, webAncestors: [CGRect] = [screen],
                hittable: Bool = true, diagnostic: String? = nil, samples: Int = 1, reason: String) {

@@ -154,12 +154,21 @@ enum NativeFramePolicy {
         return CGRect(x: safe.minX, y: dismiss.maxY, width: safe.width, height: top - dismiss.maxY)
     }
 
-    static func terminalControlScroll(target: CGRect, dismiss: CGRect, helpers: [CGRect], safe: CGRect) -> ScrollDirection? {
+    static func terminalTargetBeforeKeyboard(_ target: CGRect, _ keyboard: CGRect, compact: Bool) -> Bool {
+        if !compact { return target.maxY <= keyboard.minY }
+        return target.maxX <= keyboard.minX && max(target.minY, keyboard.minY) < min(target.maxY, keyboard.maxY)
+            && target.maxY <= keyboard.maxY
+    }
+
+    static func terminalControlScroll(target: CGRect, dismiss: CGRect, helpers: [CGRect], safe: CGRect,
+                                      compact: Bool = false) -> ScrollDirection? {
         let anchors = [target, dismiss] + helpers
         guard anchors.allSatisfy({ valid($0) && $0.minX >= safe.minX && $0.maxX <= safe.maxX }) else { return nil }
         let frame = anchors.reduce(CGRect.null) { $0.union($1) }
         guard frame.height <= safe.height else { return nil }
-        let down = frame.minY < safe.minY || target.maxY > dismiss.minY
+        let ordered = terminalTargetBeforeKeyboard(target, dismiss, compact: compact)
+        if compact && !ordered { return nil }
+        let down = frame.minY < safe.minY || !ordered
         let up = frame.maxY > safe.maxY
         guard down != up else { return nil }
         return down ? .swipeDown : .swipeUp
@@ -196,6 +205,31 @@ enum NativeConnectPolicy {
         ["status": status.rawValue, "keyboardVisible": keyboardVisible,
          "submitFrame": NativeFramePolicy.diagnosticRect(submitFrame),
          "submitEnabled": submitEnabled, "submitHittable": submitHittable]
+    }
+}
+
+enum NativeActivePage {
+    case terminal, board, network, settings
+
+    var routeAction: (String, String) {
+        switch self {
+        case .terminal: return ("nav-terminal", "终端")
+        case .board: return ("show-remote", "看板")
+        case .network: return ("nav-network", "网络")
+        case .settings: return ("nav-settings", "设置")
+        }
+    }
+
+    func witnesses(endpoint: String) -> [(String?, String, Bool)] {
+        switch self {
+        case .terminal: return [("ssh-active-title", "普通 SSH", false), ("ssh-live-endpoint", endpoint, false),
+                                (nil, "已连接", false), ("ssh-disconnect", "断开连接", true)]
+        case .board: return [(nil, "还没有主机", false), ("host-empty-add", "添加主机", true)]
+        // The phone tab opens the configuration panel and hides the launcher.
+        case .network: return [(nil, "网络配置", false), (nil, "新增网络配置", true)]
+        case .settings: return [(nil, "设置", false), ("ssh-settings-active", "普通 SSH 会话保持连接", false),
+                                ("ssh-settings-endpoint", endpoint, false)]
+        }
     }
 }
 enum NativeHomeReadiness {
@@ -588,6 +622,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     private struct CaptureAnchors {
         let nodes: [Observed]
         let usesControls: Bool
+        var activeHeader: [Observed]? = nil
 
         var frames: [CGRect] { nodes.map { $0.snapshot.frame } }
 
@@ -597,13 +632,15 @@ final class TauriDirectSSHUITests: XCTestCase {
 
         func visibleOutput(in safe: CGRect) -> CGRect? {
             guard let output = output(in: safe) else { return nil }
-            if usesControls && (!frames.allSatisfy(safe.contains) || frames[0].maxY > frames[1].minY) { return nil }
+            if usesControls && (!frames.allSatisfy(safe.contains) ||
+                !NativeFramePolicy.terminalTargetBeforeKeyboard(frames[0], frames[1], compact: activeHeader != nil)) { return nil }
             return NativeFramePolicy.terminalCrop(target: frames[0], output: output, safe: safe)
         }
 
         func direction(in safe: CGRect) -> NativeFramePolicy.ScrollDirection? {
             usesControls ? NativeFramePolicy.terminalControlScroll(target: frames[0], dismiss: frames[1],
-                helpers: Array(frames.dropFirst(2)), safe: safe) : NativeFramePolicy.terminalScroll(target: frames[0], output: frames[1], safe: safe)
+                helpers: Array(frames.dropFirst(2)), safe: safe, compact: activeHeader != nil) :
+                NativeFramePolicy.terminalScroll(target: frames[0], output: frames[1], safe: safe)
         }
     }
 
@@ -1259,6 +1296,22 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
+    private func visibleWitness(_ rows: [Observed], _ targets: [(String?, String, Bool)], includeOffscreenText: Bool = false) -> [Observed]? {
+        let displayed = rows.filter { NativeFramePolicy.valid($0.snapshot.frame) &&
+            (includeOffscreenText || $0.snapshot.frame.intersects(app.frame) || $0.snapshot.elementType == .button) }
+        let facts = displayed.map { row in
+            let snapshot = row.snapshot
+            let label = texts(snapshot).first(where: { !$0.isEmpty }) ?? ""
+            // The active settings status can wrap its sole static text leaf.
+            let statusGroup = snapshot.identifier == "ssh-settings-active" && snapshot.elementType == .group
+            return NativeControlPolicy.Fact(identifier: snapshot.identifier,
+                label: NativeControlPolicy.fingerprintText(label), role: statusGroup ? "other" : role(snapshot.elementType), value: nil)
+        }
+        return NativeControlPolicy.pageWitness(facts, paths: displayed.map(\.path), windows: displayed.map(\.windowPath),
+            webs: displayed.map(\.webPath), targets: targets)?.map { displayed[$0] }
+    }
+
+    @MainActor
     private func waitForMobileWitness<Proof>(_ targets: [(String?, String, Bool)], includeOffscreenText: Bool,
                                     prove: ([Observed], [Observed]) throws -> MobileWitnessObservation<Proof>) throws -> Proof {
         let deadline = Date().addingTimeInterval(20)
@@ -1266,16 +1319,8 @@ final class TauriDirectSSHUITests: XCTestCase {
         var pendingObservation: (() -> [String: Any])?
         repeat {
             let rows = try observedNodes()
-            let displayed = rows.filter { NativeFramePolicy.valid($0.snapshot.frame) &&
-                (includeOffscreenText || $0.snapshot.frame.intersects(app.frame) || $0.snapshot.elementType == .button) }
-            let facts = displayed.map { row in
-                let label = texts(row.snapshot).first(where: { !$0.isEmpty }) ?? ""
-                return NativeControlPolicy.Fact(identifier: row.snapshot.identifier,
-                    label: NativeControlPolicy.fingerprintText(label), role: role(row.snapshot.elementType), value: nil)
-            }
-            if let matches = NativeControlPolicy.pageWitness(facts, paths: displayed.map(\.path),
-                windows: displayed.map(\.windowPath), webs: displayed.map(\.webPath), targets: targets) {
-                switch try prove(rows, matches.map { displayed[$0] }) {
+            if let matches = visibleWitness(rows, targets, includeOffscreenText: includeOffscreenText) {
+                switch try prove(rows, matches) {
                 case .ready(let proof): return proof
                 case .pending(let reason, let observe):
                     pending = reason
@@ -1602,9 +1647,14 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
+    private func keyboardFrames() -> [CGRect] {
+        app.keyboards.allElementsBoundByIndex.compactMap { liveControl($0)?.snapshot.frame }
+            .filter { NativeFramePolicy.valid($0.intersection(app.frame)) }
+    }
+
+    @MainActor
     private func nativeOcclusions() -> [CGRect] {
-        NativeFramePolicy.unique(statusBarFrames() + app.keyboards.allElementsBoundByIndex
-            .compactMap { liveControl($0)?.snapshot.frame }.filter(NativeFramePolicy.valid))
+        NativeFramePolicy.unique(statusBarFrames() + keyboardFrames())
     }
 
     @MainActor
@@ -1724,11 +1774,12 @@ final class TauriDirectSSHUITests: XCTestCase {
     private func terminalBoundaryControls(_ title: Observed, _ rows: [Observed]) throws -> [Observed] {
         // These controls are adjacent to xterm in the real connected page.
         // They bound a candidate strip and are never tapped to capture it.
-        let labels = [["收起键盘"], ["Esc"], ["Tab"], ["上方向键", "↑"], ["下方向键", "↓"]]
+        let keyboard = mobileFlow ? ("ssh-focus", "打开键盘") : ("ssh-hide-keyboard", "收起键盘")
+        let labels = [[keyboard.1], ["Esc"], ["Tab"], ["上方向键", "↑"], ["下方向键", "↓"]]
         var controls: [Observed] = []
         for (index, aliases) in labels.enumerated() {
             let matches = rows.filter { row in
-                (index == 0 && row.snapshot.identifier == "ssh-hide-keyboard") ||
+                (index == 0 && row.snapshot.identifier == keyboard.0) ||
                     (row.snapshot.elementType == .button && aliases.contains(row.snapshot.label))
             }
             if matches.count != 1 {
@@ -1766,7 +1817,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func waitForCaptureKeyboardToHide(reviewSample: String? = nil) throws {
+    private func waitForCaptureKeyboardToHide(reviewSample: String? = nil, reportDiagnostic: Bool = true) throws {
         let end = Date().addingTimeInterval(8)
         repeat {
             if !app.keyboards.firstMatch.exists {
@@ -1775,7 +1826,9 @@ final class TauriDirectSSHUITests: XCTestCase {
             }
             Thread.sleep(forTimeInterval: 0.15)
         } while Date() < end
-        try captureDiagnostic(reviewSample == nil ? "keyboard" : "review_title", "keyboard_visible", [], [], reviewSample: reviewSample)
+        if reportDiagnostic {
+            try captureDiagnostic(reviewSample == nil ? "keyboard" : "review_title", "keyboard_visible", [], [], reviewSample: reviewSample)
+        }
         try require(false, "native_terminal_keyboard_visible")
     }
 
@@ -1800,11 +1853,30 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func terminalHeader(_ title: Observed, _ rows: [Observed], safe: CGRect) throws -> TerminalHeader {
+    private func terminalHeader(_ title: Observed, _ rows: [Observed], safe: CGRect,
+                                active: [Observed]? = nil) throws -> TerminalHeader {
         let bars = statusBarFrames()
         if !NativeFramePolicy.headerStatusBarsValid(bars, screen: app.frame) {
             try captureDiagnostic("status_bar", bars.isEmpty ? "not_found" : "frame_invalid", [], rows, visible: safe)
             try require(false, "native_terminal_header_unproven")
+        }
+        if let active {
+            let heading = active[0], disconnect = active[1]
+            let h = heading.snapshot.frame, d = disconnect.snapshot.frame
+            let ordered = h.maxX <= d.minX && max(h.minY, d.minY) < min(h.maxY, d.maxY) && max(h.maxY, d.maxY) <= title.snapshot.frame.minY
+            if !ordered || !active.allSatisfy({ node in
+                node.windowPath == title.windowPath && node.webPath == title.webPath &&
+                    NativeFramePolicy.headerFrameClear(node.snapshot.frame, safe: safe, statusBars: bars)
+            }) {
+                try captureDiagnostic("terminal_heading", "outside_safe_frame", active, rows, visible: safe)
+                try require(false, "native_terminal_header_unproven")
+            }
+            let bound = try mobileControl(disconnect, rows, "native_terminal_header_unproven")
+            if !bound.live.hittable || !bound.live.snapshot.isEnabled {
+                try captureDiagnostic("header_disconnect", "outside_safe_frame", [disconnect], rows, visible: safe)
+                try require(false, "native_terminal_header_unproven")
+            }
+            return TerminalHeader(nodes: active, statusBars: bars, bottom: max(h.maxY, d.maxY))
         }
         let brand = try exactObserved(rows, "Herdr Pocket", captureAnchor: "header_brand", requireVisible: false)
         let add = try exactObserved(rows, "＋ 添加主机", identifiers: ["host-open-remote"], control: true,
@@ -1853,7 +1925,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func screenshot(_ stage: String, port: Int, reviewPage: Bool = false) throws {
+    private func screenshot(_ stage: String, port: Int, reviewPage: Bool = false, activeOwner: RevealedControl? = nil) throws {
         let reviewMembers = [("review_title", []), ("review_blocked", []),
             ("review_old_fingerprint", ["ssh-key-change-old"]), ("review_new_fingerprint", ["ssh-key-change-new"]),
             ("review_target", [mobileFlow ? "ssh-key-change-endpoint" : "ssh-key-change-target"]),
@@ -1870,13 +1942,27 @@ final class TauriDirectSSHUITests: XCTestCase {
                 }
                 return CaptureAnchors(nodes: resolved, usesControls: false)
             }
-            let title = try exactObserved(source, labels[0], captureAnchor: "target", requireVisible: false)
+            let title: Observed
+            var activeHeader: [Observed]?
+            if mobileFlow {
+                guard let activeOwner,
+                      let page = visibleWitness(source, NativeActivePage.terminal.witnesses(endpoint: target(port))),
+                      let scope = controlScope(page[1], source), sameControlScope(scope, activeOwner) else {
+                    try captureDiagnostic("target", "owner_unproven", [], source)
+                    try require(false, "native_active_page_unproven")
+                    throw NSError(domain: "native_active_page_unproven", code: 1)
+                }
+                title = page[1]
+                activeHeader = [page[0], page[3]]
+            } else {
+                title = try exactObserved(source, labels[0], captureAnchor: "target", requireVisible: false)
+            }
             if source.contains(where: { $0.snapshot.identifier == "ssh-terminal-output" || texts($0.snapshot).contains(labels[1]) }) {
                 let output = try exactObserved(source, labels[1], identifiers: ["ssh-terminal-output"], control: true,
                     captureAnchor: "terminal", requireVisible: false)
-                return CaptureAnchors(nodes: [title, output], usesControls: false)
+                return CaptureAnchors(nodes: [title, output], usesControls: false, activeHeader: activeHeader)
             }
-            return CaptureAnchors(nodes: [title] + (try terminalBoundaryControls(title, source)), usesControls: true)
+            return CaptureAnchors(nodes: [title] + (try terminalBoundaryControls(title, source)), usesControls: true, activeHeader: activeHeader)
         }
         if reviewPage { try waitForCaptureKeyboardToHide(reviewSample: "before") }
         var tree = try observedNodes()
@@ -1943,11 +2029,17 @@ final class TauriDirectSSHUITests: XCTestCase {
             try assertReviewActions(owner, tree, Set(labels.suffix(2)), reviewSample: "before")
             extra["reviewFrames"] = frames.map(rect)
         } else {
-            let verified = try terminalHeader(owner, tree, safe: safe)
+            let verified = try terminalHeader(owner, tree, safe: safe, active: selected.activeHeader)
             header = verified
-            extra["headerBounds"] = ["brandFrame": rect(verified.nodes[0].snapshot.frame),
-                "addFrame": rect(verified.nodes[1].snapshot.frame), "headingFrame": rect(verified.nodes[2].snapshot.frame),
-                "headerBottom": Double(verified.bottom), "statusBarFrames": verified.statusBars.map(rect), "sameOwner": true]
+            if selected.activeHeader != nil {
+                extra["activeHeaderBounds"] = ["titleFrame": rect(verified.nodes[0].snapshot.frame),
+                    "disconnectFrame": rect(verified.nodes[1].snapshot.frame), "statusBarFrames": verified.statusBars.map(rect),
+                    "sameOwner": true, "disconnectHittable": true]
+            } else {
+                extra["headerBounds"] = ["brandFrame": rect(verified.nodes[0].snapshot.frame),
+                    "addFrame": rect(verified.nodes[1].snapshot.frame), "headingFrame": rect(verified.nodes[2].snapshot.frame),
+                    "headerBottom": Double(verified.bottom), "statusBarFrames": verified.statusBars.map(rect), "sameOwner": true]
+            }
             try require(safe.contains(frames[0]) && !frames[0].isEmpty, "native_target_clipped")
             guard let crop = selected.visibleOutput(in: safe) else {
                 try require(false, "native_terminal_frame_invalid")
@@ -1957,7 +2049,8 @@ final class TauriDirectSSHUITests: XCTestCase {
             extra["boundSource"] = selected.usesControls ? "terminal_control_bounds" : "native_region"
             if selected.usesControls {
                 try verifyCaptureControls(selected, tree, safe)
-                extra["controlBounds"] = ["dismissFrame": rect(frames[1]), "helperFrames": frames.dropFirst(2).map(rect), "sameOwner": true]
+                let keyboardKey = selected.activeHeader == nil ? "dismissFrame" : "keyboardFrame"
+                extra["controlBounds"] = [keyboardKey: rect(frames[1]), "helperFrames": frames.dropFirst(2).map(rect), "sameOwner": true]
             }
         }
         let screenFrame = app.frame
@@ -1991,7 +2084,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         }
         try require(unchanged, "native_capture_geometry_changed")
         if let header = header {
-            let rechecked = try terminalHeader(after.nodes[0], afterTree, safe: afterSafe)
+            let rechecked = try terminalHeader(after.nodes[0], afterTree, safe: afterSafe, active: after.activeHeader)
             if Set(header.statusBars.map(rect)) != Set(rechecked.statusBars.map(rect)) {
                 try captureDiagnostic("status_bar", "layout_unstable", [], afterTree, visible: afterSafe)
                 try require(false, "native_capture_geometry_changed")
@@ -1999,8 +2092,9 @@ final class TauriDirectSSHUITests: XCTestCase {
             if header.bottom != rechecked.bottom || !stableCaptureLayout(header.nodes, rechecked.nodes) {
                 let index = rechecked.nodes.indices.first {
                     !stableCaptureLayout([header.nodes[$0]], [rechecked.nodes[$0]])
-                } ?? 2
-                try captureDiagnostic(["header_brand", "header_add", "terminal_heading"][index], "layout_unstable",
+                } ?? rechecked.nodes.count - 1
+                let members = after.activeHeader == nil ? ["header_brand", "header_add", "terminal_heading"] : ["terminal_heading", "header_disconnect"]
+                try captureDiagnostic(members[index], "layout_unstable",
                     [rechecked.nodes[index]], afterTree, visible: afterSafe)
                 try require(false, "native_capture_geometry_changed")
             }
@@ -2376,7 +2470,8 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func submitConnection(_ attempt: NativeConnectPolicy.Attempt, waitingFor expected: String, control: RevealedControl? = nil) throws {
+    private func submitConnection(_ attempt: NativeConnectPolicy.Attempt, waitingFor expected: String, control: RevealedControl? = nil,
+                                  activePort: Int? = nil) throws {
         try require(!mobileFlow || control != nil, "native_mobile_submit_owner_unproven")
         let ownerFailure = control == nil ? nil : "native_mobile_submit_owner_unproven"
         let submit = try reveal(control?.live.element ?? button("连接 / 重新连接"), matching: control,
@@ -2400,7 +2495,9 @@ final class TauriDirectSSHUITests: XCTestCase {
         var rows: [Observed]
         repeat {
             rows = connectionRows(try observedNodes(), in: submit)
-            if rows.contains(where: { texts($0.snapshot).contains { $0.contains(expected) } }) { return }
+            if let activePort {
+                if visibleWitness(rows, NativeActivePage.terminal.witnesses(endpoint: target(activePort))) != nil { return }
+            } else if rows.contains(where: { texts($0.snapshot).contains { $0.contains(expected) } }) { return }
             status = connectionStatus(rows)
             if !statuses.contains(status.rawValue) { statuses.append(status.rawValue) }
             Thread.sleep(forTimeInterval: 0.25)
@@ -2416,7 +2513,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func connect(password secret: String, mobileOwner: RevealedControl?) throws {
+    private func connect(password secret: String, mobileOwner: RevealedControl?) throws -> RevealedControl? {
         try phase("password")
         let port = config[scenario == "ordinary" ? "ordinaryPort" : "rotationPort"] as! Int
         try fillPassword(mobileOwner?.live.element ?? password(), secret, mobileOwner: mobileOwner)
@@ -2424,16 +2521,144 @@ final class TauriDirectSSHUITests: XCTestCase {
         let control = try mobileOwner.map { try mobileAuth(port: port, ready: true, previous: $0).submit }
         try phase("connect")
         try submitConnection(scenario == "ordinary" ? .ordinary : .rotationApproved,
-            waitingFor: target(port) + " · SSH 已连接", control: control)
+            waitingFor: target(port) + " · SSH 已连接", control: control, activePort: mobileFlow ? port : nil)
+        if let control, mobileFlow {
+            let (rows, anchors) = try activePage(.terminal, port: port, owner: control)
+            return try mobileControl(anchors[3], rows, "native_active_owner_unproven")
+        }
         let rows = try observedNodes()
         let page = try exactObserved(rows, target(port) + " · SSH 已连接")
         try assertCredentialsInactive(page, rows)
+        return nil
     }
 
     @MainActor
-    private func terminal(_ stage: String, port: Int) throws {
+    private func activePage(_ page: NativeActivePage, port: Int, owner: RevealedControl,
+                            keyboardAction: (String, String)? = nil) throws -> ([Observed], [Observed]) {
+        var expected = page.witnesses(endpoint: target(port))
+        if let keyboardAction { expected.append((keyboardAction.0, keyboardAction.1, true)) }
+        let (rows, anchors) = try mobileWitness(expected)
+        guard let scope = controlScope(anchors[0], rows), sameControlScope(scope, owner) else {
+            try require(false, "native_active_owner_unproven")
+            throw NSError(domain: "native_active_owner_unproven", code: 1)
+        }
+        let visible = try safeFrame(anchors)
+        try require(anchors.allSatisfy { visible.contains($0.snapshot.frame) }, "native_active_page_unproven")
+        if page != .terminal {
+            let activeButtons = Set(["ssh-focus", "ssh-hide-keyboard", "ssh-disconnect"])
+            let activeLabels = Set(["打开键盘", "收起键盘", "断开连接"])
+            try require(!rows.contains { item in
+                item.webPath == scope.web.path && item.snapshot.elementType == .button &&
+                    (activeButtons.contains(item.snapshot.identifier) || activeLabels.contains(item.snapshot.label)) &&
+                    NativeFramePolicy.valid(item.snapshot.frame.intersection(visible))
+            }, "native_active_page_unproven")
+        }
+        try assertNoSecret(rows.map { $0.snapshot })
+        try assertCredentialsInactive(anchors[0], rows)
+        return (rows, anchors)
+    }
+
+    @MainActor
+    private func activeAction(_ action: (String, String), rows: [Observed], owner: RevealedControl,
+                              route: Bool = false) throws -> (element: XCUIElement, geometry: [String: Any]) {
+        let (identifier, label) = action
+        let roles: Set<XCUIElement.ElementType> = route ? [.button, .checkBox, .switch, .toggle] : [.button]
+        let identified = rows.filter { $0.snapshot.identifier == identifier }
+        let candidates = identified.isEmpty ? rows.filter {
+            let snapshot = $0.snapshot
+            return roles.contains(snapshot.elementType) && snapshot.label == label &&
+                (snapshot.identifier.isEmpty || snapshot.identifier == label)
+        } : identified
+        guard candidates.count == 1, let candidate = candidates.first,
+              roles.contains(candidate.snapshot.elementType), candidate.snapshot.label == label,
+              candidate.snapshot.isEnabled, let scope = controlScope(candidate, rows), sameControlScope(scope, owner),
+              liveOnPath(scope.window) != nil, let web = liveOnPath(scope.web) else {
+            try require(false, "native_active_action_unproven")
+            throw NSError(domain: "native_active_action_unproven", code: 1)
+        }
+        let predicate = NSPredicate(format: "identifier == %@ OR label == %@", identifier, label)
+        let query = web.element.descendants(matching: candidate.snapshot.elementType).matching(predicate)
+        guard query.count == 1, let live = liveControl(query.firstMatch), live.snapshot.isEnabled,
+              sameIdentity(candidate.snapshot, live.snapshot), candidate.snapshot.frame == live.snapshot.frame,
+              let visible = controlVisibleFrame(candidate, live) else {
+            try require(false, "native_active_action_unproven")
+            throw NSError(domain: "native_active_action_unproven", code: 1)
+        }
+        let frame = live.snapshot.frame
+        let bars = statusBarFrames()
+        let geometry = controlGeometry(candidate, [live]) { viewport, _ in
+            route ? nil : self.routeTabsOcclusion(candidate, rows, viewport, [frame], scrolling: false)
+        }
+        try require(geometry.failure == nil && live.hittable && NativeFramePolicy.headerStatusBarsValid(bars, screen: app.frame) &&
+                    NativeFramePolicy.headerFrameClear(frame, safe: visible, statusBars: bars), "native_active_action_unproven")
+        return (live.element, ["frame": rect(frame), "visibleFrame": rect(visible), "screenFrame": rect(app.frame),
+            "statusBarFrames": bars.map(rect), "role": role(live.snapshot.elementType), "enabled": live.snapshot.isEnabled,
+            "hittable": live.hittable, "ownerResolved": true, "centerVisible": visible.contains(CGPoint(x: frame.midX, y: frame.midY)),
+            "fullyVisible": visible.contains(frame)])
+    }
+
+    @MainActor
+    private func activeKeyboard(open: Bool, port: Int, owner: RevealedControl) throws -> [String: Any] {
+        try require(app.keyboards.firstMatch.exists != open && (!keyboardFrames().isEmpty) != open,
+                    "native_active_action_unproven")
+        let show = ("ssh-focus", "打开键盘"), hide = ("ssh-hide-keyboard", "收起键盘")
+        let (before, _) = try activePage(.terminal, port: port, owner: owner, keyboardAction: open ? show : hide)
+        let action = try activeAction(open ? show : hide, rows: before, owner: owner)
+        action.element.tap()
+        if open {
+            try require(app.keyboards.firstMatch.waitForExistence(timeout: 10), "native_terminal_keyboard_missing")
+        } else { try waitForCaptureKeyboardToHide(reportDiagnostic: false) }
+        let (after, _) = try activePage(.terminal, port: port, owner: owner, keyboardAction: open ? hide : show)
+        _ = try activeAction(open ? hide : show, rows: after, owner: owner)
+        try require(app.keyboards.firstMatch.exists == open && (!keyboardFrames().isEmpty) == open,
+                    "native_active_action_unproven")
+        return action.geometry
+    }
+
+    @MainActor
+    private func activeRoute(from source: NativeActivePage, to destination: NativeActivePage,
+                             port: Int, owner: RevealedControl) throws -> [String: Any] {
+        let (before, _) = try activePage(source, port: port, owner: owner)
+        try require(!app.keyboards.firstMatch.exists, "native_terminal_keyboard_visible")
+        let action = try activeAction(destination.routeAction, rows: before, owner: owner, route: true)
+        action.element.tap()
+        let (after, _) = try activePage(destination, port: port, owner: owner,
+            keyboardAction: destination == .terminal ? ("ssh-focus", "打开键盘") : nil)
+        try require(!app.keyboards.firstMatch.exists, "native_terminal_keyboard_visible")
+        if destination == .terminal { _ = try activeAction(("ssh-focus", "打开键盘"), rows: after, owner: owner) }
+        return action.geometry
+    }
+
+    @MainActor
+    private func activeFlow(port: Int, owner: RevealedControl) throws {
+        try phase("active_flow")
+        try waitForCaptureKeyboardToHide(reportDiagnostic: false)
+        func record(_ step: String, _ action: [String: Any]) throws {
+            try post("ordinary_active", ["step": step, "keyboardVisible": app.keyboards.firstMatch.exists, "action": action])
+        }
+        try record("keyboard_opened", activeKeyboard(open: true, port: port, owner: owner))
+        try record("keyboard_closed", activeKeyboard(open: false, port: port, owner: owner))
+        let routes: [(NativeActivePage, String, String)] = [(.board, "board", "terminal_from_board"),
+            (.network, "network", "terminal_from_network"), (.settings, "settings", "terminal_from_settings")]
+        for (destination, away, returned) in routes {
+            try record(away, activeRoute(from: .terminal, to: destination, port: port, owner: owner))
+            try record(returned, activeRoute(from: destination, to: .terminal, port: port, owner: owner))
+        }
+    }
+
+    @MainActor
+    private func terminal(_ stage: String, port: Int, owner: RevealedControl?) throws {
+        if stage == "ordinary" {
+            guard let owner, mobileFlow else {
+                try require(false, "native_active_owner_unproven")
+                throw NSError(domain: "native_active_owner_unproven", code: 1)
+            }
+            try activeFlow(port: port, owner: owner)
+        }
         try phase("terminal_focus")
-        try tap(button("打开键盘"))
+        if stage == "key_change" { try waitForCaptureKeyboardToHide(reportDiagnostic: false) }
+        if let owner { _ = try activeKeyboard(open: true, port: port, owner: owner) }
+        else { try tap(button("打开键盘")) }
         try require(app.keyboards.firstMatch.waitForExistence(timeout: 10), "native_terminal_keyboard_missing")
         // Exactly one UI typing operation. Checkpoints/OCR never replay it.
         try phase("terminal_input")
@@ -2442,12 +2667,18 @@ final class TauriDirectSSHUITests: XCTestCase {
         // Only wait for server output to render; no client buffers are used as proof.
         Thread.sleep(forTimeInterval: 2)
         try phase("terminal_capture")
-        if app.keyboards.firstMatch.exists { try tap(button("收起键盘")) }
+        if app.keyboards.firstMatch.exists {
+            if let owner { _ = try activeKeyboard(open: false, port: port, owner: owner) }
+            else { try tap(button("收起键盘")) }
+        }
         try waitForCaptureKeyboardToHide()
-        try screenshot(stage + "_terminal", port: port)
+        try screenshot(stage + "_terminal", port: port, activeOwner: owner)
         try phase("disconnect")
         try post(stage + "_disconnect_attempt")
-        try tap(button("断开连接"))
+        if let owner {
+            let (rows, _) = try activePage(.terminal, port: port, owner: owner)
+            try activeAction(("ssh-disconnect", "断开连接"), rows: rows, owner: owner).element.tap()
+        } else { try tap(button("断开连接")) }
         if mobileFlow { try mobileDisconnected() } else { try waitText("已断开") }
         try post(stage + "_disconnected")
     }
@@ -2471,8 +2702,8 @@ final class TauriDirectSSHUITests: XCTestCase {
         try phase("fingerprint")
         let ordinaryOwner = try approve(config["ordinaryFingerprint"] as! String, port: ordinaryPort)
         try post("ordinary_password")
-        try connect(password: config["ordinaryPassword"] as! String, mobileOwner: ordinaryOwner)
-        try terminal("ordinary", port: ordinaryPort)
+        let activeOrdinary = try connect(password: config["ordinaryPassword"] as! String, mobileOwner: ordinaryOwner)
+        try terminal("ordinary", port: ordinaryPort, owner: activeOrdinary)
         try phase("return_home")
         if mobileFlow {
             try tapMobileButton(try mobileDisconnected(), "native_mobile_return_owner_unproven")
@@ -2541,8 +2772,8 @@ final class TauriDirectSSHUITests: XCTestCase {
         try phase("new_fingerprint")
         let rotatedOwner = try approve(config["fingerprintB"] as! String, port: port, excluding: config["fingerprintA"] as? String)
         try post("key_change_password_b")
-        try connect(password: config["rotationPassword"] as! String, mobileOwner: rotatedOwner)
-        try terminal("key_change", port: port)
+        let activeRotation = try connect(password: config["rotationPassword"] as! String, mobileOwner: rotatedOwner)
+        try terminal("key_change", port: port, owner: activeRotation)
         try post("complete")
     }
 }

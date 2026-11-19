@@ -70,9 +70,7 @@ def safe_result(raw):
     return result
 
 
-def ordinary_session_evidence(fixture, *, closed):
-    facts = fixture.snapshot()
-    events = facts['connectionEvents']
+def ordinary_session_evidence(fixture, *, closed, await_initial_output=False):
     counts = dict(authAttempts=1, authSuccesses=1, ptyRequests=1, shellRequests=1, inputBytes=9 if closed else 0)
     probe = dict.fromkeys(counts, 0)
     probe.update(id=1, hostKey='A', outputBytes=0, authAccepted=False, markerReceived=False,
@@ -83,13 +81,31 @@ def ordinary_session_evidence(fixture, *, closed):
     session = counts.copy()
     session.update(id=2, hostKey='A', authAccepted=True, markerReceived=closed,
                    sessionClosed=closed, closed=closed)
-    if (type(facts['connections']) is not int or facts['connections'] != 2
-            or facts['connectionsClosed'] is not closed or len(events) != 2
-            or any(type(event.get(key)) is not type(value) or event[key] != value
-                   for event, expected in zip(events, (probe, session)) for key, value in expected.items())
-            or type(events[1].get('outputBytes')) is not int or events[1]['outputBytes'] <= 0):
-        raise Failure('direct_ssh_ordinary_session_evidence_invalid')
-    return {key: events[1][key] for key in ('id', *counts, 'markerReceived', 'closed')}
+    # The client can receive the banner before sendall's counter is published.
+    # Only that zero counter at the first live checkpoint can be in flight.
+    deadline = time.monotonic() + 1.0 if await_initial_output and not closed else None
+    while True:
+        facts = fixture.snapshot()
+        events = facts['connectionEvents']
+        if (type(facts['connections']) is not int or facts['connections'] != 2
+                or facts['connectionsClosed'] is not closed or len(events) != 2
+                or any(type(event.get(key)) is not type(value) or event[key] != value
+                       for event, expected in zip(events, (probe, session)) for key, value in expected.items())):
+            break
+        output_bytes = events[1].get('outputBytes')
+        if type(output_bytes) is not int or output_bytes < 0:
+            break
+        if output_bytes > 0:
+            return {key: events[1][key] for key in ('id', *counts, 'markerReceived', 'closed')}
+        if deadline is None:
+            break
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(.02, remaining))
+        if time.monotonic() >= deadline:
+            break
+    raise Failure('direct_ssh_ordinary_session_evidence_invalid')
 
 
 def ordinary_mobile_checkpoint(fixture, value, completed):
@@ -101,7 +117,7 @@ def ordinary_mobile_checkpoint(fixture, value, completed):
         return None
     if len(completed) >= len(ORDINARY_MOBILE_PHASES) or phase != ORDINARY_MOBILE_PHASES[len(completed)]:
         raise Failure('direct_ssh_mobile_stage_out_of_order')
-    return phase, ordinary_session_evidence(fixture, closed=False)
+    return phase, ordinary_session_evidence(fixture, closed=False, await_initial_output=not completed)
 
 
 def require_ordinary_mobile_checkpoints(completed):

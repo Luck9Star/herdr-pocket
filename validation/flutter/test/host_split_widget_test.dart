@@ -175,12 +175,15 @@ void main() {
     expect(tabs.find(aId)!.inputEligible.value, isTrue);
     expect(tabs.find(bId)!.inputEligible.value, isFalse);
     expect(tester.widget<TerminalView>(bVisibleTerminal).terminal, same(bTerminal));
-    expect(bAdapter.resumes, 0);
+    // Re-widening auto-resumes the layout-stashed side pane exactly once (D2);
+    // the pause confirmation from narrowing may still be settling (late pause).
+    expect(bAdapter.resumes, 1);
     expect(bAdapter.calls, 1);
     expect(bTerminal.viewWidth, 80);
     expect(bTerminal.viewHeight, 24);
     final bFocus = find.byKey(ValueKey('workspace-focus-$bId'));
-    expect(find.descendant(of: bFocus, matching: find.text('B · 已暂停')), findsOneWidget);
+    expect(find.descendant(of: bFocus, matching: find.text('B · 已暂停')), findsNothing);
+    expect(find.descendant(of: bView, matching: find.byKey(const ValueKey('remote-resume'))), findsNothing);
     await tabTo(tester, bFocus);
     await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
@@ -195,11 +198,12 @@ void main() {
     bTerminal.textInput('no automatic input'); await tester.pump();
     expect(aAdapter.writes, ['probeA:A']); expect(bAdapter.writes, ['probeB:B']);
 
-    final resumeB = find.descendant(of: bView, matching: find.byKey(const ValueKey('remote-resume')));
-    await tester.ensureVisible(resumeB);
-    await tester.tap(resumeB);
+    // The auto-resume waits for a fresh full frame of the same target: a late
+    // frame from the pre-pause generation is refused like the stale full.
+    final bOldGeneration = bAdapter.generation - 1;
+    bAdapter.frame!(bOldGeneration, 'w1:p1', const RemoteFrame(0, true, 'STALE GENERATION FULL'));
     await tester.pump();
-    expect(bAdapter.resumes, 1);
+    expect(tester.widget<TerminalView>(bVisibleTerminal).terminal, same(bTerminal));
     bAdapter.frame!(bAdapter.generation, 'w1:p1', const RemoteFrame(0, true, 'OLD FULL'));
     await tester.pump();
     expect(tester.widget<TerminalView>(bVisibleTerminal).terminal, same(bTerminal));
@@ -222,7 +226,8 @@ void main() {
     tester.view.physicalSize = const Size(1440, 900); await tester.pumpAndSettle();
     expect(FocusManager.instance.primaryFocus, same(directFocus));
     expect(aVisibleTerminal, findsOneWidget);
-    expect(aAdapter.resumes, 1);
+    // A became the stashed side pane at 700; re-widening auto-resumes it too.
+    expect(aAdapter.resumes, 2);
     expect((bResumed.viewWidth, bResumed.viewHeight), (80, 24));
     expect(tester.widget<TerminalView>(bVisibleTerminal).autoResize, isFalse);
     expect(aAdapter.writes, ['probeA:A']); expect(bAdapter.writes, ['probeB:B']);
@@ -236,6 +241,35 @@ void main() {
     expect(tabs.activeId, bId);
     expect(aAdapter.calls, 1); expect(bAdapter.calls, 1);
     expect(aAdapter.writes, ['probeA:A']); expect(bAdapter.writes, ['probeB:B']);
+    // Manually paused panes stay manual: revealing A via its tab after
+    // closeSplit must not auto-resume; the review button still works.
+    expect(aAdapter.resumes, 2);
+    // Direct-mode terminal holds keyboard traversal; drive the same tab-bar
+    // select() the button performs (its keyboard path is covered above).
+    tabs.select(aId); await tester.pumpAndSettle();
+    expect(tabs.activeId, aId);
+    expect(aAdapter.resumes, 2);
+    final resumeA2 = find.descendant(of: aView, matching: find.byKey(const ValueKey('remote-resume')));
+    await tester.ensureVisible(resumeA2); await tester.tap(resumeA2); await tester.pump();
+    expect(aAdapter.resumes, 3);
+    // Reviewer counterexample: a manually-paused side pane must not gain
+    // auto-resume eligibility from a fresh narrow/widen cycle (D2).
+    await tapVisible(tester, 'host-split-$bId'); await tester.pumpAndSettle();
+    expect(tabs.splitId, bId);
+    tester.view.physicalSize = const Size(700, 900); await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(1440, 900); await tester.pumpAndSettle();
+    expect(bAdapter.resumes, 1); // narrow/widen alone grants nothing
+    final resumeB2 = find.descendant(of: bView, matching: find.byKey(const ValueKey('remote-resume')));
+    await tester.ensureVisible(resumeB2); await tester.tap(resumeB2); await tester.pump();
+    expect(bAdapter.resumes, 2); // manual entry still works
+    // Second reviewer case: a pane that resumed and is still waiting for its
+    // new full (live=false) must not lose layout eligibility. A second full
+    // round-trip with no frame delivered still auto-resumes the same target.
+    tester.view.physicalSize = const Size(700, 900); await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(1440, 900); await tester.pumpAndSettle();
+    expect(bAdapter.resumes, 3); // auto-resume on the final widen, same target
+    expect(bAdapter.writes, ['probeB:B']); // zero remote input added
+    expect(bAdapter.calls, 1); // no reconnect
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox()); tabs.dispose(); catalog.dispose();
   });

@@ -82,6 +82,27 @@ KEY_REJECTED_WITNESS = '''const status = node('#ssh-status');
     node('#ssh-live-endpoint').innerText === '' && node('#ssh-connect').disabled &&
     arguments[0].every(s => node(s).value === '');'''
 
+ROTATION_REVIEW_WITNESS = r'''const panel = node('#ssh-key-change');
+  const oldKey = node('#ssh-key-change-old'), newKey = node('#ssh-key-change-new');
+  const target = node('#ssh-key-change-target');
+  const recheck = node('#ssh-key-recheck'), cancel = node('#ssh-key-cancel');
+  return visible(panel) && [oldKey, newKey, target, recheck, cancel].every(el => panel.contains(el)) &&
+    visible(oldKey) && oldKey.innerText.replace(/\s/g, '') === '旧：' + arguments[1] &&
+    visible(newKey) && newKey.innerText.replace(/\s/g, '') === '新：' + arguments[2] &&
+    visible(target) && target.innerText === '目标：' + arguments[0] &&
+    actionableButton(recheck, '重新核对主机指纹') && actionableButton(cancel, '取消连接，保留旧信任') &&
+    !visible(node('#ssh-setup')) && !visible(node('#ssh-live')) &&
+    !visible(node('.app-header')) && !visible(node('.route-tabs')) &&
+    arguments[3].every(s => node(s).disabled && node(s).value === '') && node('#ssh-connect').disabled;'''
+
+ROTATION_RETAINED_WITNESS = '''const target = node('#ssh-target-fields'), prior = node('#ssh-prior-fingerprint');
+  return !visible(node('#ssh-key-change')) && !visible(node('#ssh-live')) && visible(target) &&
+    arguments[0].every(([s, value]) => target.contains(node(s)) && visible(node(s)) && node(s).value === value) &&
+    visible(prior) && prior.innerText === '保留的旧指纹：' + arguments[1] &&
+    !visible(node('#ssh-credentials')) && !node('#ssh-review').checked && node('#ssh-review').disabled &&
+    arguments[2].every(s => node(s).disabled && node(s).value === '') && node('#ssh-connect').disabled &&
+    actionableButton(node('#ssh-probe'), '探测并核对主机密钥');'''
+
 
 def require(condition, code):
     if not condition:
@@ -192,6 +213,15 @@ def key_session_evidence(facts, *, sent, closed):
     verify_shell(facts, 3, 'A', sent=sent, closed=closed, publickey=True)
 
 
+def rotation_session_evidence(facts, *, sent, closed):
+    probe_evidence(facts, 4)
+    for expected, event in enumerate(facts['connectionEvents'][1:3], 2):
+        require(event['id'] == expected and event['hostKey'] == 'B' and event['closed'] is True
+                and all(event[k] == 0 for k in CHECK_FIELDS),
+                'direct_ssh_rotation_preapproval_peer_not_empty')
+    verify_shell(facts, 4, 'B', sent=sent, closed=closed, publickey=True)
+
+
 def fill_encrypted_credentials(driver, fixture, endpoint, *, passphrase):
     wait_for(lambda: driver.observe(KEY_FIELDS_WITNESS, endpoint), 'direct_ssh_key_fields_unproven')
     require(driver.observe('return node("#ssh-connect").disabled && '
@@ -293,7 +323,52 @@ def capture_outcome(driver, selector):
                  'bounds': before['bounds'], 'capture': 'native WebKitGTK WebDriver viewport'}
 
 
-def execute(driver, fixture, report, *, encrypted=False):
+def closed_rotation(fixture, count):
+    require(fixture.wait_for_connections_closed(count), 'direct_ssh_rotation_peer_open')
+    try:
+        return fixture.rotation_evidence(count)
+    except ValueError:
+        raise GuiFailure('direct_ssh_rotation_peer_invalid') from None
+
+
+def exercise_rotation_review(driver, fixture, endpoint, target_fields, report):
+    report['stage'] = 'rotation_refusal'
+    fill_encrypted_credentials(driver, fixture, endpoint, passphrase=fixture.passphrase)
+    probe_evidence(fixture.snapshot(), 1)
+    driver.click('#ssh-connect')  # The newly presenting key must be refused.
+    wait_for(lambda: driver.observe(ROTATION_REVIEW_WITNESS, endpoint, fixture.fingerprint,
+                                    fixture.rotated_fingerprint, SECRET_FIELDS),
+             'direct_ssh_rotation_review_unproven')
+    rejected = closed_rotation(fixture, 2)
+    png, geometry = capture_outcome(driver, '#ssh-key-change')
+    require(driver.observe(ROTATION_REVIEW_WITNESS, endpoint, fixture.fingerprint,
+                           fixture.rotated_fingerprint, SECRET_FIELDS) and closed_rotation(fixture, 2) == rejected,
+            'direct_ssh_rotation_review_changed')
+    report['rotation'] = {'rejectedPeer': rejected, 'reviewFrame': geometry}
+
+    report['stage'] = 'rotation_cancel'
+    driver.click('#ssh-key-cancel')
+    wait_for(lambda: driver.observe(ROTATION_RETAINED_WITNESS, target_fields, fixture.fingerprint, SECRET_FIELDS),
+             'direct_ssh_rotation_old_trust_unproven')
+    require(closed_rotation(fixture, 2) == rejected, 'direct_ssh_rotation_cancel_dialed')
+    report['rotation']['cancelKeptOldTrust'] = True
+
+    report['stage'] = 'rotation_reprobe'
+    driver.click('#ssh-probe')
+    algorithm = fixture.rotated_public_key.split(' ', 1)[0]
+    wait_for(lambda: driver.observe(REVIEW_WITNESS, endpoint, algorithm, fixture.rotated_fingerprint)
+             and driver.observe('const prior = node("#ssh-prior-fingerprint"); return visible(prior) && '
+                                'prior.innerText === "保留的旧指纹：" + arguments[0] && '
+                                'arguments[1].every(s => node(s).disabled && node(s).value === "");',
+                                fixture.fingerprint, SECRET_FIELDS),
+             'direct_ssh_rotation_fresh_fingerprint_unproven')
+    report['rotation']['freshProbe'] = closed_rotation(fixture, 3)
+    driver.click('#ssh-trust-confirm')
+    driver.click('#ssh-auth-key')
+    return png
+
+
+def execute(driver, fixture, report, *, encrypted=False, rotating=False):
     host = '127.0.0.1'
     endpoint = f'{fixture.username}@{host}:{fixture.port}'
     algorithm = fixture.public_key.split(' ', 1)[0]
@@ -307,7 +382,8 @@ def execute(driver, fixture, report, *, encrypted=False):
     driver.click('#add-ssh')
     report['stage'] = 'target'
     wait_for(lambda: driver.observe(TARGET_WITNESS), 'direct_ssh_target_form_unavailable')
-    for selector, value in (('#ssh-host', host), ('#ssh-port', str(fixture.port)), ('#ssh-user', fixture.username)):
+    target_fields = (('#ssh-host', host), ('#ssh-port', str(fixture.port)), ('#ssh-user', fixture.username))
+    for selector, value in target_fields:
         driver.fill(selector, value)
     require(driver.observe('return ["#ssh-password", "#ssh-connect", "#ssh-review"].every(s => node(s).disabled);'),
             'direct_ssh_credentials_ungated_before_probe')
@@ -333,16 +409,24 @@ def execute(driver, fixture, report, *, encrypted=False):
                         'algorithm': algorithm, 'fingerprint': fixture.fingerprint}
     report['fingerprintReviewed'] = True
 
-    verify_session = key_session_evidence if encrypted else session_evidence
-    connection_count = 3 if encrypted else 2
+    verify_session = rotation_session_evidence if rotating else key_session_evidence if encrypted else session_evidence
+    connection_count = 4 if rotating else 3 if encrypted else 2
+    rotation_png = None
     if encrypted:
-        report['stage'] = 'wrong_passphrase'
         driver.click('#ssh-auth-key')
-        exercise_wrong_passphrase(driver, fixture, endpoint, report)
+        if rotating:
+            rotation_png = exercise_rotation_review(driver, fixture, endpoint, target_fields, report)
+        else:
+            report['stage'] = 'wrong_passphrase'
+            exercise_wrong_passphrase(driver, fixture, endpoint, report)
     report['stage'] = 'connect'
     if encrypted:
         fill_encrypted_credentials(driver, fixture, endpoint, passphrase=fixture.passphrase)
-        rejected_key_evidence(fixture.snapshot(), 2)
+        if rotating:
+            require(closed_rotation(fixture, 3) == report['rotation']['freshProbe'],
+                    'direct_ssh_rotation_dialed_before_submit')
+        else:
+            rejected_key_evidence(fixture.snapshot(), 2)
     else:
         driver.fill('#ssh-password', fixture.password)
     driver.click('#ssh-connect')
@@ -351,6 +435,8 @@ def execute(driver, fixture, report, *, encrypted=False):
     verify_session(fixture.snapshot(), sent=False, closed=False)
     if encrypted:
         report['publicKeyAuthenticated'] = True
+        if rotating:
+            report['rotation']['freshFingerprintConfirmed'] = True
     wait_for(lambda: driver.observe('const el = node("#ssh-live-endpoint"); '
                                     'return visible(el) && el.innerText === arguments[0];', endpoint),
              'direct_ssh_live_target_mismatched')
@@ -394,7 +480,11 @@ def execute(driver, fixture, report, *, encrypted=False):
     verify_session(fixture.snapshot(), sent=True, closed=True)
     report.update(terminal=screen, disconnectOutcome=outcome, homeOutcome=home,
                   returnedHome=True, credentialFieldsCleared=True)
-    return {'ordinary-terminal.png': png, 'ordinary-disconnect.png': outcome_png, 'ordinary-home.png': home_png}
+    images = {'ordinary-terminal.png': png, 'ordinary-disconnect.png': outcome_png, 'ordinary-home.png': home_png}
+    if rotating:
+        report['rotation']['closed'] = closed_rotation(fixture, 4)
+        images['rotation-rejected.png'] = rotation_png
+    return images
 
 
 
@@ -410,7 +500,7 @@ def port_is_released(port):
         return client.connect_ex(('127.0.0.1', port)) == errno.ECONNREFUSED
 
 
-def native_run(app, report, *, encrypted=False):
+def native_run(app, report, *, encrypted=False, rotating=False):
     report['stage'] = 'launch'
     driver = DesktopDriver()
     port = driver_port()
@@ -435,9 +525,10 @@ def native_run(app, report, *, encrypted=False):
                 require(rect.get('width') == 1440 and rect.get('height') == 1200,
                         'direct_ssh_window_size_unconfirmed')
                 fixture_class = EncryptedKeyFixture if encrypted else DirectSshFixture
-                with fixture_class(screen_proof=True, channel_deadline=time.monotonic() + 240) as fixture:
+                with fixture_class(screen_proof=True, rotate_after_probe=rotating,
+                                   channel_deadline=time.monotonic() + 240) as fixture:
                     try:
-                        images = execute(driver, fixture, report, encrypted=encrypted)
+                        images = execute(driver, fixture, report, encrypted=encrypted, rotating=rotating)
                     finally:
                         # Snapshot before fixture cleanup, so a forced close
                         # can never appear as a successful user disconnect.
@@ -472,7 +563,7 @@ def main():
     parser.add_argument('--app', required=True, type=Path)
     parser.add_argument('--source-sha', required=True)
     parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--authentication', choices=('password', 'key'), default='password')
+    parser.add_argument('--authentication', choices=('password', 'key', 'key-rotation'), default='password')
     args = parser.parse_args()
     if not re.fullmatch(r'[0-9a-f]{40}', args.source_sha) or not args.app.is_file():
         parser.error('a built native app and a full source SHA are required')
@@ -480,11 +571,15 @@ def main():
     # WebDriver carries a disposable password over an owned loopback only.
     urllib.request.install_opener(urllib.request.build_opener(urllib.request.ProxyHandler({})))
     args.output.mkdir(parents=True, exist_ok=False)
+    encrypted = args.authentication != 'password'
+    rotating = args.authentication == 'key-rotation'
     report = {'schemaVersion': 1, 'sourceSHA': args.source_sha, 'platform': 'Linux Tauri GTK / Xvfb',
-              'authentication': 'publickey' if args.authentication == 'key' else 'password',
+              'authentication': 'publickey' if encrypted else 'password',
               'scope': 'native application and isolated loopback SSH', 'status': 'failed'}
+    if rotating:
+        report['hostKeyRotation'] = True
     try:
-        images = native_run(args.app.resolve(), report, encrypted=args.authentication == 'key')
+        images = native_run(args.app.resolve(), report, encrypted=encrypted, rotating=rotating)
         for name, png in images.items():
             (args.output / name).write_bytes(png)
         report.update(status='passed', stage='complete')

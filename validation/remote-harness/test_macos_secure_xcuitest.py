@@ -155,6 +155,20 @@ class ScaffoldTests(unittest.TestCase):
             self.assertNotEqual(execute().returncode,0)
             report=json.loads(output.read_text());self.assertTrue(report['targetMetrics'][0]['hostMatches']);self.assertFalse(report['targetMetrics'][0]['passwordPortMatches'])
             self.assertNotIn('private target material',output.read_text())
+            focus = 'HP_XCUI_FOCUS=phase:tap,ax:ok,trusted:1,role:textfield,match:yes,exists:1,enabled:1,hittable:1,stable:1,retained:match'
+            invalid = ['HP_XCUI_FOCUS=phase:drag,ax:ok,trusted:1,role:private-secret,match:yes,exists:1,enabled:1,hittable:1,stable:1,retained:match',
+                       focus + ',value:private-secret', focus.replace('enabled:1', 'enabled:2'),
+                       focus.replace('phase:tap', 'phase:other')]
+            invalid.append(focus.replace('ax:ok', 'ax:denied'))
+            drag = 'HP_XCUI_FOCUS=phase:drag,ax:denied,trusted:0,role:unknown,match:unknown,exists:1,enabled:1,hittable:1,stable:1,retained:unavailable'
+            log.write_text('Test Case testSystemMasking failed\n' + focus + '\n' + '\n'.join(invalid) + '\n' + drag + '\n')
+            self.assertNotEqual(execute().returncode,0)
+            report=json.loads(output.read_text())
+            self.assertEqual(report['ordinaryFocus'], [{'phase':'tap','ax':'ok','trusted':True,'role':'textfield','frameMatch':'yes',
+                'exists':True,'enabled':True,'hittable':True,'frameStable':True,'retained':'match'},
+                {'phase':'drag','ax':'denied','trusted':False,'role':'unknown','frameMatch':'unknown',
+                 'exists':True,'enabled':True,'hittable':True,'frameStable':True,'retained':'unavailable'}])
+            self.assertNotIn('private-secret',output.read_text())
             (root/'macos-secure-private-details.json').write_text(json.dumps({'message':'test timed out','private':'synthetic credential'}))
             self.assertNotEqual(execute().returncode,0)
             report=json.loads(output.read_text());self.assertIn('timeout',report['failureCategories']);self.assertTrue(report['xcresultDetailsAvailable'])
@@ -298,6 +312,23 @@ class ScaffoldTests(unittest.TestCase):
         self.assertLess(returned.index('try verifyOrdinarySentinel'), returned.index('try assertNoSecrets'))
         self.assertLess(returned.index('try assertNoSecrets'), returned.index('mark("ordinarySentinelObserved")'))
         self.assertNotIn('reopenSSH(', returned)
+
+    def test_focus_diagnostic_is_read_only_and_never_replays_sentinel(self):
+        swift = (Path(__file__).parent / 'macos_secure_xcuitest.swift').read_text()
+        diagnostic = swift[swift.index('private func ordinaryFocusObservation'):swift.index('private func verifyOrdinarySentinel')]
+        self.assertIn('AXUIElementCreateApplication(app.processID)', diagnostic)
+        self.assertIn('kAXFocusedUIElementAttribute', diagnostic)
+        self.assertIn('kAXPositionAttribute', diagnostic)
+        self.assertIn('frame match is only a geometric clue', swift.lower())
+        self.assertNotIn('AXUIElementSetAttributeValue', diagnostic)
+        self.assertNotIn('typeText(', diagnostic)
+        self.assertNotIn('node.label', diagnostic)
+        helper = swift[swift.index('private func verifyOrdinarySentinel'):swift.index('private func verifyFingerprint')]
+        self.assertLess(helper.index('phase: "tap"'), helper.index('trailing.click(forDuration:'))
+        self.assertLess(helper.index('trailing.click(forDuration:'), helper.index('phase: "drag"'))
+        self.assertLess(helper.index('phase: "drag"'), helper.index('address.typeText(sentinel)'))
+        self.assertEqual(helper.count('address.typeText(sentinel)'), 1)
+        self.assertIn('seen = try ordinaryValue(address) == sentinel', helper)
 
     def test_fingerprint_mouse_fallback_requires_unique_visible_target_and_actual_confirmation(self):
         swift=(Path(__file__).parent/'macos_secure_xcuitest.swift').read_text()

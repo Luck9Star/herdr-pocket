@@ -18,6 +18,8 @@ spec = importlib.util.spec_from_file_location('flutter_ci', Path(__file__).with_
 ci = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ci)
 
+import android_device_test
+
 
 class AndroidNoticeTests(unittest.TestCase):
     def test_exact_native_notice_is_required_inside_apk(self):
@@ -123,6 +125,36 @@ class SharedDiagnosticAssetsTests(unittest.TestCase):
             license.parent.mkdir(parents=True)
             license.write_text('Synthetic license fixture; no dependency is installed or executed.\n')
         return root
+
+    def test_android_connect_diagnostic_is_only_staged_in_device_scaffold(self):
+        source = 'a' * 40
+        with patch.dict(os.environ, {'GITHUB_SHA': source}):
+            app = self.flutter_scaffold()
+        staged = app / android_device_test.CONNECT_DIAGNOSTIC_TEST
+        self.assertFalse(staged.exists())
+        self.assertFalse((app / 'device_test').exists())
+        self.assertFalse((app / 'integration_test').exists())
+        self.assertNotIn('integration_test:', (app / 'pubspec.yaml').read_text())
+
+        env = {'GITHUB_ACTIONS': 'true', 'GITHUB_RUN_ID': '123',
+               'GITHUB_REF': 'refs/heads/codex/device-preparation-test', 'GITHUB_SHA': source,
+               'RUNNER_TEMP': str(self.root)}
+        (app / 'candidate/terminal_view').mkdir(parents=True)
+        (app / 'pubspec_overrides.yaml').write_text(
+            'dependency_overrides:\n  terminal_view:\n    path: candidate/terminal_view\n')
+        lock = app / 'pubspec.lock'
+        lock.write_text(lock.read_text().replace('candidate/reference_terminal_view', 'candidate/terminal_view'))
+        (app / 'candidate-manifest.json').write_text(json.dumps({
+            'sourceCommit': source, 'variant': 'experimental-patched',
+            'candidateLockSha256': android_device_test.digest(lock)}))
+
+        proof = android_device_test.prepare(app, env)
+        original = android_device_test.SOURCE / 'device_test' / staged.name
+        self.assertEqual(staged.read_bytes(), original.read_bytes())
+        self.assertEqual(proof['connectDiagnosticTestSha256'], android_device_test.digest(staged))
+        staged.write_text('changed')
+        with self.assertRaisesRegex(android_device_test.DevicePreparationFailure, 'android_device_preparation_changed'):
+            android_device_test.verify_lock(app, env)
 
     @unittest.skipUnless(shutil.which('node'), 'real Tauri resource copier requires an existing Node executable')
     def test_real_copy_paths_include_identical_diagnostic_and_locked_font_bytes(self):

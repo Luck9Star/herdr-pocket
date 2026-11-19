@@ -230,7 +230,7 @@ def checked_public_reply(reply, relative, limit):
 
 
 def read_public_json(relative, limit=4096):
-    if not re.fullmatch(r'cache/herdr-direct-ssh-[0-9]+/(?:(?:rotation-)?(?:result|stage)|'
+    if not re.fullmatch(r'cache/herdr-direct-ssh-[0-9]+/(?:(?:rotation-|encrypted-)?(?:result|stage)|'
                         r'ordinary-mobile-stage|failure|screen-request)\.json', relative):
         raise Failure('direct_android_public_path_invalid')
     if not package_present():
@@ -247,7 +247,7 @@ def read_public_json(relative, limit=4096):
     return checked_public_reply(reply, relative, limit)
 
 
-def screen_checkpoint(request, completed, fixture, rotation_fixture, relative, output):
+def screen_checkpoint(request, completed, fixture, rotation_fixture, relative, output, *, require_rotation=True):
     # Device writes the actual surface first and publishes this fixed-shape
     # request atomically. Each acknowledgement refers to exactly one frame.
     if (not isinstance(request, dict) or set(request) != {'tag', 'attempt', 'bounds', 'viewSize', 'observedTarget'}
@@ -261,6 +261,8 @@ def screen_checkpoint(request, completed, fixture, rotation_fixture, relative, o
             or request['bounds'][2] <= 0 or request['bounds'][3] <= 0):
         raise Failure('direct_android_screen_request_invalid')
     tag, attempt = request['tag'], request['attempt']
+    if not require_rotation and tag != 'ordinary':
+        raise Failure('direct_android_screen_request_invalid')
     peer = fixture if tag == 'ordinary' else rotation_fixture
     expected_target = f'{peer.username}@127.0.0.1:{peer.port}'
     if type(request['observedTarget']) is not str or request['observedTarget'] != expected_target:
@@ -268,7 +270,7 @@ def screen_checkpoint(request, completed, fixture, rotation_fixture, relative, o
     if tag in completed and attempt <= completed[tag]['attempt']:
         return
     expected = 1 if tag not in completed else completed[tag]['attempt'] + 1
-    if attempt != expected or (tag == 'ordinary' and not completed.get('key-rotation', {}).get('accepted')):
+    if attempt != expected or (require_rotation and tag == 'ordinary' and not completed.get('key-rotation', {}).get('accepted')):
         raise Failure('direct_android_screen_request_out_of_order')
     if tag in completed and completed[tag]['accepted']:
         raise Failure('direct_android_screen_already_accepted')
@@ -577,13 +579,259 @@ def run(args, env):
     return report
 
 
+
+ENCRYPTED_PUBLIC_FIELDS = {
+    'schemaVersion', 'platform', 'homepageEntry', 'fingerprintMatched',
+    'explicitTrustRequired', 'privateKeyPasted', 'passphraseObscured',
+    'wrongPassphraseRejectedLocally', 'realTerminalView', 'normalTextInputCommit',
+    'remoteEchoVisible', 'disconnectUiConfirmed', 'credentialsCleared',
+    'privateInputRemoved', 'clipboardCleared', 'physicalImeVerified',
+}
+
+
+def safe_encrypted_result(raw):
+    try:
+        value = json.loads(raw)
+    except (ValueError, UnicodeError):
+        raise Failure('direct_android_encrypted_result_not_json') from None
+    if (not isinstance(value, dict) or set(value) != ENCRYPTED_PUBLIC_FIELDS
+            or type(value['schemaVersion']) is not int or value['schemaVersion'] != 1
+            or value['platform'] != 'android-api35-emulator'
+            or value['physicalImeVerified'] is not False
+            or any(value[key] is not True for key in ENCRYPTED_PUBLIC_FIELDS -
+                   {'schemaVersion', 'platform', 'physicalImeVerified'})):
+        raise Failure('direct_android_encrypted_result_invalid')
+    return value
+
+
+def encrypted_probe_evidence(fixture):
+    if not fixture.wait_for_connections_closed(1):
+        raise Failure('direct_android_encrypted_probe_not_closed')
+    value = fixture.snapshot()
+    events = value['connectionEvents']
+    if (type(value['connections']) is not int or value['connections'] != 1
+            or value['connectionsClosed'] is not True or len(events) != 1):
+        raise Failure('direct_android_encrypted_probe_invalid')
+    event = events[0]
+    expected = {'id': 1, 'hostKey': 'A', 'authAttempts': 0, 'authSuccesses': 0,
+                'ptyRequests': 0, 'shellRequests': 0, 'inputBytes': 0, 'outputBytes': 0,
+                'authAccepted': False, 'markerReceived': False, 'sessionClosed': False,
+                'closed': True}
+    if any(type(event.get(key)) is not type(item) or event[key] != item
+           for key, item in expected.items()):
+        raise Failure('direct_android_encrypted_probe_invalid')
+    return expected
+
+
+def checked_encrypted_stage(value, completed):
+    if (not isinstance(value, dict) or set(value) != {'phase'}
+            or type(value['phase']) is not str or value['phase'] not in ('review', 'rejected')):
+        raise Failure('direct_android_encrypted_stage_invalid')
+    name = value['phase']
+    if name in completed:
+        return None
+    if len(completed) >= 2 or name != ('review', 'rejected')[len(completed)]:
+        raise Failure('direct_android_encrypted_stage_out_of_order')
+    return name
+
+
+def deliver_encrypted_credentials(fixture, run_id):
+    if not re.fullmatch(r'\d+', run_id):
+        raise Failure('direct_android_invalid_run_id')
+    payload = json.dumps({'privateKey': fixture.private_key,
+                          'passphrase': fixture.passphrase}).encode()
+    pending = 'cache/herdr-key-' + run_id + '.pending'
+    adb('shell', 'run-as', PACKAGE, 'mkdir', '-p', 'cache')
+    adb('shell', '-T', 'run-as', PACKAGE, 'tee', pending, data=payload)
+    adb('shell', 'run-as', PACKAGE, 'chmod', '600', pending)
+    adb('shell', 'run-as', PACKAGE, 'mv', pending, pending[:-8] + '.json')
+
+
+def run_encrypted(args, env):
+    app, output = checked_paths(args.project, args.output, env)
+    verify_prepared(app, env)
+    devices = [line.split()[:2] for line in text('devices').splitlines()[1:] if line.strip()]
+    if (devices != [[SERIAL, 'device']] or text('shell', 'getprop', 'ro.kernel.qemu') != '1'
+            or text('shell', 'getprop', 'ro.build.version.sdk') != '35'
+            or text('shell', 'am', 'get-current-user') != '0'):
+        raise Failure('direct_android_not_single_api35_emulator')
+    if package_present():
+        raise Failure('direct_android_package_already_present')
+    output.mkdir(mode=0o700)
+    before = forward_set()
+    cleanup = {'reverseRemoved': False, 'packageRemoved': False, 'ownedForwardsRemoved': False,
+               'fixtureClosed': False, 'temporaryKeyRemoved': False,
+               'flutterToolStopped': False, 'rawLogsUploaded': False}
+    report = {'schemaVersion': 1, 'sourceSHA': env['GITHUB_SHA'],
+              'kind': 'flutter-android-encrypted-ed25519', 'status': 'failed',
+              'cleanup': cleanup, 'physicalImeVerified': False}
+    from tauri_encrypted_key_fixture import EncryptedKeyFixture
+    from screen_proof_token import token_lines
+    fixture = EncryptedKeyFixture(screen_proof=True)
+    screens, checkpoints = {}, {}
+    report['checkpoints'] = checkpoints
+    primary = None
+    phase = 'fixture_start'
+    reverse = None
+    process = None
+    private = None
+    fixture_path = None
+    try:
+        phase = 'software_keyboard_setup'
+        adb('shell', 'settings', 'put', 'secure', 'show_ime_with_hard_keyboard', '1')
+        if text('shell', 'settings', 'get', 'secure', 'show_ime_with_hard_keyboard') != '1':
+            raise Failure('direct_android_software_keyboard_setup_failed')
+        with fixture:
+            fixture_path = Path(fixture._temp.name)
+            # This peer's existing echo marker is extended with the same public,
+            # per-session OCR proof used by the ordinary screen gate.
+            fixture.echo_marker += '\r\n' + '\r\n'.join(token_lines(fixture.screen_token))
+            phase = 'reverse_setup'
+            candidate = 'tcp:' + str(fixture.port)
+            if any(candidate in line.split()[1:2] for line in text('reverse', '--list').splitlines()):
+                raise Failure('direct_android_reverse_already_present')
+            adb('reverse', '--no-rebind', candidate, candidate)
+            reverse = candidate
+            phase = 'private_defines'
+            private = Path(tempfile.mkdtemp(prefix='herdr-direct-android-key-', dir=env['RUNNER_TEMP']))
+            defines = private / 'defines.json'
+            defines.write_text(json.dumps({'HERDR_ANDROID_DIRECT_SSH': '1',
+                'HERDR_ANDROID_RUN_ID': env['GITHUB_RUN_ID'], 'HERDR_ANDROID_ENCRYPTED_KEY_CASE': '1',
+                'HERDR_ANDROID_ENCRYPTED_KEY_TARGET': json.dumps({'host': '127.0.0.1', 'port': fixture.port,
+                    'username': fixture.username, 'fingerprint': fixture.fingerprint})}))
+            defines.chmod(0o600)
+            relative = 'cache/herdr-direct-ssh-' + env['GITHUB_RUN_ID']
+            command = ['flutter', 'test', '--no-pub', '--no-uninstall', '--reporter', 'expanded', '-d', SERIAL,
+                       '--dart-define-from-file=' + str(defines), TARGET]
+            phase = 'driver_start'
+            process = subprocess.Popen(command, cwd=app, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            deadline = time.monotonic() + 1200
+            peer_confirmed = False
+            credential_sent = False
+            while process.poll() is None and time.monotonic() < deadline:
+                phase = 'await_device_result'
+                if not credential_sent and package_present():
+                    # Private app-cache IPC only: secrets never enter Dart
+                    # defines, build artifacts, exported logs or screenshots.
+                    deliver_encrypted_credentials(fixture, env['GITHUB_RUN_ID'])
+                    credential_sent = True
+                screen = read_public_json(relative + '/screen-request.json')
+                if screen is not None:
+                    screen_checkpoint(screen, screens, fixture, None, relative, output, require_rotation=False)
+                checkpoint = read_public_json(relative + '/encrypted-stage.json')
+                if checkpoint is not None:
+                    name = checked_encrypted_stage(checkpoint, checkpoints)
+                    if name is not None:
+                        checkpoints[name] = encrypted_probe_evidence(fixture)
+                        if process.poll() is not None:
+                            raise Failure('direct_android_driver_exited_before_encrypted_confirmation')
+                        reply = json.dumps({'phase': name, 'serverEvidenceAccepted': True}).encode()
+                        pending = relative + '/encrypted-' + name + '-confirmed.new'
+                        adb('shell', '-T', 'run-as', PACKAGE, 'tee', pending, data=reply)
+                        adb('shell', 'run-as', PACKAGE, 'mv', pending, pending[:-4] + '.json')
+                public = read_public_json(relative + '/encrypted-result.json')
+                if public is not None:
+                    report['device'] = safe_encrypted_result(json.dumps(public))
+                    if not credential_sent or tuple(checkpoints) != ('review', 'rejected'):
+                        raise Failure('direct_android_encrypted_checkpoints_incomplete')
+                    if set(screens) != {'ordinary'} or screens['ordinary']['accepted'] is not True:
+                        raise Failure('direct_android_screen_proof_missing')
+                    phase = 'peer_close_confirmation'
+                    if (not fixture.wait_for('markerReceived') or not fixture.wait_for('sessionClosed')
+                            or not fixture.wait_for_connections_closed(2)):
+                        raise Failure('direct_android_remote_input_or_close_missing')
+                    ordinary_session_evidence(fixture, closed=True)
+                    report['authenticationMethod'] = 'publickey'
+                    if process.poll() is not None:
+                        raise Failure('direct_android_driver_exited_before_peer_confirmation')
+                    reply = b'{"protocolAccepted":true,"peerClosedBeforeDriverExit":true}'
+                    pending = relative + '/encrypted-peer-confirmed.new'
+                    adb('shell', '-T', 'run-as', PACKAGE, 'tee', pending, data=reply)
+                    adb('shell', 'run-as', PACKAGE, 'mv', pending, relative + '/encrypted-peer-confirmed.json')
+                    report['peerClosedBeforeDriverExit'] = True
+                    peer_confirmed = True
+                    break
+                time.sleep(.5)
+            phase = 'await_driver_exit'
+            try:
+                code = process.wait(timeout=max(1, deadline - time.monotonic()))
+            except subprocess.TimeoutExpired:
+                raise Failure('direct_android_flutter_timeout') from None
+            if code:
+                failure = read_public_json(relative + '/failure.json', 256)
+                if isinstance(failure, dict):
+                    stage = failure.get('stage', '')
+                    if isinstance(stage, str) and re.fullmatch(r'[a-z_]{1,40}', stage):
+                        report['failureStage'] = stage
+                raise Failure('direct_android_device_test_failed')
+            if not peer_confirmed:
+                raise Failure('direct_android_peer_confirmation_missing')
+            cleanup['flutterToolStopped'] = True
+            phase = 'read_screenshots'
+            for name in ('home', 'connected', 'disconnected'):
+                png = adb('exec-out', 'run-as', PACKAGE, 'cat', relative + '/' + name + '.png').stdout
+                if not png.startswith(b'\x89PNG\r\n\x1a\n') or len(png) > 8_000_000:
+                    raise Failure('direct_android_screenshot_invalid')
+                (output / (name + '.png')).write_bytes(png)
+            report['protocol'] = fixture.snapshot()
+            report['status'] = 'passed'
+    except Exception as error:
+        primary = str(error) if isinstance(error, Failure) else 'direct_android_runner_failed'
+        report['failureCode'] = primary
+        report['diagnostic'] = safe_failure(error, phase)
+    finally:
+        report['lastPhase'] = phase
+        report['protocol'] = fixture.snapshot()
+        if process is not None and process.poll() is None:
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait(timeout=10)
+        cleanup['flutterToolStopped'] = process is None or process.poll() is not None
+        try:
+            if reverse is not None:
+                adb('reverse', '--remove', reverse)
+            remaining = text('reverse', '--list').splitlines()
+            cleanup['reverseRemoved'] = reverse is None or not any(reverse in line.split()[1:2] for line in remaining)
+            if package_present():
+                adb('shell', 'am', 'force-stop', PACKAGE)
+                adb('uninstall', PACKAGE)
+            cleanup['packageRemoved'] = not package_present()
+            for line in forward_set() - before:
+                parts = line.split()
+                if len(parts) == 3 and parts[0] == SERIAL and re.fullmatch(r'tcp:\d+', parts[1]):
+                    adb('forward', '--remove', parts[1])
+            cleanup['ownedForwardsRemoved'] = forward_set() == before
+        except Failure:
+            report['cleanupCode'] = 'direct_android_adb_cleanup_failed'
+        fixture.close()
+        cleanup['fixtureClosed'] = fixture.snapshot()['connectionsClosed']
+        cleanup['temporaryKeyRemoved'] = (fixture_path is None or not fixture_path.exists()) and not getattr(fixture, 'private_key', '') and not getattr(fixture, 'passphrase', '')
+        if private is not None:
+            shutil.rmtree(private)
+        if not all(cleanup[key] for key in cleanup if key != 'rawLogsUploaded'):
+            report['status'] = 'failed'
+            report['cleanupCode'] = 'direct_android_cleanup_incomplete'
+        report['screenProof'] = {tag: {field: screens[tag][field] for field in ('attempt', 'accepted', 'expectedTarget')}
+                                 for tag in ('ordinary',) if tag in screens}
+        (output / 'result.json').write_text(json.dumps(report, indent=2) + '\n')
+    if report['status'] != 'passed':
+        raise Failure(primary or 'direct_android_cleanup_incomplete')
+    return report
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--project', required=True)
     parser.add_argument('--output', required=True)
+    parser.add_argument('--encrypted-key', action='store_true')
     args = parser.parse_args()
     try:
-        report = run(args, dict(os.environ))
+        report = (run_encrypted if args.encrypted_key else run)(args, dict(os.environ))
         print(json.dumps({'status': report['status'], 'kind': report['kind']}))
     except Exception as error:
         print(str(error) if isinstance(error, Failure) else 'direct_android_runner_failed', file=sys.stderr)

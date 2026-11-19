@@ -2,6 +2,12 @@ name: Ordinary SSH Android UI acceptance
 
 on:
   workflow_dispatch:
+    inputs:
+      auth_case:
+        description: 'SSH acceptance case'
+        type: choice
+        options: [standard, encrypted-key]
+        default: standard
   push:
     branches:
       - 'codex/acceptance/direct-ssh-android-*'
@@ -56,11 +62,18 @@ jobs:
           python3 "$GITHUB_WORKSPACE/validation/flutter/tool/android_device_test.py" verify-lock --destination "$RUNNER_TEMP/direct-ssh-app"
           flutter analyze lib integration_test
       - name: Drive homepage, host key rotation, ordinary SSH input and disconnect on an owned API35 AVD
+        env:
+          AUTH_CASE: ${{ inputs.auth_case }}
         run: |
           export PATH="$RUNNER_TEMP/direct-ssh-sdk/bin:$PATH"
+          case "${AUTH_CASE:-}" in
+            ''|standard) set -- ;;
+            encrypted-key) set -- --encrypted-key ;;
+            *) echo 'unsupported SSH acceptance case' >&2; exit 1 ;;
+          esac
           AVD_EVIDENCE_DIR="$RUNNER_TEMP/direct-ssh-avd" bash validation/remote-harness/with-android-emulator.sh \
             "$RUNNER_TEMP/direct-ssh-python/bin/python" validation/remote-harness/flutter_direct_ssh_android.py \
-            --project "$RUNNER_TEMP/direct-ssh-app" --output "$RUNNER_TEMP/direct-ssh-public"
+            --project "$RUNNER_TEMP/direct-ssh-app" --output "$RUNNER_TEMP/direct-ssh-public" "$@"
       - name: Upload only sanitized device evidence and post-credential screenshots
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

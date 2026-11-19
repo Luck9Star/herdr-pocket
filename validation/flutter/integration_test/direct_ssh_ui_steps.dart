@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:terminal_view/terminal_view.dart';
@@ -391,6 +392,174 @@ Future<void> runDirectSshUi(
   step('peer_confirmed');
   binding.reportData = report;
   step('report_data_set');
+}
+
+Future<void> runEncryptedDirectSshUi(
+  WidgetTester tester, {
+  required IntegrationTestWidgetsFlutterBinding binding,
+  required Map<String, dynamic> config,
+  required String directory,
+  required String platform,
+  required void Function(String) step,
+  required void Function(String, Object) publish,
+  required Future<void> Function(String) capture,
+}) async {
+  Future<void> checkpoint(String phase) async {
+    publish('encrypted-stage.json', {'phase': phase});
+    final confirmation = File('$directory/encrypted-$phase-confirmed.json');
+    await until(tester, confirmation.existsSync);
+    expect(jsonDecode(confirmation.readAsStringSync()), {
+      'phase': phase,
+      'serverEvidenceAccepted': true,
+    });
+  }
+
+  Future<void> pasteKey() async {
+    try {
+      await tester.runAsync(
+        () => Clipboard.setData(
+          ClipboardData(text: config['privateKey'] as String),
+        ),
+      );
+      await tap(tester, 'direct-paste-key');
+      await until(
+        tester,
+        () =>
+            tester
+                .widget<TextField>(control('direct-secret'))
+                .controller!
+                .text ==
+            config['privateKey'],
+      );
+    } finally {
+      await tester.runAsync(
+        () => Clipboard.setData(const ClipboardData(text: '')),
+      );
+      final cleared = await tester.runAsync(
+        () => Clipboard.getData(Clipboard.kTextPlain),
+      );
+      expect(cleared?.text?.isEmpty ?? true, isTrue);
+      // Let Android's transient clipboard preview expire before any capture.
+      await tester.pump(const Duration(seconds: 8));
+    }
+  }
+
+  step('encrypted_home');
+  await app.main();
+  await until(
+    tester,
+    () =>
+        find.byType(HostCatalogPage).evaluate().length == 1 &&
+        control('hosts-direct-ssh').evaluate().isNotEmpty,
+  );
+  final home = tester.widget<HostCatalogPage>(find.byType(HostCatalogPage));
+  expect(home.catalog, isNull);
+  expect(home.adapterFactory, isNull);
+  expect(home.keys, isNull);
+  await capture('home');
+  await openDirectSshFromHome(tester);
+  for (final entry in {
+    'direct-host': '127.0.0.1',
+    'direct-port': '${config['port']}',
+    'direct-user': 'fixture',
+  }.entries) {
+    await tester.ensureVisible(control(entry.key));
+    await tester.enterText(control(entry.key), entry.value);
+    await tester.pump();
+  }
+  expect(control('direct-secret'), findsNothing);
+  step('encrypted_probe');
+  await tap(tester, 'direct-probe');
+  await until(
+    tester,
+    () => control('direct-trust-key').evaluate().length == 1,
+  );
+  expect(
+    find.textContaining(config['fingerprint'] as String),
+    findsOneWidget,
+  );
+  step('encrypted_review');
+  await checkpoint('review');
+  await tap(tester, 'direct-trust-key');
+  await tap(tester, 'direct-auth-key');
+  await pasteKey();
+  final passphrase = control('direct-passphrase');
+  expect(tester.widget<TextField>(passphrase).obscureText, isTrue);
+  await tester.ensureVisible(passphrase);
+  await tester.enterText(passphrase, 'invalid-fixture-passphrase');
+  await tester.pump();
+  await tap(tester, 'direct-connect', requireEnabled: true);
+  await until(
+    tester,
+    () => find.textContaining('私钥无法解析或解密').evaluate().isNotEmpty,
+  );
+  final dynamic state = tester.state(find.byType(DirectSshPage));
+  expect(state.secret.text.isEmpty, isTrue);
+  expect(state.passphrase.text.isEmpty, isTrue);
+  step('encrypted_rejected');
+  await checkpoint('rejected');
+  await pasteKey();
+  await tester.ensureVisible(passphrase);
+  await tester.enterText(passphrase, config['passphrase'] as String);
+  config.remove('privateKey');
+  config.remove('passphrase');
+  await tester.pump();
+  expect(tester.widget<TextField>(passphrase).obscureText, isTrue);
+  step('encrypted_connect');
+  await tap(tester, 'direct-connect', requireEnabled: true);
+  await until(tester, () => find.byType(TerminalView).evaluate().length == 1);
+  final terminal = tester
+      .widget<TerminalView>(find.byType(TerminalView))
+      .terminal;
+  await until(tester, () => hasMarker(terminal, 'POCKET-ANDROID-READY'));
+  expect(state.secret.text.isEmpty, isTrue);
+  expect(state.passphrase.text.isEmpty, isTrue);
+  await toggleOrdinaryKeyboard(tester, show: true);
+  tester.testTextInput.enterText('hp-check');
+  await tester.pump();
+  await tapControl(tester, control('direct-key-enter'), 'terminal-enter');
+  await until(tester, () => hasMarker(terminal, 'POCKET-ANDROID-SSH-OK'));
+  await toggleOrdinaryKeyboard(tester, show: false);
+  await capture('connected');
+  step('encrypted_disconnect');
+  await tapControl(
+    tester,
+    control('direct-disconnect'),
+    'direct-disconnect',
+    reveal: false,
+  );
+  await until(tester, () => find.byType(TerminalView).evaluate().isEmpty);
+  expect(state.secret.text.isEmpty, isTrue);
+  expect(state.passphrase.text.isEmpty, isTrue);
+  expect(find.textContaining('已断开'), findsOneWidget);
+  await capture('disconnected');
+  expect(tester.takeException(), isNull);
+  final report = {
+    'schemaVersion': 1,
+    'platform': platform,
+    'homepageEntry': true,
+    'fingerprintMatched': true,
+    'explicitTrustRequired': true,
+    'privateKeyPasted': true,
+    'passphraseObscured': true,
+    'wrongPassphraseRejectedLocally': true,
+    'realTerminalView': true,
+    'normalTextInputCommit': true,
+    'remoteEchoVisible': true,
+    'disconnectUiConfirmed': true,
+    'credentialsCleared': true,
+    'privateInputRemoved': true,
+    'clipboardCleared': true,
+    'physicalImeVerified': false,
+  };
+  publish('encrypted-result.json', report);
+  final confirmation = File('$directory/encrypted-peer-confirmed.json');
+  await until(tester, confirmation.existsSync);
+  expect(jsonDecode(confirmation.readAsStringSync()), {
+    'protocolAccepted': true,
+    'peerClosedBeforeDriverExit': true,
+  });
+  binding.reportData = report;
 }
 
 Future<void> runDirectSshRotationUi(

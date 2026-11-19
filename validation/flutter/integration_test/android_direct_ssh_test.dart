@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/widgets.dart' show Text, ValueKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:terminal_view/terminal_view.dart';
@@ -13,6 +14,12 @@ const packageName = 'dev.herdr.herdr_flutter_probe';
 const enabled = String.fromEnvironment('HERDR_ANDROID_DIRECT_SSH');
 const runId = String.fromEnvironment('HERDR_ANDROID_RUN_ID');
 const targetJson = String.fromEnvironment('HERDR_ANDROID_DIRECT_TARGET');
+const encryptedCase = String.fromEnvironment(
+  'HERDR_ANDROID_ENCRYPTED_KEY_CASE',
+);
+const encryptedTargetJson = String.fromEnvironment(
+  'HERDR_ANDROID_ENCRYPTED_KEY_TARGET',
+);
 const rotationTargetJson = String.fromEnvironment(
   'HERDR_ANDROID_ROTATION_TARGET',
 );
@@ -21,6 +28,7 @@ const directory = '/data/user/0/$packageName/cache/herdr-direct-ssh-$runId';
 Map<String, dynamic> target({
   String encoded = targetJson,
   bool rotating = false,
+  bool encrypted = false,
 }) {
   if (!Platform.isAndroid ||
       !kDebugMode ||
@@ -28,12 +36,17 @@ Map<String, dynamic> target({
       !RegExp(r'^\d+$').hasMatch(runId)) {
     throw StateError('direct_ssh_android_isolated_fixture_required');
   }
-  final value = jsonDecode(encoded);
+  dynamic value;
+  try {
+    value = jsonDecode(encoded);
+  } catch (_) {
+    throw StateError('direct_ssh_android_invalid_target');
+  }
   final keys = {
     'host',
     'port',
     'username',
-    'password',
+    if (!encrypted) 'password',
     'fingerprint',
     if (rotating) 'rotatedFingerprint',
   };
@@ -45,8 +58,9 @@ Map<String, dynamic> target({
       value['port'] < 1024 ||
       value['port'] > 65535 ||
       value['username'] != 'fixture' ||
-      value['password'] is! String ||
-      !RegExp(r'^[0-9a-f]{32}$').hasMatch(value['password']) ||
+      (!encrypted &&
+          (value['password'] is! String ||
+              !RegExp(r'^[0-9a-f]{32}$').hasMatch(value['password']))) ||
       value['fingerprint'] is! String ||
       !RegExp(r'^SHA256:[A-Za-z0-9+/]{43}$').hasMatch(value['fingerprint']) ||
       (rotating &&
@@ -74,15 +88,58 @@ void main() {
       var stage = 'fixture_validation';
       var fixtureValidated = false;
       try {
-        final config = target();
-        final rotation = target(encoded: rotationTargetJson, rotating: true);
-        if (rotation['port'] == config['port']) {
+        if (encryptedCase != '' && encryptedCase != '1') {
+          throw StateError('direct_ssh_android_invalid_case');
+        }
+        final encrypted = encryptedCase == '1';
+        final config = encrypted
+            ? target(encoded: encryptedTargetJson, encrypted: true)
+            : target();
+        final rotation = encrypted
+            ? null
+            : target(encoded: rotationTargetJson, rotating: true);
+        if (rotation != null && rotation['port'] == config['port']) {
           throw StateError('direct_ssh_android_peers_not_independent');
         }
         fixtureValidated = true;
         expect(tester.testTextInput.isRegistered, isFalse);
         if (Directory(directory).existsSync())
           throw StateError('direct_ssh_android_exchange_exists');
+        if (encrypted) {
+          final incoming = File(
+            '/data/user/0/$packageName/cache/herdr-key-$runId.json',
+          );
+          final deadline = DateTime.now().add(const Duration(seconds: 120));
+          while (!incoming.existsSync()) {
+            if (DateTime.now().isAfter(deadline)) {
+              throw StateError('direct_ssh_android_private_input_timeout');
+            }
+            await tester.pump(const Duration(milliseconds: 100));
+          }
+          dynamic secret;
+          try {
+            secret = jsonDecode(incoming.readAsStringSync());
+          } catch (_) {
+            throw StateError('direct_ssh_android_private_input_invalid');
+          } finally {
+            incoming.deleteSync();
+          }
+          expect(incoming.existsSync(), isFalse);
+          if (secret is! Map<String, dynamic> ||
+              secret.length != 2 ||
+              !secret.containsKey('privateKey') ||
+              !secret.containsKey('passphrase') ||
+              secret['privateKey'] is! String ||
+              (secret['privateKey'] as String).length > 8192 ||
+              !RegExp(
+                r'^-----BEGIN OPENSSH PRIVATE KEY-----\n[A-Za-z0-9+/=\n]+\n-----END OPENSSH PRIVATE KEY-----\n?$',
+              ).hasMatch(secret['privateKey']) ||
+              secret['passphrase'] is! String ||
+              !RegExp(r'^[0-9a-f]{32}$').hasMatch(secret['passphrase'])) {
+            throw StateError('direct_ssh_android_private_input_invalid');
+          }
+          config.addAll(secret);
+        }
         void step(String next) {
           stage = next;
           publish('stage.json', {'stage': next});
@@ -111,7 +168,7 @@ void main() {
             final active = find.byKey(const ValueKey('direct-active-target'));
             expect(active, findsOneWidget);
             final observedTarget = tester.widget<Text>(active).data;
-            final peer = name == 'connected' ? config : rotation;
+            final peer = name == 'connected' ? config : rotation!;
             final expectedTarget =
                 '${peer['username']}@${peer['host']}:${peer['port']}';
             expect(observedTarget, expectedTarget);
@@ -154,9 +211,22 @@ void main() {
           throw StateError('direct_ssh_screen_pixels_not_verified');
         }
 
+        if (encrypted) {
+          await runEncryptedDirectSshUi(
+            tester,
+            binding: binding,
+            config: config,
+            directory: directory,
+            platform: 'android-api35-emulator',
+            step: step,
+            publish: publish,
+            capture: capture,
+          );
+          return;
+        }
         await runDirectSshRotationUi(
           tester,
-          config: rotation,
+          config: rotation!,
           directory: directory,
           platform: 'android-api35-emulator',
           step: step,
@@ -181,6 +251,12 @@ void main() {
           });
         }
         rethrow;
+      } finally {
+        if (fixtureValidated && Platform.isAndroid && encryptedCase == '1') {
+          await tester.runAsync(
+            () => Clipboard.setData(const ClipboardData(text: '')),
+          );
+        }
       }
     },
   );

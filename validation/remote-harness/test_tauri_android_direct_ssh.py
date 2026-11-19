@@ -623,6 +623,129 @@ entries['#host-home #home-dashboard'][0].hidden = true; assert.equal(select(), n
 
 
 
+class DeviceCleanupTests(unittest.TestCase):
+    def setUp(self):
+        root = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
+        self.apk = root / 'fixture.apk'
+        self.apk.write_bytes(b'apk')
+        self.output = root / 'output'
+        self.enterContext(patch.dict(driver.os.environ, {'GITHUB_ACTIONS':'true',
+            'GITHUB_REF':'refs/heads/codex/test', 'ANDROID_SERIAL':driver.SERIAL, 'RUNNER_TEMP':str(root)}, clear=True))
+        self.peer = Fixture()
+        self.reverse = f'tcp:{self.peer.port}'
+        pkg = driver.PACKAGE
+        self.secret = 'raw-adb-detail-' + self.peer.password
+        self.stop = ('shell','am','force-stop',pkg)
+        self.uninstall = ('uninstall',pkg)
+        self.forward_remove = ('forward','--remove','tcp:4567')
+        self.reverse_remove = ('reverse','--remove',self.reverse)
+        self.process_list = ('shell','ps','-A','-o','PID,NAME')
+        self.package_list = ('shell','pm','list','packages','--user','0')
+        self.answers = {
+            ('devices',):f'List of devices attached\n{driver.SERIAL}\tdevice',
+            ('shell','getprop','ro.kernel.qemu'):'1', ('shell','getprop','ro.build.version.sdk'):'35',
+            ('shell','am','get-current-user'):'0', ('shell','pm','list','packages',pkg):'',
+            ('reverse',self.reverse,self.reverse):'', ('install',str(self.apk)):'Success',
+            ('shell','monkey','-p',pkg,'-c','android.intent.category.LAUNCHER','1'):'',
+            ('shell','pidof',pkg):'123', ('shell','cat','/proc/net/unix'):'@webview_devtools_remote_123',
+            ('forward','tcp:0','localabstract:webview_devtools_remote_123'):'4567',
+            self.stop:'', self.uninstall:'Success', self.forward_remove:'', self.reverse_remove:'',
+            self.process_list:f'PID NAME\n1 init\n45 {pkg}.other',
+            self.package_list:f'package:android\npackage:{pkg}.other',
+            ('forward','--list'):f'{driver.SERIAL} tcp:3333 tcp:4567',
+            ('reverse','--list'):f'UsbFfs tcp:3333 {self.reverse}',
+        }
+        def adb(*args, **kwargs):
+            value = self.answers[args]
+            if isinstance(value, Exception):
+                raise value
+            return value
+        self.adb = self.enterContext(patch.object(driver,'adb',side_effect=adb))
+        self.browser = Mock()
+        self.browser.ws = types.SimpleNamespace(connected=False, sock=None)
+        self.enterContext(patch.object(driver,'_connect_ready',return_value=self.browser))
+        self.ui = self.enterContext(patch.object(driver,'exercise_ui',return_value={'disconnected':True}))
+
+    def manifest(self):
+        import direct_ssh_fixture
+        peer = MagicMock(port=self.peer.port)
+        peer.__enter__.return_value = peer
+        peer.snapshot.return_value = {'connections':2, 'authAccepted':True, 'connectionsClosed':True}
+        with patch.object(direct_ssh_fixture,'DirectSshFixture',return_value=peer), \
+             patch.object(driver.sys,'argv',['driver','--apk',str(self.apk),'--output',str(self.output)]), \
+             self.assertRaises(SystemExit) as error:
+            driver.main()
+        self.assertEqual(error.exception.code, 1)
+        report = json.loads((self.output/'manifest.json').read_text())
+        self.assertNotIn(self.secret, json.dumps(report))
+        self.assertNotIn(self.peer.password, json.dumps(report))
+        return report
+
+    def test_first_failure_and_second_open_facts_survive_independent_cleanup_failures(self):
+        facts = [{'ime':{'reason':'owned_hidden'}, 'peerUnchanged':True}]
+        def fail(*args, progress, **kwargs):
+            progress.update(stage='terminal_input', secondOpenFacts=facts)
+            raise driver.GuiFailure('android_control_missing_' + self.secret)
+        self.ui.side_effect = fail
+        self.browser.close.side_effect = RuntimeError(self.secret)
+        self.browser.ws.connected = True
+        self.answers.update({self.stop:RuntimeError(self.secret), self.uninstall:driver.GuiFailure('android_adb_unavailable'),
+            self.forward_remove:driver.GuiFailure('android_adb_command_failed'), self.reverse_remove:RuntimeError(self.secret),
+            self.process_list:f'PID NAME\n1 init\n123 {driver.PACKAGE}:worker', self.package_list:RuntimeError(self.secret),
+            ('forward','--list'):RuntimeError(self.secret), ('reverse','--list'):f'UsbFfs {self.reverse} tcp:3333'})
+        report = self.manifest()
+        self.assertEqual((report['failureStage'],report['errorCode']),('terminal_input','direct_android_control_missing'))
+        self.assertEqual(report['secondOpenFacts'], facts)
+        cleanup = report['cleanupDiagnostic']
+        self.assertEqual((cleanup['failureStage'],cleanup['errorCode']),('cleanup','direct_cleanup_failed'))
+        self.assertEqual(cleanup['steps'], {'browserClose':'direct_driver_failed', 'browserSocket':'present',
+            'forceStop':'direct_driver_failed', 'uninstall':'direct_android_adb_unavailable',
+            'appProcess':'present', 'appPackage':'direct_driver_failed',
+            'forwardRemove':'direct_android_adb_command_failed', 'forwardList':'direct_driver_failed',
+            'reverseRemove':'direct_driver_failed', 'reverseList':'present'})
+        calls = [call.args for call in self.adb.call_args_list]
+        for args in (self.stop,self.uninstall,self.forward_remove,self.reverse_remove,self.process_list,self.package_list,
+                     ('forward','--list'),('reverse','--list')):
+            self.assertEqual(calls.count(args), 1, args)
+        self.browser.close.assert_called_once_with()
+        self.ui.assert_called_once()
+
+    def test_unexpected_ui_error_survives_unconfirmed_reverse_removal(self):
+        def fail(*args, progress, **kwargs):
+            progress['stage'] = 'connect'
+            raise RuntimeError(self.secret)
+        self.ui.side_effect = fail
+        self.answers[('reverse','--list')] = driver.GuiFailure('android_adb_unavailable')
+        report = self.manifest()
+        self.assertEqual((report['failureStage'],report['errorCode']),('connect','direct_fixture_or_driver_failed'))
+        self.assertEqual(report['cleanupDiagnostic']['steps']['reverseList'],'direct_android_adb_unavailable')
+        self.assertNotIn('secondOpenFacts',report)
+
+    def test_cleanup_only_fails_for_present_or_unverifiable_resources_even_after_successful_commands(self):
+        self.answers.update({self.process_list:'', self.package_list:f'package:android\npackage:{driver.PACKAGE}',
+            ('forward','--list'):'unrecognized ' + self.secret, ('reverse','--list'):driver.GuiFailure('android_adb_unavailable')})
+        report = self.manifest()
+        self.assertEqual((report['failureStage'],report['errorCode']),('cleanup','direct_cleanup_failed'))
+        steps = report['cleanupDiagnostic']['steps']
+        self.assertEqual([steps[k] for k in ('appProcess','appPackage','forwardList','reverseList')],
+                         ['unverified','present','unverified','direct_android_adb_unavailable'])
+        self.assertNotIn('secondOpenFacts',report)
+
+    def test_uncertain_removals_pass_only_after_resource_specific_absence_without_replay(self):
+        writes = (self.stop,self.uninstall,self.forward_remove,self.reverse_remove)
+        self.answers.update({args:driver.GuiFailure('android_adb_command_failed') for args in writes})
+        result = driver.run_device(self.apk,self.peer,progress={})
+        self.assertEqual(result['cleanup'], dict.fromkeys(('browser','application','forward','reverse'), True))
+        steps = result['cleanupDiagnostic']['steps']
+        for key in ('browserSocket','appProcess','appPackage','forwardList','reverseList'):
+            self.assertEqual(steps[key], 'absent')
+        for key in ('forceStop','uninstall','forwardRemove','reverseRemove'):
+            self.assertEqual(steps[key], 'direct_android_adb_command_failed')
+        for args in writes:
+            self.assertEqual([call.args for call in self.adb.call_args_list].count(args), 1)
+        self.ui.assert_called_once()
+
+
 class ActiveNavigationTests(unittest.TestCase):
     def peer(self):
         return {'connections':2,'sessionClosed':False,'connectionEvents':[

@@ -22,6 +22,7 @@ import uuid
 import xml.etree.ElementTree as ET
 
 from android_gui import AndroidWebView, PACKAGE, SERIAL, adb, dashboard_add_selector, system_keyboard, public_ime_diagnostic
+from flutter_android_gui import parse_system_ime, DeviceFailure
 from paired_gui import GuiFailure, wait_for
 from terminal_screenshot_gate import ECHO_MARKER, ScreenshotGateError, verify_terminal_screenshot
 
@@ -556,6 +557,26 @@ def _ime_dom_state(browser, fixture):
         return {key:False for key in IME_DOM_KEYS}
     return value
 
+def public_editor_focus(browser):
+    """Fixed booleans: the terminal textarea exists, is the active element,
+    the document holds focus, and the page's own IME-known/visible classes.
+    Unreadable facts stay null (distinct from False)."""
+    try:
+        value=browser.evaluate(r"""(()=>{
+          const editor=document.querySelector('#ssh-terminal .xterm-helper-textarea');
+          return {editorPresent:!!editor,
+            editorActive:editor===document.activeElement,
+            documentFocused:document.hasFocus(),
+            imeKnown:document.body.classList.contains('ssh-ime-known'),
+            imeVisible:document.body.classList.contains('ssh-ime-visible')};
+        })()""")
+    except Exception:
+        return {key:None for key in ('editorPresent','editorActive','documentFocused','imeKnown','imeVisible')}
+    keys=('editorPresent','editorActive','documentFocused','imeKnown','imeVisible')
+    if not isinstance(value,dict) or any(type(value.get(key)) is not bool for key in keys):
+        return {key:None for key in keys}
+    return {key:value[key] for key in keys}
+
 
 def _foreground_owned():
     """True only when our package holds the current window focus."""
@@ -1006,11 +1027,21 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
             error.ime_failure=public_ime_diagnostic(getattr(error,'system_ime_diagnostic',None))
             raise
     if progress is not None: progress['stage']='terminal_input'
+    second_open=[]
     if active_navigation:
-        native_active_tap(browser,'#ssh-focus')
-        system_keyboard(True)
-        active_view(browser,fixture,'ssh',keyboard=True)
-        active_peer(fixture)
+        # Before/after facts around the second explicit open: fixed IME enums,
+        # bounded geometry, zero-input peer; retained on any later failure.
+        second_open.append(second_open_checkpoint(browser,fixture))
+        try:
+            native_active_tap(browser,'#ssh-focus')
+            system_keyboard(True)
+            active_view(browser,fixture,'ssh',keyboard=True)
+            active_peer(fixture)
+        except GuiFailure as error:
+            if not hasattr(error,'second_open_checkpoint'):
+                error.second_open_checkpoint=second_open+[second_open_checkpoint(browser,fixture)]
+            raise
+        second_open.append(second_open_checkpoint(browser,fixture))
     else:
         browser.click('#ssh-focus')
     wait_for(lambda: browser.evaluate("document.activeElement === document.querySelector('#ssh-terminal .xterm-helper-textarea')"),
@@ -1066,8 +1097,42 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
             'terminalInputReceived':True,'terminalEchoRendered':True,'disconnected':True,
             'passwordCleared':True, 'returnedHome':True, **({'helperKeysExact':True} if not encrypted_key else {}),
             **({'ordinaryActive':active_navigation,'activeImeChecks':ime_checks} if active_navigation else {}),
+            **({'secondOpenFacts':second_open} if second_open else {}),
             **({'terminalScreenshot':terminal_proof} if terminal_proof else {}),
             'peer':{k:True for k in ('authAccepted','ptyRequested','shellRequested','markerReceived','sessionClosed')}}
+
+def second_open_checkpoint(browser, fixture):
+    """Bounded second-open facts only: IME enums, editor focus booleans,
+    geometry, and same-connection peer counts.
+
+    Read-only; no raw DOM text, credentials, screenshots, taps or focus changes.
+    Every fact is a fixed boolean/enum; an unreadable fact stays null so miss,
+    foreign focus and transition states stay distinguishable.
+    """
+    checkpoint={}
+    try:
+        raw=parse_system_ime(adb('shell','dumpsys','input_method'), adb('shell','dumpsys','window','displays'), PACKAGE)
+        checkpoint['ime']=public_ime_diagnostic(raw.get('diagnostic'))
+    except (DeviceFailure,GuiFailure):
+        checkpoint['ime']={}
+    checkpoint['editorFocus']=public_editor_focus(browser)
+    diagnostic=active_diagnostic(browser,fixture)
+    checkpoint['geometry']=diagnostic.get('geometry')
+    # Keep the already-whitelisted same-connection counters, not just a flag.
+    snapshot=fixture.snapshot()
+    events=snapshot.get('connectionEvents') if isinstance(snapshot,dict) else None
+    live=events[-1] if isinstance(events,list) and events else None
+    if isinstance(live,dict):
+        checkpoint['peerCounts']={key:live.get(key) for key in
+            ('authAttempts','authSuccesses','ptyRequests','shellRequests','inputBytes')
+            if type(live.get(key)) is int}
+        checkpoint['peerClosed']=snapshot.get('sessionClosed') is True
+    try:
+        active_peer(fixture, input_bytes=0)
+        checkpoint['peerUnchanged']=True
+    except (GuiFailure,AttributeError):
+        checkpoint['peerUnchanged']=False
+    return checkpoint
 
 
 def exercise_key_change_ui(browser, fixture, *, evidence_dir=None):
@@ -1367,6 +1432,9 @@ def main():
             report['activeImeChecks']=[public_ime_diagnostic(item) for item in ime_checks]
         ime_failure=public_ime_diagnostic(getattr(error,'ime_failure',None))
         if ime_failure: report['activeImeFailure']=ime_failure
+        second_open_facts=getattr(error,'second_open_checkpoint',None)
+        if isinstance(second_open_facts,list) and 1<=len(second_open_facts)<=3:
+            report['secondOpenFacts']=second_open_facts
         report['errorCode']=public_driver_error(error)
         if progress.get('stage') in DRIVER_STAGES: report['failureStage']=progress['stage']
     except Exception:

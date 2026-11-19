@@ -787,6 +787,54 @@ class ActiveNavigationTests(unittest.TestCase):
         with patch.object(driver,'adb',return_value='  unrelated dumpsys line'):
             self.assertFalse(driver._foreground_owned())
 
+    def test_second_open_checkpoint_records_bounded_facts_and_explicit_misses(self):
+        browser=Mock(); fixture=Mock()
+        fixture.snapshot.return_value=self.peer()
+        diagnostic={'formatVersion':1,'reason':'owned_hidden','serviceCount':1,'displayCount':1,
+                    'focusCount':1,'focusOwner':'owned','editorOwner':'none','imeInsetsState':'hidden',
+                    'visibility':'hidden'}
+        focus={'editorPresent':True,'editorActive':True,'documentFocused':True,'imeKnown':True,'imeVisible':False}
+        with patch.object(driver,'adb',return_value='dump'), \
+             patch.object(driver,'parse_system_ime',return_value={'diagnostic':diagnostic}), \
+             patch.object(driver,'public_editor_focus',return_value=focus), \
+             patch.object(driver,'active_diagnostic',return_value={'geometry':{'viewport':[393,851,0,851]}}), \
+             patch.object(driver,'active_peer') as peer:
+            checkpoint=driver.second_open_checkpoint(browser,fixture)
+        self.assertEqual(checkpoint['ime'],driver.public_ime_diagnostic(diagnostic))
+        self.assertEqual(checkpoint['editorFocus'],focus)
+        self.assertEqual(checkpoint['geometry'],{'viewport':[393,851,0,851]})
+        self.assertEqual(checkpoint['peerCounts'],{'authAttempts':1,'authSuccesses':1,
+            'ptyRequests':1,'shellRequests':1,'inputBytes':0})
+        self.assertFalse(checkpoint['peerClosed'])
+        self.assertTrue(checkpoint['peerUnchanged'])
+        peer.assert_called_once_with(fixture,input_bytes=0)
+
+    def test_second_open_checkpoint_explicitly_misses_when_driver_facts_absent(self):
+        browser=Mock(); fixture=Mock()
+        fixture.snapshot.return_value=self.peer()
+        browser.evaluate.side_effect=RuntimeError('cdp gone')
+        with patch.object(driver,'adb',side_effect=driver.GuiFailure('android_adb_unavailable')), \
+             patch.object(driver,'active_diagnostic',return_value={}), \
+             patch.object(driver,'active_peer',side_effect=driver.GuiFailure('direct_active_peer_changed')):
+            checkpoint=driver.second_open_checkpoint(browser,fixture)
+        self.assertEqual(checkpoint,{'ime':{},
+            'editorFocus':{'editorPresent':None,'editorActive':None,'documentFocused':None,
+                           'imeKnown':None,'imeVisible':None},
+            'geometry':None,
+            'peerCounts':{'authAttempts':1,'authSuccesses':1,'ptyRequests':1,
+                          'shellRequests':1,'inputBytes':0},
+            'peerClosed':False,'peerUnchanged':False})
+
+    def test_public_editor_focus_normalizes_shapes_and_nulls_on_miss(self):
+        browser=Mock()
+        good={'editorPresent':True,'editorActive':False,'documentFocused':True,
+              'imeKnown':True,'imeVisible':False}
+        browser.evaluate.return_value=good
+        self.assertEqual(driver.public_editor_focus(browser),good)
+        browser.evaluate.return_value={'editorPresent':'yes'}
+        self.assertEqual(driver.public_editor_focus(browser),
+            {key:None for key in good})
+
     def test_ime_dom_predicate_whitelists_ready_plus_bare_prompt_only(self):
         # run the exact JS shipped in _ime_dom_state through the driver's own
         # evaluate expression via node, against a real xterm-style DOM stub

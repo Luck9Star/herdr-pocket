@@ -27,6 +27,26 @@ TYPED_LINE = 'hp-check\ue007'  # WebDriver Enter, sent to the focused xterm.
 RENDER_PENDING = {'terminal_screenshot_echo_not_visible', 'terminal_screenshot_token_not_visible',
                   'terminal_screenshot_proof_not_adjacent'}
 
+DASHBOARD_WITNESS = '''const home = node('#home-dashboard'), empty = node('#host-empty');
+  const add = node('#host-empty-add');
+  return visible(home) && visible(empty) && home.contains(empty) && empty.contains(add) &&
+    actionableButton(add, '添加主机');'''
+
+CHOICE_WITNESS = '''const page = node('#home-add'), heading = node('#add-choice-heading');
+  const choice = node('#add-ssh'), label = node('#add-ssh-label');
+  return !visible(node('#home-dashboard')) && visible(page) && visible(heading) &&
+    heading.innerText === '选择连接方式' && page.contains(choice) && choice.contains(label) &&
+    choice.getAttribute('aria-labelledby') === label.id && visible(label) &&
+    label.innerText === '普通 SSH 终端' && actionableButton(choice);'''
+
+TARGET_WITNESS = '''const page = node('#home-ssh'), step = node('#ssh-step-title');
+  const target = node('#ssh-target-fields');
+  return !visible(node('#home-add')) && visible(page) && visible(step) && step.innerText === '普通 SSH' &&
+    visible(target) && page.contains(target) && ['#ssh-host', '#ssh-port', '#ssh-user'].every(selector => {
+      const field = node(selector);
+      return visible(field) && target.contains(field) && !field.disabled && !field.readOnly;
+    }) && !visible(node('#ssh-trust-review')) && !visible(node('#ssh-credentials'));'''
+
 REVIEW_WITNESS = r'''const selectors = ['#ssh-step-title', '#ssh-reviewed-target', '#ssh-reviewed-endpoint',
     '#ssh-reviewed-key', '#ssh-reviewed-algorithm', '#ssh-reviewed-fingerprint', '#ssh-trust-confirm'];
   if (selectors.some(s => document.querySelectorAll(s).length !== 1)) return false;
@@ -56,7 +76,15 @@ class DesktopDriver(WebDriver):
     def observe(self, script, *args):
         helpers = '''const node = selector => document.querySelector(selector);
             const visible = el => !!el && el.getClientRects().length > 0 &&
-                getComputedStyle(el).visibility === 'visible';'''
+                getComputedStyle(el).visibility === 'visible';
+            const actionableButton = (el, label) => {
+                if (!visible(el) || el.tagName !== 'BUTTON' || el.disabled || el.closest('[inert]') ||
+                    (label !== undefined && el.innerText !== label)) return false;
+                const r = el.getBoundingClientRect();
+                return r.width > 0 && r.height > 0 && r.left >= 0 && r.top >= 0 &&
+                    r.right <= innerWidth && r.bottom <= innerHeight &&
+                    el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+            };'''
         return self.call('POST', self.session + '/execute/sync', {'script': helpers + script, 'args': args})
 
     def click(self, selector):
@@ -185,10 +213,16 @@ def execute(driver, fixture, report):
     host = '127.0.0.1'
     endpoint = f'{fixture.username}@{host}:{fixture.port}'
     algorithm = fixture.public_key.split(' ', 1)[0]
-    report['stage'] = 'form'
-    require(driver.observe('return visible(node("#home-dashboard"));'), 'direct_ssh_home_not_visible')
-    driver.click('#host-empty-add' if driver.observe('return visible(node("#host-empty-add"));') else '#host-open-remote')
+    report['stage'] = 'dashboard'
+    # The private catalog starts empty. Wait for its card: the transient header
+    # disappears when the desktop empty layout finishes loading.
+    wait_for(lambda: driver.observe(DASHBOARD_WITNESS), 'direct_ssh_empty_dashboard_entry_unavailable')
+    driver.click('#host-empty-add')
+    report['stage'] = 'connection_choice'
+    wait_for(lambda: driver.observe(CHOICE_WITNESS), 'direct_ssh_connection_choice_unavailable')
     driver.click('#add-ssh')
+    report['stage'] = 'target'
+    wait_for(lambda: driver.observe(TARGET_WITNESS), 'direct_ssh_target_form_unavailable')
     for selector, value in (('#ssh-host', host), ('#ssh-port', str(fixture.port)), ('#ssh-user', fixture.username)):
         driver.fill(selector, value)
     require(driver.observe('return ["#ssh-password", "#ssh-connect", "#ssh-review"].every(s => node(s).disabled);'),
@@ -200,13 +234,16 @@ def execute(driver, fixture, report):
              'direct_ssh_fingerprint_not_visible_or_mismatched')
     require(fixture.wait_for_connections_closed(1), 'direct_ssh_probe_not_closed')
     probe_evidence(fixture.snapshot(), 1)
+    report['stage'] = 'authentication'
     driver.click('#ssh-trust-confirm')
-    require(driver.observe('''const endpoint = node('#ssh-reviewed-endpoint'), password = node('#ssh-password');
-        const choice = node('#ssh-auth-password');
-        return visible(node('#ssh-credentials')) && visible(endpoint) && endpoint.innerText === arguments[0] &&
+    wait_for(lambda: driver.observe('''const endpoint = node('#ssh-reviewed-endpoint'), password = node('#ssh-password');
+        const step = node('#ssh-step-title'), choice = node('#ssh-auth-password');
+        return visible(step) && step.innerText === 'SSH 账号认证' && !visible(node('#ssh-trust-review')) &&
+            visible(node('#ssh-credentials')) && visible(endpoint) && endpoint.innerText === arguments[0] &&
             node('#ssh-review').checked && node('#ssh-auth-method').value === 'password' &&
             visible(choice) && choice.getAttribute('aria-pressed') === 'true' && visible(password) &&
-            password.type === 'password' && !password.disabled && node('#ssh-connect').disabled;''', endpoint),
+            password.type === 'password' && !password.disabled && !password.readOnly &&
+            node('#ssh-connect').disabled;''', endpoint),
             'direct_ssh_password_review_invalid')
     report['target'] = {'host': host, 'port': fixture.port, 'username': fixture.username,
                         'algorithm': algorithm, 'fingerprint': fixture.fingerprint}
@@ -238,6 +275,7 @@ def execute(driver, fixture, report):
     wait_for(lambda: driver.observe('''const card = node('#ssh-closed-feedback');
         const title = node('#ssh-closed-title'), detail = node('#ssh-closed-detail');
         return visible(card) && visible(title) && visible(detail) && card.contains(title) && card.contains(detail) &&
+            card.dataset.phase === 'confirmed' && actionableButton(node('#ssh-return-home'), '返回首页') &&
             title.innerText === '本机已断开' && detail.innerText === '凭据已清空，重连时请重新填写。' &&
             !visible(node('#ssh-live')) && node('#ssh-live-endpoint').innerText === '';'''),
              'direct_ssh_ui_disconnect_unconfirmed')
@@ -250,9 +288,11 @@ def execute(driver, fixture, report):
     report['stage'] = 'return_home'
     driver.click('#ssh-return-home')
     wait_for(lambda: driver.observe('''const home = node('#home-dashboard'), result = node('#host-ssh-disconnected');
+        const empty = node('#host-empty'), add = node('#host-empty-add'), shortcut = node('#home-open-ssh');
         return visible(home) && visible(result) && home.contains(result) && result.innerText === '本机已断开' &&
-            (visible(node('#host-open-remote')) || visible(node('#host-empty-add'))) &&
-            visible(node('#home-open-ssh')) && !visible(node('#home-ssh'));'''),
+            result.dataset.phase === 'confirmed' && visible(empty) && home.contains(empty) && empty.contains(add) &&
+            actionableButton(add, '添加主机') && home.contains(shortcut) && actionableButton(shortcut, '普通 SSH') &&
+            !visible(node('#home-ssh'));'''),
              'direct_ssh_home_not_restored')
     home_png, home = capture_outcome(driver, '#host-ssh-disconnected')
     session_evidence(fixture.snapshot(), sent=True, closed=True)

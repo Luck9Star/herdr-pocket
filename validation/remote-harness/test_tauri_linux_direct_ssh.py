@@ -132,6 +132,30 @@ class WebDriverTests(unittest.TestCase):
 
 
 class ReviewFlowTests(unittest.TestCase):
+    def test_waits_for_isolated_empty_board_instead_of_locking_onto_startup_header(self):
+        driver = Mock()
+        fixture = Mock(username='fixture', port=49821, public_key='ssh-rsa AAAA')
+        snapshots = []
+
+        def observe(script, *_):
+            if '#host-empty-add' in script:
+                snapshots.append('empty-board')
+                return len(snapshots) > 1
+            return True
+
+        def click(selector):
+            if selector == '#host-open-remote':
+                raise GuiFailure('control_unavailable_host-open-remote')
+            if selector == '#add-ssh':
+                raise GuiFailure('test_stop_at_open_ssh')
+
+        driver.observe.side_effect = observe
+        driver.click.side_effect = click
+        with self.assertRaisesRegex(GuiFailure, '^test_stop_at_open_ssh$'):
+            execute(driver, fixture, {})
+        self.assertEqual(snapshots, ['empty-board', 'empty-board'])
+        self.assertEqual([call.args[0] for call in driver.click.call_args_list], ['#host-empty-add', '#add-ssh'])
+
     def test_physical_confirmation_occurs_after_probe_evidence(self):
         events = []
         driver = Mock()

@@ -23,7 +23,7 @@ class Element {
 }
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 
-function setup({innerWidth=1280,rejectDrafts=false}={}) {
+function setup({innerWidth=1280,rejectDrafts=false,onFrameAck=async()=>{}}={}) {
   const oldDocument=globalThis.document, oldWindow=globalThis.window;
   const nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content','workbench-split'].map(id=>[id,new Element('div')]));
   const listeners={};
@@ -33,6 +33,7 @@ function setup({innerWidth=1280,rejectDrafts=false}={}) {
   let generation=0;
   const invoke=(name,args)=>{calls.push({name,args});
     if(name==='remote_tab_reserve')return Promise.resolve(++generation);
+    if(name==='remote_tab_ack')return onFrameAck(args);
     if(name==='remote_tab_input_mode')return Promise.resolve(7);
     if(name==='remote_tab_input_send'){if(args.draft && rejectDrafts)return Promise.resolve({status:'rejected',recoveryRequired:true});const pane=tabTargets[args.tabId];return Promise.resolve({status:'accepted',receipt:{requestId:'0'.repeat(32),paneId:pane.paneId,terminalId:pane.terminalId,acceptedBytes:args.bytes.length}});}
     if(name==='remote_tab_observe'){observes.push(args);channels.push(args.onEvent);return new Promise(()=>{});}
@@ -304,6 +305,64 @@ test('width changes keep the direct editor, lease and original observing peer', 
     assert.deepEqual(s.resizes,[]);
   } finally { s.restore(); }
 });
+
+for(const delivery of ['before-pause-snapshot','paused','after-manual-resume','current']) {
+  test(`split frame acknowledgement failure is scoped to its observation: ${delivery}`, async () => {
+    const pending=Promise.withResolvers();
+    const s=setup({onFrameAck:async({epoch,seq})=>{
+      if(epoch===2 && seq===2)await pending.promise;
+    }});
+    try {
+      const a=await s.openTab('direct-pane-a');
+      const b=await s.openTab('mesh-pane-b');
+      const state=tab=>s.panelOf(tab).all().find(n=>n.className?.includes('tab-connection-actions')).dataset.state;
+      const frame=(epoch,seq,full)=>({kind:'frame',epoch,frame:{seq,full,cols:80,rows:24,bytes:[65]}});
+      await s.settlePaused(a);
+      s.splitButton.onclick();await s.flush();
+      s.send(a,{kind:'observation',snapshot:{epoch:2,phase:'resuming'}});
+      s.send(a,frame(2,1,true));
+      s.send(a,{kind:'observation',snapshot:{epoch:2,phase:'active'}});
+      const start=s.calls.length;
+      s.send(a,frame(2,2,false));
+      await s.flush();
+      assert.equal(s.calls.slice(start).filter(c=>c.name==='remote_tab_ack' && c.args.tabId===a).length,1);
+
+      const manuallyResume=delivery==='after-manual-resume';
+      if(delivery!=='current') {
+        await s.ui.hide();
+        assert.deepEqual([state(a),state(b)],['pausing','pausing']);
+        if(delivery!=='before-pause-snapshot') {
+          s.send(b,{kind:'observation',snapshot:{epoch:2,phase:'paused'}});
+          s.send(a,{kind:'observation',snapshot:{epoch:3,phase:'paused'}});
+        }
+        if(manuallyResume) {
+          await s.ui.select(a);
+          s.panelOf(a).all().find(n=>n.textContent==='恢复观察').onclick();
+          await s.flush();
+          s.send(a,{kind:'observation',snapshot:{epoch:4,phase:'resuming'}});
+          s.send(a,frame(4,1,true));
+          s.send(a,{kind:'observation',snapshot:{epoch:4,phase:'active'}});
+          await s.flush();
+        }
+      }
+
+      pending.reject(delivery==='before-pause-snapshot' ? 'tab_stale' : 'stale_ack');
+      await s.flush();
+      const expected={
+        'before-pause-snapshot':['pausing','pausing'],paused:['paused','paused'],
+        'after-manual-resume':['active','paused'],current:['disconnected','active'],
+      };
+      assert.deepEqual([state(a),state(b)],expected[delivery]);
+      const actions=s.calls.slice(start);
+      assert.deepEqual(actions.filter(c=>c.name==='remote_tab_cancel').map(c=>c.args.tabId),delivery==='current'?[a]:[]);
+      assert.deepEqual(actions.filter(c=>c.name==='remote_tab_control' && c.args.action==='resume').map(c=>c.args.tabId),
+        manuallyResume?[a]:[]);
+      assert.deepEqual(actions.filter(c=>c.name==='remote_tab_ack').map(c=>[c.args.tabId,c.args.epoch,c.args.seq]),
+        delivery==='after-manual-resume'?[[a,2,2],[a,4,1]]:[[a,2,2]]);
+      assert.ok(actions.every(c=>!['remote_tab_reserve','remote_tab_observe','remote_tab_input_send'].includes(c.name)));
+    } finally { s.restore(); }
+  });
+}
 
 test('标签切换进行中（switching 窗口）分屏入口禁用且 toggle 被拒，不产生 aria-pressed 脱节', async () => {
   const s=setup({innerWidth:1280});

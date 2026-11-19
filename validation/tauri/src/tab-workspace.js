@@ -722,7 +722,11 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
         if(event.kind==='stage') {if(!tab.wantsPause && !document.hidden && paneVisible()){tab.diagnostics.stage(event.stage);const text=connectionStageText(event.stage);if(text)status(tab,text);}return;}
         if(event.kind==='observation') {if(!Number.isSafeInteger(event.snapshot?.epoch) || (tab.epoch!==null && event.snapshot.epoch<tab.epoch))return;if(event.snapshot.epoch!==tab.epoch){if(tab.blockedIntent && !tab.blockedVerified)tab.blockedBound=false;tab.selectionTextReady=false;retireDirectPending(tab);tab.suppressBlur=true;tab.board.advance(event.snapshot.epoch);boardEvent(tab,'stale');tab.selectionReady=false;tab.frames=new RemoteFrameQueue();tab.inputRevision++;tab.inputBusy=false;tab.inputReady=false;tab.inputEpoch=null;tab.mode='observe';tab.queue.clear();if(tab.terminal)tab.terminal.options.disableStdin=true;}tab.epoch=event.snapshot.epoch;tab.state=event.snapshot.phase;if(['paused','pausing','closed'].includes(tab.state)){tab.board.invalidate(tab.state);boardEvent(tab,'stale');tab.selectionReady=false;}status(tab,tab.state==='paused'?'观察已暂停，SSH 保留；需主动恢复。':tab.state==='active'?'观察已连接；输入状态见下方。':'正在切换观察状态…');updateTabButton(tab);tab.suppressBlur=false;if(tab.state==='paused')restoreSplitPause(tab);return;}
         if(event.kind==='input_ready') {if(event.epoch!==tab.epoch || tab.blockedIntent && !tab.blockedVerified)return;tab.inputReady=true;tab.unknown=event.unknown || event.recovery_status==='unavailable' || !!(tab.unknownReview && tab.unknownReview.target.paneId===tab.target?.paneId && tab.unknownReview.target.terminalId===tab.target?.terminalId);tab.recoveryStatus=event.recovery_status;tab.message=event.recovery_status==='unavailable'?'安全记录不可用；输入保持锁定。':event.unknown?'存在未确认的发送结果，输入保持锁定；请核查原目标。':'已收到完整画面，可显式开启草稿输入。';render();return;}
-        if(event.kind!=='frame' || event.epoch!==tab.epoch || !paneVisible())return;
+        if(event.kind!=='frame' || event.epoch!==tab.epoch || tab.wantsPause || tab.closing || !paneVisible())return;
+        const controlRevision=tab.controlRevision;
+        // Pause retires the native frame ACK before its new epoch may reach the WebView.
+        const frameCurrent=()=>current(tab,token) && !tab.wantsPause && !tab.closing &&
+          event.epoch===tab.epoch && controlRevision===tab.controlRevision;
         if(tab.blockedIntent && !tab.blockedVerified && (!tab.blockedBound || !event.frame?.full || !blockedMatches(tab,tab.target))){void cancel(tab);return;}
         if(!tab.frames.accept(event.frame)){void cancel(tab);return;}
         const hadVisibleFull=tab.selectionTextReady;
@@ -739,7 +743,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
           tab.terminal.textarea.addEventListener('paste',event=>void reviewPaste(tab,event,tab.terminal.textarea,tab.composition.token && !tab.composition.ended),true);
         } else if(event.frame.full) {tab.selectionTextReady=false;if(tab.fontDiagnosticsButton)tab.fontDiagnosticsButton.disabled=true;tab.localViewport.capture();tab.terminal.reset();if(tab.terminal.cols!==event.frame.cols || tab.terminal.rows!==event.frame.rows)tab.terminal.resize(event.frame.cols,event.frame.rows);}
         const frame=event.frame;tab.terminal.write(Uint8Array.from(frame.bytes),()=>{
-          if(!current(tab,token) || !paneVisible() || event.epoch!==tab.epoch)return;
+          if(!frameCurrent() || !paneVisible())return;
           const firstBlockedFull=!!tab.blockedIntent && !tab.blockedVerified;
           if(firstBlockedFull && (!frame.full || !tab.blockedBound || !blockedMatches(tab,tab.target) || tab.wantsPause || tab.closing)){void cancel(tab);return;}
           if(!tab.frames.acknowledge(frame.seq)){void cancel(tab);return;}
@@ -749,7 +753,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
           if(frame.full && !hadVisibleFull)render();
           const focusedPane=tabs.activeId===tab.id;if(tab.selectionTextButton)tab.selectionTextButton.disabled=!focusedPane;if(tab.fontDiagnosticsButton)tab.fontDiagnosticsButton.disabled=!focusedPane;
           if(firstBlockedFull)render();
-          void invoke('remote_tab_ack',{tabId:tab.id,clientGeneration:token.generation,generation,epoch:event.epoch,seq:frame.seq}).catch(()=>{if(current(tab,token))void cancel(tab);});
+          void invoke('remote_tab_ack',{tabId:tab.id,clientGeneration:token.generation,generation,epoch:event.epoch,seq:frame.seq}).catch(()=>{if(frameCurrent())void cancel(tab);});
         });
       };
       const pending=invoke('remote_tab_observe',{tabId:tab.id,clientGeneration:token.generation,generation,paneId:tab.target?.paneId || '',terminalId:tab.target?.terminalId || '',canvas,onEvent:channel});

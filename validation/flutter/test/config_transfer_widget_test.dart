@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:terminal_view/terminal_view.dart';
 import 'package:herdr_flutter_probe/config_transfer.dart';
 import 'package:herdr_flutter_probe/config_transfer_page.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
@@ -14,6 +16,7 @@ import 'host_catalog_test.dart' show MemoryCatalogStorage,catalogPairing;
 import 'config_transfer_test.dart' show portable;
 import 'pairing_gui_test.dart' show TestDeviceKeys,tapVisible;
 import 'host_tabs_widget_test.dart' show TabFixtureAdapter,tabProfile,connectTab;
+import 'import_widget_evidence.dart';
 import 'remote_test_data.dart';
 
 class MemoryConfigDocuments implements ConfigDocuments {
@@ -34,6 +37,102 @@ class ImportSaveFixture extends MemoryCatalogStorage {
   }
 }
 void main() {
+  testWidgets('390px settings import keeps the old screen readable and closes only its historical tab', (tester) async {
+    tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(390,844);
+    addTearDown(tester.view.reset);
+    final disk = MemoryCatalogStorage(), catalog = HostCatalog(storage:disk,clock:() => 1000);
+    await catalog.load();
+    final old = tabProfile('开发 A','probeA','127.0.0.1','unspecified','opaque-mobile-a');
+    final peer = tabProfile('验证 B','probeB','127.0.0.2','unspecified','opaque-mobile-b');
+    await catalog.add(old); await catalog.add(peer);
+    final a = TabFixtureAdapter(), b = TabFixtureAdapter(), tabs = HostTabs();
+    final tokens = (await tester.runAsync(DesignTokens.load))!, captureKey = GlobalKey();
+    final outputs = Platform.environment['HERDR_M105_MOBILE_EVIDENCE'];
+    final theme = outputs == null ? tokens.theme : (await tester.runAsync(() => loadImportEvidenceFonts(
+      tokens.theme,Platform.environment['HERDR_S06_CJK_FONT'])))!;
+    Future<void> capture(String name) async {
+      expect(tester.takeException(),isNull);
+      if (outputs != null) await captureImportEvidence(tester,captureKey,File('$outputs/$name.png'));
+    }
+    final config = catalog.exportConfig({old.id},{});
+    const passphrase = 'local mobile fixture archive';
+    final archive = (await tester.runAsync(() => encryptPortableConfig(passphrase,config)))!;
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(NativeConfigDocuments.channel,(call) async {
+      expect(call.method,'open'); return archive;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(NativeConfigDocuments.channel,null));
+    await tester.pumpWidget(RepaintBoundary(key:captureKey,child:MaterialApp(debugShowCheckedModeBanner:false,theme:theme,home:HostCatalogPage(tokens:tokens,catalog:catalog,tabs:tabs,
+      keys:TestDeviceKeys(fixtureConfig()['privateKeyPem'] as String),adapterFactory:(p) => p.id == old.id ? a : b,offlineBuilder:(_) => const SizedBox()))));
+    await tester.pumpAndSettle();
+    await tapVisible(tester,'host-open-${old.id}'); await tester.pumpAndSettle();
+    await tapVisible(tester,'pair-connect'); await tester.pumpAndSettle(); await connectTab(tester,a);
+    const oldMarker = 'A LAST FRAME / M1-05';
+    a.frame!(a.generation,'w1:p1',const RemoteFrame(1,false,'\x1b[22;1H$oldMarker'));
+    await tester.pump();
+    final oldTab = tabs.active!, original = tester.widget<TerminalView>(find.byType(TerminalView)).terminal;
+    await tapVisible(tester,'hosts-board-tab');
+    await tapVisible(tester,'host-open-${peer.id}'); await tester.pumpAndSettle();
+    await tapVisible(tester,'pair-connect'); await tester.pumpAndSettle(); await connectTab(tester,b);
+    final survivor = tabs.active!, bGeneration = b.generation, bTarget = b.inputTarget;
+    expect(bTarget,isNotNull);
+    await tester.tap(find.widgetWithIcon(NavigationDestination,Icons.settings_outlined)); await tester.pumpAndSettle();
+    expect(b.inputTarget,same(bTarget)); expect(b.pauses,0);
+    await tapVisible(tester,'hosts-transfer'); await tester.pumpAndSettle(); await tapVisible(tester,'transfer-open');
+    final password = find.byKey(const ValueKey('transfer-password')), decrypt = find.byKey(const ValueKey('transfer-decrypt'));
+    await tester.ensureVisible(password); await tester.enterText(password,passphrase);
+    final controller = tester.widget<TextField>(password).controller!;
+    await tester.ensureVisible(decrypt); await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      await tester.tap(decrypt);
+      final deadline = DateTime.now().add(const Duration(seconds:30));
+      while (controller.text.isNotEmpty && DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds:20));
+      }
+      expect(controller.text,isEmpty);
+    });
+    await tester.pumpAndSettle();
+    final choice = find.byKey(const ValueKey('transfer-choice-0'));
+    await tester.ensureVisible(choice); await tester.pumpAndSettle();
+    await tester.tap(find.descendant(of:choice,matching:find.byIcon(Icons.arrow_drop_down)).hitTestable());
+    await tester.pumpAndSettle(); await tester.tap(find.text('替换全部冲突').hitTestable().last); await tester.pumpAndSettle();
+    await tapVisible(tester,'transfer-review');
+    final apply = find.byKey(const ValueKey('transfer-apply'));
+    await tester.ensureVisible(apply); await tester.pumpAndSettle();
+    expect(apply.hitTestable(),findsOneWidget);
+    final affected = find.byKey(ValueKey('transfer-affected-tab-${oldTab.id}'));
+    expect(affected.hitTestable(),findsOneWidget);
+    expect(find.byKey(ValueKey('transfer-affected-tab-${survivor.id}')),findsNothing);
+    await capture('mobile-import-review');
+    await tester.tap(apply); await tester.pumpAndSettle();
+    expect(oldTab.view.value.state,'retired'); expect(tabs.tabs,[oldTab,survivor]);
+    expect(b.inputTarget,same(bTarget)); expect(b.generation,bGeneration);
+    await tester.pageBack(); await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithIcon(NavigationDestination,Icons.terminal)); await tester.pumpAndSettle();
+    expect(survivor.inputEligible.value,isTrue);
+    await tapVisible(tester,'host-tab-${oldTab.id}'); await tester.pumpAndSettle();
+    final historical = find.byKey(ValueKey('retired-host-view-${oldTab.id}'));
+    expect(historical,findsOneWidget);
+    final oldTerminal = tester.widget<TerminalView>(find.descendant(of:historical,matching:find.byType(TerminalView)));
+    expect(oldTerminal.readOnly,isTrue); expect(oldTerminal.terminal,same(original));
+    expect(oldTerminal.terminal.onOutput,isNull);
+    expect(oldTerminal.terminal.buffer.lines[21].getText(),contains(oldMarker));
+    expect(find.byKey(const ValueKey('remote-connect')),findsNothing);
+    expect(find.byKey(const ValueKey('remote-resume')),findsNothing);
+    final close = find.byKey(ValueKey('host-tab-close-${oldTab.id}'));
+    if (close.hitTestable().evaluate().isEmpty) {
+      await tester.ensureVisible(close); await tester.pumpAndSettle();
+    }
+    expect(close.hitTestable(),findsOneWidget);
+    await capture('mobile-import-retained');
+    await tester.tap(close); await tester.pumpAndSettle();
+    expect(tabs.tabs,[survivor]); expect(b.cancels,0); expect(b.calls,1); expect(b.generation,bGeneration);
+    expect(historical,findsNothing);
+    final remaining = find.byKey(ValueKey('host-tab-${survivor.id}'));
+    expect(remaining,findsOneWidget);
+    await tester.ensureVisible(remaining); await capture('mobile-import-closed');
+    await tester.pumpWidget(const SizedBox()); tabs.dispose(); catalog.dispose();
+  });
   for (final failure in ['catalog_conflict','catalog_write_unknown']) {
     testWidgets('failed import preserves the unrelated original observation while recovering catalog: $failure', (tester) async {
       tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(390,844);

@@ -1,10 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui' as ui;
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:terminal_view/terminal_view.dart';
@@ -18,6 +16,7 @@ import 'package:herdr_flutter_probe/pairing_page.dart';
 import 'package:herdr_flutter_probe/remote_adapter.dart';
 import 'package:herdr_flutter_probe/remote_input.dart';
 import 'host_catalog_test.dart' show MemoryCatalogStorage;
+import 'import_widget_evidence.dart';
 import 'pairing_gui_test.dart' as pairing;
 import 'pairing_gui_ssh_test.dart' show GuiSshMemoryInputJournal;
 
@@ -65,20 +64,9 @@ void main() {
     final catalog = HostCatalog(storage: MemoryCatalogStorage()), tabs = HostTabs();
     traceAdapters.addAll(adapters); traceTabs = tabs;
     final tokens = (await tester.runAsync(DesignTokens.load))!;
-    var theme = tokens.theme;
-    if (importReplace) {
-      await tester.runAsync(() async {
-        const monoAsset = 'assets/shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf';
-        await (FontLoader('ProbeNerd')..addFont(rootBundle.load(monoAsset))).load();
-        await (FontLoader('MaterialIcons')..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
-        final cjk = env['HERDR_S06_CJK_FONT'];
-        if (cjk != null) {
-          await (FontLoader('S06Cjk')..addFont(File(cjk).readAsBytes().then(ByteData.sublistView))).load();
-          theme = theme.copyWith(textTheme: theme.textTheme.apply(fontFamily: 'S06Cjk'),
-            primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: 'S06Cjk'));
-        }
-      });
-    }
+    final theme = importReplace
+      ? (await tester.runAsync(() => loadImportEvidenceFonts(tokens.theme,env['HERDR_S06_CJK_FONT'])))!
+      : tokens.theme;
     tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(1440, 1000);
     // Live binding keeps an independent 800x600 render surface unless this is
     // set; physicalSize alone changes MediaQuery but not layout constraints.
@@ -127,19 +115,9 @@ void main() {
       await until(() => settled && (failure != null || (peerAck?.existsSync() ?? true)));
       if (failure != null) throw failure!;
     }
-    Future<void> capture(String name) async {
-      await tester.pump();
-      final root = captureKey.currentContext!.findRenderObject()! as RenderRepaintBoundary;
-      await tester.runAsync(() async {
-        final image = await root.toImage();
-        try {
-          final png = (await image.toByteData(format: ui.ImageByteFormat.png))!;
-          File('${exchange.path}/$name.png').writeAsBytesSync(png.buffer.asUint8List());
-        } finally { image.dispose(); }
-      });
-    }
+    Future<void> capture(String name) => captureImportEvidence(tester,captureKey,File('${exchange.path}/$name.png'));
     stage('s06_homepage');
-    await tester.pumpWidget(RepaintBoundary(key: captureKey, child: MaterialApp(theme: theme, home: HostCatalogPage(
+    await tester.pumpWidget(RepaintBoundary(key: captureKey, child: MaterialApp(debugShowCheckedModeBanner: false, theme: theme, home: HostCatalogPage(
       tokens: tokens, catalog: catalog, tabs: tabs, keys: keys,
       adapterFactory: (profile) => adapters[profile.target['session'] == configs[0]['session'] ? 0 : 1],
       offlineBuilder: (_) => const SizedBox()))));

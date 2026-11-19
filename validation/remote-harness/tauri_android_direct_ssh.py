@@ -662,10 +662,14 @@ def active_view(browser, fixture, section, keyboard=False):
       const focused=document.activeElement===document.querySelector('#ssh-terminal .xterm-helper-textarea');
       const panel=one('network-panel'),heading=panel?.querySelector(':scope > h2');
       const networkButton=[...(panel?.querySelectorAll(':scope > button')||[])].find(e=>e.textContent.trim()==='新增网络配置');
+      const settingsStatus=route?.querySelector(':scope > #ssh-settings-active[role="status"]');
+      const settingsLabel=settingsStatus?.querySelector(':scope > strong');
+      const settingsTarget=route?.querySelector(':scope > #ssh-settings-target');
+      const settingsEndpoint=settingsTarget?.querySelector(':scope > #ssh-settings-endpoint');
       const sectionContent=ssh || (spec.section==='dashboard'?shown(one('home-dashboard')):
         spec.section==='network'?shown(panel)&&shown(heading)&&heading.textContent.trim()==='网络配置'&&shown(networkButton):
-        spec.section==='settings'?shown(one('ssh-settings-active'))&&one('ssh-settings-active').textContent.trim()==='普通 SSH 会话保持连接'&&
-          shown(one('ssh-settings-endpoint'))&&one('ssh-settings-endpoint').textContent.trim()===spec.target:false);
+        spec.section==='settings'?shown(settingsStatus)&&shown(settingsLabel)&&settingsLabel.textContent.trim()==='普通 SSH 会话保持连接'&&
+          shown(settingsTarget)&&shown(settingsEndpoint)&&settingsEndpoint.textContent.trim()===spec.target:false);
       return {route:shown(route),live:!!live&&!live.hidden,
         title:!ssh||shown(title)&&title.textContent.trim()==='普通 SSH',
         badge:!ssh||hit(badge)&&badge.textContent.trim()==='已连接',

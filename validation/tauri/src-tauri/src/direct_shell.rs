@@ -13,15 +13,24 @@ use tokio::sync::watch;
 
 type CloseResult = Result<(), &'static str>;
 
+#[derive(PartialEq, Eq)]
+enum SessionState {
+    Active,
+    Closing,
+    WindowDestroyed,
+}
+
 struct Session {
     owner: String,
     control: ShellControl,
-    closing: bool,
+    state: SessionState,
     retired: watch::Receiver<Option<CloseResult>>,
 }
 impl Session {
     fn request_close(&mut self) {
-        self.closing = true;
+        if self.state == SessionState::Active {
+            self.state = SessionState::Closing;
+        }
         self.control.close();
     }
 }
@@ -61,7 +70,7 @@ impl Shells {
             Session {
                 owner: owner.to_owned(),
                 control,
-                closing: false,
+                state: SessionState::Active,
                 retired,
             },
         );
@@ -99,6 +108,7 @@ impl Shells {
     fn close_window(&self, owner: &str) {
         if let Ok(mut registry) = self.0.lock() {
             for session in registry.sessions.values_mut().filter(|s| s.owner == owner) {
+                session.state = SessionState::WindowDestroyed;
                 session.request_close();
             }
         }
@@ -114,15 +124,29 @@ struct Worker {
     result: CloseResult,
 }
 impl Worker {
-    fn is_current(&self) -> bool {
-        self.registry.upgrade().is_some_and(|registry| {
-            registry.lock().is_ok_and(|registry| {
-                registry
-                    .sessions
-                    .get(&self.id)
-                    .is_some_and(|session| !session.closing)
+    fn send_event(
+        &self,
+        on_event: &Channel<Event>,
+        event: ShellEvent,
+        error: Option<&'static str>,
+    ) -> CloseResult {
+        let registry = self.registry.upgrade().ok_or("cancelled")?;
+        let registry = registry.lock().map_err(|_| "cancelled")?;
+        let session = registry.sessions.get(&self.id).ok_or("cancelled")?;
+        // Serialize dispatch with close and window destruction. A retired SSH
+        // transport can still deliver a report to its closing window.
+        if session.state != SessionState::Active
+            && !(session.state == SessionState::Closing && event.has_exit_report())
+        {
+            return Err("cancelled");
+        }
+        on_event
+            .send(Event {
+                session_id: self.id.clone(),
+                event,
+                error,
             })
-        })
+            .map_err(|_| "cancelled")
     }
 }
 impl Drop for Worker {
@@ -185,19 +209,13 @@ pub fn ssh_shell_open(
     let session_id = worker.id.clone();
     tauri::async_runtime::spawn(async move {
         let mut last_seq = 0;
+        let mut exit_delivered = false;
         let result = direct_shell::run_shell(config, commands, |event| {
             last_seq = event.seq;
-            if worker.is_current() {
-                on_event
-                    .send(Event {
-                        session_id: worker.id.clone(),
-                        event,
-                        error: None,
-                    })
-                    .map_err(|_| "cancelled")
-            } else {
-                Err("cancelled")
-            }
+            let is_exit = event.kind == "exit";
+            worker.send_event(&on_event, event, None)?;
+            exit_delivered |= is_exit;
+            Ok(())
         })
         .await;
         worker.result = match result {
@@ -206,11 +224,11 @@ pub fn ssh_shell_open(
             _ => Ok(()),
         };
         if let Err(error) = result
-            && worker.is_current()
+            && !exit_delivered
         {
-            let _ = on_event.send(Event {
-                session_id: worker.id.clone(),
-                event: ShellEvent {
+            let _ = worker.send_event(
+                &on_event,
+                ShellEvent {
                     seq: last_seq + 1,
                     kind: "error",
                     data: None,
@@ -218,8 +236,8 @@ pub fn ssh_shell_open(
                     exit_signal: None,
                     presented_fingerprint: None,
                 },
-                error: Some(error),
-            });
+                Some(error),
+            );
         }
     });
     // Reserved before spawning, so close can cancel even the first network dial.
@@ -232,7 +250,7 @@ fn control(state: &Shells, owner: &str, id: &str) -> Result<ShellControl, String
         .map_err(|_| "state_unavailable")?
         .sessions
         .get(id)
-        .filter(|session| session.owner == owner && !session.closing)
+        .filter(|session| session.owner == owner && session.state == SessionState::Active)
         .map(|session| session.control.clone())
         .ok_or_else(|| "shell_stale".into())
 }
@@ -293,6 +311,70 @@ mod tests {
         pin::pin,
         task::Poll,
     };
+
+    fn shell_event(seq: u64, kind: &'static str, exit_status: Option<u32>) -> ShellEvent {
+        ShellEvent {
+            seq,
+            kind,
+            data: None,
+            exit_status,
+            exit_signal: None,
+            presented_fingerprint: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn closing_owner_receives_only_its_remote_exit_report_before_close_ack() {
+        use tauri::ipc::InvokeResponseBody;
+
+        let shells = Shells::default();
+        let (input, commands) = direct_shell::shell_commands();
+        let mut worker = shells.reserve("main", input).unwrap();
+        let id = worker.id.clone();
+        let (send, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let channel = Channel::new(move |body| {
+            let InvokeResponseBody::Json(json) = body else {
+                panic!("expected shell event JSON");
+            };
+            send.send(serde_json::from_str::<serde_json::Value>(&json).unwrap())
+                .unwrap();
+            Ok(())
+        });
+        let mut closing = pin!(shells.close("main", &id));
+        assert!(
+            poll_fn(|cx| Poll::Ready(closing.as_mut().poll(cx)))
+                .await
+                .is_pending()
+        );
+        assert_eq!(shells.close("other", &id).await, Err("shell_stale"));
+        for kind in ["ready", "data", "exit", "host_key_change", "error"] {
+            assert_eq!(
+                worker.send_event(&channel, shell_event(1, kind, None), None),
+                Err("cancelled"),
+                "unexpected event while closing: {kind}"
+            );
+        }
+
+        drop(commands);
+        worker
+            .send_event(&channel, shell_event(2, "exit", Some(0)), None)
+            .unwrap();
+        assert_eq!(
+            received.try_recv().unwrap(),
+            serde_json::json!({"sessionId": id, "seq": 2, "kind": "exit", "exitStatus": 0})
+        );
+        assert!(received.try_recv().is_err());
+        assert!(
+            poll_fn(|cx| Poll::Ready(closing.as_mut().poll(cx)))
+                .await
+                .is_pending()
+        );
+        worker.result = Ok(());
+        drop(worker);
+        assert_eq!(closing.await, Ok(()));
+        assert_eq!(shells.close("main", &id).await, Ok(()));
+        assert!(received.try_recv().is_err());
+    }
 
     #[tokio::test]
     async fn concurrent_close_waits_for_one_worker_and_reuses_its_result() {
@@ -364,13 +446,27 @@ mod tests {
         assert_eq!(other_input.acknowledge(1), Err("stale_ack"));
         let (new_input, _new_commands) = direct_shell::shell_commands();
         let newer = shells.reserve("main", new_input.clone()).unwrap();
-        worker.result = Ok(());
-        drop(worker);
+        {
+            let channel = Channel::new(|_| panic!("report sent to destroyed window"));
+            let mut closing = pin!(shells.close("main", &id));
+            assert!(
+                poll_fn(|cx| Poll::Ready(closing.as_mut().poll(cx)))
+                    .await
+                    .is_pending()
+            );
+            assert_eq!(
+                worker.send_event(&channel, shell_event(2, "exit", Some(0)), None),
+                Err("cancelled")
+            );
+            worker.result = Ok(());
+            drop(worker);
+            assert_eq!(closing.await, Ok(()));
+        }
 
         assert_eq!(shells.close("main", &id).await, Ok(()));
         assert_eq!(shells.close("other", &id).await, Err("shell_stale"));
-        assert!(newer.is_current());
-        assert!(other.is_current());
+        assert!(control(&shells, "main", &newer.id).is_ok());
+        assert!(control(&shells, "other", &other.id).is_ok());
         drop(shells);
         assert_eq!(new_input.acknowledge(1), Err("cancelled"));
         assert_eq!(other_input.acknowledge(1), Err("cancelled"));

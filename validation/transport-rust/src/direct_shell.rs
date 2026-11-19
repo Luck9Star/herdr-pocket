@@ -162,6 +162,11 @@ pub struct ShellEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub presented_fingerprint: Option<String>,
 }
+impl ShellEvent {
+    pub fn has_exit_report(&self) -> bool {
+        self.kind == "exit" && (self.exit_status.is_some() || self.exit_signal.is_some())
+    }
+}
 type Reply = oneshot::Sender<Result<()>>;
 enum Command {
     Write(Vec<u8>, Reply),
@@ -271,7 +276,15 @@ pub async fn run_shell(
     let _abort = CancelOnDrop(cancel.clone());
     let (release, released) = oneshot::channel();
     let mut ssh = None;
-    let result = shell_connection(config, commands, &mut emit, &mut ssh, release).await;
+    let mut exit = ShellEvent {
+        seq: 2, // Sequence 1 is the ready event.
+        kind: "exit",
+        data: None,
+        exit_status: None,
+        exit_signal: None,
+        presented_fingerprint: None,
+    };
+    let result = shell_connection(config, commands, &mut emit, &mut ssh, release, &mut exit).await;
     // Cancellation can make the underlying I/O fail during the same poll.
     let cancelled = cancel.is_cancelled();
     cancel.cancel();
@@ -291,10 +304,17 @@ pub async fn run_shell(
     })
     .await
     .map_err(|_| "close_timeout")??;
+    // An active channel can report its process outcome before it closes. A
+    // later cancellation must retain that report until local retirement.
+    let emitted = if exit.has_exit_report() || (!cancelled && result.is_ok()) {
+        emit(exit)
+    } else {
+        Ok(())
+    };
     if cancelled {
         Err("cancelled")
     } else {
-        emit(result?)
+        result.and(emitted)
     }
 }
 async fn shell_connection(
@@ -303,7 +323,8 @@ async fn shell_connection(
     emit: &mut (impl FnMut(ShellEvent) -> Result<()> + Send),
     ssh: &mut Option<client::Handle<Pinned>>,
     release: oneshot::Sender<()>,
-) -> Result<ShellEvent> {
+    exit: &mut ShellEvent,
+) -> Result<()> {
     let cancel = commands.cancel.clone();
     let expected = config.validate()?;
     let audit = Arc::new(Audit::default());
@@ -410,17 +431,14 @@ async fn shell_connection(
     request_reply(&mut channel, &cancel, "shell_failed").await?;
     drop(config); // Erase caller credentials once authentication/setup finishes.
     commands.ready.store(true, Ordering::SeqCst);
-    let mut seq = 1;
     emit(ShellEvent {
-        seq,
+        seq: 1,
         kind: "ready",
         data: None,
         exit_status: None,
         exit_signal: None,
         presented_fingerprint: None,
     })?;
-    let mut exit_status = None;
-    let mut exit_signal = None;
     loop {
         tokio::select! { biased;
             _ = cancel.wait() => return Err("cancelled"),
@@ -440,17 +458,18 @@ async fn shell_connection(
             },
             message = channel.wait() => match message {
                 Some(ChannelMsg::Data { data }) | Some(ChannelMsg::ExtendedData { data, .. }) => {
-                    seq += 1;
+                    let seq = exit.seq;
                     let (tx, rx) = oneshot::channel();
                     *commands.ack.lock().map_err(|_| "state_unavailable")? = Some((seq, tx));
                     emit(ShellEvent { seq, kind: "data", data: Some(data.to_vec()), exit_status: None, exit_signal: None, presented_fingerprint: None })?;
+                    exit.seq += 1;
                     // One packet at a time reaches the UI. SSH's bounded window
                     // then provides backpressure all the way to the remote PTY.
                     bounded(&cancel, 30, "output_ack_failed", rx).await
                         .map_err(|code| if code == "timeout" { "output_ack_failed" } else { code })?;
                 }
-                Some(ChannelMsg::ExitStatus { exit_status: status }) => exit_status = Some(status),
-                Some(ChannelMsg::ExitSignal { signal_name, .. }) => exit_signal = Some(exit_signal_name(signal_name)),
+                Some(ChannelMsg::ExitStatus { exit_status }) => exit.exit_status = Some(exit_status),
+                Some(ChannelMsg::ExitSignal { signal_name, .. }) => exit.exit_signal = Some(exit_signal_name(signal_name)),
                 Some(ChannelMsg::Close) | None => break,
                 _ => {},
             }
@@ -464,14 +483,7 @@ async fn shell_connection(
         ssh.disconnect(Disconnect::ByApplication, "", "en"),
     )
     .await;
-    Ok(ShellEvent {
-        seq: seq + 1,
-        kind: "exit",
-        data: None,
-        exit_status,
-        exit_signal,
-        presented_fingerprint: None,
-    })
+    Ok(())
 }
 
 fn exit_signal_name(signal: russh::Sig) -> &'static str {

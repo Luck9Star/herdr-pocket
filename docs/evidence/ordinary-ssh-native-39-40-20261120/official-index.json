@@ -1,0 +1,672 @@
+{
+  "schema_version": 1,
+  "repository": "Luck9Star/herdr-pocket",
+  "verified_on": "2026-11-20",
+  "checked_main": "63d1148a60afd6ecd3c4395175c5fe8ce7e9d907",
+  "pr_42_head": "5a2281780229b7ca35110c8c6e68e539730639bf",
+  "connection_fields": [
+    "hostKey",
+    "authAttempts",
+    "authSuccesses",
+    "ptyRequests",
+    "shellRequests",
+    "inputBytes",
+    "outputBytes",
+    "closed"
+  ],
+  "runs": [
+    {
+      "client": "tauri",
+      "platform": "linux",
+      "source": "ea5dd709806a2745e25792921d3b5da07dcdb6c0",
+      "head_branch": "codex/acceptance/direct-ssh-ios-tauri-only-local-result-main-r3",
+      "run": 44600935553,
+      "job": 135831834733,
+      "attempt": 1,
+      "workflow": "paired-gui-validation.yml",
+      "artifact": 14567539745,
+      "archive_name": "tauri-linux-direct-ssh-password-ea5dd709806a2745e25792921d3b5da07dcdb6c0",
+      "archive_bytes": 88168,
+      "archive_sha256": "005fd999d68cd95591218de3e49ff0299b1955d24c3d581025f07205723a28e1",
+      "expires_utc": "2026-12-03T19:44:55Z",
+      "report_path": "result.json",
+      "zip_members": 4,
+      "report_sha256": "a14a1f3e28fd39277d9b9487e4801ec7ec495c78f718fcce54d60a05414a8b01",
+      "report_crc32": "9f864a4f",
+      "environment": "Linux 原生 GTK / WebKitGTK · Xvfb",
+      "facts": {
+        "authentication": "password",
+        "stage": "complete",
+        "fingerprintReviewed": true,
+        "terminal.imageSize": [
+          1440,
+          1200
+        ],
+        "terminal.proofSequenceVisible": true,
+        "peer.connectionEvents.1.closeReason": "peer_eof",
+        "returnedHome": true,
+        "credentialFieldsCleared": true,
+        "cleanup": {
+          "peerListenerReleased": true,
+          "fixturePasswordCleared": true,
+          "webdriverProcessStopped": true,
+          "webdriverPortsReleased": true,
+          "privateDirectoryRemoved": true
+        }
+      },
+      "connections": {
+        "peer.connectionEvents": [
+          [
+            "A",
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            true
+          ],
+          [
+            "A",
+            1,
+            1,
+            1,
+            1,
+            9,
+            102,
+            true
+          ]
+        ]
+      }
+    },
+    {
+      "client": "tauri",
+      "platform": "android",
+      "source": "ea5dd709806a2745e25792921d3b5da07dcdb6c0",
+      "head_branch": "codex/acceptance/direct-ssh-ios-tauri-only-local-result-main-r3",
+      "run": 44600936462,
+      "job": 135831836282,
+      "attempt": 1,
+      "workflow": "tauri-android-direct-ssh.yml",
+      "artifact": 14569371319,
+      "archive_name": "tauri-android-direct-ssh-evidence-ea5dd709806a2745e25792921d3b5da07dcdb6c0",
+      "archive_bytes": 612210,
+      "archive_sha256": "9dc61d06f51997f146b22b9bc93557e322cdfa966a76dbded35c647b02d59232",
+      "expires_utc": "2026-12-03T19:57:46Z",
+      "report_path": "tauri-direct-evidence/manifest.json",
+      "zip_members": 13,
+      "report_sha256": "4d01416464500a42e632ee8ae4ce4b0b314af88d1cacaef6f1b120eefbcf8dff",
+      "report_crc32": "79159393",
+      "environment": "Android API 35 x86_64 Google APIs 模拟器 · 原生应用 WebView 与 CDP",
+      "facts": {
+        "scenario": "default",
+        "fingerprintReviewed": true,
+        "ordinaryActive": {
+          "keyboardOpened": true,
+          "keyboardClosed": true,
+          "board": true,
+          "terminalFromBoard": true,
+          "network": true,
+          "terminalFromNetwork": true,
+          "settings": true,
+          "terminalFromSettings": true,
+          "singleAuthenticatedShellWithoutInput": true
+        },
+        "terminalEchoRendered": true,
+        "disconnected": true,
+        "passwordCleared": true,
+        "returnedHome": true,
+        "helperKeysExact": true,
+        "terminalScreenshot.imageSize": [
+          1080,
+          2340
+        ],
+        "terminalScreenshot.captureEngine": "adb exec-out screencap -p",
+        "rotation.terminalScreenshot.captureEngine": "adb exec-out screencap -p",
+        "terminalScreenshot.proofSequenceVisible": true,
+        "rotation.cancelKeptTrust": true,
+        "rotation.rotationEvidence.2.connections": 4,
+        "rotation.rotationEvidence.2.connectionsClosed": true,
+        "rotation.terminalScreenshot.proofSequenceVisible": true,
+        "encryptedKey.fingerprintReviewed": true,
+        "encryptedKey.terminalEchoRendered": true,
+        "encryptedKey.disconnected": true,
+        "encryptedKey.passwordCleared": true,
+        "encryptedKey.returnedHome": true,
+        "encryptedKey.peer": {
+          "authAccepted": true,
+          "ptyRequested": true,
+          "shellRequested": true,
+          "markerReceived": true,
+          "sessionClosed": true
+        },
+        "encryptedKey.cleanup": {
+          "browser": true,
+          "application": true,
+          "forward": true,
+          "reverse": true,
+          "fixtureConnections": true
+        },
+        "rotation.cleanup": {
+          "browser": true,
+          "application": true,
+          "forward": true,
+          "reverse": true,
+          "fixtureConnections": true
+        },
+        "cleanup": {
+          "browser": true,
+          "application": true,
+          "forward": true,
+          "reverse": true,
+          "fixtureConnections": true
+        },
+        "activeImeChecks.0.reason": "owned_hidden",
+        "activeImeChecks.1.reason": "owned_visible",
+        "activeImeChecks.2.reason": "owned_visible",
+        "activeImeChecks.3.reason": "owned_hidden",
+        "activeImeChecks.4.reason": "owned_hidden",
+        "rotation.rotationEvidence.2.acceptedSession.inputBytes": 9
+      },
+      "image_properties": {
+        "path": "avd-evidence/image.properties",
+        "values": {
+          "AndroidVersion.ApiLevel": "35",
+          "SystemImage.Abi": "x86_64",
+          "SystemImage.TagId": "google_apis",
+          "Pkg.Revision": "9"
+        }
+      }
+    },
+    {
+      "client": "tauri",
+      "platform": "ios",
+      "source": "ea5dd709806a2745e25792921d3b5da07dcdb6c0",
+      "head_branch": "codex/acceptance/direct-ssh-ios-tauri-only-local-result-main-r3",
+      "run": 44600895267,
+      "job": 135831679520,
+      "attempt": 1,
+      "workflow": "direct-ssh-ios.yml",
+      "artifact": 14570171432,
+      "archive_name": "tauri-ordinary-ssh-ios-ea5dd709806a2745e25792921d3b5da07dcdb6c0",
+      "archive_bytes": 385977,
+      "archive_sha256": "fd1116aac9dcd92b1f82c7535f1279fcdd413e003786babc6b49092fec564b7f",
+      "expires_utc": "2027-02-17T19:41:18Z",
+      "report_path": "result.json",
+      "zip_members": 6,
+      "report_sha256": "8853735b67a300c5be9083de621d82545d39879599e7c0567612f58adf031c4c",
+      "report_crc32": "7c6cdc5f",
+      "environment": "iOS 26.2 · iPhone 17 Pro Max 模拟器 · XCTest",
+      "facts": {
+        "simulator": {
+          "deviceType": "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max",
+          "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-26-2"
+        },
+        "homeEntry.ordinary.route": "viaAdd",
+        "homeEntry.keyChange.route": "viaAdd",
+        "cases.ordinary.status": "passed",
+        "cases.ordinary.fingerprintReviewed": true,
+        "cases.ordinary.disconnected": true,
+        "cases.ordinary.terminalScreenshot.imageSize": [
+          1320,
+          2868
+        ],
+        "cases.ordinary.terminalScreenshot.proofSequenceVisible": true,
+        "cases.keyChange.status": "passed",
+        "cases.keyChange.cancelKeptTrust": true,
+        "cases.keyChange.freshFingerprintConfirmed": true,
+        "cases.keyChange.disconnected": true,
+        "cases.keyChange.terminalScreenshot.proofSequenceVisible": true,
+        "cleanup": {
+          "simulatorDeleted": true,
+          "fixturesClosed": true,
+          "privateFilesRemoved": true
+        },
+        "cases.ordinary.activeFlow.0.step": "keyboard_opened",
+        "cases.ordinary.activeFlow.1.step": "keyboard_closed",
+        "cases.ordinary.activeFlow.2.step": "board",
+        "cases.ordinary.activeFlow.3.step": "terminal_from_board",
+        "cases.ordinary.activeFlow.4.step": "network",
+        "cases.ordinary.activeFlow.5.step": "terminal_from_network",
+        "cases.ordinary.activeFlow.6.step": "settings",
+        "cases.ordinary.activeFlow.7.step": "terminal_from_settings"
+      },
+      "connections": {
+        "cases.ordinary.peer.connectionEvents": [
+          [
+            "A",
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            true
+          ],
+          [
+            "A",
+            1,
+            1,
+            1,
+            1,
+            9,
+            102,
+            true
+          ]
+        ],
+        "cases.keyChange.peer.connectionEvents": [
+          [
+            "A",
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            true
+          ],
+          [
+            "B",
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            true
+          ],
+          [
+            "B",
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            true
+          ],
+          [
+            "B",
+            1,
+            1,
+            1,
+            1,
+            9,
+            102,
+            true
+          ]
+        ]
+      }
+    },
+    {
+      "client": "flutter",
+      "platform": "linux",
+      "source": "8be0a23b514469cd33707c30ecf578a7524207b1",
+      "head_branch": "codex/acceptance/direct-ssh-ios-flutter-only-encrypted-key-main-r2",
+      "run": 44601674208,
+      "job": 135834441543,
+      "attempt": 1,
+      "workflow": "paired-gui-validation.yml",
+      "artifact": 14569155442,
+      "archive_name": "flutter-linux-direct-ssh-password-8be0a23b514469cd33707c30ecf578a7524207b1",
+      "archive_bytes": 37538,
+      "archive_sha256": "0e6ad2db14d112ff10829efcb45a2c02a1fea45912509dbab9dccb8bd9113fdd",
+      "expires_utc": "2026-12-03T19:50:20Z",
+      "report_path": "result.json",
+      "zip_members": 2,
+      "report_sha256": "43a181c91cd8230b4f68b60a06bbbf937dd798f5a7cfdd0e10a3049857323b0e",
+      "report_crc32": "001c77d3",
+      "environment": "Linux 原生 Flutter debug GTK · Xvfb",
+      "facts": {
+        "authentication": "password",
+        "checkpoint": "complete",
+        "fingerprintMatchedBeforeConfirm": true,
+        "fingerprintConfirmed": true,
+        "sourceVerification.flutterVersion": "3.47.9",
+        "sourceVerification.productionDartFilesMatched": 45,
+        "terminal.imageSize": [
+          1920,
+          1080
+        ],
+        "terminal.windowBounds": [
+          0,
+          0,
+          1280,
+          720
+        ],
+        "terminal.proofSequenceVisible": true,
+        "peer.connectionEvents.1.closeReason": "peer_eof",
+        "returnedHome": true,
+        "credentialFieldsCleared": true,
+        "cleanup": {
+          "ownedFlutterProcessStopped": true,
+          "peerListenerReleased": true,
+          "fixturePasswordCleared": true,
+          "fixtureDirectoryRemoved": true
+        }
+      },
+      "connections": {
+        "peer.connectionEvents": [
+          [
+            "A",
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            true
+          ],
+          [
+            "A",
+            1,
+            1,
+            1,
+            1,
+            9,
+            102,
+            true
+          ]
+        ]
+      }
+    },
+    {
+      "client": "flutter",
+      "platform": "android",
+      "source": "8be0a23b514469cd33707c30ecf578a7524207b1",
+      "head_branch": "codex/acceptance/direct-ssh-ios-flutter-only-encrypted-key-main-r2",
+      "run": 44601672495,
+      "job": 135834431911,
+      "attempt": 1,
+      "workflow": "direct-ssh-android.yml",
+      "artifact": 14570246209,
+      "archive_name": "flutter-ordinary-ssh-android-8be0a23b514469cd33707c30ecf578a7524207b1",
+      "archive_bytes": 681496,
+      "archive_sha256": "ea6f1460e058d9136ec0ece1c57d28bb4afd7218634351769a76d9ed84df4032",
+      "expires_utc": "2027-02-17T19:45:48Z",
+      "report_path": "direct-ssh-public/result.json",
+      "zip_members": 15,
+      "report_sha256": "90c64a0462edc9b16d537e918a13c1296426e97e81a0a037b71aacf7c67c3bc4",
+      "report_crc32": "48c182f4",
+      "environment": "Android API 35 x86_64 Google APIs 模拟器 · Flutter 集成测试",
+      "facts": {
+        "device.fingerprintMatched": true,
+        "device.explicitTrustRequired": true,
+        "device.platformKeyboardOpenedAndClosed": true,
+        "device.boardNetworkSettingsReturnedToSameTerminal": true,
+        "device.remoteEchoVisible": true,
+        "device.credentialsCleared": true,
+        "peerClosedBeforeDriverExit": true,
+        "physicalImeVerified": false,
+        "screenProof.ordinary.accepted": true,
+        "screenProof.key-rotation.accepted": true,
+        "rotation.device.cancelKeepsOldTrust": true,
+        "rotation.device.freshProbeMatchedIndependentB": true,
+        "rotation.peerClosedBeforeDriverExit": true,
+        "cleanup": {
+          "reverseRemoved": true,
+          "packageRemoved": true,
+          "ownedForwardsRemoved": true,
+          "fixtureClosed": true,
+          "flutterToolStopped": true,
+          "rawLogsUploaded": false
+        },
+        "ordinaryMobileCheckpoints.keyboard_shown.inputBytes": 0,
+        "ordinaryMobileCheckpoints.keyboard_hidden.inputBytes": 0,
+        "ordinaryMobileCheckpoints.board_visible.inputBytes": 0,
+        "ordinaryMobileCheckpoints.board_returned.inputBytes": 0,
+        "ordinaryMobileCheckpoints.network_visible.inputBytes": 0,
+        "ordinaryMobileCheckpoints.network_returned.inputBytes": 0,
+        "ordinaryMobileCheckpoints.settings_visible.inputBytes": 0,
+        "ordinaryMobileCheckpoints.settings_returned.inputBytes": 0,
+        "ordinaryMobileCheckpoints.keyboard_shown.id": 2,
+        "ordinaryMobileCheckpoints.keyboard_hidden.id": 2,
+        "ordinaryMobileCheckpoints.board_visible.id": 2,
+        "ordinaryMobileCheckpoints.board_returned.id": 2,
+        "ordinaryMobileCheckpoints.network_visible.id": 2,
+        "ordinaryMobileCheckpoints.network_returned.id": 2,
+        "ordinaryMobileCheckpoints.settings_visible.id": 2,
+        "ordinaryMobileCheckpoints.settings_returned.id": 2
+      },
+      "connections": {
+        "protocol.connectionEvents": [
+          [
+            "A",
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            true
+          ],
+          [
+            "A",
+            1,
+            1,
+            1,
+            1,
+            9,
+            102,
+            true
+          ]
+        ],
+        "rotation.finalSnapshot.connectionEvents": [
+          [
+            "A",
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            true
+          ],
+          [
+            "B",
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            true
+          ],
+          [
+            "B",
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            true
+          ],
+          [
+            "B",
+            1,
+            1,
+            1,
+            1,
+            9,
+            102,
+            true
+          ]
+        ]
+      },
+      "image_properties": {
+        "path": "direct-ssh-avd/image.properties",
+        "values": {
+          "AndroidVersion.ApiLevel": "35",
+          "SystemImage.Abi": "x86_64",
+          "SystemImage.TagId": "google_apis",
+          "Pkg.Revision": "9"
+        }
+      }
+    },
+    {
+      "client": "flutter",
+      "platform": "ios",
+      "source": "8be0a23b514469cd33707c30ecf578a7524207b1",
+      "head_branch": "codex/acceptance/direct-ssh-ios-flutter-only-encrypted-key-main-r2",
+      "run": 44601625331,
+      "job": 135834259606,
+      "attempt": 1,
+      "workflow": "direct-ssh-ios.yml",
+      "artifact": 14569332961,
+      "archive_name": "flutter-ordinary-ssh-ios-8be0a23b514469cd33707c30ecf578a7524207b1",
+      "archive_bytes": 726524,
+      "archive_sha256": "f09dc2ab3bdfdf162ca6a7845a60b30c11297cb628df0282ae7e8a54d81bee61",
+      "expires_utc": "2027-02-17T19:45:31Z",
+      "report_path": "result.json",
+      "zip_members": 9,
+      "report_sha256": "008df2022d07369982f27de62f4cfc7796cf64b8c6e73bc2c06f87255a44e562",
+      "report_crc32": "cf57a44d",
+      "environment": "iOS 26.2 · iPhone 11 模拟器 · Flutter 集成测试",
+      "facts": {
+        "simulator": {
+          "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-26-2",
+          "runtimeVersion": "26.2",
+          "deviceType": "iPhone 11"
+        },
+        "device.fingerprintMatched": true,
+        "device.platformKeyboardOpenedAndClosed": true,
+        "device.boardNetworkSettingsReturnedToSameTerminal": true,
+        "device.remoteEchoVisible": true,
+        "device.credentialsCleared": true,
+        "physicalImeVerified": false,
+        "peerClosedBeforeDriverExit": true,
+        "rotation.device.cancelKeepsOldTrust": true,
+        "rotation.peerClosedBeforeDriverExit": true,
+        "cases.encryptedKey.status": "passed",
+        "cases.encryptedKey.authenticationMethod": "publickey",
+        "cases.encryptedKey.wrongPassphrase.rejected": true,
+        "cases.encryptedKey.wrongPassphrase.peer.authAttempts": 0,
+        "cases.encryptedKey.modeSwitch": {
+          "passwordToKeyCleared": true,
+          "keyToPasswordCleared": true,
+          "sameTrust": true
+        },
+        "cases.encryptedKey.device.credentialsCleared": true,
+        "cases.encryptedKey.peerClosedBeforeDriverExit": true,
+        "screens.ordinary.accepted": true,
+        "screens.key-rotation.accepted": true,
+        "screens.encrypted.accepted": true,
+        "cleanup": {
+          "simulatorDeleted": true,
+          "fixtureClosed": true,
+          "flutterToolStopped": true,
+          "appRemoved": true,
+          "privateRemoved": true,
+          "rawLogsUploaded": false,
+          "encryptedFixtureClosed": true,
+          "encryptedSecretsCleared": true
+        },
+        "ordinaryMobileCheckpoints.keyboard_shown.inputBytes": 0,
+        "ordinaryMobileCheckpoints.keyboard_hidden.inputBytes": 0,
+        "ordinaryMobileCheckpoints.board_visible.inputBytes": 0,
+        "ordinaryMobileCheckpoints.board_returned.inputBytes": 0,
+        "ordinaryMobileCheckpoints.network_visible.inputBytes": 0,
+        "ordinaryMobileCheckpoints.network_returned.inputBytes": 0,
+        "ordinaryMobileCheckpoints.settings_visible.inputBytes": 0,
+        "ordinaryMobileCheckpoints.settings_returned.inputBytes": 0,
+        "ordinaryMobileCheckpoints.keyboard_shown.id": 2,
+        "ordinaryMobileCheckpoints.keyboard_hidden.id": 2,
+        "ordinaryMobileCheckpoints.board_visible.id": 2,
+        "ordinaryMobileCheckpoints.board_returned.id": 2,
+        "ordinaryMobileCheckpoints.network_visible.id": 2,
+        "ordinaryMobileCheckpoints.network_returned.id": 2,
+        "ordinaryMobileCheckpoints.settings_visible.id": 2,
+        "ordinaryMobileCheckpoints.settings_returned.id": 2
+      },
+      "connections": {
+        "protocol.connectionEvents": [
+          [
+            "A",
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            true
+          ],
+          [
+            "A",
+            1,
+            1,
+            1,
+            1,
+            9,
+            102,
+            true
+          ]
+        ],
+        "rotation.protocol.connectionEvents": [
+          [
+            "A",
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            true
+          ],
+          [
+            "B",
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            true
+          ],
+          [
+            "B",
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            true
+          ],
+          [
+            "B",
+            1,
+            1,
+            1,
+            1,
+            9,
+            102,
+            true
+          ]
+        ],
+        "encryptedProtocol.connectionEvents": [
+          [
+            "A",
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            true
+          ],
+          [
+            "A",
+            1,
+            1,
+            1,
+            1,
+            9,
+            102,
+            true
+          ]
+        ]
+      }
+    }
+  ]
+}

@@ -23,7 +23,7 @@ import 'package:flutter/services.dart'
         MissingPluginException,
         PhysicalKeyboardKey,
         PlatformException;
-import 'package:flutter/widgets.dart' show DebugCreator, Element, State, Text;
+import 'package:flutter/widgets.dart' show DebugCreator, Element, State, Text, View;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/direct_ssh_page.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
@@ -242,8 +242,8 @@ Future<void> _verifyWindowsReturnHome(
 
 // The shared fingerprint witness needs only target metadata. Its encrypted
 // Linux fixture path has a different credential policy and is not used here.
-class _WindowsKeyTarget implements LinuxTarget {
-  const _WindowsKeyTarget(this.port, this.fingerprint);
+class WindowsKeyTarget implements LinuxTarget {
+  const WindowsKeyTarget(this.port, this.fingerprint);
 
   @override
   final int port;
@@ -276,14 +276,13 @@ bool windowsDirectSshHomeReady(WidgetTester tester, Finder home) {
   return button is ButtonStyleButton && button.onPressed != null;
 }
 
-Future<void> _runWindowsPublicKey(
+Future<void> runWindowsDirectSshPublicKey(
   WidgetTester tester,
-  _WindowsKeyTarget target,
+  WindowsKeyTarget target,
   String privateKey, {
   required void Function(String) step,
   required Checkpoint checkpoint,
 }) async {
-  final view = tester.view;
   step('home');
   await tester.runAsync(app.main);
   final home = find.byType(HostCatalogPage);
@@ -304,6 +303,7 @@ Future<void> _runWindowsPublicKey(
   step('form');
   await openDirectSshFromHome(tester);
   final page = find.byType(DirectSshPage);
+  final view = View.of(tester.element(page));
   expect(Theme.of(tester.element(page)).platform, TargetPlatform.windows);
   final fields = [
     ('direct-host', '127.0.0.1'),
@@ -349,14 +349,33 @@ Future<void> _runWindowsPublicKey(
   expect(tester.widget<TextField>(pemField).obscureText, isTrue);
   expect(tester.widget<TextField>(pemField).controller!.text.isEmpty, isTrue);
   expect(tester.widget<FilledButton>(connect).onPressed, isNull);
-  await tap(tester, 'direct-auth-key', requireEnabled: true);
+  final keyMode = control('direct-auth-key');
+  await tapControl(
+    tester,
+    keyMode,
+    'windows_key_mode',
+    beforeTap: () =>
+        expect(tester.widget<OutlinedButton>(keyMode).onPressed, isNotNull),
+  );
 
   final passphraseField = control('direct-passphrase');
   final editable = find.descendant(
     of: pemField,
     matching: find.byType(EditableText),
   );
-  await tapControl(tester, pemField, 'windows_pem', stableHitPoint: true);
+  await tapControl(
+    tester,
+    pemField,
+    'windows_pem',
+    beforeTap: () {
+      final pem = tester.widget<TextField>(pemField);
+      expect(
+        pem.enabled != false && !pem.obscureText && pem.maxLines != 1,
+        isTrue,
+        reason: 'windows_direct_publickey_pem_not_ready',
+      );
+    },
+  );
   await waitUi(
     tester,
     () =>
@@ -372,7 +391,8 @@ Future<void> _runWindowsPublicKey(
   final input = editor.widget;
   final passphrase = tester.widget<TextField>(passphraseField);
   bool focusBound() =>
-      identical(tester.viewOf(editable), view) &&
+      editable.evaluate().length == 1 &&
+      identical(View.of(tester.element(editable)), view) &&
       identical(tester.state<EditableTextState>(editable), editor) &&
       identical(editor.widget.controller, input.controller) &&
       identical(editor.widget.focusNode, input.focusNode) &&
@@ -430,7 +450,8 @@ Future<void> _runWindowsPublicKey(
   final terminal = tester.widget<TerminalView>(terminalView).terminal;
   final terminalState = tester.state<TerminalViewState>(terminalView);
   bool targetBound() =>
-      identical(tester.viewOf(terminalView), view) &&
+      terminalView.evaluate().length == 1 &&
+      identical(View.of(tester.element(terminalView)), view) &&
       identical(tester.state<TerminalViewState>(terminalView), terminalState) &&
       tester.widget<Text>(bound).data == target.label;
   expect(targetBound() && credentialsEmpty(), isTrue);
@@ -572,7 +593,7 @@ void main() {
           !pem.trimRight().endsWith('-----END OPENSSH PRIVATE KEY-----')) {
         fail('windows_direct_publickey_fixture_required');
       }
-      target = _WindowsKeyTarget(port, fingerprint);
+      target = WindowsKeyTarget(port, fingerprint);
       privateKey = pem;
     } else {
       if (value.length != 3 || !value.containsKey('password')) {
@@ -625,9 +646,9 @@ void main() {
     }
     try {
       if (publicKey) {
-        final verification = _runWindowsPublicKey(
+        final verification = runWindowsDirectSshPublicKey(
           tester,
-          target as _WindowsKeyTarget,
+          target as WindowsKeyTarget,
           privateKey!,
           step: step,
           checkpoint: checkpoint,

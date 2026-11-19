@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,9 +12,12 @@ import 'package:herdr_flutter_probe/host_catalog_page.dart';
 import '../integration_test/direct_ssh_ui_steps.dart'
     show control, openDirectSshFromHome;
 import '../integration_test/windows_direct_ssh_test.dart'
-    show windowsDirectSshHomeReady;
+    show
+        WindowsKeyTarget,
+        runWindowsDirectSshPublicKey,
+        windowsDirectSshHomeReady;
 
-Future<void> pumpCatalog(WidgetTester tester, {required bool available}) async {
+void configureCatalogFixture(WidgetTester tester, {required bool available}) {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = const Size(1024, 705);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -31,6 +37,10 @@ Future<void> pumpCatalog(WidgetTester tester, {required bool available}) async {
       null,
     ),
   );
+}
+
+Future<void> pumpCatalog(WidgetTester tester, {required bool available}) async {
+  configureCatalogFixture(tester, available: available);
   final tokens = (await tester.runAsync(DesignTokens.load))!;
   await tester.pumpWidget(
     MaterialApp(
@@ -103,5 +113,49 @@ void main() {
       expect(entry, findsNothing);
       expect(windowsDirectSshHomeReady(tester, home), isFalse);
     },
+  );
+
+  const fixturePath = String.fromEnvironment(
+    'HERDR_WINDOWS_PUBLICKEY_WIDGET_FIXTURE',
+  );
+  testWidgets(
+    'Windows public-key lane verifies the key, echoes once and returns home',
+    (tester) async {
+      configureCatalogFixture(tester, available: false);
+      final fixture = jsonDecode(File(fixturePath).readAsStringSync()) as Map;
+      final checkpoints = <String>[];
+      await runWindowsDirectSshPublicKey(
+        tester,
+        WindowsKeyTarget(
+          fixture['port'] as int,
+          fixture['fingerprint'] as String,
+        ),
+        fixture['privateKey'] as String,
+        step: (_) {},
+        checkpoint: (phase, evidence) async {
+          if (phase == 'key_entry') {
+            expect(evidence, {
+              'privateKeyExact': true,
+              'passphraseEmpty': true,
+            });
+          }
+          checkpoints.add(phase);
+        },
+      );
+      expect(checkpoints, [
+        'probe',
+        'key_entry',
+        'connected',
+        'capture',
+        'disconnect',
+        'complete',
+      ]);
+      expect(home, findsOneWidget);
+      expect(entry, findsOneWidget);
+      expect(find.textContaining('资料损坏、存储锁定或不可用'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+    skip: fixturePath.isEmpty,
+    variant: TargetPlatformVariant.only(TargetPlatform.windows),
   );
 }

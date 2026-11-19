@@ -1,0 +1,149 @@
+{
+  "scope": "Production Tauri pages in actual browser; simulated IPC only. No real SSH or overlay.",
+  "cases": [
+    {
+      "sourceSHA": "0c3ef4817234f8519c4d9f8559cd0bd188ee89d5",
+      "engine": "chromium",
+      "version": "148.0.7778.96",
+      "layout": "narrow",
+      "report": "main/chromium-narrow/report.json",
+      "sha256": "ac1647401120faaca76ac6f9bd3f7ac54ca619b023bae93e7c04d01ae0c9fcdb",
+      "foregroundAfterClose": false,
+      "targetOriginalConnection": 1,
+      "inputAuthMode": "draft",
+      "newFrame": "full after explicit resume",
+      "closedConnections": [
+        2,
+        1
+      ],
+      "nodeStopsBeforeExplicitStop": 0,
+      "nodeStopsAfterExplicitStop": 1
+    },
+    {
+      "sourceSHA": "0c3ef4817234f8519c4d9f8559cd0bd188ee89d5",
+      "engine": "chromium",
+      "version": "148.0.7778.96",
+      "layout": "wide",
+      "report": "main/chromium-wide/report.json",
+      "sha256": "20d3407ebda17f88f5eefaa75aad687661b459b2feda8dee0011b2c8c2ac22f4",
+      "foregroundAfterClose": true,
+      "targetOriginalConnection": 1,
+      "inputAuthMode": "draft",
+      "newFrame": "delta",
+      "closedConnections": [
+        2,
+        1
+      ],
+      "nodeStopsBeforeExplicitStop": 0,
+      "nodeStopsAfterExplicitStop": 1
+    },
+    {
+      "sourceSHA": "0c3ef4817234f8519c4d9f8559cd0bd188ee89d5",
+      "engine": "webkit",
+      "version": "26.4",
+      "layout": "narrow",
+      "report": "main/webkit-narrow/report.json",
+      "sha256": "cbabe9db5b197b2e6b3b30d3ed852a7e43df7ad0c506a69c4b26e9b3a05dcd20",
+      "foregroundAfterClose": false,
+      "targetOriginalConnection": 1,
+      "inputAuthMode": "draft",
+      "newFrame": "full after explicit resume",
+      "closedConnections": [
+        2,
+        1
+      ],
+      "nodeStopsBeforeExplicitStop": 0,
+      "nodeStopsAfterExplicitStop": 1
+    },
+    {
+      "sourceSHA": "0c3ef4817234f8519c4d9f8559cd0bd188ee89d5",
+      "engine": "webkit",
+      "version": "26.4",
+      "layout": "wide",
+      "report": "main/webkit-wide/report.json",
+      "sha256": "6224f506e62a41ea7b952bac4bd03c7630079fdab5d40d09b2592ec2419c92af",
+      "foregroundAfterClose": true,
+      "targetOriginalConnection": 1,
+      "inputAuthMode": "draft",
+      "newFrame": "delta",
+      "closedConnections": [
+        2,
+        1
+      ],
+      "nodeStopsBeforeExplicitStop": 0,
+      "nodeStopsAfterExplicitStop": 1
+    },
+    {
+      "sourceSHA": "a1fe2517f56e15b7d169b34163d250e4759aee81",
+      "engine": "chromium",
+      "version": "148.0.7778.96",
+      "layout": "narrow",
+      "report": "pr13/chromium-narrow/report.json",
+      "sha256": "ccd44d460ed51a1b322f608a36698ef0c5f4f783a55a6e045dd69d9c4f1cd4cf",
+      "foregroundAfterClose": false,
+      "targetOriginalConnection": 1,
+      "inputAuthMode": "draft",
+      "newFrame": "full after explicit resume",
+      "closedConnections": [
+        2,
+        1
+      ],
+      "nodeStopsBeforeExplicitStop": 0,
+      "nodeStopsAfterExplicitStop": 1
+    },
+    {
+      "sourceSHA": "a1fe2517f56e15b7d169b34163d250e4759aee81",
+      "engine": "chromium",
+      "version": "148.0.7778.96",
+      "layout": "wide",
+      "report": "pr13/chromium-wide/report.json",
+      "sha256": "8870ba301b21e82dfcd1a4ebbdbc3d4ab9ec1345036444f9fa57151c965ce4c2",
+      "foregroundAfterClose": true,
+      "targetOriginalConnection": 1,
+      "inputAuthMode": "draft",
+      "newFrame": "delta",
+      "closedConnections": [
+        2,
+        1
+      ],
+      "nodeStopsBeforeExplicitStop": 0,
+      "nodeStopsAfterExplicitStop": 1
+    },
+    {
+      "sourceSHA": "a1fe2517f56e15b7d169b34163d250e4759aee81",
+      "engine": "webkit",
+      "version": "26.4",
+      "layout": "narrow",
+      "report": "pr13/webkit-narrow/report.json",
+      "sha256": "f485d7242204121b0b82e45befe47dc8b41a56d9222cbd4e575aa3fbf2fe9ea7",
+      "foregroundAfterClose": false,
+      "targetOriginalConnection": 1,
+      "inputAuthMode": "draft",
+      "newFrame": "full after explicit resume",
+      "closedConnections": [
+        2,
+        1
+      ],
+      "nodeStopsBeforeExplicitStop": 0,
+      "nodeStopsAfterExplicitStop": 1
+    },
+    {
+      "sourceSHA": "a1fe2517f56e15b7d169b34163d250e4759aee81",
+      "engine": "webkit",
+      "version": "26.4",
+      "layout": "wide",
+      "report": "pr13/webkit-wide/report.json",
+      "sha256": "503d9960d9c749c16ec4f5a3e70b4e55ae329469322c500045e69dcc3816c7de",
+      "foregroundAfterClose": true,
+      "targetOriginalConnection": 1,
+      "inputAuthMode": "draft",
+      "newFrame": "delta",
+      "closedConnections": [
+        2,
+        1
+      ],
+      "nodeStopsBeforeExplicitStop": 0,
+      "nodeStopsAfterExplicitStop": 1
+    }
+  ]
+}

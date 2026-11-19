@@ -169,6 +169,168 @@ test('native Android SSH IME covers unchanged and already reduced viewports, the
   assert.equal(f.props.has('--hp-ssh-ime-inset'),false);
 });
 
+test('late Android IME confirmation after the wake window still updates the page', async t=>{
+  // R5 second-open shape: tap wakes sampling, insets report imeVisible:false for
+  // longer than the 2s window, then the IME becomes visible with no further
+  // viewport event on a fixed WebView. The page must still adopt the state.
+  const f = fixture(), timers = new Map(), nodes = ['host-home', 'home-ssh', 'ssh-live'].map(()=>({hidden:false}));
+  const ids = Object.fromEntries(['host-home', 'home-ssh', 'ssh-live'].map((id,index)=>[id,nodes[index]]));
+  let mutation, now = 0, focused = true, nextTimer = 0;
+  let next = {imeVisible:false};
+  const old = globalThis.MutationObserver;
+  globalThis.MutationObserver = class {constructor(fn) {mutation=fn;} observe() {} disconnect() {}};
+  t.after(()=> {globalThis.MutationObserver=old;});
+  const editor = {isConnected:true};
+  const doc = {documentElement:f.root, body:f.body, hidden:false, hasFocus:()=>focused, activeElement:editor,
+    getElementById:id=>ids[id], addEventListener:(name,fn)=>f.callbacks.set('d:'+name,fn),
+    removeEventListener:name=>f.callbacks.delete('d:'+name)};
+  Object.assign(f.view, {innerWidth:393,innerHeight:851,devicePixelRatio:2,performance:{now:()=>now},
+    setTimeout:fn=>{timers.set(++nextTimer,fn);return nextTimer;},clearTimeout:id=>timers.delete(id)});
+  Object.assign(f.viewport, {height:851,offsetTop:0,scale:1});
+  const settle = async()=>{await Promise.resolve(); await Promise.resolve();};
+  const tick = async(delta=160)=>{
+    now+=delta; const [id,fn] = timers.entries().next().value;
+    timers.delete(id); fn(); await settle();
+  };
+  const stop = observeAndroidSshIme(f.view,doc,()=>next,{getEditor:()=>editor});
+  t.after(stop);
+  await settle();
+  const hit = {target:{closest:sel=>sel.includes('#ssh-focus')?{}:null}};
+  f.callbacks.get('d:pointerdown')(hit);
+  await settle();
+  // 2s window expires with IME still closed; editor keeps focus
+  await tick(2000);
+  assert.equal(f.classes.has('ssh-ime-visible'),false,'window expired with IME still closed');
+  next = {imeVisible:true,viewHeightPx:1702,imeOverlapPx:600};
+  // late IME confirmation arrives with no further viewport event
+  await tick(600);
+  assert.equal(f.classes.has('ssh-ime-visible'),true,'late IME confirmation adopted');
+  assert.equal(f.props.get('--hp-ssh-ime-height'),'551px');
+  assert.equal(f.props.get('--hp-ssh-ime-inset'),'300px');
+  // confirmed visible for THIS intent: cycle closes with focus retained —
+  // system Back shape — and must not keep a 500ms watch alive
+  doc.activeElement = editor;
+  next = {imeVisible:false};
+  await tick(600);
+  assert.equal(f.classes.has('ssh-ime-visible'),false);
+  assert.equal(timers.size,0,'watch ends once this open cycle proved closed');
+  // a new explicit open intent may hold the slow watch again
+  next = {imeVisible:false};
+  f.callbacks.get('d:pointerdown')({target:{closest:sel=>sel.includes('#ssh-focus')?{}:null}});
+  await settle();
+  next = {imeVisible:true,viewHeightPx:1702,imeOverlapPx:600};
+  await tick(2100);
+  assert.equal(f.classes.has('ssh-ime-visible'),true,'second intent adopted late');
+});
+
+test('wake treats DOM Event objects and inactive pages as plain wakes', async t=>{
+  // Regression for the fresh-flag trap: DOM listeners pass a truthy Event and
+  // must not reset scope as if a new open intent arrived.
+  const f = fixture(), timers = new Map(), nodes = ['host-home', 'home-ssh', 'ssh-live'].map(()=>({hidden:false}));
+  const ids = Object.fromEntries(['host-home', 'home-ssh', 'ssh-live'].map((id,index)=>[id,nodes[index]]));
+  let now = 0, focused = true, nextTimer = 0, reads = 0;
+  let next = {imeVisible:false};
+  const old = globalThis.MutationObserver;
+  globalThis.MutationObserver = class {observe() {} disconnect() {}};
+  t.after(()=> {globalThis.MutationObserver=old;});
+  const editor = {isConnected:true};
+  const doc = {documentElement:f.root, body:f.body, hidden:false, hasFocus:()=>focused, activeElement:editor,
+    getElementById:id=>ids[id], addEventListener:(name,fn)=>f.callbacks.set('d:'+name,fn),
+    removeEventListener:name=>f.callbacks.delete('d:'+name)};
+  Object.assign(f.view, {innerWidth:393,innerHeight:851,devicePixelRatio:2,performance:{now:()=>now},
+    setTimeout:fn=>{timers.set(++nextTimer,fn);return nextTimer;},clearTimeout:id=>timers.delete(id)});
+  Object.assign(f.viewport, {height:851,offsetTop:0,scale:1});
+  const settle = async()=>{await Promise.resolve(); await Promise.resolve();};
+  const tick = async(delta=160)=>{
+    now+=delta; const entry = timers.entries().next();
+    if (entry.done) return;
+    const [id,fn] = entry.value;
+    timers.delete(id); fn(); await settle();
+  };
+  const stop = observeAndroidSshIme(f.view,doc,()=>{reads++;return next;},{getEditor:()=>editor});
+  t.after(stop);
+  await settle();
+  // open intent, then the 2s window expires closed: slow watch holds
+  f.callbacks.get('d:pointerdown')({target:{closest:sel=>sel.includes('#ssh-focus')?{}:null}});
+  await settle();
+  await tick(2200);
+  assert.equal(timers.size,1,'awaitingOpen keeps exactly the slow watch');
+  // a resize Event (truthy object) must extend the same scope, not reset it
+  f.callbacks.get('w:resize')({type:'resize'});
+  await settle();
+  await tick(2200);
+  assert.equal(timers.size,1,'truthy Event does not restart the watch as a new intent');
+  // page loses focus: reset clears state; a resize while inactive must not
+  // touch scope.awaitingOpen (the old code read it after an early return)
+  focused = false;
+  f.callbacks.get('w:blur')({type:'blur'});
+  assert.equal(f.classes.has('ssh-ime-known'),false);
+  f.callbacks.get('w:resize')({type:'resize'});
+  assert.equal(timers.size,0,'inactive resize neither throws nor restarts sampling');
+  // wide Android window: no wake at all
+  focused = true; f.view.innerWidth = 900;
+  f.callbacks.get('w:resize')({type:'resize'});
+  assert.equal(timers.size,0,'wide viewport ignores resize wakes');
+  f.view.innerWidth = 393;
+  // open intent on an inactive-focus page still must not throw
+  focused = false;
+  f.callbacks.get('d:pointerdown')({target:{closest:sel=>sel.includes('#ssh-focus')?{}:null}});
+  assert.equal(timers.size,0,'inactive open intent resets without sampling');
+  assert.equal(f.classes.has('ssh-ime-known'),false);
+});
+
+test('a settled watch still answers later real DOM focus and resize wakes', async t=>{
+  // Regression for the dropped `current.pending = false`: after a cycle ends
+  // naturally, a plain wake() (focus/resize/pageshow) must sample again.
+  const f = fixture(), timers = new Map(), nodes = ['host-home', 'home-ssh', 'ssh-live'].map(()=>({hidden:false}));
+  const ids = Object.fromEntries(['host-home', 'home-ssh', 'ssh-live'].map((id,index)=>[id,nodes[index]]));
+  let now = 0, focused = true, nextTimer = 0, reads = 0;
+  let next = {imeVisible:false};
+  const old = globalThis.MutationObserver;
+  globalThis.MutationObserver = class {observe() {} disconnect() {}};
+  t.after(()=> {globalThis.MutationObserver=old;});
+  const editor = {isConnected:true};
+  const doc = {documentElement:f.root, body:f.body, hidden:false, hasFocus:()=>focused, activeElement:editor,
+    getElementById:id=>ids[id], addEventListener:(name,fn)=>f.callbacks.set('d:'+name,fn),
+    removeEventListener:name=>f.callbacks.delete('d:'+name)};
+  Object.assign(f.view, {innerWidth:393,innerHeight:851,devicePixelRatio:2,performance:{now:()=>now},
+    setTimeout:fn=>{timers.set(++nextTimer,fn);return nextTimer;},clearTimeout:id=>timers.delete(id)});
+  Object.assign(f.viewport, {height:851,offsetTop:0,scale:1});
+  const settle = async()=>{await Promise.resolve(); await Promise.resolve();};
+  const tick = async(delta=160)=>{
+    now+=delta; const entry = timers.entries().next();
+    if (entry.done) return;
+    const [id,fn] = entry.value;
+    timers.delete(id); fn(); await settle();
+  };
+  const stop = observeAndroidSshIme(f.view,doc,()=>{reads++;return next;},{getEditor:()=>editor});
+  t.after(stop);
+  await settle();
+  // open intent; window expires closed; slow watch holds until answered
+  f.callbacks.get('d:pointerdown')({target:{closest:sel=>sel.includes('#ssh-focus')?{}:null}});
+  await settle();
+  await tick(2200);
+  assert.equal(timers.size,1,'slow watch scheduled');
+  // answer this intent: IME becomes visible, then closes — watch settles
+  next = {imeVisible:true,viewHeightPx:1702,imeOverlapPx:600};
+  await tick(600);
+  assert.equal(f.classes.has('ssh-ime-visible'),true);
+  next = {imeVisible:false};
+  await tick(200);
+  assert.equal(timers.size,0,'answered intent settles into quiet');
+  // plain wake via real-DOM-shaped Event must sample again
+  const readsBefore = reads;
+  f.callbacks.get('w:focus')({type:'focus'});
+  await settle();
+  assert.equal(reads,readsBefore+1,'focus wake re-samples after settle');
+  await tick(2200);
+  assert.equal(timers.size,0,'window expired into quiet');
+  const secondReads = reads;
+  f.callbacks.get('w:resize')({type:'resize'});
+  await settle();
+  assert.equal(reads,secondReads+1,'resize wake re-samples too');
+});
+
 test('Android SSH header scroll tracking stops during review and outside the route',()=>{
   const f=fixture(), nodes={'host-home':{hidden:false},'home-ssh':{hidden:false},'ssh-key-change':{hidden:true}};
   const previous={ResizeObserver:globalThis.ResizeObserver,MutationObserver:globalThis.MutationObserver};

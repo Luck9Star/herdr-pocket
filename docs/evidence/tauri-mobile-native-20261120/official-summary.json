@@ -1,0 +1,254 @@
+{
+  "schemaVersion": 1,
+  "mainBaseline": "89aeb25a310cae4e2ba486d13e09940f134f871e",
+  "android": {
+    "R3": {
+      "runId": 44612662778,
+      "jobId": 135873055745,
+      "sourceSHA": "42fa205cf28219027d8954210b99b27867b3b20d",
+      "jobConclusion": "failure",
+      "artifact": {
+        "id": 14573782872,
+        "expiresAtUtc": "2026-12-03T20:59:58Z",
+        "zipSha256": "c2a4dec0d26910b5ba81c9ebc98337bcad2c3e9d54c03013f75d6c6361ee7a72",
+        "memberSha256": {
+          "manifest.json": "dd9769c03314df696380294e496392386b04fefd399c921b961b129beccf3d64"
+        }
+      },
+      "facts": {
+        "androidApi": 35,
+        "scenario": "preferences-only-system-documents-ui",
+        "status": "failed",
+        "stage": "set_control_preference",
+        "errorCode": "catalog_mismatch",
+        "pickerOpens": 2,
+        "pickerCancelledUnchanged": true,
+        "confirmationAttempts": 0,
+        "confirmationClicks": 0,
+        "cleanup": {
+          "application": true,
+          "debugConnection": true,
+          "debugForward": true,
+          "downloadFolder": true,
+          "hierarchyFile": true
+        },
+        "archive": {
+          "bytes": 126,
+          "version": 2
+        },
+        "avdLifecycleArtifactPresent": false
+      }
+    },
+    "R4": {
+      "runId": 44617210333,
+      "jobId": 135889007953,
+      "sourceSHA": "6994d9493aa176af3cbda952e588d5acc54aaefe",
+      "jobConclusion": "failure",
+      "artifact": {
+        "id": 14576447045,
+        "expiresAtUtc": "2026-12-03T21:27:24Z",
+        "zipSha256": "1696d89b31b042076509abc51fbd1fd5dcf6a9fe020900c12df51ebff8a1a80d",
+        "memberSha256": {
+          "tauri-config-document-evidence/manifest.json": "3877f20402b73b964aefce34486b2301300d62cc4d143975725d460704ee6e90",
+          "tauri-config-document-avd-evidence/lifecycle.txt": "275cb8162a20d4e29f2149e97ac9ca73a40e25659bbda19c2fcae9dde576d637"
+        }
+      },
+      "facts": {
+        "androidApi": 35,
+        "scenario": "preferences-only-system-documents-ui",
+        "status": "failed",
+        "stage": "set_control_preference",
+        "errorCode": "font_save_receipt_unconfirmed",
+        "pickerOpens": 2,
+        "pickerCancelledUnchanged": true,
+        "confirmationAttempts": 0,
+        "confirmationClicks": 0,
+        "cleanup": {
+          "application": true,
+          "debugConnection": true,
+          "debugForward": true,
+          "downloadFolder": true,
+          "hierarchyFile": true
+        },
+        "archive": {
+          "bytes": 126,
+          "version": 2
+        },
+        "preferenceSave": {
+          "catalog": "not_read",
+          "receipt": "waiting"
+        },
+        "avdLifecycle": {
+          "preflightNoExistingDevice": true,
+          "ownedDeviceStarted": true,
+          "driverExitStatus": 1,
+          "processAliveOnCleanupEntry": true,
+          "processExitStatus": 0,
+          "transportAbsentAtAttempt": 2
+        }
+      }
+    }
+  },
+  "iosManualEncryptedKey": {
+    "R6": {
+      "runId": 44609944062,
+      "jobId": 135863554949,
+      "sourceSHA": "3923f06e31302554f3135d6c33ef216200f048e9",
+      "jobConclusion": "failure",
+      "artifact": {
+        "id": 14573950954,
+        "expiresAtUtc": "2027-02-17T20:33:52Z",
+        "zipSha256": "b0014df4b8aee438deb322c0b5d59dc8833c29264006321bf8331ea828fb1cf9",
+        "memberSha256": {
+          "result.json": "6c7c0fb18c63206348b0f9378e541dd485cc58a34e2383ca1ade6caa04b70f1c"
+        }
+      },
+      "facts": {
+        "platform": "ios-simulator",
+        "scope": "owned_loopback_ordinary_ssh_encrypted_key_manual",
+        "status": "failed",
+        "lastCompletedStage": "encrypted_key_wrong_pem_verified",
+        "nativeCheckpoint": "encrypted_key_passphrase",
+        "nativeFailureCode": "native_secret_exposed",
+        "cleanup": {
+          "simulatorDeleted": true,
+          "fixturesClosed": true,
+          "privateFilesRemoved": true,
+          "encryptedSecretsCleared": true,
+          "rawLogsUploaded": false
+        },
+        "cases": {
+          "ordinary": "not_run",
+          "keyChange": "not_run",
+          "encryptedKey": "failed"
+        },
+        "credentialEntry": "nativeTypeText",
+        "fingerprintReviewed": true,
+        "wrongPemExact": true,
+        "secretDiagnostic": {
+          "count": 2,
+          "candidates": [
+            {
+              "role": "staticText",
+              "scope": "sameWeb",
+              "relation": "descendant",
+              "privateKeyHeader": true,
+              "passphrase": false
+            },
+            {
+              "role": "staticText",
+              "scope": "sameWeb",
+              "relation": "descendant",
+              "privateKeyHeader": true,
+              "passphrase": false
+            }
+          ]
+        },
+        "peerBeforeAndAfterCleanup": {
+          "beforeCleanup": {
+            "connections": 1,
+            "connectionsClosed": true,
+            "events": [
+              {
+                "authAttempts": 0,
+                "authSuccesses": 0,
+                "ptyRequests": 0,
+                "shellRequests": 0,
+                "inputBytes": 0,
+                "outputBytes": 0,
+                "closed": true
+              }
+            ]
+          },
+          "afterCleanup": {
+            "connections": 1,
+            "connectionsClosed": true,
+            "events": [
+              {
+                "authAttempts": 0,
+                "authSuccesses": 0,
+                "ptyRequests": 0,
+                "shellRequests": 0,
+                "inputBytes": 0,
+                "outputBytes": 0,
+                "closed": true
+              }
+            ]
+          }
+        }
+      }
+    },
+    "R7": {
+      "runId": 44616831107,
+      "jobId": 135887674869,
+      "sourceSHA": "7c201e986fa43a224e155976fb7a8280f1aef675",
+      "jobConclusion": "failure",
+      "artifact": {
+        "id": 14576158322,
+        "expiresAtUtc": "2027-02-17T21:14:56Z",
+        "zipSha256": "949190c047ece04b98bc8ec597c41602b3c3e6043345a3d027e4da639928b933",
+        "memberSha256": {
+          "result.json": "d153829f55b71fc62aa96bf1e3ef991dea1ae5fa5a09aa63ec4bdd5a243e259f"
+        }
+      },
+      "facts": {
+        "platform": "ios-simulator",
+        "scope": "owned_loopback_ordinary_ssh_encrypted_key_manual",
+        "status": "failed",
+        "lastCompletedStage": "encrypted_key_form",
+        "nativeCheckpoint": "encrypted_key_host",
+        "nativeFailureCode": "native_input_value_invalid",
+        "cleanup": {
+          "simulatorDeleted": true,
+          "fixturesClosed": true,
+          "privateFilesRemoved": true,
+          "encryptedSecretsCleared": true,
+          "rawLogsUploaded": false
+        },
+        "cases": {
+          "ordinary": "not_run",
+          "keyChange": "not_run",
+          "encryptedKey": "failed"
+        },
+        "credentialEntry": "nativeTypeText",
+        "hostRole": "textField",
+        "hostReadback": {
+          "state": "empty",
+          "samples": 6
+        },
+        "hostSamples": [
+          {
+            "sample": "afterTap",
+            "formUIFocus": "host",
+            "liveHostUIFocus": true,
+            "keyboard": "visible",
+            "treeHostReadback": "empty",
+            "liveHostReadback": "empty",
+            "portReadback": "notCompared",
+            "userReadback": "notCompared"
+          },
+          {
+            "sample": "afterInput",
+            "formUIFocus": "host",
+            "liveHostUIFocus": true,
+            "keyboard": "visible",
+            "treeHostReadback": "empty",
+            "liveHostReadback": "empty",
+            "portReadback": "unchanged",
+            "userReadback": "unchanged"
+          }
+        ],
+        "peerBeforeAndAfterCleanup": {
+          "beforeCleanup": {
+            "connections": 0,
+            "connectionsClosed": true
+          },
+          "afterCleanup": {
+            "connections": 0,
+            "connectionsClosed": true
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show kDebugMode;
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:flutter/foundation.dart' show FlutterError, kDebugMode;
+import 'package:flutter/services.dart'
+    show Clipboard, ClipboardData, PlatformException;
 import 'package:flutter/widgets.dart' show Text, ValueKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:terminal_view/terminal_view.dart';
@@ -78,6 +79,46 @@ void publish(String name, Object value) {
   final pending = File('${dir.path}/$name.pending')
     ..writeAsStringSync(jsonEncode(value), flush: true);
   pending.renameSync('${dir.path}/$name');
+}
+
+Map<String, Object> encryptedFailure(
+  String stage,
+  Object error,
+  StackTrace stack,
+) {
+  final exceptionClass = switch (error) {
+    TestFailure() => 'TestFailure',
+    FlutterError() => 'FlutterError',
+    StateError() => 'StateError',
+    AssertionError() => 'AssertionError',
+    TypeError() => 'TypeError',
+    FileSystemException() => 'FileSystemException',
+    PlatformException() => 'PlatformException',
+    _ => 'other',
+  };
+  // Export only the static test source names and decimal line numbers from
+  // Dart stack frames. Helper frames and their callers locate failed UI steps.
+  final pattern = RegExp(
+    r'^#\d+\s+[^()]+\((?:[^()]*/)?(android_direct_ssh_test\.dart|direct_ssh_ui_steps\.dart):(\d{1,5})(?::\d{1,5})?\)$',
+  );
+  final locations = <({String file, int line})>{};
+  for (final frame in stack.toString().split('\n')) {
+    final match = pattern.firstMatch(frame.trim());
+    if (match == null) continue;
+    final line = int.parse(match.group(2)!);
+    if (line < 1) continue;
+    locations.add((file: match.group(1)!, line: line));
+    if (locations.length == 4) break;
+  }
+  return {
+    'stage': stage,
+    'code': 'direct_ssh_android_ui_failed',
+    'exceptionClass': exceptionClass,
+    'sourceLocations': [
+      for (final location in locations)
+        {'file': location.file, 'line': location.line},
+    ],
+  };
 }
 
 void main() {
@@ -267,12 +308,14 @@ void main() {
           publish: publish,
           capture: capture,
         );
-      } catch (_) {
+      } catch (error, stack) {
         if (fixtureValidated) {
-          publish('failure.json', {
-            'stage': stage,
-            'code': 'direct_ssh_android_ui_failed',
-          });
+          publish(
+            'failure.json',
+            encryptedCase == '1'
+                ? encryptedFailure(stage, error, stack)
+                : {'stage': stage, 'code': 'direct_ssh_android_ui_failed'},
+          );
         }
         rethrow;
       } finally {

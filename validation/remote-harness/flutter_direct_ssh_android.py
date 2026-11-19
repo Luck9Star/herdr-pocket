@@ -769,13 +769,31 @@ ENCRYPTED_APP_STAGES = ENCRYPTED_UI_PHASES | {
 }
 
 
-def safe_encrypted_app_stage(value, *, failure=False):
-    fields = {'stage', 'code'} if failure else {'stage'}
-    if (not isinstance(value, dict) or set(value) != fields
-            or type(value['stage']) is not str or value['stage'] not in ENCRYPTED_APP_STAGES
-            or (failure and value['code'] != 'direct_ssh_android_ui_failed')):
+def safe_encrypted_app_stage(value):
+    if (not isinstance(value, dict) or set(value) != {'stage'}
+            or type(value['stage']) is not str or value['stage'] not in ENCRYPTED_APP_STAGES):
         raise Failure('direct_android_encrypted_app_stage_invalid')
     return value['stage']
+
+
+def safe_encrypted_app_failure(value):
+    classes = ('TestFailure', 'FlutterError', 'StateError', 'AssertionError', 'TypeError',
+               'FileSystemException', 'PlatformException', 'other')
+    files = ('android_direct_ssh_test.dart', 'direct_ssh_ui_steps.dart')
+    if (not isinstance(value, dict) or set(value) != {'stage', 'code', 'exceptionClass', 'sourceLocations'}
+            or type(value['stage']) is not str or value['stage'] not in ENCRYPTED_APP_STAGES
+            or value['code'] != 'direct_ssh_android_ui_failed' or value['exceptionClass'] not in classes
+            or not isinstance(value['sourceLocations'], list) or len(value['sourceLocations']) > 4
+            or any(not isinstance(frame, dict) or set(frame) != {'file', 'line'}
+                   or frame['file'] not in files or type(frame['line']) is not int or not 1 <= frame['line'] <= 99999
+                   for frame in value['sourceLocations'])):
+        raise Failure('direct_android_encrypted_app_failure_invalid')
+    return value
+
+
+def read_encrypted_app_failure(relative, *, package_known=False):
+    value = read_public_json(relative + '/failure.json', 1024, package_known=package_known)
+    return None if value is None else safe_encrypted_app_failure(value)
 
 
 def encrypted_app_observation(relative, *, check_failure=True):
@@ -784,11 +802,7 @@ def encrypted_app_observation(relative, *, check_failure=True):
         return False, None, None
     stage = read_public_json(relative + '/stage.json', 256, package_known=True)
     name = safe_encrypted_app_stage(stage) if stage is not None else None
-    failure = None
-    if check_failure:
-        value = read_public_json(relative + '/failure.json', 256, package_known=True)
-        if value is not None:
-            failure = safe_encrypted_app_stage(value, failure=True)
+    failure = read_encrypted_app_failure(relative, package_known=True) if check_failure else None
     return True, name, failure
 
 
@@ -929,7 +943,7 @@ def run_encrypted(args, env):
                     startup['appStage'] = current_stage
                 if not credential_sent:
                     if early_failure is not None:
-                        report['failureStage'] = early_failure
+                        report.update(failureStage=early_failure['stage'], deviceFailure=early_failure)
                         raise Failure('direct_android_device_test_failed')
                     if current_stage is None:
                         time.sleep(1)
@@ -991,12 +1005,13 @@ def run_encrypted(args, env):
             except subprocess.TimeoutExpired:
                 raise Failure('direct_android_flutter_timeout') from None
             if code:
-                failure = read_public_json(relative + '/failure.json', 256)
-                if not isinstance(failure, dict):
-                    failure = read_public_json(relative + '/stage.json', 256)
-                if isinstance(failure, dict):
-                    report['failureStage'] = safe_encrypted_app_stage(
-                        failure, failure='code' in failure)
+                failure = read_encrypted_app_failure(relative)
+                if failure is not None:
+                    report.update(failureStage=failure['stage'], deviceFailure=failure)
+                else:
+                    stage = read_public_json(relative + '/stage.json', 256)
+                    if stage is not None:
+                        report['failureStage'] = safe_encrypted_app_stage(stage)
                 connect_diagnostic = read_public_json(relative + '/encrypted-connect-diagnostic.json', 2048)
                 if connect_diagnostic is not None:
                     report['connectDiagnostic'] = safe_encrypted_connect_diagnostic(connect_diagnostic)

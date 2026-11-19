@@ -577,11 +577,12 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
         with patch.object(runner, 'package_present', return_value=True), \
              patch.object(runner, 'read_public_json', return_value={'stage': 'private-key-content'}):
             with self.assertRaises(runner.Failure): runner.encrypted_app_observation(path)
+        failure = {'stage': 'fixture_validation', 'code': 'direct_ssh_android_ui_failed',
+                   'exceptionClass': 'StateError', 'sourceLocations': []}
         with patch.object(runner, 'package_present', return_value=True), \
-             patch.object(runner, 'read_public_json', side_effect=[{'stage': 'encrypted_waiting_private'},
-                 {'stage': 'fixture_validation', 'code': 'direct_ssh_android_ui_failed'}]):
+             patch.object(runner, 'read_public_json', side_effect=[{'stage': 'encrypted_waiting_private'}, failure]):
             self.assertEqual(runner.encrypted_app_observation(path),
-                             (True, 'encrypted_waiting_private', 'fixture_validation'))
+                             (True, 'encrypted_waiting_private', failure))
 
     def test_connect_diagnostic_accepts_only_fixed_token_free_state(self):
         value = dict.fromkeys(runner.ENCRYPTED_CONNECT_BOOLEAN_FIELDS, False)
@@ -639,13 +640,28 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
         self.assertEqual(sum(call[:2] == ('reverse', '--remove') for call in calls), 1)
         self.assertIn(('uninstall', runner.PACKAGE), calls)
 
-    def test_app_stage_is_fixed_and_failure_code_is_exact(self):
-        self.assertEqual(runner.safe_encrypted_app_stage({'stage':'encrypted_waiting_private'}), 'encrypted_waiting_private')
-        self.assertEqual(runner.safe_encrypted_app_stage({'stage':'encrypted_home', 'code':'direct_ssh_android_ui_failed'}, failure=True), 'encrypted_home')
-        for value in ({'stage':'sensitive-test-key'}, {'stage':'encrypted_home','secret':'x'},
-                      {'stage':'encrypted_home','code':'sensitive-test-key'}):
+    def test_app_stage_and_failure_details_are_strictly_allowlisted(self):
+        self.assertEqual(runner.safe_encrypted_app_stage({'stage': 'encrypted_waiting_private'}),
+                         'encrypted_waiting_private')
+        for value in ({'stage': 'sensitive-test-key'}, {'stage': 'encrypted_home', 'secret': 'x'}):
             with self.subTest(value=value), self.assertRaises(runner.Failure):
-                runner.safe_encrypted_app_stage(value, failure=('code' in value))
+                runner.safe_encrypted_app_stage(value)
+
+        frame = {'file': 'direct_ssh_ui_steps.dart', 'line': 717}
+        failure = {'stage': 'encrypted_review', 'code': 'direct_ssh_android_ui_failed',
+                   'exceptionClass': 'TestFailure', 'sourceLocations': [frame]}
+        self.assertEqual(runner.safe_encrypted_app_failure(failure), failure)
+        for extra in ({'stage': 'sensitive-test-key'}, {'code': 'sensitive-test-key'},
+                      {'message': 'sensitive-test-key'}, {'exceptionClass': 'sensitive-test-key'},
+                      {'sourceLocations': [frame] * 5}, {'sourceLocations': 'raw stack'},
+                      {'sourceLocations': [{'file': '/private/direct_ssh_ui_steps.dart', 'line': 717}]},
+                      {'sourceLocations': [{**frame, 'line': True}]},
+                      {'sourceLocations': [{**frame, 'line': 0}]},
+                      {'sourceLocations': [{**frame, 'line': 100000}]},
+                      {'sourceLocations': [{**frame, 'column': 10}]}):
+            with self.subTest(extra=extra), self.assertRaisesRegex(
+                    runner.Failure, 'direct_android_encrypted_app_failure_invalid'):
+                runner.safe_encrypted_app_failure({**failure, **extra})
 
     def test_result_is_exact_and_never_exports_credentials(self):
         value = {field: True for field in runner.ENCRYPTED_PUBLIC_FIELDS}
@@ -868,6 +884,9 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
             fake_module = types.SimpleNamespace(EncryptedKeyFixture=Mock(return_value=fixture))
             process = Mock(pid=12345); process.stdout = __import__('io').BytesIO(b'')
             process.poll.side_effect = [None, None, 1, 1, 1, 1]
+            failure = {'stage': 'encrypted_review', 'code': 'direct_ssh_android_ui_failed',
+                       'exceptionClass': 'TestFailure',
+                       'sourceLocations': [{'file': 'direct_ssh_ui_steps.dart', 'line': 717}]}
             finished = {'value': False}
             def wait(**unused): finished['value'] = True; return 1
             process.wait.side_effect = wait
@@ -883,7 +902,7 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
                 if path.endswith('encrypted-diagnostic.json'): return diagnostic
                 if path.endswith('encrypted-connect-diagnostic.json'): return connect_diagnostic
                 if path.endswith('encrypted-stage.json'): return {'phase': 'review'}
-                if path.endswith('failure.json') and finished['value']: return {'stage': 'encrypted_keyboard_show', 'code': 'direct_ssh_android_ui_failed'}
+                if path.endswith('failure.json') and finished['value']: return failure
                 return None
             env = {'GITHUB_SHA': 'a'*40, 'GITHUB_RUN_ID': '123', 'RUNNER_TEMP': temp}
             args = types.SimpleNamespace(project=app, output=output)
@@ -899,7 +918,9 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
                 with self.assertRaisesRegex(runner.Failure, 'direct_android_device_test_failed'):
                     runner.run_encrypted(args, env)
             result = json.loads((output/'result.json').read_text())
-            self.assertEqual(result['failureStage'], 'encrypted_keyboard_show')
+            self.assertEqual(result['failureStage'], 'encrypted_review')
+            self.assertEqual(result['deviceFailure'], failure)
+            self.assertEqual(result['checkpoints'], {'review': probe})
             self.assertEqual(result['uiDiagnostic'], diagnostic)
             self.assertEqual(result['connectDiagnostic'], connect_diagnostic)
             self.assertNotIn('sensitive-test-key', json.dumps(result))

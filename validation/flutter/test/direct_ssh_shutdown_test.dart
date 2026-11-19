@@ -8,7 +8,7 @@ import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/direct_ssh_page.dart';
 import 'package:herdr_flutter_probe/host_catalog.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
-import 'host_catalog_test.dart' show MemoryCatalogStorage;
+import 'host_catalog_test.dart' show MemoryCatalogStorage, saveCatalogProfile;
 
 class _Session extends Fake implements SSHSession {
   _Session(this.events) {
@@ -120,6 +120,104 @@ const _mobile = TargetPlatformVariant({
 final _disconnect = find.byKey(const ValueKey('direct-disconnect'));
 
 void main() {
+  for (final (width, natural, failed) in [
+    (390.0, false, false), (390.0, false, true), (390.0, true, false),
+    (980.0, false, true),
+  ]) {
+    final desktop = width >= 700;
+    testWidgets('pending SSH close locks the target and preserves its receipt: width=$width natural=$natural failed=$failed', (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = Size(width, desktop ? 780 : 844);
+      addTearDown(tester.view.reset);
+      final tokens = (await tester.runAsync(DesignTokens.load))!;
+      final storage = MemoryCatalogStorage();
+      final catalog = HostCatalog(storage: storage, clock: () => 1000);
+      await catalog.load();
+      await saveCatalogProfile(catalog);
+      final saved = await storage.load();
+      final writes = storage.writes;
+      await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: HostCatalogPage(
+        tokens: tokens, catalog: catalog, offlineBuilder: (_) => const SizedBox(),
+      )));
+      await tester.pumpAndSettle();
+      Finder key(String name) => find.byKey(ValueKey(name));
+      final entry = key('hosts-direct-ssh');
+      await tester.ensureVisible(entry);
+      await tester.tap(entry);
+      await tester.pumpAndSettle();
+      final page = find.byType(DirectSshPage);
+      final dynamic state = tester.state(page);
+      state.host.text = '127.0.0.1';
+      state.user.text = 'fixture';
+      state.checkedTarget = state.target;
+      state.fingerprint = 'SHA256:fixture';
+      final session = _connect(state, <String>[], observeExit: true);
+      final client = state.client as _Client;
+      client.closeGate = Completer<void>();
+      client.closeThrows = failed;
+      (state.socket as _Socket).destroyThrows = failed;
+      state.secret.text = 'fixture-password';
+      state.passphrase.text = 'fixture-passphrase';
+      await tester.pump();
+
+      if (natural) {
+        session.peerClosed.complete();
+      } else {
+        await tester.tap(desktop ? key('direct-desktop-disconnect') : _disconnect);
+      }
+      await tester.pump();
+      expect(find.text('正在断开本机连接'), findsOneWidget);
+      final port = key('direct-port');
+      for (final field in ['direct-host', 'direct-port', 'direct-user']) {
+        expect(tester.widget<TextField>(key(field)).enabled, isFalse);
+      }
+      await tester.tap(port);
+      await tester.pump();
+      final editor = find.descendant(of: port, matching: find.byType(EditableText));
+      expect(tester.widget<EditableText>(editor).focusNode.hasFocus, isFalse);
+      expect(tester.widget<TextField>(port).controller!.text, '22');
+      // Simulate a late controller notification that bypasses the disabled UI.
+      state.port.text = '2223';
+      await tester.pump();
+      expect(tester.widget<TextField>(port).controller!.text, '2223');
+      expect(state.fingerprint, isNull);
+      expect(state.secret.text, isEmpty);
+      expect(state.passphrase.text, isEmpty);
+      expect(find.text('正在断开本机连接'), findsOneWidget);
+      expect(tester.widget<FilledButton>(key('direct-probe')).onPressed, isNull);
+      expect(key('direct-return-home').hitTestable(), findsOneWidget);
+
+      if (!natural) session.peerClosed.complete();
+      final title = failed ? '本机连接关闭失败' : '本机已断开';
+      if (natural) {
+        // A silent channel EOF can finish after the user leaves this route.
+        await tester.tap(key('direct-return-home'));
+        await tester.pumpAndSettle();
+        expect(page, findsNothing);
+        expect(key('home-ssh-closed'), findsNothing);
+      }
+      client.closeGate!.complete();
+      await tester.pumpAndSettle();
+      if (!natural) {
+        expect(find.descendant(of: key('direct-closed-feedback'), matching: find.text(title)), findsOneWidget);
+        expect(find.textContaining('远端已报告结束'), findsNothing);
+        for (final field in ['direct-host', 'direct-port', 'direct-user']) {
+          expect(tester.widget<TextField>(key(field)).enabled, isTrue);
+        }
+        expect(tester.widget<FilledButton>(key('direct-probe')).onPressed, isNotNull);
+        await tester.tap(key('direct-return-home'));
+        await tester.pumpAndSettle();
+      }
+      expect(page, findsNothing);
+      expect(tester.widget<Text>(key('home-ssh-closed-title')).data, title);
+      expect(await storage.load(), saved);
+      expect(storage.writes, writes);
+      await tester.pumpWidget(const SizedBox());
+      catalog.dispose();
+      expect(tester.takeException(), isNull);
+    }, variant: desktop ? TargetPlatformVariant.only(TargetPlatform.linux) : _mobile);
+  }
+
   for (final (width, exit, localFailure) in [
     (320.0, 'silent', false),
     (390.0, 'status', false),
@@ -484,6 +582,9 @@ void main() {
     aClient.closeThrows = true; aClient.closeGate = Completer<void>(); aSocket.destroyThrows = true;
     await tester.tap(find.widgetWithText(TextButton, '断开')); await tester.pump();
     aSession.peerClosed.complete(); await tester.pump();
+    a.port.text = '2223';
+    await tester.pump();
+    expect(find.text('正在断开本机连接'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('direct-return-home'))); await tester.pumpAndSettle();
     expect(find.byType(DirectSshPage), findsNothing);
     expect(find.byKey(const ValueKey('home-ssh-closed')), findsNothing);

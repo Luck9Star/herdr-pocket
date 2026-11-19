@@ -95,7 +95,9 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   bool get valid => host.text.trim().isNotEmpty && user.text.trim().isNotEmpty &&
       (int.tryParse(port.text.trim()) ?? 0) > 0 && (int.tryParse(port.text.trim()) ?? 65536) <= 65535;
 
-  bool get canConnect => valid && !busy && !hostKeyReviewRequired && fingerprint != null && checkedTarget == target &&
+  bool get closePending => userDisconnected && !closeLocalConfirmed && !closeCleanupFailed;
+  bool get canProbe => valid && !busy && !closePending;
+  bool get canConnect => valid && !busy && !closePending && !hostKeyReviewRequired && fingerprint != null && checkedTarget == target &&
     (mobileLayout || desktopEntryLayout(context) ? mobileCredentialReady : secret.text.isNotEmpty);
   bool get mobileCredentialReady {
     if (!keyAuth) return secret.text.isNotEmpty;
@@ -229,8 +231,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     closeReturnEpoch = null;
   }
   void changed() {
-    userDisconnected = false;
-    resetCloseOutcome();
+    // The target draft is independent of the retiring session's receipt.
     cancelKeyPaste();
     if (busy && pendingTarget != target) stop(message: '连接目标已更改；本次操作已取消。', notify: false);
     if (checkedTarget != target) { mobileAuth = false; fingerprint = null; algorithm = null; checkedTarget = null; hostKeyReviewRequired = false; hostKeyChange = null; secret.clear(); passphrase.clear(); }
@@ -375,7 +376,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     super.dispose();
   }
   Future<void> probe() async {
-    if (!valid || busy || !foreground) return;
+    if (!canProbe || !foreground) return;
     userDisconnected = false;
     resetCloseOutcome();
     stop(); connectPhase = DirectSshConnectPhase.idle; connectFailure = null;
@@ -420,7 +421,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     } finally { if (generation != epoch) { localClient?.close(); localSocket?.destroy(); } }
   }
   Future<void> connect() async {
-    if (!valid || busy || !foreground || hostKeyReviewRequired || fingerprint == null || checkedTarget != target || secret.text.isEmpty) return;
+    if (!valid || busy || closePending || !foreground || hostKeyReviewRequired || fingerprint == null || checkedTarget != target || secret.text.isEmpty) return;
     userDisconnected = false;
     resetCloseOutcome();
     cancelKeyPaste();
@@ -712,12 +713,12 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
             Text(outcome.detail, style: TextStyle(fontSize: 13, color: t.color('textSecondary'))),
           ]))),
         const SizedBox(height: 16), const Text('填写连接目标', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)), const SizedBox(height: 27),
-        SizedBox(height: 48, child: TextField(key: const ValueKey('direct-host'), controller: host, decoration: const InputDecoration(labelText: '主机地址'))),
+        SizedBox(height: 48, child: TextField(key: const ValueKey('direct-host'), controller: host, enabled: !closePending, decoration: const InputDecoration(labelText: '主机地址'))),
         const SizedBox(height: 36), Row(children: [
-          Expanded(child: SizedBox(height: 48, child: TextField(key: const ValueKey('direct-user'), controller: user, decoration: const InputDecoration(labelText: '用户名')))),
-          const SizedBox(width: 12), SizedBox(width: 84, height: 48, child: TextField(key: const ValueKey('direct-port'), controller: port, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '端口'))),
+          Expanded(child: SizedBox(height: 48, child: TextField(key: const ValueKey('direct-user'), controller: user, enabled: !closePending, decoration: const InputDecoration(labelText: '用户名')))),
+          const SizedBox(width: 12), SizedBox(width: 84, height: 48, child: TextField(key: const ValueKey('direct-port'), controller: port, enabled: !closePending, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '端口'))),
         ]),
-        const SizedBox(height: 20), SizedBox(height: 48, child: FilledButton(key: const ValueKey('direct-probe'), onPressed: valid && !busy ? probe : null, child: const Text('探测并核对主机密钥'))),
+        const SizedBox(height: 20), SizedBox(height: 48, child: FilledButton(key: const ValueKey('direct-probe'), onPressed: canProbe ? probe : null, child: const Text('探测并核对主机密钥'))),
         const SizedBox(height: 36), SizedBox(height: 48, child: OutlinedButton(key: const ValueKey('direct-return-home'), onPressed: returnAfterDisconnect, child: const Text('返回首页'))),
       ]))),
     ]);
@@ -752,19 +753,19 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     SizedBox(height: mobileLargeText ? null : 28, child: Transform.translate(offset: Offset(0, mobileLargeText ? 0 : -4),
       child: const Text('填写连接目标', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 0)))),
     const SizedBox(height: 8),
-    mobileField('主机地址', SizedBox(height: mobileInputHeight, child: TextField(key: const ValueKey('direct-host'), controller: host, enabled: !busy,
+    mobileField('主机地址', SizedBox(height: mobileInputHeight, child: TextField(key: const ValueKey('direct-host'), controller: host, enabled: !busy && !closePending,
       decoration: mobileInput('ssh.example.test')))),
     const SizedBox(height: 14),
     Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Expanded(child: mobileField('用户名', SizedBox(height: mobileInputHeight, child: TextField(key: const ValueKey('direct-user'), controller: user, enabled: !busy,
+      Expanded(child: mobileField('用户名', SizedBox(height: mobileInputHeight, child: TextField(key: const ValueKey('direct-user'), controller: user, enabled: !busy && !closePending,
         decoration: mobileInput('demo'))))),
       const SizedBox(width: 12), SizedBox(width: 84, child: mobileField('端口', SizedBox(height: mobileInputHeight, child: TextField(key: const ValueKey('direct-port'),
-        controller: port, enabled: !busy, keyboardType: TextInputType.number,
+        controller: port, enabled: !busy && !closePending, keyboardType: TextInputType.number,
         inputFormatters: desktop ? [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(5)] : null,
         decoration: mobileInput('22'))))),
     ]),
     const SizedBox(height: 20), SizedBox(height: mobileButtonHeight, child: FilledButton(style: mobilePrimaryButton, key: const ValueKey('direct-probe'),
-      onPressed: valid && !busy ? probe : null, child: const Text('探测并核对主机密钥'))),
+      onPressed: canProbe ? probe : null, child: const Text('探测并核对主机密钥'))),
     const SizedBox(height: 9), Text('探测时仅获取主机密钥，认证在核对之后进行。',
       style: TextStyle(fontSize: 12, color: widget.tokens.color('textMutedReadable'))),
     if (userDisconnected) ...[const SizedBox(height: 10), SizedBox(height: mobileButtonHeight, child: OutlinedButton(
@@ -1565,7 +1566,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
           Semantics(container: true, explicitChildNodes: true, label: '用户名', child: TextField(key: const ValueKey('direct-user'), controller: user, enabled: !busy,
             decoration: const InputDecoration(label: ExcludeSemantics(child: Text('用户名'))))),
           const SizedBox(height: 16),
-          OutlinedButton(key: const ValueKey('direct-probe'), onPressed: valid && !busy ? probe : null, child: const Text('探测并核对主机密钥')),
+          OutlinedButton(key: const ValueKey('direct-probe'), onPressed: canProbe ? probe : null, child: const Text('探测并核对主机密钥')),
           if (fingerprint != null) ...[
             const SizedBox(height: 12),
             SelectableText('$algorithm · $fingerprint'),

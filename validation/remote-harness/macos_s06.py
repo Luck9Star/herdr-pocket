@@ -12,6 +12,7 @@ import tempfile
 import time
 
 from macos_secure_xcuitest import install_test_semantics_hook, prepare
+from macos_s06_diagnostics import STAGES, TEST_SELECTION, diagnostics
 from paired_dual_demo import prepared_pairing_hosts
 from paired_gui import GuiFailure, bounded_wire, fixture_terminal_id, owned_process, wait_for
 from s06_tauri_gui import peer_connection_evidence
@@ -23,12 +24,11 @@ MARKERS = {'et': 'HPS06A', 'ts': 'HPS06B'}
 CHECKS = ('homepage', 'reviewedPairings', 'twoVisibleTargets', 'bothTicksAdvanced', 'stockControlsDisabled',
           'keyboardFocus', 'narrowStowed', 'originalSidesRestored', 'explicitResume', 'stoppedBoth',
           'localProfilesAbsentFromBoard')
-STAGES = ('display', 'homepage', 'pairA', 'pairB', 'keyA', 'keyB', 'connectA', 'connectB',
-          'split', 'frames', 'keyboard', 'resize', 'resume', 'stop', 'remove')
 
 
 def prepare_test(app, exchange):
     """Only change the generated native test target and opt-in AX notification."""
+    fixture = (HERE / 'macos_s06_fixture.swift').read_text()
     template = (HERE / 'macos_s06_xcuitest.swift').read_text()
     placeholder = '__HP_S06_EXCHANGE_BASE64__'
     if template.count(placeholder) != 1:
@@ -36,7 +36,7 @@ def prepare_test(app, exchange):
     prepare(app)
     install_test_semantics_hook(app)
     payload = base64.b64encode(os.fsencode(exchange)).decode('ascii')
-    (app / 'macos/RunnerTests/RunnerTests.swift').write_text(template.replace(placeholder, payload))
+    (app / 'macos/RunnerTests/RunnerTests.swift').write_text(fixture + '\n' + template.replace(placeholder, payload))
 
 
 def stock_binary(binary):
@@ -93,6 +93,16 @@ def write_exchange(path, payload):
     with pending.open('xb') as stream:
         stream.write(payload)
     pending.replace(path)
+
+
+def publish_release(exchange, configs):
+    write_exchange(exchange / 'release.json', json.dumps({'schemaVersion': 1, 'peers': configs}).encode())
+
+
+def test_command(xcode, bundle):
+    # Use the same test action as the existing macOS native suite. The
+    # separately verified build-for-testing warms this derived-data directory.
+    return xcode + ['-only-testing:' + TEST_SELECTION, '-resultBundlePath', str(bundle), 'test']
 
 
 def native_stage(exchange):
@@ -203,15 +213,20 @@ def run(app, binary, output):
                     raise GuiFailure('s06_native_test_build_failed')
             stage = 'fixture'
             with fixtures(binary, root) as (targets, children, metadata, configs):
-                write_exchange(exchange / 'fixture.json', json.dumps(configs).encode())
+                publish_release(exchange, configs)
                 stage = 'test'
+                result['releasePublished'] = True
+                proc = None
+                bundle, private_test_log = root / 'private.xcresult', root / 'test-private.log'
                 try:
-                    with owned_process(xcode + ['-resultBundlePath', str(root / 'private.xcresult'),
-                                                'test-without-building'],
-                                       cwd=app, env=os.environ, log=root / 'test-private.log') as proc:
+                    with owned_process(test_command(xcode, bundle), cwd=app,
+                                       env=os.environ, log=private_test_log) as proc:
                         audit = requests_and_disconnect(proc, exchange, targets)
                 finally:
-                    if last := native_stage(exchange):
+                    phase = native_stage(exchange)
+                    native = diagnostics(private_test_log, bundle, proc.poll() if proc else None, phase)
+                    result['nativeDiagnostics'] = native
+                    if last := native.get('lastLoggedStage', phase):
                         result['nativeStage'] = last
                 ui = checked_ui_result(json.loads(bounded_wire(exchange / 'ui.json', 2048)))
                 if any(fixture_terminal_id(target.config) != config['terminalId']

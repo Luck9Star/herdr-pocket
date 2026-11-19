@@ -1,31 +1,15 @@
 import AppKit
 import CoreGraphics
+import Darwin
 import XCTest
 
 @available(macOS 15.0, *)
 final class MacosS06UITests: XCTestCase {
-    private struct Peer: Decodable {
-        let host: String
-        let port: Int
-        let username: String
-        let session: String
-        let socketPath: String
-        let herdrPath: String
-        let expectedHostKey: String
-        let fingerprint: String
-        let paneId: String
-        let terminalId: String
-        let marker: String
-
-        var title: String { "\(host) / \(session)" }
-        var remoteTitle: String { "\(session) · 远端终端" }
-        var binding: String { "\(paneId) · \(terminalId)" }
-    }
-
+    private typealias Peer = MacosS06Fixture.Peer
     private enum Failure: Error { case check(String) }
     private enum Scope: Equatable { case whole, sidebar, main, left, right }
-    private let app = XCUIApplication()
-    private let clipboard = NSPasteboard.general
+    private lazy var app = XCUIApplication()
+    private lazy var clipboard = NSPasteboard.general
     private var window: XCUIElement { app.windows.firstMatch }
     private var exchange: URL!
 
@@ -43,7 +27,17 @@ final class MacosS06UITests: XCTestCase {
     }
 
     private func mark(_ stage: String) throws {
-        try Data(stage.utf8).write(to: exchange.appendingPathComponent("stage"), options: .atomic)
+        do {
+            try Data(stage.utf8).write(to: exchange.appendingPathComponent("stage"), options: .atomic)
+        } catch {
+            throw Failure.check("exchange_stage_write_failed")
+        }
+        trace("STAGE", stage)
+    }
+
+    private func trace(_ kind: String, _ token: String) {
+        print("HP_S06_NATIVE_\(kind)=\(token)")
+        fflush(stdout)
     }
 
     private func bounds(_ scope: Scope) -> CGRect {
@@ -283,17 +277,44 @@ final class MacosS06UITests: XCTestCase {
     }
 
     func testTwoPairedPeersInNativeWindow() throws {
+        trace("STAGE", "entered")
         continueAfterFailure = false
+        do {
+            try exerciseTwoPairedPeers()
+        } catch let Failure.check(code) {
+            trace("FAILURE", code)
+            throw Failure.check(code)
+        } catch {
+            trace("FAILURE", "unexpected_native_error")
+            throw Failure.check("unexpected_native_error")
+        }
+    }
+
+    private func exerciseTwoPairedPeers() throws {
         guard let pathData = Data(base64Encoded: "__HP_S06_EXCHANGE_BASE64__"),
               let path = String(data: pathData, encoding: .utf8) else {
             throw Failure.check("private_exchange_path_invalid")
         }
         exchange = URL(fileURLWithPath: path, isDirectory: true)
-        let peers = try JSONDecoder().decode([Peer].self, from: Data(contentsOf: exchange.appendingPathComponent("fixture.json")))
-        try require(peers.count == 2 && peers.allSatisfy { $0.host == "127.0.0.1" } &&
-                    peers[0].paneId == peers[1].paneId && peers[0].terminalId != peers[1].terminalId,
-                    "private_fixture_binding_invalid")
-        let a = peers[0], b = peers[1]
+        trace("STAGE", "exchangeResolved")
+        try mark("exchangeWritable")
+        let release: Data
+        do {
+            release = try Data(contentsOf: exchange.appendingPathComponent("release.json"))
+        } catch {
+            throw Failure.check("private_release_read_failed")
+        }
+        try mark("releaseRead")
+        let fixture: MacosS06Fixture
+        do {
+            fixture = try JSONDecoder().decode(MacosS06Fixture.self, from: release)
+        } catch {
+            throw Failure.check("private_release_decode_failed")
+        }
+        try mark("releaseDecoded")
+        try require(fixture.hasIndependentTargets, "private_fixture_binding_invalid")
+        let a = fixture.peers[0], b = fixture.peers[1]
+        try mark("targetsValidated")
         try mark("display")
         let display = CGMainDisplayID()
         guard let original = CGDisplayCopyDisplayMode(display) else { throw Failure.check("display_unavailable") }

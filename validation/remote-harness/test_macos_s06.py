@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -17,6 +18,7 @@ from unittest.mock import patch
 
 try:
     import macos_s06 as runner
+    from macos_s06_diagnostics import TEST_SELECTION, checked_summary, diagnostics, log_facts
     from paired_dual_demo import fixture_sshd_config, ssh_args
     from paired_gui import GuiFailure, wait_for
     from pairing import MemoryKeyStore, PendingPairing, encode
@@ -106,6 +108,70 @@ class MacosS06Checks(unittest.TestCase):
                 (root / 'stage').write_text(phase)
                 self.assertEqual(runner.native_stage(root), expected)
 
+    def test_xcode_selects_exact_native_case_on_known_test_action(self):
+        base = ['xcodebuild', '-scheme', 'Runner']
+        bundle = Path('/tmp/owned/private.xcresult')
+        self.assertEqual(runner.test_command(base, bundle),
+                         base + ['-only-testing:' + TEST_SELECTION, '-resultBundlePath', str(bundle), 'test'])
+
+    def test_atomic_release_does_not_overwrite_when_pending_write_is_unknown(self):
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            runner.publish_release(root, [])
+            self.assertEqual(json.loads((root / 'release.json').read_bytes()), {'schemaVersion': 1, 'peers': []})
+            self.assertFalse((root / 'release.new').exists())
+            (root / 'release.new').write_bytes(b'partial')
+            with self.assertRaises(FileExistsError):
+                runner.publish_release(root, [{'port': 1234}])
+            self.assertEqual(json.loads((root / 'release.json').read_bytes())['peers'], [])
+            self.assertEqual((root / 'release.new').read_bytes(), b'partial')
+
+    def test_native_startup_diagnostics_whitelist_and_last_known_phase(self):
+        log = ("Test Case '-[RunnerTests.MacosS06UITests testTwoPairedPeersInNativeWindow]' started.\n"
+               "HP_S06_NATIVE_STAGE=entered\n"
+               "HP_S06_NATIVE_STAGE=releaseRead\n"
+               "HP_S06_NATIVE_STAGE=secretValue\n"
+               "HP_S06_NATIVE_STAGE=pairA\n"
+               "HP_S06_NATIVE_STAGE=keyA\n"
+               "HP_S06_NATIVE_STAGE=pairA\n"
+               "HP_S06_NATIVE_FAILURE=private_release_decode_failed\n"
+               "HP_S06_NATIVE_FAILURE=private_token\n"
+               "/private/secret-data/RunnerTests.swift:168:12: error: private fixture text\n")
+        facts = log_facts(log)
+        self.assertEqual(facts['loggedStages'], ['entered', 'releaseRead', 'pairA', 'keyA'])
+        self.assertEqual(facts['lastLoggedStage'], 'pairA')
+        self.assertIs(facts['testCaseStarted'], True)
+        self.assertEqual(facts['fixedFailure'], 'private_release_decode_failed')
+        self.assertEqual(facts['testSourceFailureLines'], [168])
+        for leak in ('secretValue', 'private_token', '/private', 'private fixture text'):
+            self.assertNotIn(leak, json.dumps(facts))
+        result = log_facts('No tests were found.\nEarly unexpected exit.\n')
+        self.assertEqual(result['startupFlags'], ['noTestsSelected', 'runnerConnectionLost'])
+        self.assertIs(result['testCaseStarted'], False)
+        self.assertNotIn('lastLoggedStage', result)
+
+    def test_xcresult_counts_are_only_small_numeric_fields(self):
+        raw = {'totalTestCount': 1, 'failedTests': 1, 'passedTests': True, 'skippedTests': 9000,
+               'configuration': 'secret-data', 'failedDetails': ['secret-path']}
+        self.assertEqual(checked_summary(raw), {'totalTestCount': 1, 'failedTests': 1})
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            log = root / 'private-log'
+            bundle = root / 'private.xcresult'
+            bundle.mkdir()
+            log.write_text('HP_S06_NATIVE_STAGE=entered\nprivate raw log\n')
+            def summary_command(_args, *, stdout, **_opts):
+                stdout.write(json.dumps(raw).encode())
+                return subprocess.CompletedProcess(_args, 0)
+            with patch('macos_s06_diagnostics.subprocess.run', side_effect=summary_command):
+                result = diagnostics(log, bundle, 65, 'exchangeWritable')
+            self.assertEqual(result['atomicStage'], 'exchangeWritable')
+            self.assertEqual(result['lastLoggedStage'], 'entered')
+            self.assertEqual(result['xcresultTestCounts'], {'totalTestCount': 1, 'failedTests': 1})
+            self.assertEqual(result['xcodeExitCode'], 65)
+            self.assertNotIn('secret', json.dumps(result))
+            self.assertNotIn('private raw log', json.dumps(result))
+
     @unittest.skipUnless(BINARY and sys.platform == 'darwin', 'requires explicit owned-stock macOS opt-in')
     def test_two_real_stock_peers_advance_their_own_terminal_and_close(self):
         keys = MemoryKeyStore()
@@ -113,6 +179,7 @@ class MacosS06Checks(unittest.TestCase):
             base = Path(directory).resolve()
             with runner.fixtures(Path(BINARY), base) as (targets, owned, metadata, configs):
                 self.assertEqual(metadata['herdrSha256'], runner.HERDR_SHA256)
+                self.check_swift_release(base, configs)
                 with ExitStack() as readers:
                     clients = []
                     for target, config in zip(targets.values(), configs):
@@ -168,6 +235,34 @@ class MacosS06Checks(unittest.TestCase):
                 self.assertIsNotNone(target.approval.revocation_response)
             self.assertTrue(all(child.poll() is not None for child in owned))
         self.assertFalse(base.exists())
+
+    def check_swift_release(self, base, configs):
+        compiler = shutil.which('swiftc')
+        self.assertIsNotNone(compiler, 'macOS stock fixture verification requires Swift')
+        runner.publish_release(base, configs)
+        driver = base / 'main.swift'
+        driver.write_text('''import Foundation
+do {
+    let fixture = try JSONDecoder().decode(MacosS06Fixture.self, from: FileHandle.standardInput.readDataToEndOfFile())
+    print(fixture.hasIndependentTargets ? "valid" : "binding")
+} catch {
+    print("decode")
+}
+''')
+        probe = base / 'decode-fixture'
+        subprocess.run([compiler, str(runner.HERE / 'macos_s06_fixture.swift'), str(driver), '-o', str(probe)],
+                       check=True, capture_output=True, timeout=25)
+        payload = (base / 'release.json').read_bytes()
+        self.assertEqual(subprocess.check_output([probe], input=payload, timeout=5), b'valid\n')
+        release = json.loads(payload)
+        wrong_port = copy.deepcopy(release)
+        wrong_port['peers'][0]['port'] = str(wrong_port['peers'][0]['port'])
+        wrong_key = copy.deepcopy(release)
+        wrong_key['peers'][0]['terminal_id'] = wrong_key['peers'][0].pop('terminalId')
+        wrong_binding = copy.deepcopy(release)
+        wrong_binding['peers'][1]['terminalId'] = wrong_binding['peers'][0]['terminalId']
+        for state, expected in ((wrong_port, b'decode\n'), (wrong_key, b'decode\n'), (wrong_binding, b'binding\n')):
+            self.assertEqual(subprocess.check_output([probe], input=json.dumps(state).encode(), timeout=5), expected)
 
     @staticmethod
     def frame(client):

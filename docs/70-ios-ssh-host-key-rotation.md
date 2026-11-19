@@ -4,6 +4,12 @@
 
 范围为 GitHub 托管 macOS 上的受控 iOS Simulator、临时 loopback SSH 和密码认证。模拟器安装、应用界面、服务端协议、完整测试通过及最终画面复核分别记录；本页不证明 iPhone 真机、手工／中文 IME、外部网络、生产主机或五平台支持。
 
+## 2026-11-20 · 本机断开回执验收
+
+Flutter `b3c1182` 的两个 iPhone 11 / iOS 26.2 作业通过普通密码、密码换钥、加密私钥与加密私钥换钥。两个换钥案均经 A → B → B → B，拒绝 B 后取消保留 A，前三条零认证、零 PTY、零收发。仅末条经明确核对 B 后认证并产生原图回显。四案都核对本机断开回执、凭据清空、返回首页及驱动退出前对端关闭。[两个 Flutter 作业的原件与 OCR](evidence/ordinary-ssh-ios-local-result-20261120/README.md#flutter-连接回显与关闭)
+
+Tauri `2e8c355` 的密码作业止于目标地址字段读回，手输私钥作业止于首页添加。两个失败件分别记录清理前后均零连接、零远端写入。该批未执行 Tauri 换钥。较早密码通过的记录保留如下。[两个 Tauri 失败原件](evidence/ordinary-ssh-ios-local-result-20261120/README.md#tauri-r1-的两个停止点)
+
 ## R21 Tauri 定向复验：普通与换钥均通过
 
 R20 换钥失败的定向复验批次：源码 [`cdbb41ac5878ff93a88cbf0fcdb5088f9dc0473b`](https://github.com/Luck9Star/herdr-pocket/commit/cdbb41ac5878ff93a88cbf0fcdb5088f9dc0473b)（验收测试代码），[Actions 运行 44326045427](https://github.com/Luck9Star/herdr-pocket/actions/runs/44326045427)，`status=passed`、`stage=complete`、`nativeCheckpoint=key_change_disconnect`。工件 `tauri.zip`（SHA256 `c17aa0ec…48d8f5c`）与逐文件校验见 [R21 官方证据归档索引](evidence/ios-ssh-20261118/r21-official-index.json)。运行于 iPhone 17 Pro Max / iOS 26.2 Simulator。

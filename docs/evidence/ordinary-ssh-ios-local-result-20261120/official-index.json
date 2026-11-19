@@ -1,0 +1,436 @@
+{
+  "schemaVersion": 1,
+  "verifiedOn": "2026-11-20",
+  "artifacts": [
+    {
+      "label": "r2-batch",
+      "shell": "flutter",
+      "sourceSha": "b3c1182b8860a0d1eda93f7402509938b836c715",
+      "workflowRun": 44577362257,
+      "runAttempt": 1,
+      "jobId": 135748357206,
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44577362257/job/135748357206",
+      "jobConclusion": "success",
+      "sourceBranch": "codex/acceptance/direct-ssh-ios-flutter-only-encrypted-key-local-result-r2",
+      "event": "push",
+      "githubArtifactId": 14558242724,
+      "githubArtifactName": "flutter-ordinary-ssh-ios-b3c1182b8860a0d1eda93f7402509938b836c715",
+      "githubArtifactDigest": "sha256:1e2a16cfbb351e93ff4653f1ac5d2b08c92e7649ee6a9e77b48dd1a549e0a4bf",
+      "githubArtifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44577362257/artifacts/14558242724",
+      "expiresAt": "2027-02-17T17:27:25Z",
+      "zip": "44577362257-14558242724.zip",
+      "zipSizeBytes": 585955,
+      "zipSha256": "1e2a16cfbb351e93ff4653f1ac5d2b08c92e7649ee6a9e77b48dd1a549e0a4bf",
+      "members": {
+        "result.json": {
+          "sizeBytes": 25219,
+          "sha256": "c65f1ce58dd199153093662c75921e31be4bf547fe356a69796e85ed931b1543"
+        },
+        "ordinary-terminal.png": {
+          "sizeBytes": 96932,
+          "sha256": "9876fe553879e3763ac9b570c6c22f4d3213bc29c6be477d39d74ead832fda6c",
+          "imageSize": [
+            828,
+            1792
+          ],
+          "pngMetadataKeys": [
+            "exif",
+            "srgb"
+          ]
+        },
+        "ordinary-terminal-ocr.json": {
+          "sizeBytes": 486,
+          "sha256": "bab42a0819e1f9b6892f3d24b59b31ef5f9f267fb57575451cb53017f5345924"
+        },
+        "key-change-review.png": {
+          "sizeBytes": 148401,
+          "sha256": "daf0483d92a09a895d02037357e7b04f97abbbaed86a916fc74a200a031d54fd",
+          "imageSize": [
+            828,
+            1792
+          ],
+          "pngMetadataKeys": [
+            "exif",
+            "srgb"
+          ]
+        },
+        "key-change-terminal.png": {
+          "sizeBytes": 219489,
+          "sha256": "bc72c1b74f7565edcde3b97514f3ee918966dae0e046d37c9db5ca24c5b5230e",
+          "imageSize": [
+            828,
+            1792
+          ],
+          "pngMetadataKeys": [
+            "exif",
+            "srgb"
+          ]
+        },
+        "preconnect.png": {
+          "sizeBytes": 140145,
+          "sha256": "440702b012b409a57dff6ce5a096c52b59a1067390c768569a7be6618e958b42",
+          "imageSize": [
+            828,
+            1792
+          ],
+          "pngMetadataKeys": [
+            "exif",
+            "srgb"
+          ]
+        },
+        "encrypted-key-terminal.png": {
+          "sizeBytes": 96748,
+          "sha256": "e5fc0c320f0953cf0371348d3b40db1f40f6bc8230411d9d234fe44b1ac5662e",
+          "imageSize": [
+            828,
+            1792
+          ],
+          "pngMetadataKeys": [
+            "exif",
+            "srgb"
+          ]
+        },
+        "key-change-terminal-ocr.json": {
+          "sizeBytes": 485,
+          "sha256": "e70cd739b2dd32c63c7254971a3bb5dcd42372104107419dac42f9bb66c38703"
+        },
+        "encrypted-key-terminal-ocr.json": {
+          "sizeBytes": 486,
+          "sha256": "da5aecbddb45a6443b36c26175c378d9869083f394f587084de5747f62ff7b79"
+        }
+      },
+      "result": "passed",
+      "simulator": {
+        "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-26-2",
+        "runtimeVersion": "26.2",
+        "deviceType": "iPhone 11"
+      },
+      "cleanup": {
+        "simulatorDeleted": true,
+        "fixtureClosed": true,
+        "flutterToolStopped": true,
+        "appRemoved": true,
+        "privateRemoved": true,
+        "rawLogsUploaded": false,
+        "encryptedFixtureClosed": true,
+        "encryptedSecretsCleared": true
+      },
+      "terminalProofs": {
+        "ordinary": {
+          "imageFile": "ordinary-terminal.png",
+          "imageSha256": "9876fe553879e3763ac9b570c6c22f4d3213bc29c6be477d39d74ead832fda6c",
+          "criteriaFile": "ordinary-terminal-ocr.json",
+          "criteriaSha256": "bab42a0819e1f9b6892f3d24b59b31ef5f9f267fb57575451cb53017f5345924",
+          "hostKeySequence": [
+            "A",
+            "A"
+          ],
+          "acceptedConnection": 2,
+          "terminalBounds": [
+            48,
+            336,
+            732,
+            1148
+          ],
+          "targetBounds": [
+            192,
+            259,
+            343,
+            34
+          ],
+          "ocrEngine": "tesseract 5.5.4",
+          "freshMarkerAndTokenVisible": true
+        },
+        "keyChange": {
+          "imageFile": "key-change-terminal.png",
+          "imageSha256": "bc72c1b74f7565edcde3b97514f3ee918966dae0e046d37c9db5ca24c5b5230e",
+          "criteriaFile": "key-change-terminal-ocr.json",
+          "criteriaSha256": "e70cd739b2dd32c63c7254971a3bb5dcd42372104107419dac42f9bb66c38703",
+          "hostKeySequence": [
+            "A",
+            "B",
+            "B",
+            "B"
+          ],
+          "acceptedConnection": 4,
+          "terminalBounds": [
+            48,
+            336,
+            732,
+            726
+          ],
+          "targetBounds": [
+            192,
+            259,
+            343,
+            34
+          ],
+          "ocrEngine": "tesseract 5.5.4",
+          "freshMarkerAndTokenVisible": true,
+          "reviewScreenshot": {
+            "imageFile": "key-change-review.png",
+            "imageSha256": "daf0483d92a09a895d02037357e7b04f97abbbaed86a916fc74a200a031d54fd",
+            "purpose": "design-review-no-ocr"
+          }
+        },
+        "encryptedKey": {
+          "imageFile": "encrypted-key-terminal.png",
+          "imageSha256": "e5fc0c320f0953cf0371348d3b40db1f40f6bc8230411d9d234fe44b1ac5662e",
+          "criteriaFile": "encrypted-key-terminal-ocr.json",
+          "criteriaSha256": "da5aecbddb45a6443b36c26175c378d9869083f394f587084de5747f62ff7b79",
+          "hostKeySequence": [
+            "A",
+            "A"
+          ],
+          "acceptedConnection": 2,
+          "terminalBounds": [
+            48,
+            336,
+            732,
+            1148
+          ],
+          "targetBounds": [
+            192,
+            259,
+            343,
+            34
+          ],
+          "ocrEngine": "tesseract 5.5.4",
+          "freshMarkerAndTokenVisible": true
+        }
+      },
+      "ordinaryMobileCheckpoints": [
+        "keyboard_shown",
+        "keyboard_hidden",
+        "board_visible",
+        "board_returned",
+        "network_visible",
+        "network_returned",
+        "settings_visible",
+        "settings_returned"
+      ]
+    },
+    {
+      "label": "r2-encrypted-rotation",
+      "shell": "flutter",
+      "sourceSha": "b3c1182b8860a0d1eda93f7402509938b836c715",
+      "workflowRun": 44577365059,
+      "runAttempt": 1,
+      "jobId": 135748377946,
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44577365059/job/135748377946",
+      "jobConclusion": "success",
+      "sourceBranch": "codex/acceptance/direct-ssh-ios-flutter-only-encrypted-rotation-local-result-r2",
+      "event": "workflow_dispatch",
+      "githubArtifactId": 14559260076,
+      "githubArtifactName": "flutter-ordinary-ssh-ios-b3c1182b8860a0d1eda93f7402509938b836c715",
+      "githubArtifactDigest": "sha256:3ce67794a04d79c18d45b48f51cc0cc7e4abbd189dadb8280c3654eb24b16139",
+      "githubArtifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44577365059/artifacts/14559260076",
+      "expiresAt": "2027-02-17T17:27:27Z",
+      "zip": "44577365059-14559260076.zip",
+      "zipSizeBytes": 201004,
+      "zipSha256": "3ce67794a04d79c18d45b48f51cc0cc7e4abbd189dadb8280c3654eb24b16139",
+      "members": {
+        "encrypted-rotation-review.png": {
+          "sizeBytes": 150091,
+          "sha256": "61f09ad6204c468caf995872ea8f870f8506e57858a198352100a0bcce5a7c46",
+          "imageSize": [
+            828,
+            1792
+          ],
+          "pngMetadataKeys": [
+            "exif",
+            "srgb"
+          ]
+        },
+        "encrypted-rotation-terminal.png": {
+          "sizeBytes": 97095,
+          "sha256": "53c4f89caf769a2fa7d7b7639a9978467366a9b6bdee4cf21d9acf3acfc994ed",
+          "imageSize": [
+            828,
+            1792
+          ],
+          "pngMetadataKeys": [
+            "exif",
+            "srgb"
+          ]
+        },
+        "encrypted-rotation-terminal-ocr.json": {
+          "sizeBytes": 486,
+          "sha256": "73aa9ec955741f3bd99a2af2e8706f4b304aa772d7c4c4d160f9b3ad90a5d5bd"
+        },
+        "result.json": {
+          "sizeBytes": 17562,
+          "sha256": "1f26e8dce2d92fd43a2e528abea3d1071c3976cec70176001ef5a29cd2671eb1"
+        }
+      },
+      "result": "passed",
+      "simulator": {
+        "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-26-2",
+        "runtimeVersion": "26.2",
+        "deviceType": "iPhone 11"
+      },
+      "cleanup": {
+        "simulatorDeleted": true,
+        "fixtureClosed": true,
+        "flutterToolStopped": true,
+        "appRemoved": true,
+        "privateRemoved": true,
+        "rawLogsUploaded": false,
+        "encryptedFixtureClosed": true,
+        "encryptedSecretsCleared": true
+      },
+      "terminalProofs": {
+        "encryptedKeyRotation": {
+          "imageFile": "encrypted-rotation-terminal.png",
+          "imageSha256": "53c4f89caf769a2fa7d7b7639a9978467366a9b6bdee4cf21d9acf3acfc994ed",
+          "criteriaFile": "encrypted-rotation-terminal-ocr.json",
+          "criteriaSha256": "73aa9ec955741f3bd99a2af2e8706f4b304aa772d7c4c4d160f9b3ad90a5d5bd",
+          "hostKeySequence": [
+            "A",
+            "B",
+            "B",
+            "B"
+          ],
+          "acceptedConnection": 4,
+          "terminalBounds": [
+            48,
+            336,
+            732,
+            1148
+          ],
+          "targetBounds": [
+            192,
+            259,
+            343,
+            34
+          ],
+          "ocrEngine": "tesseract 5.5.4",
+          "freshMarkerAndTokenVisible": true,
+          "reviewScreenshot": {
+            "imageFile": "encrypted-rotation-review.png",
+            "imageSha256": "61f09ad6204c468caf995872ea8f870f8506e57858a198352100a0bcce5a7c46",
+            "purpose": "design-review-no-ocr"
+          }
+        }
+      }
+    },
+    {
+      "label": "r1-password",
+      "shell": "tauri",
+      "sourceSha": "2e8c3557e2e51ae62b423f9e25a9f1fc5d72cecf",
+      "workflowRun": 44573407807,
+      "runAttempt": 2,
+      "jobId": 135746345036,
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44573407807/job/135746345036",
+      "jobConclusion": "failure",
+      "sourceBranch": "codex/acceptance/direct-ssh-ios-tauri-only-local-result-r1",
+      "event": "push",
+      "githubArtifactId": 14558498583,
+      "githubArtifactName": "tauri-ordinary-ssh-ios-2e8c3557e2e51ae62b423f9e25a9f1fc5d72cecf",
+      "githubArtifactDigest": "sha256:0d30b18f3c4dc1b738f224bcad1cd0028c2e0b99284f19e8e3d3cca6f116d420",
+      "githubArtifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44573407807/artifacts/14558498583",
+      "expiresAt": "2027-02-17T17:24:14Z",
+      "zip": "44573407807-14558498583.zip",
+      "zipSizeBytes": 2325,
+      "zipSha256": "0d30b18f3c4dc1b738f224bcad1cd0028c2e0b99284f19e8e3d3cca6f116d420",
+      "members": {
+        "result.json": {
+          "sizeBytes": 10936,
+          "sha256": "1684d14919b07bcc881c40005c931bec090a04b9f0d3bafb3c4ba9a625cf919e"
+        }
+      },
+      "result": "failed",
+      "simulator": {
+        "deviceType": "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max",
+        "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-26-2"
+      },
+      "cleanup": {
+        "simulatorDeleted": true,
+        "fixturesClosed": true,
+        "privateFilesRemoved": true
+      },
+      "stage": "ordinary_form",
+      "nativeCheckpoint": "ordinary_host",
+      "nativeFailureCode": "native_input_value_invalid",
+      "cases": {
+        "ordinary": "failed",
+        "keyChange": "not_run"
+      },
+      "failurePeerObservations": {
+        "beforeCleanup": {
+          "connections": 0,
+          "connectionsClosed": true,
+          "events": [],
+          "truncated": false
+        },
+        "afterCleanup": {
+          "connections": 0,
+          "connectionsClosed": true,
+          "events": [],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "label": "r1-manual-key",
+      "shell": "tauri",
+      "sourceSha": "2e8c3557e2e51ae62b423f9e25a9f1fc5d72cecf",
+      "workflowRun": 44573496445,
+      "runAttempt": 2,
+      "jobId": 135745516595,
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44573496445/job/135745516595",
+      "jobConclusion": "failure",
+      "sourceBranch": "codex/acceptance/direct-ssh-ios-tauri-only-encrypted-manual-r1",
+      "event": "workflow_dispatch",
+      "githubArtifactId": 14558906376,
+      "githubArtifactName": "tauri-ordinary-ssh-ios-2e8c3557e2e51ae62b423f9e25a9f1fc5d72cecf",
+      "githubArtifactDigest": "sha256:0c4f9c63c212942e0e3b269ff15b674ce9f5d2219dfa16f3372a6f1953313959",
+      "githubArtifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44573496445/artifacts/14558906376",
+      "expiresAt": "2027-02-17T17:22:56Z",
+      "zip": "44573496445-14558906376.zip",
+      "zipSizeBytes": 2033,
+      "zipSha256": "0c4f9c63c212942e0e3b269ff15b674ce9f5d2219dfa16f3372a6f1953313959",
+      "members": {
+        "result.json": {
+          "sizeBytes": 8191,
+          "sha256": "0d951987265a672c4ba11b61cf5daa2e6d5d8687206cf656df1f632b37e477b0"
+        }
+      },
+      "result": "failed",
+      "simulator": {
+        "deviceType": "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max",
+        "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-26-2"
+      },
+      "cleanup": {
+        "simulatorDeleted": true,
+        "fixturesClosed": true,
+        "privateFilesRemoved": true,
+        "encryptedSecretsCleared": true,
+        "rawLogsUploaded": false
+      },
+      "stage": "encrypted_key_form",
+      "nativeCheckpoint": "encrypted_key_open_add",
+      "nativeFailureCode": "native_home_navigation_failed",
+      "cases": {
+        "ordinary": "not_run",
+        "keyChange": "not_run",
+        "encryptedKey": "failed"
+      },
+      "failurePeerObservations": {
+        "beforeCleanup": {
+          "connections": 0,
+          "connectionsClosed": true,
+          "events": [],
+          "truncated": false
+        },
+        "afterCleanup": {
+          "connections": 0,
+          "connectionsClosed": true,
+          "events": [],
+          "truncated": false
+        }
+      },
+      "configuredCredentialEntry": "nativeTypeText"
+    }
+  ]
+}

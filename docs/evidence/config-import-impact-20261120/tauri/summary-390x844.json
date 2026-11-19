@@ -1,0 +1,101 @@
+{
+  "scope": "390x844 mobile browser with synthetic Tauri IPC; no native SSH, device, file picker or encryption ingest",
+  "measurements": {
+    "after-chromium-390x844": {
+      "commit": "c7cfd0c1060bbd9ff2c88d2640351078a0a46122",
+      "engine": "chromium",
+      "version": "151.0.7922.34",
+      "actualViewport": {
+        "width": 390,
+        "height": 844
+      },
+      "taps": 8,
+      "exactRadioHits": 8,
+      "checked": 8,
+      "minScrollDelta": 180,
+      "maxScrollDelta": 921,
+      "measurementCount": 4,
+      "documentOverflow": 0,
+      "previewOverflow": 0,
+      "impactOverflow": 0,
+      "horizontallyOverflowedLabels": 0,
+      "visibleTextRuns": 16,
+      "textRuns": 16,
+      "writes": 0,
+      "input": 0,
+      "report": "after-chromium-390x844/report.json"
+    },
+    "after-webkit-390x844": {
+      "commit": "c7cfd0c1060bbd9ff2c88d2640351078a0a46122",
+      "engine": "webkit",
+      "version": "26.5",
+      "actualViewport": {
+        "width": 390,
+        "height": 844
+      },
+      "taps": 8,
+      "exactRadioHits": 8,
+      "checked": 8,
+      "minScrollDelta": 181,
+      "maxScrollDelta": 915,
+      "measurementCount": 4,
+      "documentOverflow": 0,
+      "previewOverflow": 0,
+      "impactOverflow": 0,
+      "horizontallyOverflowedLabels": 0,
+      "visibleTextRuns": 16,
+      "textRuns": 16,
+      "writes": 0,
+      "input": 0,
+      "report": "after-webkit-390x844/report.json"
+    },
+    "before-chromium-390x844": {
+      "commit": "8a38ada164fbaa631a61cc1c78cfb849222ff61f",
+      "engine": "chromium",
+      "version": "151.0.7922.34",
+      "actualViewport": {
+        "width": 390,
+        "height": 844
+      },
+      "taps": 8,
+      "exactRadioHits": 8,
+      "checked": 8,
+      "minScrollDelta": 120,
+      "maxScrollDelta": 851,
+      "measurementCount": 4,
+      "documentOverflow": 0,
+      "previewOverflow": 0,
+      "impactOverflow": 0,
+      "horizontallyOverflowedLabels": 0,
+      "visibleTextRuns": 4,
+      "textRuns": 4,
+      "writes": 0,
+      "input": 0,
+      "report": "before-chromium-390x844/report.json"
+    },
+    "before-webkit-390x844": {
+      "commit": "8a38ada164fbaa631a61cc1c78cfb849222ff61f",
+      "engine": "webkit",
+      "version": "26.5",
+      "actualViewport": {
+        "width": 390,
+        "height": 844
+      },
+      "taps": 8,
+      "exactRadioHits": 8,
+      "checked": 8,
+      "minScrollDelta": 121,
+      "maxScrollDelta": 852,
+      "measurementCount": 4,
+      "documentOverflow": 0,
+      "previewOverflow": 0,
+      "impactOverflow": 0,
+      "horizontallyOverflowedLabels": 0,
+      "visibleTextRuns": 4,
+      "textRuns": 4,
+      "writes": 0,
+      "input": 0,
+      "report": "before-webkit-390x844/report.json"
+    }
+  }
+}

@@ -1,0 +1,393 @@
+{
+  "sourceSHA": "after",
+  "engine": "chromium",
+  "browser": "151.0.7922.34",
+  "scope": "Production Tauri frontend in a Playwright browser against simulated native IPC; synthetic file and saved hosts; no SSH or native picker.",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "pageErrors": [],
+  "clicks": [
+    {
+      "entry": 0,
+      "choice": "replace",
+      "scrollBefore": 716,
+      "x": 55,
+      "y": 422,
+      "hitOwnRadio": true,
+      "hitOwnLabel": true,
+      "hitTag": "INPUT",
+      "scrollY": 1297,
+      "viewport": 390,
+      "viewportHeight": 844,
+      "left": 44,
+      "right": 346,
+      "top": 400.03125,
+      "bottom": 444.03125,
+      "horizontalOverflow": 0,
+      "checked": true
+    },
+    {
+      "entry": 1,
+      "choice": "add",
+      "scrollBefore": 1297,
+      "x": 55,
+      "y": 421,
+      "hitOwnRadio": true,
+      "hitOwnLabel": true,
+      "hitTag": "INPUT",
+      "scrollY": 1553,
+      "viewport": 390,
+      "viewportHeight": 844,
+      "left": 44,
+      "right": 346,
+      "top": 399.5,
+      "bottom": 443.5,
+      "horizontalOverflow": 0,
+      "checked": true
+    },
+    {
+      "entry": 0,
+      "choice": "keep",
+      "scrollBefore": 2174,
+      "x": 55,
+      "y": 422,
+      "hitOwnRadio": true,
+      "hitOwnLabel": true,
+      "hitTag": "INPUT",
+      "scrollY": 1253,
+      "viewport": 390,
+      "viewportHeight": 844,
+      "left": 44,
+      "right": 346,
+      "top": 400.03125,
+      "bottom": 444.03125,
+      "horizontalOverflow": 0,
+      "checked": true
+    },
+    {
+      "entry": 1,
+      "choice": "replace",
+      "scrollBefore": 1253,
+      "x": 55,
+      "y": 421,
+      "hitOwnRadio": true,
+      "hitOwnLabel": true,
+      "hitTag": "INPUT",
+      "scrollY": 1641,
+      "viewport": 390,
+      "viewportHeight": 844,
+      "left": 44,
+      "right": 346,
+      "top": 399.5,
+      "bottom": 443.5,
+      "horizontalOverflow": 0,
+      "checked": true
+    },
+    {
+      "entry": 0,
+      "choice": "add",
+      "scrollBefore": 2105,
+      "x": 55,
+      "y": 422,
+      "hitOwnRadio": true,
+      "hitOwnLabel": true,
+      "hitTag": "INPUT",
+      "scrollY": 1209,
+      "viewport": 390,
+      "viewportHeight": 844,
+      "left": 44,
+      "right": 346,
+      "top": 400.03125,
+      "bottom": 444.03125,
+      "horizontalOverflow": 0,
+      "checked": true
+    },
+    {
+      "entry": 1,
+      "choice": "keep",
+      "scrollBefore": 1209,
+      "x": 55,
+      "y": 421,
+      "hitOwnRadio": true,
+      "hitOwnLabel": true,
+      "hitTag": "INPUT",
+      "scrollY": 1597,
+      "viewport": 390,
+      "viewportHeight": 844,
+      "left": 44,
+      "right": 346,
+      "top": 399.5,
+      "bottom": 443.5,
+      "horizontalOverflow": 0,
+      "checked": true
+    },
+    {
+      "entry": 2,
+      "choice": "replace",
+      "scrollBefore": 1597,
+      "x": 55,
+      "y": 421,
+      "hitOwnRadio": true,
+      "hitOwnLabel": true,
+      "hitTag": "INPUT",
+      "scrollY": 1984,
+      "viewport": 390,
+      "viewportHeight": 844,
+      "left": 44,
+      "right": 346,
+      "top": 399.96875,
+      "bottom": 443.96875,
+      "horizontalOverflow": 0,
+      "checked": true
+    },
+    {
+      "entry": 2,
+      "choice": "keep",
+      "scrollBefore": 2120,
+      "x": 55,
+      "y": 421,
+      "hitOwnRadio": true,
+      "hitOwnLabel": true,
+      "hitTag": "INPUT",
+      "scrollY": 1940,
+      "viewport": 390,
+      "viewportHeight": 844,
+      "left": 44,
+      "right": 346,
+      "top": 399.96875,
+      "bottom": 443.96875,
+      "horizontalOverflow": 0,
+      "checked": true
+    }
+  ],
+  "impactGeometry": {
+    "alpha-replace": {
+      "visualWidth": 390,
+      "visualHeight": 844,
+      "scale": 1,
+      "scrollY": 2174,
+      "documentWidth": 390,
+      "rootClientWidth": 390,
+      "previewScrollWidth": 332,
+      "previewClientWidth": 332,
+      "left": 29,
+      "right": 361,
+      "top": 284.96875,
+      "bottom": 558.25,
+      "width": 332,
+      "height": 273.28125,
+      "clientWidth": 332,
+      "scrollWidth": 332,
+      "lines": [
+        {
+          "left": 41,
+          "right": 340,
+          "top": 312.96875,
+          "bottom": 328.96875,
+          "visible": true
+        },
+        {
+          "left": 41,
+          "right": 93,
+          "top": 335.0625,
+          "bottom": 351.0625,
+          "visible": true
+        },
+        {
+          "left": 81,
+          "right": 173.65625,
+          "top": 370.15625,
+          "bottom": 388.15625,
+          "visible": true
+        },
+        {
+          "left": 41,
+          "right": 223,
+          "top": 407.15625,
+          "bottom": 423.15625,
+          "visible": true
+        },
+        {
+          "left": 81,
+          "right": 343.1875,
+          "top": 444.25,
+          "bottom": 462.25,
+          "visible": true
+        },
+        {
+          "left": 81,
+          "right": 221.8125,
+          "top": 466.25,
+          "bottom": 484.25,
+          "visible": true
+        },
+        {
+          "left": 81,
+          "right": 337.625,
+          "top": 488.25,
+          "bottom": 506.25,
+          "visible": true
+        },
+        {
+          "left": 81,
+          "right": 221.8125,
+          "top": 510.25,
+          "bottom": 528.25,
+          "visible": true
+        }
+      ]
+    },
+    "beta-replace": {
+      "visualWidth": 390,
+      "visualHeight": 844,
+      "scale": 1,
+      "scrollY": 2105,
+      "documentWidth": 390,
+      "rootClientWidth": 390,
+      "previewScrollWidth": 332,
+      "previewClientWidth": 332,
+      "left": 29,
+      "right": 361,
+      "top": 353.96875,
+      "bottom": 489.0625,
+      "width": 332,
+      "height": 135.09375,
+      "clientWidth": 332,
+      "scrollWidth": 332,
+      "lines": [
+        {
+          "left": 41,
+          "right": 223,
+          "top": 381.96875,
+          "bottom": 397.96875,
+          "visible": true
+        },
+        {
+          "left": 81,
+          "right": 347.03125,
+          "top": 419.0625,
+          "bottom": 437.0625,
+          "visible": true
+        },
+        {
+          "left": 81,
+          "right": 205.8125,
+          "top": 441.0625,
+          "bottom": 459.0625,
+          "visible": true
+        }
+      ]
+    },
+    "native-owner-only": {
+      "visualWidth": 390,
+      "visualHeight": 844,
+      "scale": 1,
+      "scrollY": 2120,
+      "documentWidth": 390,
+      "rootClientWidth": 390,
+      "previewScrollWidth": 332,
+      "previewClientWidth": 332,
+      "left": 29,
+      "right": 361,
+      "top": 338.96875,
+      "bottom": 505.25,
+      "width": 332,
+      "height": 166.28125,
+      "clientWidth": 332,
+      "scrollWidth": 332,
+      "lines": [
+        {
+          "left": 41,
+          "right": 340,
+          "top": 366.96875,
+          "bottom": 382.96875,
+          "visible": true
+        },
+        {
+          "left": 41,
+          "right": 93,
+          "top": 389.0625,
+          "bottom": 405.0625,
+          "visible": true
+        },
+        {
+          "left": 81,
+          "right": 188.015625,
+          "top": 424.15625,
+          "bottom": 442.15625,
+          "visible": true
+        },
+        {
+          "left": 41,
+          "right": 249,
+          "top": 461.15625,
+          "bottom": 477.15625,
+          "visible": true
+        }
+      ]
+    },
+    "keep-and-add": {
+      "visualWidth": 390,
+      "visualHeight": 844,
+      "scale": 1,
+      "scrollY": 2073,
+      "documentWidth": 390,
+      "rootClientWidth": 390,
+      "previewScrollWidth": 332,
+      "previewClientWidth": 332,
+      "left": 29,
+      "right": 361,
+      "top": 385.96875,
+      "bottom": 458.0625,
+      "width": 332,
+      "height": 72.09375,
+      "clientWidth": 332,
+      "scrollWidth": 332,
+      "lines": [
+        {
+          "left": 41,
+          "right": 249,
+          "top": 413.96875,
+          "bottom": 429.96875,
+          "visible": true
+        }
+      ]
+    }
+  },
+  "noSelection": "当前选择没有受影响的工作台标签。",
+  "alphaReplace": "预览时检测到以下主机有连接活动，确认后将停止这些连接。\n\nfixture-alpha\n\n当前选择影响以下工作台标签。\n\n标签 1 · fixture-alpha · w1:p1 · 观察已暂停 · 输入已关闭。\n标签 2 · fixture-alpha · 选择终端 · 未连接 · 输入已关闭。",
+  "alphaItems": [
+    "fixture-alpha",
+    "标签 1 · fixture-alpha · w1:p1 · 观察已暂停 · 输入已关闭。",
+    "标签 2 · fixture-alpha · 选择终端 · 未连接 · 输入已关闭。"
+  ],
+  "includesOpaqueId": false,
+  "passwordFieldsEmpty": true,
+  "betaReplace": "当前选择影响以下工作台标签。\n\n标签 3 · fixture-beta · 选择终端 · 未连接 · 输入已关闭。",
+  "betaItems": [
+    "标签 3 · fixture-beta · 选择终端 · 未连接 · 输入已关闭。"
+  ],
+  "nativeOwnerOnly": "预览时检测到以下主机有连接活动，确认后将停止这些连接。\n\nfixture-gamma\n\n当前选择没有受影响的工作台标签。",
+  "nativeOwnerItems": [
+    "fixture-gamma"
+  ],
+  "noReplacement": "当前选择没有受影响的工作台标签。",
+  "counts": {
+    "config_document_platform": 2,
+    "host_init": 1,
+    "host_list": 4,
+    "network_list": 5,
+    "remote_tab_reserve": 1,
+    "remote_tab_visible": 1,
+    "remote_tab_observe": 1,
+    "remote_tab_select": 1,
+    "remote_tab_ack": 1,
+    "remote_tab_input_mode": 1,
+    "remote_tab_control": 1,
+    "config_document_open": 1,
+    "config_preview": 1
+  },
+  "passed": true
+}

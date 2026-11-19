@@ -119,6 +119,19 @@ class MacosS06Checks(unittest.TestCase):
         channel.send.assert_not_called()
         target.review.assert_not_called()
 
+    def test_broker_error_publication_accepts_only_fixed_category(self):
+        channel = runner.NativeChannel(Path('/tmp/owned/broker'), '1' * 64)
+        for stderr, expected in ((b'topic_occupied\n', 'topic_occupied'),
+                                 (b'write_denied\n', 'write_denied'),
+                                 (b'read_unavailable\n', 'read_unavailable'),
+                                 (b'prepare_denied\n', 'prepare_denied'),
+                                 (b'write_denied\nprivate-source', 'rejected')):
+            failure = subprocess.CompletedProcess([], 2, b'', stderr)
+            with patch('macos_s06.subprocess.run', return_value=failure):
+                with self.assertRaises(GuiFailure) as raised:
+                    channel.send('release', b'fixture')
+            self.assertEqual(str(raised.exception), 's06_native_private_channel_' + expected)
+
     def test_native_startup_diagnostics_whitelist_and_last_known_phase(self):
         log = ("Test Case '-[RunnerTests.MacosS06UITests testTwoPairedPeersInNativeWindow]' started.\n"
                "HP_S06_NATIVE_STAGE=entered\n"
@@ -142,6 +155,10 @@ class MacosS06Checks(unittest.TestCase):
         self.assertEqual(result['startupFlags'], ['noTestsSelected', 'runnerConnectionLost'])
         self.assertIs(result['testCaseStarted'], False)
         self.assertNotIn('lastLoggedStage', result)
+        for category in ('topic_occupied', 'prepare_denied', 'write_denied', 'read_unavailable'):
+            marker = 'private_channel_' + category
+            facts = log_facts(f'HP_S06_NATIVE_FAILURE={marker}\n')
+            self.assertEqual(facts['fixedFailure'], marker)
 
     def test_xcresult_counts_are_only_small_numeric_fields(self):
         raw = {'totalTestCount': 1, 'failedTests': 1, 'passedTests': True, 'skippedTests': 9000,
@@ -185,12 +202,14 @@ class MacosS06Checks(unittest.TestCase):
                         pairing = PendingPairing(keys, handle, account=config['username'],
                             expected_host_key=target.host.pin, device='Owned local test', now=int(time.time()))
                         request = encode(pairing.request)
+                        self.assertIsNone(channel.receive(f'request{index}'))
                         test.send(f'request{index}', request)
                         host_request = channel.receive(f'request{index}')
                         self.assertEqual(host_request, request)
                         review = target.review(host_request)
                         response = target.approve(host_request, request_id=review['requestId'],
                             device_fingerprint=review['deviceFingerprint'], reviewed=True)
+                        self.assertIsNone(test.receive(f'response{index}'))
                         channel.send(f'response{index}', response)
                         public_response = test.receive(f'response{index}')
                         self.assertEqual(public_response, response)
@@ -254,13 +273,21 @@ class MacosS06Checks(unittest.TestCase):
             self.assertIsNone(other.receive('release'))
         finally:
             runner.NativeChannel(host.executable, other.nonce).call('releaseAll')
-        for sender, topic, data in ((host, 'release', b'replay'), (host, 'testReady', b'wrong writer'),
-                                    (host, 'unknown', b'wrong topic'), (test, 'request0', b'x' * 2049)):
-            with self.assertRaisesRegex(GuiFailure, 'private_channel_rejected'):
+        cases = ((host, 'release', b'replay', 'topic_occupied'),
+                 (host, 'testReady', b'wrong writer', 'message_rejected'),
+                 (host, 'unknown', b'wrong topic', 'message_rejected'),
+                 (test, 'request0', b'x' * 2049, 'message_rejected'))
+        for sender, topic, data, failure in cases:
+            with self.assertRaisesRegex(GuiFailure, 'private_channel_' + failure):
                 sender.send(topic, data)
+        self.assertIsNotNone(test.receive('release'))
         challenge = str(uuid.uuid4()).encode()
+        # The live host polls before XCTest sends. On R3 the empty board's
+        # writeObjects returned false in this order, unlike write-then-read.
+        self.assertIsNone(host.receive('testReady'))
         test.send('testReady', challenge)
         self.assertEqual(host.receive('testReady'), challenge)
+        self.assertIsNone(test.receive('hostReady'))
         host.send('hostReady', challenge)
         self.assertEqual(test.receive('hostReady'), challenge)
 

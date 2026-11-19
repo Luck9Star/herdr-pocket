@@ -36,6 +36,9 @@ struct MacosS06Broker {
             default:
                 throw MacosS06Channel.Failure.rejectedMessage
             }
+        } catch let failure as MacosS06Channel.Failure {
+            FileHandle.standardError.write(Data((failure.rawValue + "\n").utf8))
+            exit(2)
         } catch {
             // Never print the channel identifier or wire payload.
             exit(2)

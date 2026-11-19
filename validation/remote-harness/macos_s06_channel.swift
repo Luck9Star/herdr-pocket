@@ -25,7 +25,16 @@ struct MacosS06Channel {
         }
     }
 
-    enum Failure: Error { case invalidScope, rejectedMessage, deliveryFailed, cleanupFailed }
+    enum Failure: String, Error {
+        case invalidScope = "scope_invalid"
+        case rejectedMessage = "message_rejected"
+        case occupiedTopic = "topic_occupied"
+        case preparationDenied = "prepare_denied"
+        case itemRejected = "item_rejected"
+        case writeDenied = "write_denied"
+        case readUnavailable = "read_unavailable"
+        case cleanupFailed = "cleanup_failed"
+    }
 
     private static let type = NSPasteboard.PasteboardType("dev.herdr.pocket.s06.fixture-message")
     private let nonce: String
@@ -50,16 +59,24 @@ struct MacosS06Channel {
             throw Failure.rejectedMessage
         }
         let board = board(topic)
-        guard board.types?.isEmpty != false else { throw Failure.rejectedMessage }
+        guard board.types?.isEmpty != false else { throw Failure.occupiedTopic }
+        // A polling reader can create this still-empty board before the writer
+        // arrives. AppKit's first write step prepares it for the new contents.
+        let before = board.changeCount
+        guard board.clearContents() != before else { throw Failure.preparationDenied }
         let item = NSPasteboardItem()
-        guard item.setData(prefix + data, forType: Self.type), board.writeObjects([item]) else {
-            throw Failure.deliveryFailed
-        }
+        guard item.setData(prefix + data, forType: Self.type) else { throw Failure.itemRejected }
+        guard board.writeObjects([item]) else { throw Failure.writeDenied }
     }
 
     func receive(_ topic: Topic) throws -> Data? {
         guard topic.writer != party else { throw Failure.rejectedMessage }
-        guard let wire = board(topic).data(forType: Self.type) else { return nil }
+        let board = board(topic)
+        let advertised = board.types?.contains(Self.type) == true
+        guard let wire = board.data(forType: Self.type) else {
+            if advertised { throw Failure.readUnavailable }
+            return nil
+        }
         guard wire.starts(with: prefix) && wire.count > prefix.count && wire.count - prefix.count <= topic.limit else {
             throw Failure.rejectedMessage
         }

@@ -9,7 +9,9 @@ TEST_SELECTION = 'RunnerTests/MacosS06UITests/testTwoPairedPeersInNativeWindow'
 STAGES = ('entered', 'channelConfigured', 'releaseRead', 'releaseDecoded', 'targetsValidated',
           'channelRoundTrip', 'display', 'homepage', 'pairA', 'pairB', 'keyA', 'keyB',
           'connectA', 'connectB', 'split', 'frames', 'keyboard', 'resize', 'resume', 'stop', 'remove')
-FAILURES = {'private_channel_scope_invalid', 'private_channel_send_failed', 'private_channel_receive_failed',
+CHANNEL_FAILURES = {'scope_invalid', 'message_rejected', 'topic_occupied', 'prepare_denied',
+                    'item_rejected', 'write_denied', 'read_unavailable', 'cleanup_failed'}
+FAILURES = {'private_channel_send_failed', 'private_channel_receive_failed',
             'private_release_unavailable', 'private_channel_receipt_missing', 'private_channel_receipt_mismatch',
             'private_release_decode_failed', 'private_fixture_binding_invalid', 'display_unavailable',
             'isolated_display_too_small', 'native_window_missing', 'native_window_origin_not_reached',
@@ -17,7 +19,8 @@ FAILURES = {'private_channel_scope_invalid', 'private_channel_send_failed', 'pri
             'unique_visible_control_missing', 'public_value_not_read_back', 'public_request_unavailable',
             'reviewed_host_response_unavailable', 'reviewed_host_response_invalid',
             'peer_close_unconfirmed_while_window_running', 'peer_close_receipt_invalid', 'native_visible_peer_marker_missing',
-            'native_tab_focus_unreachable', 'unexpected_native_error'}
+            'native_tab_focus_unreachable', 'unexpected_native_error'} | {
+                'private_channel_' + failure for failure in CHANNEL_FAILURES}
 STARTUP = {
     'noTestsSelected': ('no tests were found', 'no tests were run', 'no matching test cases'),
     'runnerLaunchFailed': ('test runner failed to initialize', 'failed to launch test runner',

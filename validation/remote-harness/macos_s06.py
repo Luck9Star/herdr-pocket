@@ -12,7 +12,7 @@ import tempfile
 import time
 
 from macos_secure_xcuitest import install_test_semantics_hook, prepare
-from macos_s06_diagnostics import TEST_SELECTION, diagnostics
+from macos_s06_diagnostics import CHANNEL_FAILURES, TEST_SELECTION, diagnostics
 from paired_dual_demo import prepared_pairing_hosts
 from paired_gui import GuiFailure, bounded_wire, fixture_terminal_id, owned_process, wait_for
 from s06_tauri_gui import peer_connection_evidence
@@ -101,8 +101,13 @@ class NativeChannel:
         if topic is not None:
             command.append(topic)
         child = subprocess.run(command, input=payload, stdout=subprocess.PIPE,
-                               stderr=subprocess.DEVNULL, timeout=8, check=False)
-        if child.returncode or len(child.stdout) > 4096:
+                               stderr=subprocess.PIPE, timeout=8, check=False)
+        if child.returncode:
+            code = child.stderr.decode('ascii', errors='replace').strip()
+            if code in CHANNEL_FAILURES:
+                raise GuiFailure('s06_native_private_channel_' + code)
+            raise GuiFailure('s06_native_private_channel_rejected')
+        if len(child.stdout) > 4096:
             raise GuiFailure('s06_native_private_channel_rejected')
         return child.stdout
 

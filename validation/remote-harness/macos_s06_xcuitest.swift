@@ -32,12 +32,14 @@ final class MacosS06UITests: XCTestCase {
 
     private func send(_ topic: MacosS06Channel.Topic, _ data: Data) throws {
         do { try channel.send(topic, data) }
+        catch let failure as MacosS06Channel.Failure { throw Failure.check("private_channel_" + failure.rawValue) }
         catch { throw Failure.check("private_channel_send_failed") }
     }
 
     private func receive(_ topic: MacosS06Channel.Topic, or code: String) throws -> Data {
         try until(code) {
             do { return try self.channel.receive(topic) }
+            catch let failure as MacosS06Channel.Failure { throw Failure.check("private_channel_" + failure.rawValue) }
             catch { throw Failure.check("private_channel_receive_failed") }
         }
     }

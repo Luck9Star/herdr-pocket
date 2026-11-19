@@ -2,3 +2,6 @@
 validation/vendor/russh-0.65.0/README.md -whitespace
 validation/vendor/russh-0.65.0-local-close.patch -whitespace
 validation/herdr-input-extension/herdr-0.9.5-pocket-input.patch whitespace=-blank-at-eol
+
+# Preserve original test log bytes in the mobile close evidence.
+docs/evidence/tauri-mobile-close-outcomes-20261120/logs/rust-*.log whitespace=-blank-at-eof

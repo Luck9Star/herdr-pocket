@@ -73,6 +73,8 @@ class HostTabs extends ChangeNotifier {
   String? activeId;
   String? splitId;
   String? splitLeftId;
+  bool _splitAvailable = true;
+  bool get splitAvailable => _splitAvailable;
   String? notice;
   int get activeIndex => activeId == null ? -1 : _tabs.indexWhere((t) => t.id == activeId);
   HostTab? get active => activeIndex < 0 ? null : _tabs[activeIndex];
@@ -91,7 +93,7 @@ class HostTabs extends ChangeNotifier {
     if (activeId == id) return;
     final old = active;
     old?.inputEligible.value = false;
-    if (splitId != null && id == splitId) {
+    if (_splitAvailable && splitId != null && id == splitId) {
       splitId = activeId;
     } else {
       old?.summaryLease?.invalidate(); old?.visible.value = false;
@@ -106,13 +108,24 @@ class HostTabs extends ChangeNotifier {
   }
   void splitWith(String id) {
     final other = find(id);
-    if (active == null || other == null || id == activeId || id == splitId) return;
+    if (!_splitAvailable || active == null || other == null || id == activeId || id == splitId) return;
     final previous = splitId == null ? null : find(splitId!);
     previous?.summaryLease?.invalidate(); previous?.visible.value = false;
     splitId = id; splitLeftId = activeId;
     other.visible.value = true;
     other.inputEligible.value = false;
     notice = null; notifyListeners();
+  }
+  void setSplitAvailable(bool available) {
+    if (_splitAvailable == available) return;
+    _splitAvailable = available;
+    final other = splitId == null ? null : find(splitId!);
+    if (other == null) return;
+    if (!available) other.summaryLease?.invalidate();
+    // Visibility changes alone leave the paused observation waiting for user
+    // review and a new full frame. The selected side keeps its input lease.
+    other.visible.value = available;
+    notifyListeners();
   }
   void closeSplit() {
     final other = splitId == null ? null : find(splitId!);

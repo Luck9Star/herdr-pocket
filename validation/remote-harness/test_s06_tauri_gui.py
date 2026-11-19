@@ -3,12 +3,12 @@ import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 try:
     from s06_tauri_gui import (SplitDriver, exercise_window_resize, layout_matches, observed_tick,
                                peer_connection_evidence, require_same_positions, require_side_by_side,
-                               window_dimensions, exercise_direct_resize, GuiFailure)
+                               window_dimensions, exercise_direct_resize, owned_xvfb, park_xvfb_pointer, GuiFailure)
 except ModuleNotFoundError as missing:
     if missing.name != 'cryptography':
         raise
@@ -86,6 +86,55 @@ class TauriSplitEvidenceTests(unittest.TestCase):
                     self.assertEqual(evidence['beforeKey']['keyDowns'], 0)
                 else:
                     self.assertEqual(evidence['stage'], 'before_key')
+
+    def test_only_the_matching_ancestor_owned_xvfb_can_be_prepared(self):
+        with tempfile.TemporaryDirectory() as directory:
+            proc = Path(directory)
+            env = {'DISPLAY': ':103', 'XAUTHORITY': '/tmp/xvfb-run.fixture/Xauthority'}
+            wrapper, server, session = (proc / str(pid) for pid in (100, 101, 102))
+            for process in (wrapper, server, session):
+                process.mkdir()
+            (session / 'cmdline').write_bytes(b'dbus-run-session\0')
+            (session / 'status').write_text('PPid:\t100\n')
+            (wrapper / 'cmdline').write_bytes(b'/bin/sh\0/usr/bin/xvfb-run\0-a\0')
+            children = wrapper / 'task/100/children'
+            children.parent.mkdir(parents=True)
+            children.write_text('101 102 ')
+            argv = server / 'cmdline'
+            matching = b'Xvfb\0:103\0-nolisten\0tcp\0-auth\0/tmp/xvfb-run.fixture/Xauthority\0'
+            argv.write_bytes(matching)
+            self.assertTrue(owned_xvfb(env, proc=proc, parent=102))
+            self.assertFalse(owned_xvfb({**env, 'DISPLAY': 'localhost:103'}, proc=proc, parent=102))
+            self.assertFalse(owned_xvfb({**env, 'DISPLAY': ':104'}, proc=proc, parent=102))
+            self.assertFalse(owned_xvfb({**env, 'XAUTHORITY': '/tmp/another'}, proc=proc, parent=102))
+            argv.write_bytes(matching.replace(b'\0tcp\0', b'\0unix\0'))
+            self.assertFalse(owned_xvfb(env, proc=proc, parent=102))
+
+    def test_owned_xvfb_parks_pointer_without_clicking_or_changing_focus(self):
+        lib = MagicMock()
+        lib.XOpenDisplay.return_value = 1
+        lib.XDefaultRootWindow.return_value = 2
+        lib.XWarpPointer.return_value = 1
+
+        def input_focus(_, focus, __):
+            focus._obj.value = 1  # X11 PointerRoot
+
+        lib.XGetInputFocus.side_effect = input_focus
+        with (patch('s06_tauri_gui.owned_xvfb', return_value=True),
+              patch('s06_tauri_gui.ctypes.CDLL', return_value=lib)):
+            with park_xvfb_pointer({'DISPLAY': ':103'}) as parked:
+                self.assertTrue(parked)
+                lib.XCloseDisplay.assert_not_called()
+            lib.XWarpPointer.assert_called_once_with(1, 0, 2, 0, 0, 0, 0, 300, 100)
+            lib.XSetInputFocus.assert_not_called()
+            lib.XSync.assert_called_once_with(1, 0)
+            lib.XCloseDisplay.assert_called_once_with(1)
+
+        with (patch('s06_tauri_gui.owned_xvfb', return_value=False),
+              patch('s06_tauri_gui.ctypes.CDLL') as loader):
+            with park_xvfb_pointer({'DISPLAY': ':103'}) as parked:
+                self.assertFalse(parked)
+            loader.assert_not_called()
 
     def test_two_dom_panels_must_actually_share_a_row_without_overlap(self):
         a = dict(left=0, right=100, top=20, width=100, height=400)

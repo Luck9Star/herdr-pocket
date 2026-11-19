@@ -23,7 +23,7 @@ import { pairingCameraRequest,validatePairingCameraResponse,pairingRequestSummar
 import { writePublicRequest } from './public-request-clipboard.js';
 import { invalidatePairReview } from './pairing-lifecycle.js';
 import { dashboardPresentation, paneStatusText } from './dashboard-presentation.js';
-import { initConfigTransfer, reviewedImportLeases } from './config-transfer-ui.js';
+import { initConfigTransfer, reviewedImportLeases, reviewedImportLegacy } from './config-transfer-ui.js';
 import { HostDashboardSummary, hostSummaryIdentity, hostSummaryText, hostCardSummaryText } from './host-dashboard-summary.js';
 import {blockedTargetList} from './blocked-target-list.js';
 import {initDesktopWorkbench} from './desktop-workbench.js';
@@ -929,12 +929,12 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   $('add-ssh').onclick=()=>{ if(!ssh.isActive()) sshBackSection='add'; setHomeSection('ssh'); };
   $('home-open-ssh').onclick=()=>{ if(!ssh.isActive()) sshBackSection='dashboard'; setHomeSection('ssh'); };
   const closeConfigTransfer=initConfigTransfer({native, invoke, getHosts:()=>hostRecords, getTabImpacts:workspace.tabImpacts, refreshHosts,
-    captureLeases:()=>({tabs:workspace.tabLeaseSnapshot(),legacy:{hostId:activeHostId,generation:gate.pendingGeneration}}),
+    captureLeases:()=>({tabs:workspace.tabLeaseSnapshot(),legacy:{hostId:activeHostId,generation:gate.pendingGeneration,nativeGeneration:gate.nativeGeneration}}),
     createRevokeChannel:()=>new Channel(),
     onRevoked:(event,snapshot,selected)=>{
       if(!snapshot || !Array.isArray(event?.hostIds) || !Array.isArray(event?.tabs))return;
       workspace.prepareLeases(reviewedImportLeases(event,snapshot.tabs,selected));
-      if(Array.isArray(event.legacy) && event.legacy[0]===snapshot.legacy.generation && event.legacy[1]===snapshot.legacy.hostId && activeHostId===snapshot.legacy.hostId && gate.pendingGeneration===snapshot.legacy.generation) {
+      if(reviewedImportLegacy(event,snapshot.legacy,{hostId:activeHostId,generation:gate.pendingGeneration,nativeGeneration:gate.nativeGeneration})) {
         hostNavigation++;cancel('配置操作涉及此主机；观察已停止，请重新核对。');activeHostId=null;
       }
     }, onApplied:async()=>{}});

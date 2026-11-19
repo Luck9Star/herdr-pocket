@@ -769,7 +769,8 @@ class RemoteReadOnlyAdapter {
     return _valid(a) && a.failure == null;
   }
 
-  /// An explicit user action only. A fresh target snapshot and first full are
+  /// An explicit user action or the layout re-widening an observation the
+  /// layout itself paused. A fresh target snapshot and first full are
   /// required before a new input capability can be used.
   bool resumeObservation() {
     final a = _attempt;

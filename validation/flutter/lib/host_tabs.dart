@@ -25,6 +25,9 @@ class HostTab {
   final navigator = GlobalKey<NavigatorState>();
   final visible = ValueNotifier<bool>(false);
   final inputEligible = ValueNotifier<bool>(false);
+  // True while the layout (not the user) stashed this pane for narrow width;
+  // re-widening consumes it to auto-resume the paused observation (D2).
+  final layoutHidden = ValueNotifier<bool>(false);
   final ValueNotifier<HostTabView> view;
   HostDashboardLease? summaryLease;
   Future<void> Function()? _closeTransport;
@@ -50,7 +53,7 @@ class HostTab {
   static String bindingFor(HostProfile p,[List<NetworkProfile> networks=const []]) => jsonEncode({'id':p.id,'target':p.target,
     'networkProfileId':p.networkProfileId,'requiresNetworkBinding':p.requiresNetworkBinding,'network':p.networkProfileId == null ? null : networks.where((n) => n.id == p.networkProfileId).map((n) => n.toJson()).toList(),
     'pairing':{'handle':p.pairingRecord['handle'],'request':p.pairingRecord['request']}});
-  void dispose() { _disposed = true; summaryLease?.close(); visible.value = false; inputEligible.value = false; visible.dispose(); inputEligible.dispose(); view.dispose(); }
+  void dispose() { _disposed = true; summaryLease?.close(); visible.value = false; inputEligible.value = false; visible.dispose(); inputEligible.dispose(); layoutHidden.dispose(); view.dispose(); }
 }
 
 class HostTabView {
@@ -73,6 +76,8 @@ class HostTabs extends ChangeNotifier {
   String? activeId;
   String? splitId;
   String? splitLeftId;
+  bool _splitAvailable = true;
+  bool get splitAvailable => _splitAvailable;
   String? notice;
   int get activeIndex => activeId == null ? -1 : _tabs.indexWhere((t) => t.id == activeId);
   HostTab? get active => activeIndex < 0 ? null : _tabs[activeIndex];
@@ -91,7 +96,7 @@ class HostTabs extends ChangeNotifier {
     if (activeId == id) return;
     final old = active;
     old?.inputEligible.value = false;
-    if (splitId != null && id == splitId) {
+    if (_splitAvailable && splitId != null && id == splitId) {
       splitId = activeId;
     } else {
       old?.summaryLease?.invalidate(); old?.visible.value = false;
@@ -100,24 +105,39 @@ class HostTabs extends ChangeNotifier {
       splitId = null; splitLeftId = null;
     }
     activeId = id;
+    active?.layoutHidden.value = false;
     active?.visible.value = true;
     active?.inputEligible.value = true;
     notice = null; notifyListeners();
   }
   void splitWith(String id) {
     final other = find(id);
-    if (active == null || other == null || id == activeId || id == splitId) return;
+    if (!_splitAvailable || active == null || other == null || id == activeId || id == splitId) return;
     final previous = splitId == null ? null : find(splitId!);
     previous?.summaryLease?.invalidate(); previous?.visible.value = false;
     splitId = id; splitLeftId = activeId;
+    other.layoutHidden.value = false;
     other.visible.value = true;
     other.inputEligible.value = false;
     notice = null; notifyListeners();
   }
+  void setSplitAvailable(bool available) {
+    if (_splitAvailable == available) return;
+    _splitAvailable = available;
+    final other = splitId == null ? null : find(splitId!);
+    if (other == null) return;
+    if (!available) other.summaryLease?.invalidate();
+    // Narrowing stashes the side pane; re-widening reveals it and the page's
+    // visibility listener consumes layoutHidden to auto-resume observation.
+    // User-driven reveals (select, splitWith, closeSplit) keep manual resume.
+    if (!available) other.layoutHidden.value = true;
+    other.visible.value = available;
+    notifyListeners();
+  }
   void closeSplit() {
     final other = splitId == null ? null : find(splitId!);
     if (other == null) { splitId = null; splitLeftId = null; return; }
-    other.inputEligible.value = false; other.summaryLease?.invalidate(); other.visible.value = false;
+    other.inputEligible.value = false; other.summaryLease?.invalidate(); other.layoutHidden.value = false; other.visible.value = false;
     splitId = null; splitLeftId = null; notifyListeners();
   }
   void close(String id) {

@@ -30,6 +30,10 @@ class HostCatalogPage extends StatefulWidget {
   State<HostCatalogPage> createState() => _HostCatalogPageState();
 }
 class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingObserver {
+  static const desktopMinWidth = 960.0;
+  static const desktopSidebarWidth = 224.0;
+  static const splitWorkspaceMinWidth = 960.0;
+
   late final catalog = widget.catalog ?? HostCatalog();
   late final tabs = widget.tabs ?? HostTabs();
   late final summaries = HostTaskSummaries(catalog);
@@ -40,7 +44,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   final sshVisible = ValueNotifier<bool>(false);
   bool sshRouteOpen = false;
   int destination = 0;
-  bool collapsePending = false;
+  bool splitUpdatePending = false;
   bool workspaceWide = false;
   final hostSearch = TextEditingController();
   final expandedHostManagement = <String>{};
@@ -874,20 +878,20 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
         ),
     ],
   );
-  Widget tabNavigator(HostTab tab) => ValueListenableBuilder<bool>(valueListenable:tab.visible,
-    builder:(context,visible,child) => IgnorePointer(ignoring:!visible,child:ExcludeSemantics(excluding:!visible,
-      child:FocusScope(canRequestFocus:visible,child:child!))),
-    child:Navigator(key:tab.navigator,onGenerateRoute:(settings) => MaterialPageRoute<void>(settings:settings,
+  // The workspace handles focus exclusion for hidden panels. The Navigator
+  // can then traverse back to the workspace controls at its focus boundary.
+  Widget tabNavigator(HostTab tab) =>
+    Navigator(key:tab.navigator,onGenerateRoute:(settings) => MaterialPageRoute<void>(settings:settings,
       builder:(_) => PairingPage(tokens:widget.tokens,keys:widget.keys,catalog:catalog,profileId:tab.hostId,
         registerTransport:tab.registerTransport,
         overlayAdapterFactory:widget.overlayAdapterFactory == null ? null : (connector) => widget.overlayAdapterFactory!(catalog.profiles.singleWhere((p) => p.id == tab.hostId),connector),
-        adapter:tab.adapter,visibility:tab.visible,inputEligible:tab.inputEligible,onViewState:tab.report,requestedTarget:tab.requestedTarget,
+        adapter:tab.adapter,visibility:tab.visible,layoutHidden:tab.layoutHidden,inputEligible:tab.inputEligible,onViewState:tab.report,requestedTarget:tab.requestedTarget,
         summaryLeaseFactory:(profile) {
           tab.summaryLease?.close();
           final lease = summaries.open(profile,visible:() => tabs.find(tab.id) == tab && tab.visible.value);
           tab.summaryLease = lease; return lease;
         },
-        onOpenPane:(pane) => openPane(tab,pane)))));
+        onOpenPane:(pane) => openPane(tab,pane))));
   Widget tabBar() => SingleChildScrollView(
     scrollDirection: Axis.horizontal,
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -937,9 +941,6 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
                       ),
                     ),
                   ),
-                  if (MediaQuery.sizeOf(context).width >= 960 && tabs.active != null && tabs.activeId != tab.id)
-                    IconButton(key: ValueKey('host-split-${tab.id}'), tooltip: '并排观察此标签',
-                      onPressed: () => tabs.splitWith(tab.id), icon: const Icon(Icons.vertical_split)),
                   IconButton(
                     key: ValueKey('host-tab-close-${tab.id}'),
                     tooltip: '关闭本地标签，不终止远端任务',
@@ -953,8 +954,8 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       ],
     ),
   );
-  Widget desktopSidebar() => Material(color: widget.tokens.color('card'), child: Container(
-    width: 224,
+  Widget desktopSidebar({required bool canSplit}) => Material(color: widget.tokens.color('card'), child: Container(
+    width: desktopSidebarWidth,
     decoration: BoxDecoration(border: Border(right: BorderSide(color: widget.tokens.color('border')))),
     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const Padding(padding: EdgeInsets.all(16), child: Text('Herdr Pocket', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
@@ -978,7 +979,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
                     subtitle: Text('${view.label}${tab.visible.value ? '' : '\n${view.frameLabel}'}'),
                     onTap: () { tabs.select(tab.id); setState(() => destination = 1); },
                     trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                      if (tabs.active != null && tabs.activeId != tab.id)
+                      if (canSplit && tabs.active != null && tabs.activeId != tab.id)
                         IconButton(key: ValueKey('host-split-${tab.id}'), tooltip: '并排观察此标签',
                           onPressed: () => tabs.splitWith(tab.id), icon: const Icon(Icons.vertical_split)),
                       IconButton(key: ValueKey('host-tab-close-${tab.id}'), tooltip: '关闭本地标签，不终止远端任务',
@@ -991,6 +992,16 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       ListTile(leading: const Icon(Icons.settings_outlined), title: const Text('设置'),
         selected: destination == 3, onTap: () { tabs.select(null); setState(() => destination = 3); }),
     ])));
+  void syncSplitAvailability(bool canSplit) {
+    workspaceWide = canSplit;
+    if (splitUpdatePending || tabs.splitAvailable == canSplit) return;
+    splitUpdatePending = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      splitUpdatePending = false;
+      if (mounted) tabs.setSplitAvailable(workspaceWide);
+    });
+  }
+
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: !sshVisible.value && tabs.activeId == null,
@@ -1016,7 +1027,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
             child: ExcludeFocus(
               excluding: sshVisible.value,
               child: Scaffold(
-      bottomNavigationBar: MediaQuery.sizeOf(context).width < 960 ?
+      bottomNavigationBar: MediaQuery.sizeOf(context).width < desktopMinWidth ?
         (mobileEmptyBoard && destination == 0 && !largeMobileText ? emptyMobileNavigation() : NavigationBar(
         backgroundColor: widget.tokens.color('card'),
         indicatorColor: widget.tokens.color('brandSoft'),
@@ -1046,29 +1057,35 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
         ],
       )) : null,
       body: SafeArea(
-        child: Row(children: [
-          if (MediaQuery.sizeOf(context).width >= 960) desktopSidebar(),
-          Expanded(child: LayoutBuilder(
-          builder: (context, constraints) => Column(
+        child: LayoutBuilder(builder: (context, available) {
+          final desktop = MediaQuery.sizeOf(context).width >= desktopMinWidth;
+          final workspaceWidth = available.maxWidth - (desktop ? desktopSidebarWidth : 0);
+          final canSplit = desktop && workspaceWidth >= splitWorkspaceMinWidth;
+          syncSplitAvailability(canSplit);
+          final split = canSplit && tabs.splitAvailable && tabs.active != null && tabs.splitId != null;
+          final showingTab = destination == 1 && tabs.active != null;
+          return Row(children: [
+          if (desktop) desktopSidebar(canSplit: canSplit),
+          Expanded(child: Column(
             children: [
-              if (MediaQuery.sizeOf(context).width < 960 && tabs.tabs.isNotEmpty && (destination == 0 || destination == 1))
+              if (!desktop && tabs.tabs.isNotEmpty && (destination == 0 || destination == 1))
                 ConstrainedBox(
                   constraints: BoxConstraints(
-                    maxHeight: constraints.maxHeight * .18,
+                    maxHeight: available.maxHeight * .18,
                   ),
                   child: SingleChildScrollView(child: tabBar()),
                 ),
-              if (tabs.active != null && MediaQuery.sizeOf(context).width < 960)
+              if (tabs.active != null && !desktop)
                 ConstrainedBox(
                   constraints: BoxConstraints(
-                    maxHeight: constraints.maxHeight * .28,
+                    maxHeight: available.maxHeight * .28,
                   ),
                   child: SingleChildScrollView(child: workspaceSummary()),
                 ),
               if (tabs.notice != null)
                 ConstrainedBox(
                   constraints: BoxConstraints(
-                    maxHeight: constraints.maxHeight * .12,
+                    maxHeight: available.maxHeight * .12,
                   ),
                   child: SingleChildScrollView(
                     child: Padding(
@@ -1080,7 +1097,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
               if (tabs.active != null)
                 ConstrainedBox(
                   constraints: BoxConstraints(
-                    maxHeight: constraints.maxHeight * .12,
+                    maxHeight: available.maxHeight * .12,
                   ),
                   child: SingleChildScrollView(
                     child: Padding(
@@ -1088,57 +1105,66 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
                         horizontal: 16,
                         vertical: 4,
                       ),
-                      child: Text(
-                        '隐藏标签暂停观察与输入；连接可保留，返回后需主动恢复并等待原目标新画面。',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
+                      child: !canSplit && tabs.splitId != null
+                          ? Row(children: [
+                              Expanded(child: Text(
+                                '分屏空间不足 · 另一侧已收纳，窗口拉宽后重新显示。',
+                                key: const ValueKey('workspace-split-stashed'),
+                                style: Theme.of(context).textTheme.bodySmall,
+                              )),
+                              IconButton(
+                                key: const ValueKey('workspace-close-split'),
+                                tooltip: '取消并排观察',
+                                onPressed: tabs.closeSplit,
+                                icon: const Icon(Icons.close),
+                              ),
+                            ])
+                          : Text(
+                              '隐藏标签暂停观察与输入；连接可保留，返回后需主动恢复并等待原目标新画面。',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
                     ),
                   ),
                 ),
               // The nested tab Navigator installs a modal barrier whose BlockSemantics
               // climbs to the nearest semantic boundary and would otherwise drop the tab
               // strip, workspace summary and notices from the semantics tree. Contain it.
-              Expanded(child: LayoutBuilder(builder: (context, workspace) {
-                final wide = workspace.maxWidth >= 960;
-                workspaceWide = wide;
-                if (!wide && tabs.splitId != null && !collapsePending) {
-                  collapsePending = true;
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    collapsePending = false;
-                    if (mounted && !workspaceWide) tabs.closeSplit();
-                  });
-                }
-                final split = wide && tabs.active != null && tabs.splitId != null;
-                final showingTab = destination == 1 && tabs.active != null;
-                return Semantics(container: true, child: Stack(children: [
-                  Positioned.fill(child: Offstage(offstage: showingTab, child: IndexedStack(
+              Expanded(child: Semantics(container: true, child: Stack(children: [
+                  Positioned.fill(child: Visibility(visible: !showingTab,
+                    maintainState: true, maintainAnimation: true, child: IndexedStack(
                     index: destination, children: [board(), terminalList(),
                       NetworkProfilesPage(catalog: catalog, closeTabsAndWait:tabs.closeHostsAndWait,closeTabs: (ids) {
                         for (final id in ids) { tabs.closeHost(id); }
                       }), settings()]))),
                   for (final tab in tabs.tabs)
                     Positioned(key: ValueKey('host-tab-view-${tab.id}'), top: 0, bottom: 0,
-                      left: split && tab.id != tabs.splitLeftId ? workspace.maxWidth / 2 : 0,
-                      width: split ? workspace.maxWidth / 2 : workspace.maxWidth,
-                      child: Offstage(offstage: !showingTab || (tab.id != tabs.activeId && (!split || tab.id != tabs.splitId)),
+                      left: split && tab.id != tabs.splitLeftId ? workspaceWidth / 2 : 0,
+                      width: split ? workspaceWidth / 2 : workspaceWidth,
+                      child: Visibility(visible: showingTab && (tab.id == tabs.activeId || (split && tab.id == tabs.splitId)),
+                        maintainState: true, maintainAnimation: true,
                         child: DecoratedBox(key: ValueKey('workspace-frame-${tab.id}'), decoration: BoxDecoration(border: Border.all(
                           color: split && tab.id == tabs.activeId ? widget.tokens.color('brand') : Colors.transparent,
                           width: split ? 2 : 0)), child: Column(children: [
                           SizedBox(height: split ? 44 : 0, child: split ? Row(children: [
                             Expanded(child: TextButton(key: ValueKey('workspace-focus-${tab.id}'),
                               onPressed: () => tabs.select(tab.id),
-                              child: Text('${tab.label} · ${tab.id == tabs.activeId ? '输入焦点' : '观察'}', overflow: TextOverflow.ellipsis))),
+                              child: ValueListenableBuilder<HostTabView>(
+                                valueListenable: tab.view,
+                                builder: (context, view, _) => Text(
+                                  '${tab.label} · ${tab.id == tabs.activeId ? '输入焦点' : view.label}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ))),
                             if (tab.id == tabs.splitId) IconButton(key: const ValueKey('workspace-close-split'),
                               tooltip: '收起并排观察', onPressed: tabs.closeSplit, icon: const Icon(Icons.close)),
                           ]) : null),
                           Expanded(child: Semantics(container: true, child: tabNavigator(tab))),
                         ])))),
-                ]));
-              })),
+                ]))),
             ],
-          ),
-        )),
-        ]),
+          )),
+          ]);
+        }),
       ),
               ),
             ),

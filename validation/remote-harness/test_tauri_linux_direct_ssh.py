@@ -2,6 +2,9 @@
 import base64
 import importlib.util
 import io
+import json
+import shutil
+import subprocess
 import sys
 import time
 import unittest
@@ -18,6 +21,8 @@ from PIL import Image
 from screen_proof_token import token_lines
 from tauri_linux_direct_ssh import (
     DesktopDriver,
+    REVIEW_WITNESS,
+    execute,
     DirectSshFixture,
     GuiFailure,
     ScreenshotGateError,
@@ -124,6 +129,63 @@ class WebDriverTests(unittest.TestCase):
         self.assertTrue(all(down['type'] == 'keyDown' and up == dict(down, type='keyUp')
                             for down, up in zip(keys[::2], keys[1::2])))
         self.assertEqual(len(calls), 4)
+
+
+class ReviewFlowTests(unittest.TestCase):
+    def test_physical_confirmation_occurs_after_probe_evidence(self):
+        events = []
+        driver = Mock()
+        driver.observe.return_value = True
+        driver.click.side_effect = lambda selector: events.append(('click', selector))
+        fixture = Mock(username='fixture', port=49821, fingerprint='SHA256:example',
+                       public_key='ssh-rsa AAAA', password='temporary')
+        fixture.wait_for.return_value = True
+        fixture.wait_for_connections_closed.return_value = True
+        fixture.snapshot.return_value = {'connectionEvents': [{}, {'outputBytes': 1}]}
+        with patch('tauri_linux_direct_ssh.probe_evidence', side_effect=lambda *_: events.append(('peer', 'probe'))), \
+             patch('tauri_linux_direct_ssh.session_evidence'), \
+             patch('tauri_linux_direct_ssh.capture_terminal', return_value=(b'terminal', {})), \
+             patch('tauri_linux_direct_ssh.capture_outcome', return_value=(b'outcome', {})):
+            execute(driver, fixture, {})
+        self.assertNotIn(('click', '#ssh-review'), events)
+        self.assertEqual(events.count(('click', '#ssh-trust-confirm')), 1)
+        self.assertLess(events.index(('peer', 'probe')), events.index(('click', '#ssh-trust-confirm')))
+        self.assertLess(events.index(('click', '#ssh-trust-confirm')), events.index(('click', '#ssh-connect')))
+        self.assertIn(('click', '#ssh-disconnect'), events)
+        self.assertIn(('click', '#ssh-return-home'), events)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node is required for the DOM witness negative controls')
+    def test_review_witness_rejects_wrong_hidden_clipped_duplicate_or_covered_evidence(self):
+        script = r'''const names=['#ssh-step-title','#ssh-reviewed-target','#ssh-reviewed-endpoint',
+          '#ssh-reviewed-key','#ssh-reviewed-algorithm','#ssh-reviewed-fingerprint','#ssh-trust-confirm',
+          '#ssh-review','#ssh-password','#ssh-connect'];
+        const nodes=Object.fromEntries(names.map(name=>[name,{name,innerText:'',disabled:false,checked:false,shown:true,
+          getBoundingClientRect(){return {left:10,top:10,right:110,bottom:30,width:100,height:20};},
+          contains(e){return e===this || (this.name==='#ssh-reviewed-target'&&e===nodes['#ssh-reviewed-endpoint']) ||
+            (this.name==='#ssh-reviewed-key'&&[nodes['#ssh-reviewed-algorithm'],nodes['#ssh-reviewed-fingerprint']].includes(e));}}]));
+        nodes['#ssh-step-title'].innerText='核对主机密钥';nodes['#ssh-reviewed-endpoint'].innerText='user@host:49821';
+        nodes['#ssh-reviewed-algorithm'].innerText='ssh-rsa';nodes['#ssh-reviewed-fingerprint'].innerText='SHA256:expected';
+        nodes['#ssh-trust-confirm'].innerText='指纹一致，确认继续';nodes['#ssh-review'].shown=false;
+        nodes['#ssh-password'].disabled=nodes['#ssh-connect'].disabled=true;
+        let duplicate=false,covered=false,clipped=false;
+        globalThis.innerWidth=500;globalThis.innerHeight=500;
+        globalThis.node=s=>nodes[s];globalThis.visible=e=>!!e&&e.shown;
+        globalThis.document={querySelectorAll:s=>duplicate&&s==='#ssh-trust-confirm'?[nodes[s],nodes[s]]:[nodes[s]],
+          createRange:()=>({selectNodeContents(){},getClientRects(){return [{left:10,top:10,right:clipped?510:110,bottom:30,width:100,height:20}];}}),
+          elementFromPoint:()=>covered?{}:nodes['#ssh-reviewed-fingerprint']};
+        const check=new Function('return (function(){'+WITNESS+'}).apply(null,arguments)');
+        const run=()=>check('user@host:49821','ssh-rsa','SHA256:expected');
+        const out=[run()];
+        nodes['#ssh-reviewed-endpoint'].innerText='wrong';out.push(run());nodes['#ssh-reviewed-endpoint'].innerText='user@host:49821';
+        nodes['#ssh-reviewed-algorithm'].innerText='wrong';out.push(run());nodes['#ssh-reviewed-algorithm'].innerText='ssh-rsa';
+        nodes['#ssh-reviewed-fingerprint'].innerText='SHA256:partial';out.push(run());nodes['#ssh-reviewed-fingerprint'].innerText='SHA256:expected';
+        nodes['#ssh-trust-confirm'].disabled=true;out.push(run());nodes['#ssh-trust-confirm'].disabled=false;
+        nodes['#ssh-reviewed-fingerprint'].shown=false;out.push(run());nodes['#ssh-reviewed-fingerprint'].shown=true;
+        duplicate=true;out.push(run());duplicate=false;clipped=true;out.push(run());clipped=false;covered=true;out.push(run());
+        console.log(JSON.stringify(out));'''
+        script = 'const WITNESS=' + json.dumps(REVIEW_WITNESS) + ';\n' + script
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True, check=True)
+        self.assertEqual(json.loads(result.stdout), [True] + [False] * 8)
 
 
 class ScreenshotBindingTests(unittest.TestCase):

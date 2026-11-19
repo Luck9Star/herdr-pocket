@@ -1948,11 +1948,11 @@ test('SSH authentication selection clears abandoned secrets and sends only the c
     n['ssh-auth-method'].value='key';n['ssh-auth-method'].dispatch('change');
     assert.equal(n['ssh-password'].value,'');assert.equal(n['ssh-password-fields'].hidden,true);
     assert.equal(n['ssh-key-fields'].hidden,false);assert.equal(n['ssh-review'].checked,true);
-    n['ssh-key'].value='-----BEGIN OPENSSH PRIVATE KEY-----\nfixture\n-----END OPENSSH PRIVATE KEY-----';
+    n['ssh-key'].value='-----BEGIN PRIVATE KEY-----\nQUJDREVGR0hJSktM\n-----END PRIVATE KEY-----';
     n['ssh-passphrase'].value='passphrase fixture';
     await n['ssh-form'].onsubmit({preventDefault(){}});
     const keyConfig=h.calls.filter(c=>c.name==='ssh_shell_open').at(-1).args.config;
-    assert.match(keyConfig.privateKeyPem,/\nfixture\n/);assert.equal(keyConfig.privateKeyPassphrase,'passphrase fixture');assert.equal('password' in keyConfig,false);
+    assert.match(keyConfig.privateKeyPem,/\nQUJDREVGR0hJSktM\n/);assert.equal(keyConfig.privateKeyPassphrase,'passphrase fixture');assert.equal('password' in keyConfig,false);
     assert.equal(n['ssh-key'].value,'');assert.equal(n['ssh-passphrase'].value,'');
     n['ssh-cancel'].click();await flush();
     n['ssh-key'].value='unused key';n['ssh-passphrase'].value='unused phrase';

@@ -358,6 +358,77 @@ class BothStoppedAuditTests(unittest.TestCase):
                     write.assert_not_called()
 
 
+class SharedEasyTierAuditTests(unittest.TestCase):
+    def setUp(self):
+        from flutter_android_dual_overlay import require_shared_host_closed, shared_checkpoint
+        self.require_closed = require_shared_host_closed
+        self.checkpoint = shared_checkpoint
+        self.closed = set()
+        self.kind = {}
+        self.drift = {}
+
+    def audit(self, role, expected):
+        self.assertEqual(expected, b'')
+        value = evidence()
+        value.update(acceptedSessions=1, capturedBytes=0)
+        value['sessions'] = [dict(ordinal=1, approvedDevice=True, active=role not in self.closed,
+                                  peerClose=self.kind.get(role, 'unconfirmed'))]
+        return dict(value, **self.drift.get(role, {}))
+
+    def test_sessions_close_before_provider_teardown_and_survivor_remains_original(self):
+        baselines, progress = {}, {}
+        self.checkpoint('shared_ready', self.audit, baselines, progress)
+        self.closed.add('et'); self.kind['et'] = 'peer_eof'
+        self.checkpoint('shared_a_released', self.audit, baselines, progress)
+        self.closed.add('ts'); self.kind['ts'] = 'client_disconnect'
+        self.checkpoint('shared_b_released', self.audit, baselines, progress)
+        self.checkpoint('shared_node_stopped', self.audit, baselines, progress)
+        self.assertEqual(progress, {'bothOriginalSshLive': True, 'survivorFreshFrameOnOriginalSsh': True,
+            'aCloseBeforeBStop': True, 'bothClosedBeforeExplicitNodeStop': True,
+            'bothClosedAfterExplicitNodeStop': True})
+
+    def test_closed_socket_or_fixture_teardown_is_not_proof_and_reset_is_rejected(self):
+        self.closed.add('et')
+        baselines = {'et': (1, 1), 'ts': (1, 1)}
+        with self.assertRaisesRegex(DualOverlayDeviceFailure, 'shared_peer_close_unconfirmed'):
+            self.require_closed(self.audit, baselines, {'et'}, timeout=0)
+        self.kind['et'] = 'peer_reset'
+        with self.assertRaisesRegex(DualOverlayDeviceFailure, 'shared_peer_closed_by_reset'):
+            self.require_closed(self.audit, baselines, {'et'}, timeout=0)
+
+    def test_provider_connections_must_drain_while_the_app_is_still_running(self):
+        from flutter_android_dual_overlay import shared_relay_state
+        from types import SimpleNamespace
+        current = [0.0]
+        def clock():
+            return current[0]
+        def sleep(seconds):
+            current[0] += seconds
+        relay = SimpleNamespace(active_connections=lambda: {'easytier': 0, 'easytierSecond': int(clock() < .2)})
+        self.assertEqual(shared_relay_state(relay, lambda: None, active=False,
+            monotonic=clock, sleep=sleep), {'a': 0, 'b': 0})
+        with self.assertRaisesRegex(DualOverlayDeviceFailure, 'shared_relay_live_missing'):
+            shared_relay_state(relay, lambda: None, active=True, timeout=0)
+        def app_exited():
+            raise DualOverlayDeviceFailure('shared_device_exited_during_host_audit')
+        with self.assertRaisesRegex(DualOverlayDeviceFailure, 'shared_device_exited_during_host_audit'):
+            shared_relay_state(relay, app_exited, active=False)
+
+    def test_no_response_when_survivor_drifts_or_required_audit_runs_after_exit(self):
+        baselines = {'et': (1, 1), 'ts': (1, 1)}
+        self.closed.add('et'); self.kind['et'] = 'peer_eof'
+        self.drift['ts'] = {'newSessions': 1}
+        with self.assertRaisesRegex(DualOverlayDeviceFailure, 'host_audit_session_changed'):
+            self.require_closed(self.audit, baselines, {'et'}, timeout=0)
+        def app_exited():
+            raise DualOverlayDeviceFailure('shared_device_exited_during_host_audit')
+        with patch('flutter_android_dual_overlay.write_exchange') as write:
+            with self.assertRaisesRegex(DualOverlayDeviceFailure, 'shared_device_exited_during_host_audit'):
+                handle_stage('shared_a_released', session=None, adb='adb', serial='emulator-5554',
+                    run=None, first_stop='', baselines=baselines, shared=True, ensure_app_running=app_exited)
+            write.assert_not_called()
+
+
 class FailedHostAuditTests(unittest.TestCase):
     def test_failure_snapshot_only_keeps_bounded_counters(self):
         class Control:

@@ -37,7 +37,7 @@ class HostControlError(RuntimeError):
 
 
 STARTUP_STAGES = {'initialization', 'work_validation', 'bundle_validation', 'host_directory', 'et_peer_start', 'et_peer_ready',
-    'ts_peer_start', 'ts_peer_ready', 'materials', 'unknown'} | {
+    'ts_peer_start', 'ts_peer_ready', 'et_second_peer_start', 'et_second_peer_ready', 'materials', 'unknown'} | {
     role + '_' + step for role in ('et', 'ts') for step in
     ('version', 'host_key', 'privsep_prepare', 'sshd_check', 'sshd_start', 'herdr_start', 'workspace_create', 'capture_start', 'profile')}
 STARTUP_ERRORS = {'fixture_startup_failed', 'paired_fixture_command_failed', 'sshd_privsep_directory_missing',
@@ -81,12 +81,14 @@ def live_ssh_ports(port):
 
 class PairingControl:
     """Approve public requests and audit independent host evidence, not app flags."""
-    def __init__(self, targets, complete_auth, control_url, active_ports=live_ssh_ports, diagnostics=None):
+    def __init__(self, targets, complete_auth, control_url, active_ports=live_ssh_ports, diagnostics=None,
+                 *, shared_easytier=False):
         self.targets = targets
         self.complete_auth = complete_auth
         self.diagnostics = diagnostics
-        self.control_origin = urlsplit(control_url)
-        if self.control_origin.scheme != 'https' or self.control_origin.hostname != '127.0.0.1':
+        self.shared_easytier = shared_easytier
+        self.control_origin = None if shared_easytier else urlsplit(control_url)
+        if not shared_easytier and (self.control_origin.scheme != 'https' or self.control_origin.hostname != '127.0.0.1'):
             raise HostControlError('isolated_test_control_required')
         self.active_ports = active_ports
         self.previous = {role: (0, 0) for role in targets}
@@ -105,7 +107,8 @@ class PairingControl:
             return dict(value, event='ts_diagnostics')
         if operation == 'complete_ts_auth':
             url = request.get('url')
-            if request.get('authorize') is not True or not isinstance(url, str) or len(url) > 4096:
+            if (self.control_origin is None or request.get('authorize') is not True
+                    or not isinstance(url, str) or len(url) > 4096):
                 raise HostControlError('explicit_ts_authorization_required')
             parsed = urlsplit(url)
             if (parsed.scheme != 'https' or parsed.netloc != self.control_origin.netloc
@@ -150,7 +153,7 @@ class PairingControl:
         text = bounded_wire(target.root / 'sshd.log', 2097152).decode(errors='replace')
         pattern = (r'Accepted publickey for ' + re.escape(target.config['username'])
             + r' from 127\.0\.0\.1 port ([0-9]+) ssh2: ED25519 (SHA256:[A-Za-z0-9+/]+)(?:\s|$)')
-        accepted = re.findall(pattern, text)
+        accepted = list(re.finditer(pattern, text))
         active = self.active_ports(target.config['port'])
         captured = bounded_wire(target.root / 'received.bin', 4096)
         prior_sessions, prior_bytes = self.previous[role]
@@ -159,11 +162,14 @@ class PairingControl:
         self.previous[role] = (len(accepted), len(captured))
         # Multiple authenticated sessions make per-session attribution ambiguous.
         # Never assign a shared pane's bytes to a guessed reconnect boundary.
-        last_port_owner = {int(port): index for index, (port, _) in enumerate(accepted)}
-        sessions = [{'ordinal': index + 1, 'approvedDevice': fingerprint == target.approval.fingerprint,
-                     'active': int(port) in active and last_port_owner[int(port)] == index,
+        last_port_owner = {int(match[1]): index for index, match in enumerate(accepted)}
+        sessions = [{'ordinal': index + 1, 'approvedDevice': match[2] == target.approval.fingerprint,
+                     'active': int(match[1]) in active and last_port_owner[int(match[1])] == index,
                      'capturedBytes': len(captured) if len(accepted) == 1 else None}
-                    for index, (port, fingerprint) in enumerate(accepted)]
+                    for index, match in enumerate(accepted)]
+        if self.shared_easytier:
+            for session, match in zip(sessions, accepted):
+                session['peerClose'] = observed_peer_close(text[match.end():], match[1])
         return {'acceptedSessions': len(accepted), 'newSessions': len(accepted) - prior_sessions,
                 'sessions': sessions, 'capturedBytes': len(captured),
                 'newInputBytes': len(captured) - prior_bytes, 'exactBytes': captured == expected,
@@ -172,17 +178,31 @@ class PairingControl:
                 'inputAttributionAmbiguous': len(sessions) > 1}
 
 
+def observed_peer_close(text, port):
+    source = r'127\.0\.0\.1 port ' + re.escape(port) + r'(?=[:\s]|$)'
+    if re.search(r'^Received disconnect from ' + source, text, re.MULTILINE):
+        return 'client_disconnect'
+    if re.search(r'^Connection closed by (?:user [^\r\n]+ )?' + source, text, re.MULTILINE):
+        return 'peer_eof'
+    if (re.search(r'^Connection reset by (?:user [^\r\n]+ )?' + source, text, re.MULTILINE)
+            or re.search(r'^Read error from (?:user [^\r\n]+ )?' + source + r': Connection reset by peer',
+                         text, re.MULTILINE)):
+        return 'peer_reset'
+    return 'unconfirmed'
+
+
 class HostHarness:
-    def __init__(self, bundle, root, *, lifetime=900, local_probe=False, provider_prefix=()):
+    def __init__(self, bundle, root, *, lifetime=900, local_probe=False, provider_prefix=(), shared_easytier=False):
         if type(lifetime) is not int or not 60 <= lifetime <= 1800:
             raise HostControlError('bounded_fixture_lifetime_required')
         self.lifetime = lifetime
+        self.shared_easytier = shared_easytier
         self.bundle, self.root = Path(bundle), Path(root)
         self.local_probe, self.provider_prefix = local_probe, list(provider_prefix)
         self.stack = ExitStack()
         self.children = []
         self.ts = None
-        self.peer = None
+        self.peer = self.second_peer = None
         self.closed = False
         self.phase = 'initialization'
         self.startup_failure = None
@@ -218,7 +238,7 @@ class HostHarness:
             raise HostControlError('empty_owned_private_work_directory_required')
         self.work_owned = True
         self.set_phase('bundle_validation')
-        for name in ('herdr', 'peer', 'ts-fixture'):
+        for name in (('herdr', 'peer') if self.shared_easytier else ('herdr', 'peer', 'ts-fixture')):
             path = self.bundle / name
             if path.is_symlink() or not path.is_file() or not os.access(path, os.X_OK):
                 raise HostControlError('reviewed_fixture_binary_required')
@@ -235,25 +255,14 @@ class HostHarness:
                     'XDG_CONFIG_HOME': str(self.root / 'config'), 'LANG': 'C.UTF-8',
                     'PYTHONDONTWRITEBYTECODE': '1'}
         network, secret = 'hp-device-' + secrets.token_hex(12), secrets.token_hex(32)
-        with socket.socket() as reserve:
-            reserve.bind(('127.0.0.1', 0)); peer_port = reserve.getsockname()[1]
-        peer_root = self.root / 'et-peer'; peer_root.mkdir(mode=0o700)
-        config = self.root / 'et-peer.toml'
-        descriptor = os.open(config, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(descriptor, 'w') as stream:
-            stream.write(native_config(network, secret, peer_port, server=True))
-        self.set_phase('et_peer_start')
-        self.peer = self.stack.enter_context(owned_process(self.provider_prefix +
-            [str(self.bundle / 'peer'), str(config), str(peer_root), str(self.targets['et'].config['port']),
-             str(self.lifetime + 60)],
-            cwd=self.root, env=self.env, log=self.root / 'et-peer.private.log'))
-        self.children.append(self.peer)
-        self.set_phase('et_peer_ready')
-        wait_for(lambda: (peer_root / 'peer-ready').is_file() or self.peer.poll() is not None,
-                 'controlled_et_peer_not_ready', timeout=15)
-        if self.peer.poll() is not None:
-            raise HostControlError('controlled_et_peer_exited')
-        virtual_port = json.loads((peer_root / 'peer-ready').read_text())['virtualTcpPort']
+        self.peer, peer_port, virtual_port = self.start_et_peer('et', network, secret)
+        if self.shared_easytier:
+            self.second_peer, second_port, second_virtual_port = self.start_et_peer('ts', network, secret)
+            self.control = PairingControl(self.targets, None, None, shared_easytier=True)
+            self.write_materials(network, secret,
+                [('et', '10.126.126.2', virtual_port), ('ts', '10.126.126.4', second_virtual_port)],
+                {'easytier': (peer_port, self.peer.pid), 'easytierSecond': (second_port, self.second_peer.pid)})
+            return
         ts_root = self.root / 'ts-peer'; ts_root.mkdir(mode=0o700)
         self.set_phase('ts_peer_start')
         self.ts = subprocess.Popen(self.provider_prefix + [str(self.bundle / 'ts-fixture'),
@@ -275,27 +284,63 @@ class HostHarness:
         if control.scheme != 'https' or control.hostname != '127.0.0.1' or ready['peerPort'] != 2222:
             raise HostControlError('controlled_ts_material_invalid')
         self.control = PairingControl(self.targets, self.complete_auth, ready['controlUrl'], diagnostics=self.ts_diagnostics)
+        self.write_materials(network, secret, [('et', '10.126.126.2', virtual_port), ('ts', ready['peerIp'], 2222)],
+            {'control': (control.port, self.ts.pid), 'derp': (ready['derpPort'], self.ts.pid),
+             'easytier': (peer_port, self.peer.pid)},
+            {'caFile': ready['caFile'], 'controlUrl': ready['controlUrl']})
+
+    def start_et_peer(self, role, network, secret):
+        tag = 'et' if role == 'et' else 'et-second'
+        phase = tag.replace('-', '_')
+        with socket.socket() as reserve:
+            reserve.bind(('127.0.0.1', 0)); peer_port = reserve.getsockname()[1]
+        peer_root = self.root / (tag + '-peer'); peer_root.mkdir(mode=0o700)
+        config = self.root / (tag + '-peer.toml')
+        descriptor = os.open(config, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        config_text = native_config(network, secret, peer_port, server=True)
+        if role != 'et':
+            config_text = config_text.replace('ipv4 = "10.126.126.2/24"', 'ipv4 = "10.126.126.4/24"')
+        with os.fdopen(descriptor, 'w') as stream:
+            stream.write(config_text)
+        self.set_phase(phase + '_peer_start')
+        peer = self.stack.enter_context(owned_process(self.provider_prefix +
+            [str(self.bundle / 'peer'), str(config), str(peer_root), str(self.targets[role].config['port']),
+             str(self.lifetime + 60)],
+            cwd=self.root, env=self.env, log=self.root / (tag + '-peer.private.log')))
+        self.children.append(peer)
+        self.set_phase(phase + '_peer_ready')
+        wait_for(lambda: (peer_root / 'peer-ready').is_file() or peer.poll() is not None,
+                 'controlled_et_peer_not_ready', timeout=15)
+        if peer.poll() is not None:
+            raise HostControlError('controlled_et_peer_exited')
+        virtual_port = json.loads((peer_root / 'peer-ready').read_text())['virtualTcpPort']
+        return peer, peer_port, virtual_port
+
+    def write_materials(self, network, secret, endpoints, relay_roles, ts_materials=None):
         self.set_phase('materials')
         profiles = {}
-        for role, host, port in [('et', '10.126.126.2', virtual_port), ('ts', ready['peerIp'], 2222)]:
+        for role, host, port in endpoints:
             target = self.targets[role]
             value = json.loads(target.public_profile())
             value.update(host=host, port=port)
+            if self.shared_easytier:
+                value['provider'] = 'easytier'
             profile = self.root / (role + '-host-profile.json')
             profile.write_bytes(encode_profile(value)); profile.chmod(0o600)
             profiles[role] = str(profile)
-        materials = {'hostProfiles': profiles, 'caFile': ready['caFile'], 'controlUrl': ready['controlUrl'],
+        peers = ['tcp://127.0.0.1:' + str(port) for role, (port, _) in relay_roles.items()
+                 if role in ('easytier', 'easytierSecond')]
+        materials = {'hostProfiles': profiles, **(ts_materials or {}),
                      'etNetwork': {'networkName': network, 'networkSecret': secret,
-                                   'peerUrl': 'tcp://127.0.0.1:' + str(peer_port)},
+                                   'peerUrl': '\n'.join(peers)},
                      'udpStunRelayed': False, 'deviceTailscaleReachabilityVerified': False,
                      'clientAddressPolicy': 'Android DHCP; no fixed-client-IP acceptance condition'}
         write_private(self.root / 'materials.json', materials)
         self.relay = None
         if not self.local_probe:
             namespace = 'hp-dual-' + os.environ['GITHUB_RUN_ID'] + '-' + os.environ.get('GITHUB_RUN_ATTEMPT', '1')
-            self.relay = {'namespace': namespace, 'control': control.port,
-                          'derp': ready['derpPort'], 'easytier': peer_port,
-                          'ownerPids': {'control': self.ts.pid, 'derp': self.ts.pid, 'easytier': self.peer.pid},
+            self.relay = {'namespace': namespace, **{role: port for role, (port, _) in relay_roles.items()},
+                          'ownerPids': {role: pid for role, (_, pid) in relay_roles.items()},
                           'sshPorts': [target.config['port'] for target in self.targets.values()]}
             write_private(self.root / 'relay.json', self.relay)
 
@@ -316,17 +361,31 @@ class HostHarness:
         if self.closed:
             return
         self.closed = True
-        self.cleanup = {'tsPeerCleanup': False, 'etPeerCleanup': False}
+        self.shared_peer_streams = {}
+        self.cleanup = {'etPeerCleanup': False,
+                        'etSecondPeerCleanup' if self.shared_easytier else 'tsPeerCleanup': False}
         try:
             if self.ts is not None and self.ts.poll() is None:
                 self.ts.stdin.write(b'{"op":"stop"}\n'); self.ts.stdin.flush()
                 event = read_event(self.events, 'cleanup', self.ts)
                 self.cleanup['tsPeerCleanup'] = (event.get('peerClosed') is True
                     and event.get('bridgeConnections') == 0 and self.ts.wait(timeout=8) == 0)
-            if self.peer is not None and self.peer.poll() is None:
-                (self.root / 'et-peer/stop-peer').touch()
-                self.cleanup['etPeerCleanup'] = (self.peer.wait(timeout=10) == 0
-                    and json.loads((self.root / 'et-peer/peer-result.json').read_text()).get('activeBridgesAfterStop') == 0)
+            peers = [('et-peer', self.peer, 'etPeerCleanup')]
+            if self.shared_easytier:
+                peers.append(('et-second-peer', self.second_peer, 'etSecondPeerCleanup'))
+            for directory, peer, check in peers:
+                if peer is not None and peer.poll() is None:
+                    peer_root = self.root / directory
+                    (peer_root / 'stop-peer').touch()
+                    if peer.wait(timeout=10) == 0:
+                        stats = json.loads((peer_root / 'peer-result.json').read_text())
+                        self.cleanup[check] = stats.get('activeBridgesAfterStop') == 0
+                        if self.shared_easytier:
+                            name = 'a' if directory == 'et-peer' else 'b'
+                            counts = {key: stats.get(key) for key in
+                                      ('acceptedOverlayStreams', 'loopbackTcpConnections')}
+                            if all(type(value) is int and 0 <= value <= 64 for value in counts.values()):
+                                self.shared_peer_streams[name] = counts
         except (OSError, RuntimeError, subprocess.TimeoutExpired):
             pass
         finally:
@@ -348,10 +407,10 @@ class HostHarness:
             for target in getattr(self, 'targets', {}).values():
                 for name in ('host', 'host.pub', 'public-profile.json', 'peer.json', 'known_hosts'):
                     (target.root / name).unlink(missing_ok=True)
-            for name in ('materials.json', 'et-peer.toml', 'et-host-profile.json', 'ts-host-profile.json', 'relay.json'):
+            for name in ('materials.json', 'et-peer.toml', 'et-second-peer.toml', 'et-host-profile.json', 'ts-host-profile.json', 'relay.json'):
                 (self.root / name).unlink(missing_ok=True)
             self.cleanup['privateMaterialsRemoved'] = not any((self.root / name).exists() for name in
-                ('materials.json', 'et-peer.toml', 'et-host-profile.json', 'ts-host-profile.json', 'relay.json'))
+                ('materials.json', 'et-peer.toml', 'et-second-peer.toml', 'et-host-profile.json', 'ts-host-profile.json', 'relay.json'))
             self.cleanup['ownedProcessesStopped'] = all(child.poll() is not None
                 for child in self.children + getattr(self, 'host_processes', []))
             self.cleanup['temporaryAuthorizationsCleared'] = all(
@@ -371,10 +430,12 @@ def main():
     parser.add_argument('--bundle', required=True, type=Path)
     parser.add_argument('--work', required=True, type=Path)
     parser.add_argument('--lifetime', type=int, default=900, help='owned QA session seconds, 60..1800; does not change pairing/auth expiry')
+    parser.add_argument('--shared-easytier', action='store_true')
     args = parser.parse_args()
     if not 60 <= args.lifetime <= 1800:
         parser.error('--lifetime must be 60..1800')
-    harness = HostHarness(args.bundle.resolve(strict=True), args.work.resolve(strict=True), lifetime=args.lifetime)
+    harness = HostHarness(args.bundle.resolve(strict=True), args.work.resolve(strict=True), lifetime=args.lifetime,
+                          shared_easytier=args.shared_easytier)
     def emit(value):
         print(json.dumps(value), flush=True)
     try:
@@ -414,7 +475,10 @@ def main():
                     if len(pending) > 131072: raise HostControlError('bounded_control_request_required')
             finally:
                 selector.close()
-        emit(dict(event='cleanup', stopReason=reason, **harness.cleanup))
+        report = dict(event='cleanup', stopReason=reason, **harness.cleanup)
+        if args.shared_easytier:
+            report['sharedPeerStreams'] = harness.shared_peer_streams
+        emit(report)
         return 0 if all(harness.cleanup.values()) and reason != 'provider-exited' else 1
     except Exception:
         emit(dict(event='failed', **safe_startup_failure(harness.startup_failure)))

@@ -1,6 +1,12 @@
 name: Flutter Android dual-overlay GUI acceptance
 on:
   workflow_dispatch:
+    inputs:
+      scenario:
+        description: Owned Android overlay validation scenario
+        type: choice
+        options: [dual-providers, shared-easytier]
+        default: dual-providers
   push:
     branches: ['codex/acceptance-flutter-dual-overlay/**', 'codex/acceptance-flutter-dual-build/**']
 permissions:
@@ -11,7 +17,10 @@ concurrency:
   cancel-in-progress: false
 jobs:
   device:
-    if: startsWith(github.ref, 'refs/heads/codex/')
+    if: >-
+      (inputs.scenario != 'shared-easytier' && startsWith(github.ref, 'refs/heads/codex/')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.scenario == 'shared-easytier' &&
+      startsWith(github.ref, 'refs/heads/codex/acceptance-flutter-shared-easytier/'))
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
@@ -100,19 +109,23 @@ jobs:
           path: ${{ runner.temp }}/instrumentation-build/
           if-no-files-found: error
           retention-days: 7
-      - name: Exercise both directions on the owned API35 emulator
+      - name: Exercise the selected scenario on the owned API35 emulator
         id: device
-        if: startsWith(github.ref, 'refs/heads/codex/acceptance-flutter-dual-overlay/')
+        if: startsWith(github.ref, 'refs/heads/codex/acceptance-flutter-dual-overlay/') || inputs.scenario == 'shared-easytier'
+        env:
+          OVERLAY_SCENARIO: ${{ inputs.scenario || 'dual-providers' }}
         run: |
           AVD_EVIDENCE_DIR="$RUNNER_TEMP/dual-avd" bash validation/remote-harness/with-android-emulator.sh \
             "$RUNNER_TEMP/dual-python/bin/python" validation/remote-harness/flutter_android_dual_overlay.py \
               --project "$RUNNER_TEMP/flutter-dual-app" --qa-bundle "$RUNNER_TEMP/qa" \
               --host-bundle "$RUNNER_TEMP/host" --host-checkout "$GITHUB_WORKSPACE/host-source" \
-              --host-source "$HOST_SOURCE" --native-source "$NATIVE_SOURCE" --output "$RUNNER_TEMP/dual-evidence"
+              --host-source "$HOST_SOURCE" --native-source "$NATIVE_SOURCE" --output "$RUNNER_TEMP/dual-evidence" \
+              --scenario "$OVERLAY_SCENARIO"
       - name: Preserve a failed report when device evidence is missing
-        if: always() && startsWith(github.ref, 'refs/heads/codex/acceptance-flutter-dual-overlay/')
+        if: always() && (startsWith(github.ref, 'refs/heads/codex/acceptance-flutter-dual-overlay/') || inputs.scenario == 'shared-easytier')
         env:
           DEVICE_OUTCOME: ${{ steps.device.outcome }}
+          OVERLAY_SCENARIO: ${{ inputs.scenario || 'dual-providers' }}
         run: |
           python3 - <<'PYCODE'
           import json, os, pathlib
@@ -127,14 +140,16 @@ jobs:
                         'status': 'failed', 'errorCode': 'device_manifest_missing',
                         'deviceStepOutcome': outcome, 'uiSource': os.environ['GITHUB_SHA'],
                         'nativeSource': os.environ['NATIVE_SOURCE'], 'hostSource': os.environ['HOST_SOURCE']}
+              if os.environ.get('OVERLAY_SCENARIO') == 'shared-easytier':
+                  report['scenario'] = 'shared-easytier'
               manifest.write_text(json.dumps(report, indent=2) + '\n')
               raise SystemExit(1)
           PYCODE
       - name: Upload only sanitized device manifest
-        if: always() && startsWith(github.ref, 'refs/heads/codex/acceptance-flutter-dual-overlay/')
+        if: always() && (startsWith(github.ref, 'refs/heads/codex/acceptance-flutter-dual-overlay/') || inputs.scenario == 'shared-easytier')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: flutter-android-dual-overlay-${{ github.sha }}
+          name: ${{ inputs.scenario == 'shared-easytier' && 'flutter-android-shared-easytier' || 'flutter-android-dual-overlay' }}-${{ github.sha }}
           path: ${{ runner.temp }}/dual-evidence/manifest.json
           if-no-files-found: warn
           retention-days: 14

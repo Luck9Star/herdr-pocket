@@ -137,6 +137,89 @@ def wait_for_both_stopped(audit, baselines, first_stop, *, timeout=10.0, interva
         sleep(min(interval, remaining))
 
 
+SHARED_SCENARIO = 'shared-easytier'
+SHARED_CHECKPOINTS = ('et_pair_review', 'ts_pair_review', 'shared_ready', 'shared_a_released',
+                      'shared_b_released', 'shared_node_stopped')
+SHARED_UI_RESULT = {'status': 'passed', 'scenario': SHARED_SCENARIO, 'sameReviewedBinding': True,
+    'bothInitialFrames': True, 'survivorAdvancedOnOriginalView': True, 'noAutomaticInput': True,
+    'bothTabsClosedBeforeNodeStop': True, 'nodeExplicitlyStopped': True}
+PEER_CLOSE_KINDS = ('unconfirmed', 'peer_eof', 'client_disconnect', 'peer_reset')
+
+
+def require_shared_host_closed(audit, baselines, closed, *, timeout=10.0, interval=0.25,
+                               monotonic=None, sleep=None):
+    import time
+    monotonic = monotonic or time.monotonic
+    sleep = sleep or time.sleep
+    deadline = monotonic() + timeout
+    while True:
+        resolved = True
+        for role in ('et', 'ts'):
+            result = audit(role, b'')
+            expected_close = role in closed
+            pending = stopped_session_pending(result, baselines[role], 0) if expected_close else False
+            if not expected_close:
+                audit_unchanged_session(result, baselines[role], 0)
+            kind = result['sessions'][0].get('peerClose')
+            if kind not in PEER_CLOSE_KINDS:
+                raise DualOverlayDeviceFailure('shared_peer_close_evidence_invalid')
+            if expected_close and kind == 'peer_reset':
+                raise DualOverlayDeviceFailure('shared_peer_closed_by_reset')
+            if expected_close and (pending or kind not in ('peer_eof', 'client_disconnect')):
+                resolved = False
+            if not expected_close and kind != 'unconfirmed':
+                raise DualOverlayDeviceFailure('shared_survivor_closed')
+        if resolved:
+            return
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise DualOverlayDeviceFailure('shared_peer_close_unconfirmed')
+        sleep(min(interval, remaining))
+
+
+def shared_relay_state(relay, ensure_app_running, *, active, timeout=10.0, monotonic=None, sleep=None):
+    import time
+    monotonic = monotonic or time.monotonic
+    sleep = sleep or time.sleep
+    deadline = monotonic() + timeout
+    while True:
+        ensure_app_running()
+        counts = relay.active_connections()
+        if set(counts) != {'easytier', 'easytierSecond'} or any(
+                type(count) is not int or not 0 <= count <= 16 for count in counts.values()):
+            raise DualOverlayDeviceFailure('shared_relay_evidence_invalid')
+        if all((count > 0) == active for count in counts.values()):
+            ensure_app_running()
+            return {'a': counts['easytier'], 'b': counts['easytierSecond']}
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise DualOverlayDeviceFailure('shared_relay_live_missing' if active else 'shared_relay_close_unconfirmed')
+        sleep(min(0.25, remaining))
+
+
+def shared_checkpoint(stage, audit, baselines, progress):
+    if stage == 'shared_ready':
+        for role in ('et', 'ts'):
+            baselines[role] = audit_baseline(audit(role, b''), 0)
+            if baselines[role] != (1, 1):
+                raise DualOverlayDeviceFailure('shared_original_ssh_not_unique')
+        progress['bothOriginalSshLive'] = True
+    elif stage == 'shared_a_released':
+        if set(baselines) != {'et', 'ts'}:
+            raise DualOverlayDeviceFailure('host_audit_baseline_missing')
+        audit_unchanged_session(audit('ts', b''), baselines['ts'], 0)
+        progress['survivorFreshFrameOnOriginalSsh'] = True
+        require_shared_host_closed(audit, baselines, {'et'})
+        progress['aCloseBeforeBStop'] = True
+    else:
+        require_shared_host_closed(audit, baselines, {'et', 'ts'},
+                                   timeout=10.0 if stage == 'shared_b_released' else 0)
+        if stage == 'shared_b_released':
+            progress['bothClosedBeforeExplicitNodeStop'] = True
+        elif stage == 'shared_node_stopped':
+            progress['bothClosedAfterExplicitNodeStop'] = True
+
+
 def prepare_private_ca(adb, serial, certificate, *, run):
     """Install QA trust before the app's TS native library can be loaded.
 
@@ -170,7 +253,8 @@ def prepare_private_ca(adb, serial, certificate, *, run):
 
 
 EXCHANGE_FILES = frozenset({'config.json', 'et-response.json', 'ts-response.json',
-                            'ts-authorized.txt', 'et-audit.txt', 'ts-audit.txt', 'stopped-audit.txt', 'final-audit.txt', 'both-stopped-audit.txt'})
+                            'ts-authorized.txt', 'et-audit.txt', 'ts-audit.txt', 'stopped-audit.txt', 'final-audit.txt', 'both-stopped-audit.txt',
+                            'shared-ready.txt', 'shared-a-released.txt', 'shared-b-released.txt', 'shared-node-stopped.txt'})
 
 
 def write_exchange(adb, serial, name, data, *, run):
@@ -228,7 +312,7 @@ def read_exchange(adb, serial, name, *, run):
 
 
 
-def handle_stage(stage, *, session, adb, serial, run, first_stop, baselines, audit_records=None, audit_progress=None):
+def handle_stage(stage, *, session, adb, serial, run, first_stop, baselines, audit_records=None, audit_progress=None, shared=False, ensure_app_running=None):
     """Answer one blocked GUI checkpoint using independent host facts."""
     import base64
     import json
@@ -277,6 +361,8 @@ def handle_stage(stage, *, session, adb, serial, run, first_stop, baselines, aud
         return True
 
     def audit(role, expected):
+        if ensure_app_running is not None:
+            ensure_app_running()
         event = session.control.call({'op': 'audit', 'role': role,
             'expectedBase64': base64.b64encode(expected).decode('ascii')})
         if event.get('event') != 'host_audit' or event.get('role') != role:
@@ -290,14 +376,29 @@ def handle_stage(stage, *, session, adb, serial, run, first_stop, baselines, aud
                     or any(type(event.get(key)) is not bool for key in ('exactBytes', 'authorizationActive'))
                     or any(type(item.get('ordinal')) is not int or not 1 <= item['ordinal'] <= 64
                            or type(item.get('approvedDevice')) is not bool or type(item.get('active')) is not bool
+                           or (shared and item.get('peerClose') not in PEER_CLOSE_KINDS)
                            for item in sessions)):
                 raise DualOverlayDeviceFailure('host_audit_role_invalid')
-            audit_records.append({'checkpoint': stage, 'role': role,
+            audit_records.append({'checkpoint': stage, 'role': ({'et': 'a', 'ts': 'b'}[role] if shared else role),
                 'acceptedSessions': event.get('acceptedSessions'), 'newSessions': event.get('newSessions'),
                 'capturedBytes': event.get('capturedBytes'), 'newInputBytes': event.get('newInputBytes'),
                 'exactBytes': event.get('exactBytes'), 'authorizationActive': event.get('authorizationActive'),
-                'sessions': [{key: item.get(key) for key in ('ordinal', 'approvedDevice', 'active')} for item in sessions]})
+                'sessions': [{key: item.get(key) for key in
+                              ('ordinal', 'approvedDevice', 'active', 'peerClose') if shared or key != 'peerClose'}
+                             for item in sessions]})
+        if ensure_app_running is not None:
+            ensure_app_running()
         return event
+
+    if shared and stage in SHARED_CHECKPOINTS[2:]:
+        progress = audit_progress if audit_progress is not None else {}
+        shared_checkpoint(stage, audit, baselines, progress)
+        if stage == 'shared_ready':
+            progress['liveProviderRelays'] = shared_relay_state(session.relay, ensure_app_running, active=True)
+        elif stage == 'shared_node_stopped':
+            progress['providerRelaysAfterNodeStop'] = shared_relay_state(session.relay, ensure_app_running, active=False)
+        write_exchange(adb, serial, stage.replace('_', '-') + '.txt', b'accepted', run=run)
+        return True
 
     if stage in ('et_baseline', 'ts_baseline'):
         role = stage[:2]
@@ -351,7 +452,7 @@ UI_STAGES = frozenset({'host_board', 'et_network_create', 'ts_network_create', '
     'et_response_accept', 'ts_response_accept', 'et_response_saved', 'ts_response_saved',
     'et_identity_review', 'ts_identity_review', 'et_identity_create', 'ts_identity_create',
     'et_node_refresh', 'ts_node_refresh', 'et_node_start', 'ts_node_start',
-    'et_node_wait', 'ts_node_wait', 'ts_node_ready_refresh'})
+    'et_node_wait', 'ts_node_wait', 'ts_node_ready_refresh', *SHARED_CHECKPOINTS, 'shared_close_a', 'shared_close_b'})
 
 
 def safe_ui_failure(raw):
@@ -427,15 +528,22 @@ def safe_ui_failure(raw):
     return None
 
 
-def drive_checkpoints(session, process, adb, serial, first_stop, *, run, timeout=900, report_stage=None, report_failure=None, audit_records=None, audit_progress=None):
+def drive_checkpoints(session, process, adb, serial, first_stop, *, run, timeout=900, report_stage=None, report_failure=None, audit_records=None, audit_progress=None, shared=False):
     """Drive bounded, ordered UI checkpoints; the host facts gate each reply."""
     import json
     import time
 
-    if first_stop not in ('et', 'ts') or timeout <= 0 or timeout > 1200:
+    if first_stop not in (('',) if shared else ('et', 'ts')) or timeout <= 0 or timeout > 1200:
         raise DualOverlayDeviceFailure('device_run_invalid')
     checkpoints = ('ts_wait_authorization', 'et_pair_review', 'ts_pair_review',
                    'et_baseline', 'ts_baseline', 'stopped_audit', 'final_audit', 'both_stopped_audit')
+    if shared:
+        checkpoints = SHARED_CHECKPOINTS
+
+    def require_running():
+        if process.poll() is not None:
+            raise DualOverlayDeviceFailure('shared_device_exited_during_host_audit')
+
     deadline = time.monotonic() + timeout
     index = 0
     baselines = {}
@@ -451,7 +559,8 @@ def drive_checkpoints(session, process, adb, serial, first_stop, *, run, timeout
                 report_stage(stage if stage in UI_STAGES else 'other')
             if index < len(checkpoints) and stage == checkpoints[index]:
                 if handle_stage(stage, session=session, adb=adb, serial=serial, run=run,
-                                first_stop=first_stop, baselines=baselines, audit_records=audit_records, audit_progress=audit_progress):
+                                first_stop=first_stop, baselines=baselines, audit_records=audit_records, audit_progress=audit_progress,
+                                shared=shared, ensure_app_running=require_running if shared else None):
                     index += 1
             elif stage in checkpoints[index + 1:]:
                 raise DualOverlayDeviceFailure('device_stage_out_of_order')
@@ -467,6 +576,8 @@ def drive_checkpoints(session, process, adb, serial, first_stop, *, run, timeout
                     'explicitTsAuthorization': True, 'newFullAfterResume': True,
                     'stoppedTabRetired': True, 'survivorStopped': True,
                     'initialInputsAccepted': True, 'survivorInputAccepted': True}
+                if shared:
+                    expected = SHARED_UI_RESULT
                 if value != expected:
                     raise DualOverlayDeviceFailure('device_result_invalid')
                 try:
@@ -547,7 +658,7 @@ def installed_apk_evidence(device, bundle, destination, verify):
 
 
 def run_device(args, env):
-    """Run two fresh owned-device cases; publish only fixed result categories."""
+    """Run the explicitly selected fresh owned-device cases."""
     import json
     import os
     from pathlib import Path
@@ -585,19 +696,27 @@ def run_device(args, env):
               'hostArtifactSha256': '4bdc54843a9f438896db3717bd002859021fab51cbe60339c35e8a62a5bd6698',
               'nativeVariant': 'test-only-private-ca-x86_64', 'apiLevel': 35,
               'physicalDevice': False, 'rawLogsUploaded': False, 'cases': []}
+    shared = getattr(args, 'scenario', 'dual-providers') == SHARED_SCENARIO
+    if shared:
+        report['scenario'] = SHARED_SCENARIO
+        report['sharedTargets'] = {'a': 'easytier', 'b': 'easytier'}
+    case_names = (SHARED_SCENARIO,) if shared else ('et', 'ts')
     before_forwards = device.forward_set()
     with tempfile.TemporaryDirectory(prefix='flutter-dual-private-', dir=env['RUNNER_TEMP']) as private:
         private = Path(private)
-        for first_stop in ('et', 'ts'):
-            case = {'firstStop': first_stop, 'status': 'failed', 'stage': 'build'}
+        for case_name in case_names:
+            first_stop = '' if shared else case_name
+            case = {'status': 'failed', 'stage': 'build'}
+            case.update({'scenario': SHARED_SCENARIO} if shared else {'firstStop': first_stop})
             report['cases'].append(case)
             process = None
             session = None
             try:
                 flags = ['--dart-define=HERDR_ANDROID_DUAL_OVERLAY=true',
                          '--dart-define=HERDR_ANDROID_DUAL_RUN_ID=' + env['GITHUB_RUN_ID'],
-                         '--dart-define=HERDR_ANDROID_DUAL_FIRST_STOP=' + first_stop]
-                with (private / (first_stop + '-build.log')).open('wb') as log:
+                         ('--dart-define=HERDR_ANDROID_SHARED_EASYTIER=true' if shared else
+                          '--dart-define=HERDR_ANDROID_DUAL_FIRST_STOP=' + first_stop)]
+                with (private / (case_name + '-build.log')).open('wb') as log:
                     command = ['flutter', 'build', 'apk', '--debug', '--target-platform', 'android-x64',
                                '-t', 'integration_test/android_dual_overlay_test.dart', *flags]
                     result = subprocess.run(command, cwd=app, stdout=log, stderr=subprocess.STDOUT,
@@ -609,27 +728,30 @@ def run_device(args, env):
                 case['instrumentationApkSha256'] = apk_evidence['apkSha256']
                 case['stage'] = 'install'
                 device.adb('install', '-r', str(built))
-                with tempfile.TemporaryDirectory(prefix=first_stop + '-', dir=private) as work:
+                with tempfile.TemporaryDirectory(prefix=case_name + '-', dir=private) as work:
                     case['stage'] = 'host_start'
                     session = AndroidDualOverlaySession(args.host_bundle, work, host_source=args.host_source,
-                        source_checkout=args.host_checkout, device='emulator-5554', lifetime=900)
+                        source_checkout=args.host_checkout, device='emulator-5554', lifetime=900, shared_easytier=shared)
                     with session:
-                        case['tsControlBefore'] = sample_ts_control(session)
                         case['stage'] = 'private_setup'
-                        prepare_private_ca('adb', 'emulator-5554', session.read_ca(), run=subprocess.run)
+                        if not shared:
+                            case['tsControlBefore'] = sample_ts_control(session)
+                            prepare_private_ca('adb', 'emulator-5554', session.read_ca(), run=subprocess.run)
                         material = session.materials
                         network = material['etNetwork']
-                        config = {'runId': env['GITHUB_RUN_ID'], 'firstStop': first_stop,
+                        config = {'runId': env['GITHUB_RUN_ID'],
                                   'etProfile': json.dumps(session.read_host_profile('et')),
                                   'tsProfile': json.dumps(session.read_host_profile('ts')),
-                                  'controlUrl': material['controlUrl'], 'networkName': network['networkName'],
+                                  'networkName': network['networkName'],
                                   'networkSecret': network['networkSecret'], 'peerUrl': network['peerUrl']}
+                        config.update({'scenario': SHARED_SCENARIO} if shared else
+                                      {'firstStop': first_stop, 'controlUrl': material['controlUrl']})
                         write_exchange('adb', 'emulator-5554', 'config.json', json.dumps(config).encode(), run=subprocess.run)
                         case['stage'] = 'device_ui'
                         case['hostAudits'] = []
-                        case['auditProgress'] = {'interimClosePending': None, 'stoppedCloseConfirmed': None,
+                        case['auditProgress'] = {} if shared else {'interimClosePending': None, 'stoppedCloseConfirmed': None,
                                                  'survivorSecondInputConfirmed': None}
-                        with (private / (first_stop + '-flutter.log')).open('wb') as log:
+                        with (private / (case_name + '-flutter.log')).open('wb') as log:
                             process = subprocess.Popen(['flutter', 'test', '--no-pub', '--no-uninstall',
                                 '--reporter', 'expanded', '-d', 'emulator-5554',
                                 'integration_test/android_dual_overlay_test.dart', *flags], cwd=app,
@@ -640,9 +762,10 @@ def run_device(args, env):
                                                                report_stage=lambda stage: case.update(uiStage=stage),
                                                                report_failure=lambda failure: case.update(uiFailure=failure),
                                                                audit_records=case['hostAudits'],
-                                                               audit_progress=case['auditProgress'])
+                                                               audit_progress=case['auditProgress'], shared=shared)
                             except Exception:
-                                case['failureHostAudits'] = sample_failed_host_audits(session)
+                                hosts = sample_failed_host_audits(session)
+                                case['failureHostAudits'] = ({'a': hosts['et'], 'b': hosts['ts']} if shared else hosts)
                                 raise
                             finally:
                                 if process.poll() is None:
@@ -653,8 +776,9 @@ def run_device(args, env):
                                         try: os.killpg(process.pid, signal.SIGKILL)
                                         except ProcessLookupError: pass
                                         process.wait(timeout=10)
-                                case['tsControlAfter'] = sample_ts_control(session)
-                        installed = private / (first_stop + '-installed.apk')
+                                if not shared:
+                                    case['tsControlAfter'] = sample_ts_control(session)
+                        installed = private / (case_name + '-installed.apk')
                         installed_evidence = installed_apk_evidence(device, args.qa_bundle, installed, dual_overlay_apk.verify)
                         case['installedApkSha256'] = installed_evidence['apkSha256']
                         case['stage'] = 'host_cleanup'
@@ -662,6 +786,10 @@ def run_device(args, env):
                     if not cleanup or any(value is not True for value in cleanup.values()):
                         raise DualOverlayDeviceFailure('host_cleanup_incomplete')
                     case['hostCleanup'] = True
+                    if shared:
+                        peer_counts = {'acceptedOverlayStreams': 1, 'loopbackTcpConnections': 1}
+                        if session.report.get('sharedPeerStreams') != {'a': peer_counts, 'b': peer_counts}:
+                            raise DualOverlayDeviceFailure('shared_fixture_peer_dial_count_mismatch')
                 case['status'] = 'passed'; case['stage'] = 'complete'
             except Exception as error:
                 case['errorCode'] = str(error) if isinstance(error, DualOverlayDeviceFailure) else 'device_runner_failed'
@@ -684,6 +812,8 @@ def run_device(args, env):
                         'listener_process_namespace_unreadable', 'controlled_relay_failed'}
                     relay_failure = session_report.get('relayFailure')
                     if isinstance(relay_failure, str) and relay_failure in relay_codes: case['relayFailure'] = relay_failure
+                    if shared and 'sharedPeerStreams' in session_report:
+                        case['sharedPeerStreams'] = session_report['sharedPeerStreams']
                     cleanup_report = session_report.get('cleanup', {})
                     case['sharedCleanup'] = {key: value for key, value in cleanup_report.items()
                         if key in {'reverseRemoved', 'relayStopped', 'controllerStopped', 'namespaceRemoved',
@@ -709,7 +839,7 @@ def run_device(args, env):
                     case['packageRemoved'] = False; case['forwardsRestored'] = False
                 if not case.get('packageRemoved') or not case.get('forwardsRestored'):
                     case['status'] = 'failed'; case['errorCode'] = 'device_cleanup_incomplete'
-    if all(case['status'] == 'passed' for case in report['cases']) and len(report['cases']) == 2:
+    if all(case['status'] == 'passed' for case in report['cases']) and len(report['cases']) == len(case_names):
         report['status'] = 'passed'
     (output / 'manifest.json').write_text(json.dumps(report, indent=2) + '\n')
     return report
@@ -726,6 +856,7 @@ def main():
         parser.add_argument('--' + name, type=Path, required=True)
     parser.add_argument('--host-source', required=True)
     parser.add_argument('--native-source', required=True)
+    parser.add_argument('--scenario', choices=('dual-providers', SHARED_SCENARIO), default='dual-providers')
     args = parser.parse_args()
     try:
         validate_source_pins(args.native_source,args.host_source)
@@ -734,6 +865,8 @@ def main():
         code = str(error) if isinstance(error, DualOverlayDeviceFailure) else 'device_precondition_failed'
         safe = {'schemaVersion': 1, 'kind': 'flutter-android-dual-overlay',
                 'status': 'failed', 'errorCode': code}
+        if args.scenario == SHARED_SCENARIO:
+            safe['scenario'] = SHARED_SCENARIO
         try:
             base = Path(os.environ['RUNNER_TEMP']).resolve(strict=True)
             target = args.output.resolve()

@@ -502,6 +502,14 @@ class DualOverlayUiSteps {
     return 'host-tab-$tabId';
   }
 
+  Future<void> closeHostTab(String tabKey) async {
+    final tab = find.byKey(ValueKey(tabKey));
+    expect(tab, findsOneWidget);
+    final close = find.byKey(ValueKey(tabKey.replaceFirst('host-tab-', 'host-tab-close-')));
+    await existing.tapStablePointer(tester, close);
+    await existing.until(tester, () => tab.evaluate().isEmpty && close.evaluate().isEmpty);
+  }
+
   Future<void> resumeTab(String role, String tabKey, Terminal previous) async {
     await stage('${role}_resume');
     await existing.tapKey(tester, tabKey);
@@ -655,7 +663,7 @@ class DualOverlayUiSteps {
     }
   }
 
-  Future<String> pairHost(String role, String profileJson) async {
+  Future<String> pairHost(String role, String profileJson, {String? provider}) async {
     if (!{'et', 'ts'}.contains(role)) throw StateError('dual_role_invalid');
     responseReceived = false;
     responseCheck = null;
@@ -672,7 +680,7 @@ class DualOverlayUiSteps {
     final before = page.catalog!.profiles.map((profile) => profile.id).toSet();
     final profile = jsonDecode(profileJson) as Map<String, dynamic>;
     final expectedFingerprint = pairingFingerprint(profile['expectedHostKey'] as String);
-    expect(profile['provider'], role == 'et' ? 'easytier' : 'tailscale');
+    expect(profile['provider'], provider ?? (role == 'et' ? 'easytier' : 'tailscale'));
     await stage('${role}_pair_input');
     await enter('profile-input', profileJson);
     await existing.until(tester, () => find.byKey(const ValueKey('profile-preview')).evaluate().length == 1);

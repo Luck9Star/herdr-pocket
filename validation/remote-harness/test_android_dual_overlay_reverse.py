@@ -64,6 +64,21 @@ class ReverseTests(unittest.TestCase):
             self.assertTrue(mappings.cleanup_confirmed)
         self.assertEqual(fake.map,{10999:20999})
         self.assertEqual([call[1] for call in fake.calls],['--no-rebind']*3+['--remove']*3)
+    def test_shared_easytier_reverses_only_two_exact_provider_ports(self):
+        roles = ('easytier', 'easytierSecond')
+        relay = SimpleNamespace(roles=roles, config={'easytier': 10101, 'easytierSecond': 10102,
+            'sshPorts': [10201, 10202]}, ports={'easytier': 20101, 'easytierSecond': 20102})
+        fake = FakeAdb({10999: 20999})
+        with self.run_with(fake):
+            with bridge.OwnedReverseMappings(relay, _device_check=lambda: None) as mappings:
+                self.assertEqual(mappings.installed_count, 2)
+                self.assertEqual(fake.map, {10999: 20999, 10101: 20101, 10102: 20102})
+        self.assertEqual(fake.map, {10999: 20999})
+        self.assertTrue(mappings.cleanup_confirmed)
+        relay.ports['easytierSecond'] = relay.config['sshPorts'][1]
+        with self.run_with(fake), self.assertRaisesRegex(bridge.ReverseError, 'ssh_reverse_forbidden'):
+            bridge.OwnedReverseMappings(relay, _device_check=lambda: None).__enter__()
+
     def test_collision_and_ssh_alias_never_write(self):
         fake=FakeAdb({10102:20999})
         with self.run_with(fake),self.assertRaisesRegex(bridge.ReverseError,'reverse_collision'):

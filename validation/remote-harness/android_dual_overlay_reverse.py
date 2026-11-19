@@ -10,7 +10,7 @@ from pathlib import Path
 import re
 import subprocess
 
-from android_dual_overlay_relay import ROLES
+from android_dual_overlay_relay import ROLES, SHARED_EASYTIER_ROLES
 
 SERIAL = 'emulator-5554'
 ADB_DIAGNOSTICS = []
@@ -88,9 +88,10 @@ def _mapping_list():
 
 
 class OwnedReverseMappings:
-    """Install exactly three no-rebind mappings and remove only unchanged owned ones."""
+    """Install only selected no-rebind mappings and remove unchanged owned ones."""
     def __init__(self, relay, *, _device_check=None):
         self.relay=relay
+        self.roles=getattr(relay, 'roles', ROLES)
         self._device_check=_device_check or assert_owned_avd
         self.created={}
         self.baseline={}
@@ -102,10 +103,11 @@ class OwnedReverseMappings:
     def __enter__(self):
         self._device_check()
         config=self.relay.config
-        if set(self.relay.ports)!=set(ROLES):
+        if self.roles not in (ROLES, SHARED_EASYTIER_ROLES) or set(self.relay.ports)!=set(self.roles):
             raise ReverseError('relay_not_started')
-        requested={config[role]:self.relay.ports[role] for role in ROLES}
-        if len(requested)!=3 or set(requested)&set(config['sshPorts']) or set(requested.values())&set(config['sshPorts']):
+        requested={config[role]:self.relay.ports[role] for role in self.roles}
+        if (len(requested)!=len(self.roles) or len(set(requested.values()))!=len(self.roles) or
+                set(requested)&set(config['sshPorts']) or set(requested.values())&set(config['sshPorts'])):
             raise ReverseError('ssh_reverse_forbidden')
         self.baseline=_mapping_list()
         if set(requested)&set(self.baseline):

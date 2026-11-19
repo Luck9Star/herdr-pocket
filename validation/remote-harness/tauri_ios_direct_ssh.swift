@@ -275,6 +275,56 @@ enum NativeViewPolicy {
     }
 }
 enum NativeControlPolicy {
+    static let desktopPasswordLabel = "密码"
+    static let mobilePasswordLabel = "密码（仅本次使用）"
+    // WebKit can insert a single ASCII space at the inline label boundary.
+    static let mobilePasswordLabels = [mobilePasswordLabel, "密码 （仅本次使用）"]
+
+    static func isMobilePasswordField(identifier: String, label: String) -> Bool {
+        identifier == "ssh-password" ||
+            ((identifier.isEmpty || identifier == label) && mobilePasswordLabels.contains(label))
+    }
+
+    static func isPasswordField(identifier: String, label: String) -> Bool {
+        identifier == "ssh-password" || label == desktopPasswordLabel || mobilePasswordLabels.contains(label)
+    }
+
+    static func passwordLabelKind(_ label: String) -> String {
+        switch label {
+        case mobilePasswordLabels[0]: return "compact"
+        case mobilePasswordLabels[1]: return "spaced"
+        case desktopPasswordLabel: return "base"
+        case "（仅本次使用）", "仅本次使用": return "hint"
+        case "": return "empty"
+        default: return "other"
+        }
+    }
+
+    enum MobilePasswordIssue: String, Error {
+        case identityMissing = "native_mobile_password_identity_missing"
+        case secureRoleMissing = "native_mobile_password_secure_role_missing"
+        case wrongRole = "native_mobile_password_wrong_role"
+        case rawAmbiguous = "native_mobile_password_raw_ambiguous"
+        case rawOwner = "native_mobile_password_raw_owner_unproven"
+        case liveOwner = "native_mobile_password_live_owner_unproven"
+        case liveMissing = "native_mobile_password_live_missing"
+        case liveUnreadable = "native_mobile_password_live_unreadable"
+        case liveAmbiguous = "native_mobile_password_live_ambiguous"
+        case liveIdentity = "native_mobile_password_live_identity_mismatch"
+        case ownerChanged = "native_mobile_password_owner_changed"
+        case frameUnsettled = "native_mobile_password_frame_unsettled"
+        case unhittable = "native_mobile_password_unhittable"
+        case disabled = "native_control_disabled"
+
+        var pending: Bool {
+            switch self {
+            case .identityMissing, .secureRoleMissing, .liveMissing, .liveUnreadable, .frameUnsettled, .unhittable:
+                return true
+            default: return false
+            }
+        }
+    }
+
     struct Fact {
         let identifier: String
         let label: String
@@ -356,9 +406,13 @@ enum NativeControlPolicy {
                 paths[index].count > webPaths[index].count && Array(paths[index].prefix(webPaths[index].count)) == webPaths[index]
         }
         var controls: [String: Verdict] = [:]
+        let targetFacts = facts.map { fact in
+            fact.role == "button" && fact.label == "探测并核对主机密钥"
+                ? Fact(identifier: fact.identifier, label: "探测主机指纹", role: fact.role, value: fact.value) : fact
+        }
         for (name, identifier, label) in definitions {
             let roles: Set<String> = name == "probe" ? ["button"] : ["textField", "textView", "searchField"]
-            let result = formVerdict(facts: facts, paths: paths, identifier: identifier, label: label, editableRoles: roles)
+            let result = formVerdict(facts: targetFacts, paths: paths, identifier: identifier, label: label, editableRoles: roles)
             let owner = result.index.map(owned) ?? false
             controls[name] = Verdict(index: result.index, role: result.role,
                 reason: result.reason == "matched" && !owner ? "ownerUnproven" : result.reason,
@@ -372,8 +426,8 @@ enum NativeControlPolicy {
         // window is present. The add-choice button's text is not a heading.
         let interactive: Set<String> = ["button", "textField", "textView", "searchField", "inputWrapper", "stepper"]
         let titles = facts.indices.filter { index in
-            guard owned(index), (facts[index].role == "staticText" && facts[index].label == "普通 SSH 终端") ||
-                (facts[index].identifier == "ssh-page-heading" && !interactive.contains(facts[index].role)) else { return false }
+            guard owned(index), (facts[index].role == "staticText" && ["普通 SSH 终端", "普通 SSH"].contains(facts[index].label)) ||
+                (["ssh-page-heading", "ssh-step-title"].contains(facts[index].identifier) && !interactive.contains(facts[index].role)) else { return false }
             return !facts.indices.contains { ancestor in
                 paths.indices.contains(ancestor) && interactive.contains(facts[ancestor].role) && paths[ancestor].count < paths[index].count &&
                     Array(paths[index].prefix(paths[ancestor].count)) == paths[ancestor]
@@ -426,6 +480,7 @@ enum NativeControlPolicy {
                 let wrapper = !ids.isEmpty && fact.role == "other" && (fact.label == label ||
                     facts.indices.filter { child in
                         facts[child].role == "staticText" && facts[child].label == label &&
+                            windows[child] == windows[index] && webs[child] == webs[index] &&
                             paths[child].count > paths[index].count && paths[child].starts(with: paths[index])
                     }.count == 1)
                 guard heading || wrapper else { return false }
@@ -453,6 +508,9 @@ enum NativeControlPolicy {
     static func credentialEmpty(_ value: Any?, placeholder: String?) -> Bool {
         guard let text = valueText(value) else { return false }
         return text.isEmpty || (placeholder?.isEmpty == false && text == placeholder)
+    }
+    static func fingerprintText(_ text: String) -> String {
+        text.contains("SHA256:") ? text.filter { !$0.isWhitespace } : text
     }
     static func clearCount(_ value: Any?, placeholder: String?, secure: Bool) -> Int? {
         guard let text = valueText(value) else { return nil }
@@ -495,6 +553,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     private var config: [String: Any] = [:]
     private var app: XCUIApplication!
     private var scenario = "ordinary"
+    private var mobileFlow = false
     private var nativePhase = "ordinary_launch"
     private var lastHomeSample: [String: Any]?
     private var pageButtons: [String: Observed] = [:]
@@ -515,6 +574,10 @@ final class TauriDirectSSHUITests: XCTestCase {
         let owner: Observed
         let window: Observed
         let web: Observed
+    }
+    private enum MobileWitnessObservation<Proof> {
+        case ready(Proof)
+        case pending(String, () -> [String: Any])
     }
     private struct TerminalHeader {
         let nodes: [Observed]
@@ -545,9 +608,11 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func require(_ condition: Bool, _ code: String) throws {
+    private func require(_ condition: Bool, _ code: String, passwordObservation: [String: Any]? = nil) throws {
         if !condition {
-            try? post("native_failure", ["nativeCheckpoint": nativePhase, "nativeFailureCode": code])
+            var payload: [String: Any] = ["nativeCheckpoint": nativePhase, "nativeFailureCode": code]
+            if let passwordObservation { payload["passwordObservation"] = passwordObservation }
+            try? post("native_failure", payload)
             throw NSError(domain: code, code: 1)
         }
     }
@@ -906,7 +971,8 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func password() -> XCUIElement {
-        resolveControl(app.secureTextFields, app.secureTextFields, identifier: "ssh-password", label: "密码", requireTypedID: true)
+        resolveControl(app.secureTextFields, app.secureTextFields, identifier: "ssh-password",
+            label: mobileFlow ? NativeControlPolicy.mobilePasswordLabel : NativeControlPolicy.desktopPasswordLabel, requireTypedID: true)
     }
     @MainActor
     private func review() -> XCUIElement {
@@ -1036,8 +1102,10 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func reveal(_ item: XCUIElement, matching expected: RevealedControl? = nil, scrolling: Bool = true,
-                        protectRouteTabs: Bool = false) throws -> RevealedControl {
+                        protectRouteTabs: Bool = false, mobileOwnerFailure: String? = nil) throws -> RevealedControl {
         try require(item.waitForExistence(timeout: 20), "native_control_missing")
+        let ownerFailure = mobileOwnerFailure ?? "native_control_owner_unproven"
+        let queryMayBind = expected != nil && mobileOwnerFailure != nil
         let passwordDiagnostics = nativePhase == "ordinary_password" || nativePhase == "key_change_password"
         let attempts = scrolling ? 10 : 3
         var prior = expected
@@ -1051,16 +1119,15 @@ final class TauriDirectSSHUITests: XCTestCase {
             }
             let rows = try observedNodes()
             guard let owner = controlOwner(current.snapshot, rows), let scope = controlScope(owner, rows),
-                  liveOnPath(scope.window) != nil, liveOnPath(scope.web) != nil, let bound = liveOnPath(owner) else {
-                try require(false, "native_control_owner_unproven")
-                throw NSError(domain: "native_control_owner_unproven", code: 1)
-            }
-            if let prior = prior {
-                try require(scope.window.path == prior.window.path && scope.web.path == prior.web.path &&
-                    sameIdentity(scope.window.snapshot, prior.window.snapshot) && sameIdentity(scope.web.snapshot, prior.web.snapshot) &&
-                    sameIdentity(owner.snapshot, prior.owner.snapshot), "native_control_owner_unproven")
+                  liveOnPath(scope.window) != nil, let web = liveOnPath(scope.web),
+                  let bound = queryMayBind ? (try? mobileLiveControl(owner, in: web).get()) : liveOnPath(owner) else {
+                try require(false, ownerFailure)
+                throw NSError(domain: ownerFailure, code: 1)
             }
             let resolved = RevealedControl(live: bound, owner: owner, window: scope.window, web: scope.web)
+            if let prior = prior {
+                try require(sameControlScope(resolved, prior) && sameIdentity(owner.snapshot, prior.owner.snapshot), ownerFailure)
+            }
             prior = resolved
             let frames = [owner.snapshot.frame, current.snapshot.frame, bound.snapshot.frame]
             let geometry = controlGeometry(owner, [current, bound], measureScrollBand: scrolling || passwordDiagnostics) { viewport, failed in
@@ -1132,15 +1199,17 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func fillPassword(_ item: XCUIElement, _ text: String) throws {
-        let initial = try reveal(item)
+    private func fillPassword(_ item: XCUIElement, _ text: String, mobileOwner: RevealedControl? = nil) throws {
+        try require(!mobileFlow || mobileOwner != nil, "native_mobile_password_owner_unproven")
+        let ownerFailure = mobileOwner == nil ? nil : "native_mobile_password_owner_unproven"
+        let initial = try reveal(item, matching: mobileOwner, mobileOwnerFailure: ownerFailure)
         let current = initial.live
         try require(current.snapshot.elementType == .secureTextField, "native_control_owner_unproven")
         try require(current.snapshot.isEnabled, "native_control_disabled")
         current.element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         try post("native_progress", ["nativeCheckpoint": nativePhase, "nativeInputRole": role(current.snapshot.elementType)])
         try require(app.keyboards.firstMatch.waitForExistence(timeout: 10), "native_input_keyboard_missing")
-        let ready = try reveal(item, matching: initial, scrolling: false).live
+        let ready = try reveal(item, matching: initial, scrolling: false, mobileOwnerFailure: ownerFailure).live
         try require(ready.snapshot.isEnabled, "native_control_disabled")
         try require(NativeControlPolicy.credentialEmpty(ready.snapshot.value, placeholder: ready.snapshot.placeholderValue),
                     "native_unexpected_existing_input")
@@ -1160,12 +1229,275 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func approve(_ fingerprint: String, excluding: String? = nil) throws {
+    private func approve(_ fingerprint: String, port: Int, excluding: String? = nil) throws -> RevealedControl? {
+        if mobileFlow {
+            let cancel = excluding == nil ? "取消核对" : "取消核对，保留旧信任"
+            let algorithmKey = scenario == "ordinary" ? "ordinaryAlgorithm" : (excluding == nil ? "rotationAlgorithm" : "rotatedAlgorithm")
+            let algorithm = config[algorithmKey] as! String
+            let (rows, anchors) = try mobileWitness([
+                ("ssh-step-title", "核对主机密钥", false), ("ssh-reviewed-endpoint", target(port), false),
+                ("ssh-reviewed-algorithm", algorithm, false), ("ssh-reviewed-fingerprint", fingerprint, false),
+                ("ssh-trust-cancel", cancel, true), ("ssh-trust-confirm", "指纹一致，确认继续", true)])
+            try assertMobileSecretsLocked(anchors[0], rows)
+            try require(anchors[4].snapshot.isEnabled, "native_review_lock_invalid")
+            let ownerFailure = "native_mobile_confirmation_owner_unproven"
+            let confirmation = try mobileControl(anchors[5], rows, ownerFailure)
+            try tapMobileButton(confirmation, ownerFailure)
+            return try mobileAuth(port: port, ready: false, previous: confirmation).password
+        }
         try waitText(fingerprint)
         if let excluding = excluding { try require(try !contains(excluding), "native_old_fingerprint_stale") }
         try check(false, enabled: true)
         try tap(review())
         try check(true, enabled: true)
+        return nil
+    }
+
+    @MainActor
+    private func mobileWitness(_ targets: [(String?, String, Bool)], includeOffscreenText: Bool = false) throws -> ([Observed], [Observed]) {
+        try waitForMobileWitness(targets, includeOffscreenText: includeOffscreenText) { .ready(($0, $1)) }
+    }
+
+    @MainActor
+    private func waitForMobileWitness<Proof>(_ targets: [(String?, String, Bool)], includeOffscreenText: Bool,
+                                    prove: ([Observed], [Observed]) throws -> MobileWitnessObservation<Proof>) throws -> Proof {
+        let deadline = Date().addingTimeInterval(20)
+        var pending = "native_mobile_setup_unproven"
+        var pendingObservation: (() -> [String: Any])?
+        repeat {
+            let rows = try observedNodes()
+            let displayed = rows.filter { NativeFramePolicy.valid($0.snapshot.frame) &&
+                (includeOffscreenText || $0.snapshot.frame.intersects(app.frame) || $0.snapshot.elementType == .button) }
+            let facts = displayed.map { row in
+                let label = texts(row.snapshot).first(where: { !$0.isEmpty }) ?? ""
+                return NativeControlPolicy.Fact(identifier: row.snapshot.identifier,
+                    label: NativeControlPolicy.fingerprintText(label), role: role(row.snapshot.elementType), value: nil)
+            }
+            if let matches = NativeControlPolicy.pageWitness(facts, paths: displayed.map(\.path),
+                windows: displayed.map(\.windowPath), webs: displayed.map(\.webPath), targets: targets) {
+                switch try prove(rows, matches.map { displayed[$0] }) {
+                case .ready(let proof): return proof
+                case .pending(let reason, let observe):
+                    pending = reason
+                    pendingObservation = observe
+                }
+            } else {
+                pending = "native_mobile_setup_unproven"
+                pendingObservation = nil
+            }
+            Thread.sleep(forTimeInterval: 0.2)
+        } while Date() < deadline
+        try require(false, pending, passwordObservation: pendingObservation?())
+        throw NSError(domain: pending, code: 1)
+    }
+
+    @MainActor
+    private func mobileLiveControl(_ owner: Observed, in web: LiveControl) -> Result<LiveControl, NativeControlPolicy.MobilePasswordIssue> {
+        // WebKit can flatten intermediary AX nodes in XCUI's child queries.
+        // Re-query the role inside the proven WebView and require a unique
+        // live element that agrees with the raw snapshot identity and frame.
+        let snapshot = owner.snapshot
+        guard [.button, .secureTextField].contains(snapshot.elementType) else { return .failure(.liveIdentity) }
+        let match: NSPredicate
+        if snapshot.elementType == .secureTextField {
+            // Include both names in the scoped query so a second live
+            // representation cannot be ignored at the actual interaction.
+            // The raw witness still has to match the returned node exactly.
+            match = NSPredicate(format: "identifier == %@ OR label IN %@", "ssh-password", NativeControlPolicy.mobilePasswordLabels)
+        } else {
+            match = snapshot.identifier.isEmpty ? NSPredicate(format: "label == %@", snapshot.label) :
+                NSPredicate(format: "identifier == %@", snapshot.identifier)
+        }
+        let query = web.element.descendants(matching: snapshot.elementType).matching(match)
+        let matches = query.count
+        guard matches <= 1 else { return .failure(.liveAmbiguous) }
+        guard matches == 1 else { return .failure(.liveMissing) }
+        guard let queried = liveControl(query.firstMatch) else { return .failure(.liveUnreadable) }
+        guard sameIdentity(snapshot, queried.snapshot) else { return .failure(.liveIdentity) }
+        guard NativeFramePolicy.valid(snapshot.frame), snapshot.frame == queried.snapshot.frame else { return .failure(.frameUnsettled) }
+        return .success(queried)
+    }
+
+    @MainActor
+    private func sameControlScope(_ lhs: RevealedControl, _ rhs: RevealedControl) -> Bool {
+        sameControlScope((lhs.window, lhs.web), rhs)
+    }
+
+    @MainActor
+    private func sameControlScope(_ scope: (window: Observed, web: Observed), _ previous: RevealedControl) -> Bool {
+        scope.window.path == previous.window.path && scope.web.path == previous.web.path &&
+            sameIdentity(scope.window.snapshot, previous.window.snapshot) && sameIdentity(scope.web.snapshot, previous.web.snapshot)
+    }
+
+    @MainActor
+    private func mobileControl(_ anchor: Observed, _ rows: [Observed], _ ownerFailure: String) throws -> RevealedControl {
+        guard case .success(let bound) = mobileBinding(anchor, rows) else {
+            try require(false, ownerFailure)
+            throw NSError(domain: ownerFailure, code: 1)
+        }
+        return bound
+    }
+
+    @MainActor
+    private func mobileBinding(_ anchor: Observed, _ rows: [Observed]) -> Result<RevealedControl, NativeControlPolicy.MobilePasswordIssue> {
+        guard let scope = controlScope(anchor, rows) else { return .failure(.rawOwner) }
+        guard let owner = controlOwner(anchor.snapshot, rows), owner.path == anchor.path else { return .failure(.rawAmbiguous) }
+        guard liveOnPath(scope.window) != nil, let web = liveOnPath(scope.web) else { return .failure(.liveOwner) }
+        return mobileLiveControl(owner, in: web).map {
+            RevealedControl(live: $0, owner: owner, window: scope.window, web: scope.web)
+        }
+    }
+
+    @MainActor
+    private func tapMobileButton(_ control: RevealedControl, _ ownerFailure: String) throws {
+        let current = try reveal(control.live.element, matching: control,
+            protectRouteTabs: true, mobileOwnerFailure: ownerFailure).live
+        try require(current.snapshot.elementType == .button, ownerFailure)
+        try require(current.snapshot.isEnabled, "native_control_disabled")
+        current.element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+    }
+
+    @MainActor
+    private func mobileTarget(prior: String? = nil) throws {
+        var targets: [(String?, String, Bool)] = [("ssh-step-title", "普通 SSH", false),
+            ("ssh-step-back", "返回", true), ("ssh-probe", "探测并核对主机密钥", true)]
+        if let prior = prior { targets.append(("ssh-prior-fingerprint", "保留的旧指纹：" + prior, false)) }
+        let (rows, anchors) = try mobileWitness(targets)
+        try assertMobileSecretsLocked(anchors[0], rows)
+    }
+
+    @MainActor
+    @discardableResult
+    private func mobileDisconnected() throws -> RevealedControl {
+        let (rows, anchors) = try mobileWitness([("ssh-step-title", "普通 SSH", false), (nil, "已断开连接", false),
+            (nil, "本次凭据已清空。重新连接时请重新填写。", false), ("ssh-return-home", "返回首页", true)])
+        try assertMobileSecretsLocked(anchors[0], rows)
+        return try mobileControl(anchors[3], rows, "native_mobile_return_owner_unproven")
+    }
+
+    @MainActor
+    private func assertMobileSecretsLocked(_ anchor: Observed, _ rows: [Observed]) throws {
+        try assertCredentialsInactive(anchor, rows)
+        let submits = rows.filter { $0.snapshot.elementType == .button &&
+            ($0.snapshot.identifier == "ssh-connect" || $0.snapshot.label == "连接 SSH") }
+        try require(submits.count <= 1 && submits.allSatisfy {
+            !$0.snapshot.isEnabled && !NativeFramePolicy.valid($0.snapshot.frame)
+        }, "native_review_lock_invalid")
+    }
+
+    @MainActor
+    private func mobileAuth(port: Int, ready: Bool, previous: RevealedControl) throws -> (password: RevealedControl, submit: RevealedControl) {
+        try waitForMobileWitness([("ssh-step-title", "SSH 账号认证", false),
+            ("ssh-reviewed-endpoint", target(port), false), ("ssh-approved-note", "本次主机密钥已确认", false),
+            ("ssh-connect", "连接 SSH", true)], includeOffscreenText: ready) { rows, anchors in
+            let submit = anchors[3]
+            try require(submit.snapshot.isEnabled == ready, "native_review_lock_invalid")
+            let password: RevealedControl
+            switch mobilePassword(in: rows, submit: submit, previous: previous, requireHittable: !ready) {
+            case .success(let control): password = control
+            case .failure(let issue):
+                let observe = { self.mobilePasswordObservation(in: rows, submit: submit, previous: previous) }
+                if issue.pending { return .pending(issue.rawValue, observe) }
+                try require(false, issue.rawValue, passwordObservation: issue == .disabled ? nil : observe())
+                throw issue
+            }
+            let current = password.live.snapshot
+            if !ready || current.value != nil {
+                try require(NativeControlPolicy.credentialEmpty(current.value, placeholder: current.placeholderValue) != ready,
+                            "native_review_lock_invalid")
+            }
+            try assertNoSecret(rows.map { $0.snapshot })
+            let submitControl = try mobileControl(submit, rows, "native_mobile_submit_owner_unproven")
+            try require(submitControl.live.snapshot.isEnabled == ready, "native_review_lock_invalid")
+            return .ready((password, submitControl))
+        }
+    }
+
+    @MainActor
+    private func mobilePassword(in rows: [Observed], submit: Observed, previous: RevealedControl, requireHittable: Bool)
+        -> Result<RevealedControl, NativeControlPolicy.MobilePasswordIssue> {
+        guard let scope = controlScope(submit, rows) else { return .failure(.rawOwner) }
+        guard sameControlScope(scope, previous) else { return .failure(.ownerChanged) }
+        let named = rows.filter { row in
+            let field = row.snapshot
+            return NativeControlPolicy.isMobilePasswordField(identifier: field.identifier, label: field.label)
+        }
+        let fields = named.filter { $0.snapshot.elementType == .secureTextField }
+        guard fields.count <= 1, named.filter({ $0.snapshot.identifier == "ssh-password" }).count <= 1 else {
+            return .failure(.rawAmbiguous)
+        }
+        guard !named.contains(where: { [.textField, .searchField, .textView].contains($0.snapshot.elementType) }) else {
+            return .failure(.wrongRole)
+        }
+        guard let field = fields.first else { return .failure(named.isEmpty ? .identityMissing : .secureRoleMissing) }
+        guard field.windowPath == submit.windowPath, field.webPath == submit.webPath else { return .failure(.rawOwner) }
+        guard field.snapshot.isEnabled else { return .failure(.disabled) }
+        return mobileBinding(field, rows).flatMap { password in
+            guard password.live.snapshot.isEnabled else { return .failure(.disabled) }
+            // After password entry the keyboard can scroll the field away.
+            // The submit action has its own fresh geometry and hit test.
+            guard requireHittable else { return .success(password) }
+            let frame = password.live.snapshot.frame
+            let geometry = controlGeometry(field, [password.live]) { viewport, _ in
+                self.routeTabsOcclusion(field, rows, viewport, [frame], scrolling: false)
+            }
+            switch geometry.failure {
+            // A real, stable offscreen frame can be revealed before touching
+            // the field, using the existing guarded scrolling path.
+            case nil, .fieldOutside, .fieldOccluded: return .success(password)
+            case .fieldUnhittable: return .failure(.unhittable)
+            default: return .failure(.frameUnsettled)
+            }
+        }
+    }
+
+    @MainActor
+    private func mobilePasswordObservation(in rows: [Observed], submit: Observed, previous: RevealedControl) -> [String: Any] {
+        let limit = 12
+        let visible = submit.window.flatMap {
+            NativeFramePolicy.visible(window: $0, screen: app.frame, webAncestors: submit.webs, occlusions: nativeOcclusions())
+        }
+        func row(_ snapshot: any XCUIElementSnapshot, owner: String, hit: Bool?) -> [String: Any] {
+            let label = NativeControlPolicy.passwordLabelKind(snapshot.label)
+            let identifier = snapshot.identifier == "ssh-password" ? "expected" : snapshot.identifier.isEmpty ? "empty" :
+                snapshot.identifier == snapshot.label ? "labelAlias" : "other"
+            let role = snapshot.elementType == .textView ? "textView" : snapshot.elementType == .searchField ? "searchField" :
+                self.role(snapshot.elementType)
+            let frame: String
+            if !NativeFramePolicy.valid(snapshot.frame) { frame = "invalid" }
+            else if let visible, owner == "sameWeb" {
+                frame = visible.contains(snapshot.frame) ? "inside" : visible.intersects(snapshot.frame) ? "intersects" : "outside"
+            } else { frame = "unmeasured" }
+            return ["role": role, "owner": owner, "idKind": identifier, "labelKind": label,
+                    "frameKind": frame, "enabled": snapshot.isEnabled,
+                    "hit": hit.map { $0 ? "yes" : "no" } ?? "unknown"]
+        }
+        let candidates = rows.filter {
+            let snapshot = $0.snapshot
+            let label = NativeControlPolicy.passwordLabelKind(snapshot.label)
+            return [.secureTextField, .textField, .textView, .searchField].contains(snapshot.elementType) ||
+                snapshot.identifier == "ssh-password" || !["empty", "other"].contains(label)
+        }
+        let raw = candidates.prefix(limit).map { candidate in
+            let owner: String
+            if candidate.windowPath.isEmpty { owner = "unowned" }
+            else if candidate.windowPath != submit.windowPath { owner = "otherWindow" }
+            else if candidate.webPath.isEmpty { owner = "unowned" }
+            else if candidate.webPath != submit.webPath { owner = "otherWeb" }
+            else { owner = "sameWeb" }
+            return row(candidate.snapshot, owner: owner, hit: nil)
+        }
+        var live: [[String: Any]] = []
+        var liveCount = -1
+        if let scope = controlScope(submit, rows), sameControlScope(scope, previous),
+           liveOnPath(scope.window) != nil, let web = liveOnPath(scope.web) {
+            let query = web.element.descendants(matching: .secureTextField)
+            liveCount = min(10000, query.count)
+            live = (0..<min(limit, liveCount)).compactMap { index in
+                liveControl(query.element(boundBy: index)).map { row($0.snapshot, owner: "sameWeb", hit: $0.hittable) }
+            }
+        }
+        return ["rawCount": candidates.count, "raw": raw, "scopedSecureCount": liveCount, "scopedSecure": live]
     }
 
     @MainActor
@@ -1200,11 +1532,13 @@ final class TauriDirectSSHUITests: XCTestCase {
     @MainActor
     private func assertCredentialsInactive(_ page: Observed, _ rows: [Observed]) throws {
         let visible = try safeFrame([page])
-        for (identifier, label) in [("ssh-password", "密码"), ("ssh-key", "私钥"), ("ssh-passphrase", "私钥口令（可选）")] {
+        for (identifier, labels) in [("ssh-password", mobileFlow ? NativeControlPolicy.mobilePasswordLabels : [NativeControlPolicy.desktopPasswordLabel]),
+            ("ssh-key", [mobileFlow ? "私钥 PEM（仅本次使用）" : "私钥"]),
+            ("ssh-passphrase", [mobileFlow ? "私钥口令（加密私钥需要）" : "私钥口令（可选）"])] {
             let query = app.descendants(matching: .any).matching(NSPredicate(format:
-                "identifier == %@ OR label == %@", identifier, label))
+                "identifier == %@ OR label IN %@", identifier, labels))
             var visibleLabel = false
-            for text in app.staticTexts.matching(NSPredicate(format: "label == %@", label)).allElementsBoundByIndex
+            for text in app.staticTexts.matching(NSPredicate(format: "label IN %@", labels)).allElementsBoundByIndex
             {
                 guard let current = liveControl(text), current.hittable,
                       current.snapshot.frame.intersects(visible) else { continue }
@@ -1323,10 +1657,14 @@ final class TauriDirectSSHUITests: XCTestCase {
     private func exactObserved(_ rows: [Observed], _ text: String, identifiers: [String] = [], control: Bool = false,
                                captureAnchor: String? = nil, requireVisible: Bool = true, reviewSample: String? = nil,
                                occlusions: [CGRect]? = nil, requireExactText: Bool = false) throws -> Observed {
-        let allMatches = rows.filter { identifiers.contains($0.snapshot.identifier) || texts($0.snapshot).contains(text) }
+        let expectedText = NativeControlPolicy.fingerprintText(text)
+        let matchesText: (Observed) -> Bool = { row in
+            self.texts(row.snapshot).map(NativeControlPolicy.fingerprintText).contains(expectedText)
+        }
+        let allMatches = rows.filter { identifiers.contains($0.snapshot.identifier) || matchesText($0) }
         // The identifier alone cannot prove displayed text.
         let checkText = reviewSample != nil || requireExactText
-        let exact = checkText ? allMatches.filter { texts($0.snapshot).contains(text) } : allMatches
+        let exact = checkText ? allMatches.filter(matchesText) : allMatches
         let matches = exact.filter { NativeFramePolicy.valid($0.snapshot.frame) }
         let preferIdentifier = control || (checkText && !identifiers.isEmpty)
         let preferred = matches.indices.sorted {
@@ -1518,11 +1856,12 @@ final class TauriDirectSSHUITests: XCTestCase {
     private func screenshot(_ stage: String, port: Int, reviewPage: Bool = false) throws {
         let reviewMembers = [("review_title", []), ("review_blocked", []),
             ("review_old_fingerprint", ["ssh-key-change-old"]), ("review_new_fingerprint", ["ssh-key-change-new"]),
-            ("review_target", ["ssh-key-change-target"]), ("review_recheck", ["ssh-key-recheck"]),
+            ("review_target", [mobileFlow ? "ssh-key-change-endpoint" : "ssh-key-change-target"]),
+            ("review_recheck", ["ssh-key-recheck"]),
             ("review_cancel", ["ssh-key-cancel"])]
         let labels = reviewPage ? ["主机指纹发生变化", "已阻止连接与输入",
             "旧：" + (config["fingerprintA"] as! String), "新：" + (config["fingerprintB"] as! String),
-            "目标：" + target(port), "重新核对主机指纹", "取消连接，保留旧信任"] :
+            (mobileFlow ? "" : "目标：") + target(port), "重新核对主机指纹", "取消连接，保留旧信任"] :
             [target(port) + " · SSH 已连接", "SSH 终端输出"]
         func anchors(_ source: [Observed], reviewSample: String? = nil, occlusions: [CGRect]? = nil) throws -> CaptureAnchors {
             if let sample = reviewSample {
@@ -1814,7 +2153,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         if choice, let ssh = (mobileChoice ?? legacyChoice)?.last { pageButtons["sshChoice"] = ssh }
         let title = witness([("ssh-page-heading", "普通 SSH 终端", false)]) != nil
         let passwords = tree.filter { $0.snapshot.elementType == .secureTextField &&
-            ($0.snapshot.identifier == "ssh-password" || $0.snapshot.label == "密码") }
+            NativeControlPolicy.isPasswordField(identifier: $0.snapshot.identifier, label: $0.snapshot.label) }
         let credentialsEmpty = passwords.allSatisfy { NativeControlPolicy.credentialEmpty($0.snapshot.value, placeholder: $0.snapshot.placeholderValue) }
         return ["page": page, "appForeground": home["appForeground"]!, "inputCount": home["inputCount"]!,
             "windowCount": home["windowCount"]!, "webViewCount": home["webViewCount"]!,
@@ -1999,11 +2338,16 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func launchForm(port: Int) throws {
+        mobileFlow = false
         try phase("launch")
         app.launch()
         try require(app.wait(for: .runningForeground, timeout: 30), "native_app_launch_failed")
         try phase("open_add")
         try openHomeSSH()
+        let probeLabel = try formControl("probe").live.snapshot.label
+        mobileFlow = app.frame.width <= 599
+        try require(probeLabel == (mobileFlow ? "探测并核对主机密钥" : "探测主机指纹"), "native_mobile_setup_unproven")
+        if mobileFlow { try mobileTarget() }
         try phase("host")
         try fillForm("host", "127.0.0.1")
         try phase("port")
@@ -2032,14 +2376,17 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func submitConnection(_ attempt: NativeConnectPolicy.Attempt, waitingFor expected: String) throws {
-        let submit = try reveal(button("连接 / 重新连接"), protectRouteTabs: true)
+    private func submitConnection(_ attempt: NativeConnectPolicy.Attempt, waitingFor expected: String, control: RevealedControl? = nil) throws {
+        try require(!mobileFlow || control != nil, "native_mobile_submit_owner_unproven")
+        let ownerFailure = control == nil ? nil : "native_mobile_submit_owner_unproven"
+        let submit = try reveal(control?.live.element ?? button("连接 / 重新连接"), matching: control,
+            protectRouteTabs: true, mobileOwnerFailure: ownerFailure)
         try require(submit.live.snapshot.elementType == .button, "native_control_owner_unproven")
         try require(submit.live.snapshot.isEnabled, "native_control_disabled")
         let beforeRows = connectionRows(try observedNodes(), in: submit)
         let beforeSubmit = beforeRows.filter { sameIdentity($0.snapshot, submit.owner.snapshot) }
         try require(beforeSubmit.count == 1 && beforeSubmit.first?.path == submit.owner.path,
-                    "native_control_owner_unproven")
+                    ownerFailure ?? "native_control_owner_unproven")
         try require(beforeSubmit.first?.snapshot.isEnabled == true, "native_control_disabled")
         var status = connectionStatus(beforeRows)
         let before = NativeConnectPolicy.sample(status, keyboardVisible: app.keyboards.firstMatch.exists,
@@ -2069,13 +2416,15 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func connect(password secret: String) throws {
+    private func connect(password secret: String, mobileOwner: RevealedControl?) throws {
         try phase("password")
-        try fillPassword(password(), secret)
-        try check(true, enabled: true)
-        try phase("connect")
         let port = config[scenario == "ordinary" ? "ordinaryPort" : "rotationPort"] as! Int
-        try submitConnection(scenario == "ordinary" ? .ordinary : .rotationApproved, waitingFor: target(port) + " · SSH 已连接")
+        try fillPassword(mobileOwner?.live.element ?? password(), secret, mobileOwner: mobileOwner)
+        if !mobileFlow { try check(true, enabled: true) }
+        let control = try mobileOwner.map { try mobileAuth(port: port, ready: true, previous: $0).submit }
+        try phase("connect")
+        try submitConnection(scenario == "ordinary" ? .ordinary : .rotationApproved,
+            waitingFor: target(port) + " · SSH 已连接", control: control)
         let rows = try observedNodes()
         let page = try exactObserved(rows, target(port) + " · SSH 已连接")
         try assertCredentialsInactive(page, rows)
@@ -2099,7 +2448,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         try phase("disconnect")
         try post(stage + "_disconnect_attempt")
         try tap(button("断开连接"))
-        try waitText("已断开")
+        if mobileFlow { try mobileDisconnected() } else { try waitText("已断开") }
         try post(stage + "_disconnected")
     }
 
@@ -2120,12 +2469,17 @@ final class TauriDirectSSHUITests: XCTestCase {
         try launchForm(port: ordinaryPort)
         try post("ordinary_probe")
         try phase("fingerprint")
-        try approve(config["ordinaryFingerprint"] as! String)
+        let ordinaryOwner = try approve(config["ordinaryFingerprint"] as! String, port: ordinaryPort)
         try post("ordinary_password")
-        try connect(password: config["ordinaryPassword"] as! String)
+        try connect(password: config["ordinaryPassword"] as! String, mobileOwner: ordinaryOwner)
         try terminal("ordinary", port: ordinaryPort)
         try phase("return_home")
-        try tap(button("看板"))
+        if mobileFlow {
+            try tapMobileButton(try mobileDisconnected(), "native_mobile_return_owner_unproven")
+            _ = try mobileWitness([(nil, "还没有主机", false), ("host-ssh-disconnected", "普通 SSH 已断开", false)])
+        } else {
+            try tap(button("看板"))
+        }
         try waitText("还没有主机")
         let returnedHome = try navigationState(publish: false)
         try require(NativeHomeReadiness.classify(returnedHome, home: lastHomeSample!) == .ready,
@@ -2139,44 +2493,55 @@ final class TauriDirectSSHUITests: XCTestCase {
         try launchForm(port: port)
         try post("key_change_probe_a")
         try phase("fingerprint")
-        try approve(config["fingerprintA"] as! String)
+        let rotationOwner = try approve(config["fingerprintA"] as! String, port: port)
         try post("key_change_password_a")
         try phase("password")
-        try fillPassword(password(), config["rotationPassword"] as! String)
-        try check(true, enabled: true)
+        try fillPassword(rotationOwner?.live.element ?? password(), config["rotationPassword"] as! String, mobileOwner: rotationOwner)
+        if !mobileFlow { try check(true, enabled: true) }
+        let refusedControl = try rotationOwner.map { try mobileAuth(port: port, ready: true, previous: $0).submit }
         try phase("connect")
-        try submitConnection(.rotationRefused, waitingFor: "主机指纹发生变化")
+        try submitConnection(.rotationRefused, waitingFor: "主机指纹发生变化", control: refusedControl)
         try phase("review_capture")
+        if mobileFlow {
+            _ = try mobileWitness([(nil, "主机指纹发生变化", false), ("ssh-key-change-endpoint", target(port), false),
+                ("ssh-key-change-algorithms", "旧密钥算法 · " + (config["rotationAlgorithm"] as! String), false)])
+        }
         try screenshot("key_change_review", port: port, reviewPage: true)
         try phase("cancel")
         try tap(button("取消连接，保留旧信任"))
         try phase("cancel_check")
-        try waitText("已保留的旧信任")
-        try require(try contains(config["fingerprintA"] as! String), "native_cancel_lost_old_trust")
-        try require(try !contains(config["fingerprintB"] as! String), "native_cancel_accepted_new_trust")
-        try check(false, enabled: false)
-        let cancelledPassword = liveControl(password())
-        try require(cancelledPassword != nil && cancelledPassword?.snapshot.isEnabled == false &&
-                    NativeControlPolicy.credentialEmpty(cancelledPassword?.snapshot.value, placeholder: cancelledPassword?.snapshot.placeholderValue),
-                    "native_cancel_credentials_live")
-        let cancelledSubmit = liveControl(button("连接 / 重新连接"))
-        try require(cancelledSubmit != nil && cancelledSubmit?.snapshot.isEnabled == false, "native_cancel_submit_live")
+        if mobileFlow {
+            try mobileTarget(prior: config["fingerprintA"] as! String)
+        } else {
+            try waitText("已保留的旧信任")
+            try require(try contains(config["fingerprintA"] as! String), "native_cancel_lost_old_trust")
+            try require(try !contains(config["fingerprintB"] as! String), "native_cancel_accepted_new_trust")
+            try check(false, enabled: false)
+            let cancelledPassword = liveControl(password())
+            try require(cancelledPassword != nil && cancelledPassword?.snapshot.isEnabled == false &&
+                        NativeControlPolicy.credentialEmpty(cancelledPassword?.snapshot.value, placeholder: cancelledPassword?.snapshot.placeholderValue),
+                        "native_cancel_credentials_live")
+            let cancelledSubmit = liveControl(button("连接 / 重新连接"))
+            try require(cancelledSubmit != nil && cancelledSubmit?.snapshot.isEnabled == false, "native_cancel_submit_live")
+        }
         try post("key_change_cancelled")
         try phase("reprobe")
         try tapForm("probe")
-        try waitText(config["fingerprintB"] as! String)
-        try require(try !contains(config["fingerprintA"] as! String), "native_reprobe_old_key_stale")
-        try check(false, enabled: true)
-        guard let reprobedPassword = liveControl(password()) else {
-            try require(false, "native_reprobe_secret_stale")
-            throw NSError(domain: "native_reprobe_secret_stale", code: 1)
+        if !mobileFlow {
+            try waitText(config["fingerprintB"] as! String)
+            try require(try !contains(config["fingerprintA"] as! String), "native_reprobe_old_key_stale")
+            try check(false, enabled: true)
+            guard let reprobedPassword = liveControl(password()) else {
+                try require(false, "native_reprobe_secret_stale")
+                throw NSError(domain: "native_reprobe_secret_stale", code: 1)
+            }
+            try require(NativeControlPolicy.credentialEmpty(reprobedPassword.snapshot.value, placeholder: reprobedPassword.snapshot.placeholderValue), "native_reprobe_secret_stale")
         }
-        try require(NativeControlPolicy.credentialEmpty(reprobedPassword.snapshot.value, placeholder: reprobedPassword.snapshot.placeholderValue), "native_reprobe_secret_stale")
         try post("key_change_probe_b")
         try phase("new_fingerprint")
-        try approve(config["fingerprintB"] as! String, excluding: config["fingerprintA"] as? String)
+        let rotatedOwner = try approve(config["fingerprintB"] as! String, port: port, excluding: config["fingerprintA"] as? String)
         try post("key_change_password_b")
-        try connect(password: config["rotationPassword"] as! String)
+        try connect(password: config["rotationPassword"] as! String, mobileOwner: rotatedOwner)
         try terminal("key_change", port: port)
         try post("complete")
     }

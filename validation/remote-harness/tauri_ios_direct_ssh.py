@@ -54,6 +54,13 @@ GEOMETRY_REASONS = frozenset((
     'scroll_direction_unproven', 'scroll_surface_unhittable', 'queried_unhittable',
     'bound_unhittable', 'scroll_no_progress'))
 MAX_GEOMETRY_REASONS_PER_CHECKPOINT = 24
+MOBILE_PASSWORD_PHASES = frozenset((
+    'ordinary_fingerprint', 'ordinary_password', 'key_change_fingerprint',
+    'key_change_new_fingerprint', 'key_change_password'))
+MOBILE_PASSWORD_FAILURES = frozenset('native_mobile_password_' + reason for reason in (
+    'identity_missing', 'secure_role_missing', 'wrong_role', 'raw_ambiguous',
+    'raw_owner_unproven', 'live_owner_unproven', 'live_missing', 'live_unreadable',
+    'live_ambiguous', 'live_identity_mismatch', 'owner_changed', 'frame_unsettled', 'unhittable'))
 NATIVE_FAILURES = frozenset((
     'native_tree_limit', 'native_expected_text_missing', 'native_control_missing',
     'native_control_not_visible', 'native_control_disabled', 'native_unexpected_existing_input',
@@ -74,7 +81,9 @@ NATIVE_FAILURES = frozenset((
     'native_home_identity_unproven', 'native_home_retry_unsafe', 'native_ssh_form_unproven',
     'native_home_navigation_failed', 'native_control_owner_unproven', 'native_scroll_owner_unproven',
     'native_form_control_unproven', 'native_form_control_changed', 'native_terminal_keyboard_visible',
-    'native_terminal_header_unproven'))
+    'native_terminal_header_unproven', 'native_mobile_setup_unproven',
+    'native_mobile_confirmation_owner_unproven', 'native_mobile_password_owner_unproven',
+    'native_mobile_submit_owner_unproven', 'native_mobile_return_owner_unproven')) | MOBILE_PASSWORD_FAILURES
 HOME_MEMBERS = frozenset(('brand', 'headerAdd', 'emptyAdd', 'homeHeading', 'emptyHeading',
                          'zeroHosts', 'ordinaryShortcut', 'addHeading', 'sshOption'))
 COMPACT_HOME_MEMBERS = {'emptyDescription', 'compactShortcut'}
@@ -245,6 +254,34 @@ def public_home_readiness(value, home):
                 'unexpected': foreground and not (alert or error), 'not_foreground': not foreground}
     require(expected.get(previous, True), code)
     return json.loads(json.dumps(value))
+
+
+def public_password_observation(value):
+    """Export fixed AX classifications without raw text, coordinates or values."""
+    code = 'tauri_ios_native_diagnostic_invalid'
+    require(isinstance(value, dict) and set(value) == {'rawCount', 'raw', 'scopedSecureCount', 'scopedSecure'}, code)
+    classifications = {
+        'role': {'secureTextField', 'textField', 'textView', 'searchField', 'staticText', 'button', 'webView', 'other', 'otherNative'},
+        'owner': {'sameWeb', 'otherWeb', 'otherWindow', 'unowned'},
+        'idKind': {'expected', 'empty', 'labelAlias', 'other'},
+        'labelKind': {'compact', 'spaced', 'base', 'hint', 'empty', 'other'},
+        'frameKind': {'inside', 'intersects', 'outside', 'invalid', 'unmeasured'},
+        'hit': {'yes', 'no', 'unknown'},
+    }
+    for rows_key, count_key, scoped in (('raw', 'rawCount', False), ('scopedSecure', 'scopedSecureCount', True)):
+        rows, count = value[rows_key], value[count_key]
+        require(type(count) is int and (-1 if scoped else 0) <= count <= 10000 and isinstance(rows, list), code)
+        size = min(12, max(0, count))
+        require(len(rows) <= size if scoped else len(rows) == size, code)
+        for row in rows:
+            require(isinstance(row, dict) and set(row) == set(classifications) | {'enabled'}, code)
+            require(type(row['enabled']) is bool and all(type(row[key]) is str and row[key] in options
+                                                         for key, options in classifications.items()), code)
+            if scoped:
+                require(row['owner'] == 'sameWeb' and row['hit'] != 'unknown', code)
+            else:
+                require(row['hit'] == 'unknown', code)
+    return value
 
 
 def public_form_controls(value):
@@ -816,6 +853,16 @@ def ordinary_evidence(fixture, *, closed):
     return facts
 
 
+def initial_probe_evidence(fixture):
+    require(fixture.wait_for_connections_closed(1, timeout=30), 'tauri_ios_probe_not_closed')
+    facts = fixture.snapshot()
+    events = facts['connectionEvents']
+    require(facts['connections'] == 1 and len(events) == 1 and events[0]['hostKey'] == 'A'
+            and events[0]['closed'] is True and all(events[0][key] == 0 for key in
+                ('authAttempts', 'authSuccesses', 'ptyRequests', 'shellRequests', 'inputBytes', 'outputBytes')),
+            'tauri_ios_probe_not_empty')
+
+
 def rotation_session_evidence(fixture, *, closed):
     facts = fixture.snapshot()
     require(facts['connections'] == 4 and len(facts['connectionEvents']) == 4,
@@ -902,6 +949,7 @@ class Checkpoints:
 
     def accept(self, payload):
         stage = payload.get('stage')
+        require('passwordObservation' not in payload or stage == 'native_failure', 'tauri_ios_native_diagnostic_invalid')
         if stage in ('native_home', 'native_home_entry', 'native_navigation', 'native_navigation_arrival'):
             phase = payload.get('nativeCheckpoint')
             require(self.failure is None and phase in ('ordinary_open_add', 'key_change_open_add', 'ordinary_open_ssh', 'key_change_open_ssh'),
@@ -1072,9 +1120,30 @@ class Checkpoints:
                 self.result.setdefault('nativeInputRoles', {})[phase] = payload['nativeInputRole']
             if stage == 'native_failure':
                 code = payload.get('nativeFailureCode')
-                require(code in NATIVE_FAILURES, 'tauri_ios_native_diagnostic_invalid')
+                require(type(code) is str and code in NATIVE_FAILURES, 'tauri_ios_native_diagnostic_invalid')
+                observation = 'passwordObservation' in payload
+                if observation or code in MOBILE_PASSWORD_FAILURES:
+                    keys = {'stage', 'nativeCheckpoint', 'nativeFailureCode'}
+                    if observation:
+                        keys.add('passwordObservation')
+                    require(code in MOBILE_PASSWORD_FAILURES and phase in MOBILE_PASSWORD_PHASES and set(payload) == keys,
+                            'tauri_ios_native_diagnostic_invalid')
+                    if observation:
+                        self.result['passwordObservation'] = public_password_observation(payload['passwordObservation'])
                 self.result['nativeFailureCode'] = code
                 self.failure = 'tauri_ios_native_check_failed'
+            elif phase == 'ordinary_connect':
+                require(self.index == STAGES.index('ordinary_input'), 'tauri_ios_checkpoint_order_invalid')
+                initial_probe_evidence(self.ordinary)
+            elif phase == 'key_change_connect':
+                if self.index == STAGES.index('key_change_review'):
+                    initial_probe_evidence(self.rotation)
+                else:
+                    require(self.index == STAGES.index('key_change_input'), 'tauri_ios_checkpoint_order_invalid')
+                    try:
+                        self.rotation.rotation_evidence(3)
+                    except ValueError:
+                        raise Failure('tauri_ios_rotation_evidence_invalid') from None
             return
         require(self.failure is None and self.index < len(STAGES) and stage == STAGES[self.index],
                 'tauri_ios_checkpoint_order_invalid')
@@ -1083,12 +1152,8 @@ class Checkpoints:
             self.started_cases.add('ordinary' if stage == 'ordinary_form' else 'keyChange')
         ordinary, rotation = self.ordinary, self.rotation
         fixture = rotation if stage.startswith('key_change') else ordinary
-        if stage == 'ordinary_probe':
-            require(ordinary.wait_for_connections_closed(1, timeout=30), 'tauri_ios_probe_not_closed')
-            events = ordinary.snapshot()['connectionEvents']
-            require(len(events) == 1 and events[0]['hostKey'] == 'A'
-                    and all(events[0][k] == 0 for k in ('authAttempts', 'ptyRequests', 'shellRequests', 'inputBytes', 'outputBytes')),
-                    'tauri_ios_probe_not_empty')
+        if stage in ('ordinary_probe', 'key_change_probe_a'):
+            initial_probe_evidence(fixture)
         if stage == 'ordinary_password':
             self.result['cases']['ordinary']['fingerprintReviewed'] = True
         if stage == 'key_change_password_b':
@@ -1261,8 +1326,11 @@ def run(project, app, output, *, source_sha=None, env=None):
                   'checkpointSecret': state.secret,
                   'ordinaryPort': ordinary.port, 'ordinaryPassword': ordinary.password,
                   'ordinaryFingerprint': ordinary.fingerprint,
+                  'ordinaryAlgorithm': ordinary.public_key.split()[0],
                   'rotationPort': rotation.port, 'rotationPassword': rotation.password,
-                  'fingerprintA': rotation.fingerprint, 'fingerprintB': rotation.rotated_fingerprint}
+                  'fingerprintA': rotation.fingerprint, 'fingerprintB': rotation.rotated_fingerprint,
+                  'rotationAlgorithm': rotation.public_key.split()[0],
+                  'rotatedAlgorithm': rotation.rotated_public_key.split()[0]}
         result['stage'] = 'driver_prepare'
         prepare_driver(private, config)
         build = ['xcodebuild', '-project', str(private / 'PocketUI.xcodeproj'), '-scheme', 'PocketUI',

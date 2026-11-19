@@ -29,32 +29,47 @@ class EncryptedKeyFixture(DirectSshFixture):
     def _handle(self, transport):
         owner = self
         class Server(_base.Server):
+            def check_auth_none(self, username):
+                owner._connection_increment(transport, 'authAttempts')
+                return paramiko.AUTH_FAILED
             def check_auth_password(self, username, password):
+                owner._connection_increment(transport, 'authAttempts')
+                return paramiko.AUTH_FAILED
+            def check_auth_interactive(self, username, submethods):
+                owner._connection_increment(transport, 'authAttempts')
                 return paramiko.AUTH_FAILED
             def check_auth_publickey(self, username, offered):
+                owner._connection_increment(transport, 'authAttempts')
                 accepted = username == owner.username and secrets.compare_digest(offered.get_base64(), owner._expected)
                 if accepted:
                     owner._record('authAccepted')
+                    owner._connection_record(transport, 'authAccepted')
+                    owner._connection_increment(transport, 'authSuccesses')
                 return paramiko.AUTH_SUCCESSFUL if accepted else paramiko.AUTH_FAILED
             def get_allowed_auths(self, username):
                 return 'publickey'
             def check_channel_pty_request(self, channel, term, width, height, pixelwidth, pixelheight, modes):
                 owner._record('ptyRequested')
+                owner._connection_increment(transport, 'ptyRequests')
                 return True
             def check_channel_shell_request(self, channel):
                 owner._record('shellRequested')
+                owner._connection_increment(transport, 'shellRequests')
                 self.shell.set()
                 return True
         server = Server()
         opened = False
         try:
             transport.start_server(server=server)
+            self._connection_record(transport, 'handshakeCompleted')
             channel = transport.accept(10)
             if channel is None or not server.shell.wait(10):
                 return
             opened = True
             channel.settimeout(.2)
-            channel.sendall(b'POCKET-ANDROID-READY\r\n$ ')
+            ready = b'POCKET-ANDROID-READY\r\n$ '
+            channel.sendall(ready)
+            self._connection_increment(transport, 'outputBytes', len(ready))
             pending = b''
             while not self._stop.is_set() and transport.is_active():
                 try:
@@ -63,18 +78,23 @@ class EncryptedKeyFixture(DirectSshFixture):
                     continue
                 if not data:
                     break
+                self._connection_increment(transport, 'inputBytes', len(data))
                 pending += data
                 if len(pending) > 4096:
                     break
                 if re.search(rb'(?:^|[\r\n])hp-check[\r\n]', pending):
                     self._record('markerReceived')
-                    channel.sendall(('\r\n\x1b[32m' + self.echo_marker + '\x1b[0m\r\n$ ').encode())
+                    self._connection_record(transport, 'markerReceived')
+                    reply = ('\r\n\x1b[32m' + self.echo_marker + '\x1b[0m\r\n$ ').encode()
+                    channel.sendall(reply)
+                    self._connection_increment(transport, 'outputBytes', len(reply))
                     pending = b''
         except (EOFError, OSError, paramiko.SSHException):
             pass
         finally:
             if opened and not self._stop.is_set():
                 self._record('sessionClosed')
+                self._connection_record(transport, 'sessionClosed')
             transport.close()
             with self._lock:
                 self._transports.discard(transport)

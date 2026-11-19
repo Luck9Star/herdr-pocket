@@ -8,6 +8,7 @@ import logging
 import re
 import shutil
 import subprocess
+import threading
 import time
 from pathlib import Path
 import plistlib
@@ -1378,6 +1379,62 @@ print("native geometry cases passed")
 
 
 class NativeDiagnosticPublishingTests(unittest.TestCase):
+    def test_password_observation_redacts_and_survives_ci_publication(self):
+        from ios_direct_ssh_batch import publish_evidence
+        raw = {'role': 'secureTextField', 'owner': 'sameWeb', 'idKind': 'empty', 'labelKind': 'spaced',
+               'frameKind': 'inside', 'enabled': True, 'hit': 'unknown'}
+        live = raw | {'hit': 'yes'}
+        detail = {'rawCount': 1, 'raw': [raw], 'scopedSecureCount': 1, 'scopedSecure': [live]}
+        payload = {'stage': 'native_failure', 'nativeCheckpoint': 'ordinary_fingerprint',
+                   'nativeFailureCode': 'native_mobile_password_identity_missing', 'passwordObservation': detail}
+        sha = 'a' * 40
+        with tempfile.TemporaryDirectory() as output:
+            work = Path(output)
+            report = {'status': 'failed', 'sourceSHA': sha, 'artifacts': {}}
+            ios.Checkpoints(None, None, output, report).accept(payload)
+            self.assertEqual(report['passwordObservation'], detail)
+            public = work / 'public'
+            public.mkdir()
+            ios.write_json(public / 'result.json', report)
+            self.assertEqual(publish_evidence(public, work / 'verified', shell='tauri', source_sha=sha), {'result.json'})
+            self.assertEqual(json.loads((work / 'verified/result.json').read_text()), report)
+
+            explicit_leaks = ({'label': 'private-label'}, {'identifier': 'private-id'}, {'value': 'private-value'},
+                              {'frame': [0, 0, 100, 100]}, {'placeholder': 'private-placeholder'})
+            changes = [detail | {'raw': [raw | extra]} for extra in explicit_leaks]
+            changes += [detail | {'text': 'private'}, detail | {'rawCount': True}, detail | {'raw': [raw] * 13, 'rawCount': 13},
+                        detail | {'raw': [raw | {'labelKind': ['private']}]}, detail | {'raw': [raw | {'idKind': 'private'}]},
+                        detail | {'scopedSecure': [live | {'owner': 'otherWindow'}]}, detail | {'scopedSecureCount': -1}]
+            for changed in [payload | {'passwordObservation': change} for change in changes] + [
+                    payload | {'nativeCheckpoint': 'ordinary_port'}, payload | {'stage': 'native_progress'},
+                    payload | {'nativeFailureCode': 'native_control_disabled'}, payload | {'private': 'private'}]:
+                state = ios.Checkpoints(None, None, output, {})
+                with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                    state.accept(changed)
+                self.assertNotIn('passwordObservation', state.result)
+                self.assertNotIn('private', json.dumps(state.result))
+
+    def test_mobile_password_failure_codes_are_source_bound_and_export_nothing_else(self):
+        source = (ios.HERE / 'tauri_ios_direct_ssh.swift').read_text()
+        codes = source.split('enum MobilePasswordIssue:', 1)[1].split('var pending:', 1)[0]
+        self.assertEqual(set(re.findall(r'"(native_mobile_password_[a-z_]+)"', codes)), ios.MOBILE_PASSWORD_FAILURES)
+        with tempfile.TemporaryDirectory() as output:
+            for phase in ios.MOBILE_PASSWORD_PHASES:
+                for code in ios.MOBILE_PASSWORD_FAILURES:
+                    payload = {'stage': 'native_failure', 'nativeCheckpoint': phase, 'nativeFailureCode': code}
+                    state = ios.Checkpoints(None, None, output, {})
+                    state.accept(payload)
+                    self.assertEqual(state.result, {'nativeCheckpoint': phase, 'nativeFailureCode': code})
+            payload = {'stage': 'native_failure', 'nativeCheckpoint': 'ordinary_fingerprint',
+                       'nativeFailureCode': 'native_mobile_password_frame_unsettled'}
+            for changed in ({'nativeCheckpoint': 'ordinary_port'}, {'nativeFailureCode': payload['nativeFailureCode'] + ': private'},
+                            {'nativeFailureCode': ['private']}, {'label': 'private'}, {'frame': [0, 0, 10, 10]}):
+                state = ios.Checkpoints(None, None, output, {})
+                with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                    state.accept(payload | changed)
+                self.assertNotIn('nativeFailureCode', state.result)
+                self.assertNotIn('private', json.dumps(state.result))
+
     def test_swift_form_owner_and_geometry_failures_publish_through_real_http(self):
         source = (ios.HERE / 'tauri_ios_direct_ssh.swift').read_text()
         emitted = set(re.findall(r'\btry require\([\s\S]*?,\s*"(native_[a-z_]+)"\)', source))
@@ -1504,15 +1561,14 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
     def accept(self, stage):
         self.state.accept({'stage': stage})
 
-    @staticmethod
-    def close_protocol(peer, channel):
-        # The real fixture may close after receiving channel EOF before Paramiko
-        # sends its final CHANNEL_CLOSE. Only teardown EOF is idempotent; the
-        # production gate still checked the session alive before the UI action.
+    def close_protocol(self, fixture, peer, channel):
+        count = fixture.snapshot()['connections']
         try:
-            channel.close()
-        except EOFError:
-            pass
+            # The fixture ends the session on SSH EOF. Keep the client's
+            # transport open until the fixture has published the peer close.
+            channel.shutdown_write()
+            self.assertTrue(fixture.wait_for_connections_closed(count, timeout=5),
+                            'test SSH peer did not finish closing after channel EOF')
         finally:
             peer.close()
 
@@ -1533,18 +1589,58 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         self.assertNotIn(self.ordinary.password,json.dumps({'before':before,'after':after}))
         peer.close()
 
+    def test_protocol_teardown_waits_for_peer_after_sending_channel_eof(self):
+        self.probe(self.ordinary)
+        peer, channel = self.session(self.ordinary)
+        finishing = threading.Event()
+        release = threading.Event()
+        record = self.ordinary._connection_record
+        wait_closed = self.ordinary.wait_for_connections_closed
+        close_peer = peer.close
+
+        def pause_before_close(transport, field, value=True):
+            if field == 'closeReason':
+                finishing.set()
+                release.wait(5)
+            record(transport, field, value)
+
+        def release_after_channel_eof(minimum, timeout):
+            self.assertTrue(finishing.wait(5), 'server did not observe channel EOF')
+            release.set()
+            return wait_closed(minimum, timeout)
+
+        def check_final_cleanup():
+            try:
+                self.assertTrue(self.ordinary.snapshot()['connectionsClosed'],
+                                'client closed its transport before the server could finish')
+            finally:
+                close_peer()
+
+        with patch.object(self.ordinary, '_connection_record', side_effect=pause_before_close), \
+                patch.object(self.ordinary, 'wait_for_connections_closed', side_effect=release_after_channel_eof), \
+                patch.object(peer, 'close', side_effect=check_final_cleanup) as close:
+            try:
+                self.close_protocol(self.ordinary, peer, channel)
+            finally:
+                release.set()
+            close.assert_called_once()
+        self.assertTrue(self.ordinary.wait_for_connections_closed(2, timeout=5))
+        ios.ordinary_evidence(self.ordinary, closed=True)
+        self.assertEqual(self.ordinary.snapshot()['connectionEvents'][-1]['closeReason'], 'peer_eof')
+
     def test_complete_native_checkpoint_order_against_real_aabb_and_abbb_peers(self):
         self.accept('ordinary_form')
         self.probe(self.ordinary)
         self.accept('ordinary_probe')
         self.accept('ordinary_password')
+        self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': 'ordinary_connect'})
         peer, channel = self.session(self.ordinary)
         self.accept('ordinary_input')
         # Images in this protocol test are deliberately mocked, not device proof.
         with patch.object(self.state, 'capture'):
             self.accept('ordinary_terminal')
         self.accept('ordinary_disconnect_attempt')
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.ordinary, peer, channel)
         self.accept('ordinary_disconnected')
         self.assertNotEqual(self.result['cases']['ordinary'].get('status'), 'passed')
         with self.assertRaisesRegex(ios.Failure, 'checkpoint_order_invalid'):
@@ -1554,6 +1650,7 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         key_a = self.probe(self.rotation)
         self.accept('key_change_probe_a')
         self.accept('key_change_password_a')
+        self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': 'key_change_connect'})
         key_b = self.probe(self.rotation)
         self.assertNotEqual(key_a, key_b)
         with patch.object(self.state, 'capture'):
@@ -1563,12 +1660,13 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         self.assertEqual(self.probe(self.rotation), key_b)
         self.accept('key_change_probe_b')
         self.accept('key_change_password_b')
+        self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': 'key_change_connect'})
         peer, channel = self.session(self.rotation)
         self.accept('key_change_input')
         with patch.object(self.state, 'capture'):
             self.accept('key_change_terminal')
         self.accept('key_change_disconnect_attempt')
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.rotation, peer, channel)
         self.accept('key_change_disconnected')
         self.accept('complete')
         self.assertEqual(self.state.index, len(ios.STAGES))
@@ -1589,19 +1687,29 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         self.state.index = ios.STAGES.index('key_change_review')
         self.probe(self.rotation)
         peer, channel = self.session(self.rotation, marker=False)
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.rotation, peer, channel)
         with self.assertRaisesRegex(ios.Failure, 'rotation_evidence_invalid'):
             self.accept('key_change_review')
+
+    def test_before_native_submit_rejects_an_early_authenticated_peer(self):
+        self.probe(self.ordinary)
+        self.accept('ordinary_form')
+        self.accept('ordinary_probe')
+        self.accept('ordinary_password')
+        peer, channel = self.session(self.ordinary, marker=False)
+        self.close_protocol(self.ordinary, peer, channel)
+        with self.assertRaisesRegex(ios.Failure, 'probe_not_empty'):
+            self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': 'ordinary_connect'})
 
     def test_ordinary_return_rejects_reauthentication_and_replayed_input(self):
         self.probe(self.ordinary)
         peer, channel = self.session(self.ordinary)
         self.state.index = ios.STAGES.index('ordinary_disconnect_attempt')
         self.accept('ordinary_disconnect_attempt')
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.ordinary, peer, channel)
         self.accept('ordinary_disconnected')
         peer, channel = self.session(self.ordinary)
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.ordinary, peer, channel)
         with self.assertRaisesRegex(ios.Failure, 'ordinary_connection_count_invalid'):
             self.accept('ordinary_returned_home')
         self.assertNotEqual(self.result['cases']['ordinary'].get('status'), 'passed')
@@ -1615,7 +1723,7 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         ios.wait_peer(self.ordinary, lambda f: f['connectionEvents'][-1]['inputBytes'] > 10, 'missing', timeout=5)
         with self.assertRaises(ios.Failure):
             ios.ordinary_evidence(self.ordinary, closed=False)
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.ordinary, peer, channel)
 
     def test_http_secret_and_stage_order_are_enforced_without_raw_failure_export(self):
         server, thread = ios.start_checkpoints(self.state)
@@ -1645,7 +1753,7 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         self.assertFalse(event['singleMarkerLineExact'])
         with self.assertRaisesRegex(ios.Failure, 'ordinary_session_incomplete'):
             ios.ordinary_evidence(self.ordinary, closed=False)
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.ordinary, peer, channel)
 
     def test_second_authentication_attempt_cannot_pass_final_rotation_gate(self):
         import paramiko
@@ -1668,7 +1776,7 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         self.wait_for_reply(self.rotation, channel, before)
         with self.assertRaisesRegex(ios.Failure, 'single_command_or_auth_invalid'):
             ios.rotation_session_evidence(self.rotation, closed=False)
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.rotation, peer, channel)
         self.assertTrue(self.rotation.wait_for_connections_closed(4, timeout=5))
         # Shared gate accepts >=1 attempts; the Tauri-specific gate must still fail.
         self.rotation.rotation_evidence(4)
@@ -1680,7 +1788,7 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         peer, channel = self.session(self.ordinary)
         ios.wait_peer(self.ordinary, lambda f: f['markerReceived'], 'missing', timeout=5)
         ios.ordinary_evidence(self.ordinary, closed=False)
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.ordinary, peer, channel)
         self.assertTrue(self.ordinary.wait_for_connections_closed(2, timeout=5))
         self.state.index = ios.STAGES.index('ordinary_disconnect_attempt')
         with self.assertRaisesRegex(ios.Failure, 'close_order_invalid'):
@@ -1692,7 +1800,7 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         peer, channel = self.session(self.rotation)
         ios.wait_peer(self.rotation, lambda f: f['markerReceived'], 'missing', timeout=5)
         ios.rotation_session_evidence(self.rotation, closed=False)
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.rotation, peer, channel)
         self.assertTrue(self.rotation.wait_for_connections_closed(4, timeout=5))
         self.state.index = ios.STAGES.index('key_change_disconnect_attempt')
         with self.assertRaisesRegex(ios.Failure, 'close_order_invalid'):
@@ -1708,7 +1816,7 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         before = self.rotation.snapshot()['connectionEvents'][-1]['outputBytes']
         channel.sendall((self.rotation.marker + '\r').encode())
         self.wait_for_reply(self.rotation, channel, before)
-        self.close_protocol(peer, channel)
+        self.close_protocol(self.rotation, peer, channel)
         self.assertTrue(self.rotation.wait_for_connections_closed(4, timeout=5))
         self.rotation.rotation_evidence(4)
         with self.assertRaisesRegex(ios.Failure, 'single_command_or_auth_invalid'):
@@ -1721,6 +1829,12 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         self.assertEqual(self.result['nativeCheckpoint'], 'ordinary_password')
         self.assertEqual(self.result['nativeFailureCode'], 'native_control_not_visible')
         self.assertEqual(self.state.failure, 'tauri_ios_native_check_failed')
+        for phase, control in (('ordinary_fingerprint', 'confirmation'), ('ordinary_fingerprint', 'password'),
+                               ('key_change_new_fingerprint', 'submit'), ('ordinary_return_home', 'return')):
+            state = ios.Checkpoints(None, None, self.directory.name, {})
+            code = f'native_mobile_{control}_owner_unproven'
+            state.accept({'stage': 'native_failure', 'nativeCheckpoint': phase, 'nativeFailureCode': code})
+            self.assertEqual(state.result, {'nativeCheckpoint': phase, 'nativeFailureCode': code})
         for bad in ({'nativeCheckpoint': self.ordinary.password, 'nativeFailureCode': 'native_control_missing'},
                     {'nativeCheckpoint': 'ordinary_password', 'nativeFailureCode': self.ordinary.password}):
             state = ios.Checkpoints(None, None, self.directory.name, {})

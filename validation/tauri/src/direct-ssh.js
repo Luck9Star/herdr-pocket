@@ -36,8 +36,11 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
     connecting = false;
     const id = sessionId;
     sessionId = null;
-    if (id) { try { await invoke('ssh_shell_close', {sessionId: id}); } catch {} }
-    if (current === generation) onStatus('已断开；重新连接需要再次输入凭据。', false);
+    let closed = false;
+    if (id) {
+      try { await invoke('ssh_shell_close', {sessionId: id}); closed = true; } catch {}
+    }
+    if (current === generation) onStatus('已断开；重新连接需要再次输入凭据。', false, undefined, {closed});
   }
   async function open(target, credentials, confirmed) {
     if (!confirmed || !sameTarget(target, reviewed)) throw Error('review_required');

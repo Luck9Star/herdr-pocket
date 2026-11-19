@@ -3,6 +3,10 @@ import 'dart:ui' show FlutterView;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+/// Reports enabled state for either Material button style without throwing in diagnostics.
+bool? iosDiagnosticButtonEnabled(Widget? widget) =>
+    widget is ButtonStyleButton ? widget.onPressed != null : null;
+
 /// A bounded projection of layout facts, never a widget dump or stack trace.
 Map<String, Object?>? iosOverflowDiagnostic(
   FlutterErrorDetails details, {

@@ -1,6 +1,7 @@
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { initDirectSshUI } from "../src/direct-ssh-ui.js";
+import { initDirectSshUI, privateKeyReady } from "../src/direct-ssh-ui.js";
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 // Local-only fake host keys; no real host is contacted.
@@ -42,47 +43,9 @@ class Element {
   blur() {}
 }
 
-function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBottom = 130 } = {}) {
-  const ids = [
-    "ssh-host",
-    "ssh-port",
-    "ssh-user",
-    "ssh-password",
-    "ssh-password-fields",
-    "ssh-key",
-    "ssh-key-fields",
-    "ssh-passphrase",
-    "ssh-auth-method",
-    "ssh-review",
-    "ssh-probe",
-    "ssh-form",
-    "ssh-status",
-    "ssh-focus",
-    "ssh-setup",
-    "ssh-live",
-    "ssh-fingerprint",
-    "ssh-key-change",
-    "ssh-key-change-old",
-    "ssh-key-change-new",
-    "ssh-key-change-target",
-    "ssh-key-change-note",
-    "ssh-key-recheck",
-    "ssh-key-cancel",
-    "ssh-target",
-    "ssh-disconnect",
-    "ssh-cancel",
-    "ssh-terminal",
-    "ssh-page-heading",
-    "home-ssh",
-    "host-home",
-    "host-open-remote",
-    "show-remote",
-    "nav-terminal",
-    "nav-network",
-    "nav-settings",
-    "ssh-hide-keyboard",
-    "ssh-helper-keys",
-  ];
+function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBottom = 130, compact = false, clipboardRead, onBack, failClose = false } = {}) {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const ids = [...html.matchAll(/id="([^"]+)"/g)].map(match => match[1]);
   const nodes = Object.fromEntries(ids.map((id) => [id, new Element()]));
   nodes["ssh-host"].value = "127.0.0.1";
   nodes["ssh-port"].value = "2222";
@@ -122,6 +85,7 @@ function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBot
     scrollBy: (x, y) => scrolls.push([x, y]),
     scrollTo: (x, y) => tops.push([x, y]),
   };
+  if (compact) view.matchMedia = () => ({matches:true,addEventListener() {}});
   globalThis.document = document;
   globalThis.window = view;
   globalThis.requestAnimationFrame = (fn) => { frames.push(fn); return frames.length; };
@@ -132,12 +96,14 @@ function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBot
   let presented = "SHA256:presentedLocalOnly";
   let accept = false;
   let probeError = null;
+  let pendingProbe;
   let session = 0;
   const calls = [];
   const invoke = async (cmd, args) => {
     calls.push({ cmd, args });
     if (cmd === "ssh_host_key_probe") {
       if (probeError) throw probeError;
+      await pendingProbe;
       return { host: args.host, port: Number(args.port), ...probed };
     }
     if (cmd === "ssh_shell_open") {
@@ -155,7 +121,10 @@ function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBot
       });
       return id;
     }
-    if (cmd === "ssh_shell_close") return {};
+    if (cmd === "ssh_shell_close") {
+      if (failClose) throw Error("fixture_close_failed");
+      return {};
+    }
     return {};
   };
   const terminalFactory = () => ({
@@ -167,7 +136,7 @@ function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBot
     focus() {},
     resize() {},
   });
-  initDirectSshUI({ native: true, invoke, channelFactory: () => (channel = {}), terminalFactory });
+  initDirectSshUI({ native: true, invoke, channelFactory: () => (channel = {}), terminalFactory, clipboardRead, onBack });
   async function probe() {
     await nodes["ssh-probe"].onclick();
   }
@@ -193,6 +162,7 @@ function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBot
     navGroups,
     heading,
     probe,
+    holdProbe: promise => { pendingProbe = promise; },
     connect,
     openCalls,
     setProbed: (key) => {
@@ -301,7 +271,7 @@ test("a changed host key refuses the connection, blocks input and returns to the
     assert.equal(typeof h.nodes["ssh-key-recheck"].onclick, "function");
     assert.equal(typeof h.nodes["ssh-key-cancel"].onclick, "function");
     // The refusal offers the review and cancel exits, and no way past the change.
-    assert.equal(h.nodes["ssh-probe"].disabled, false);
+    assert.equal(h.nodes["ssh-probe"].disabled, true);
     assert.equal(typeof h.nodes["ssh-cancel"].onclick, "function");
     const controls = ["ssh-probe", "ssh-cancel"];
     assert.ok(controls.every((id) => h.nodes[id]));
@@ -710,4 +680,142 @@ test("non-iOS roots keep the old behavior: no entry alignment at all", async () 
   } finally {
     h.restore();
   }
+});
+
+test("mobile trust requires explicit consent and retains old trust after rejection", async () => {
+  const h = setup({compact:true});
+  const n = h.nodes;
+  try {
+    await h.probe();
+    assert.equal(n["home-ssh"].dataset.sshStep, "trust");
+    assert.equal(n["ssh-reviewed-algorithm"].textContent, "ssh-ed25519");
+    assert.equal(n["ssh-reviewed-fingerprint"].textContent, REVIEWED.fingerprint);
+    assert.equal(n["ssh-reviewed-public-key"].textContent, REVIEWED.publicKey);
+    assert.equal(n["ssh-credentials"].hidden, true);
+    n["ssh-password"].value = "invalid-before-consent";
+    await n["ssh-form"].onsubmit({preventDefault(){}});
+    assert.equal(h.openCalls().length, 0);
+    n["ssh-trust-cancel"].onclick();
+    assert.equal(n["home-ssh"].dataset.sshStep, "target");
+    assert.equal(n["ssh-password"].value, "");
+
+    await h.probe();
+    n["ssh-trust-confirm"].onclick();
+    assert.equal(n["home-ssh"].dataset.sshStep, "auth");
+    assert.equal(n["ssh-target-fields"].hidden, true);
+    assert.equal(n["ssh-password"].disabled, false);
+    n["ssh-password"].value = "  ";
+    await n["ssh-form"].onsubmit({preventDefault(){}});
+    await flush();
+    assert.equal(h.openCalls()[0].args.config.password, "  ");
+    assert.equal(n["ssh-key-change"].hidden, false);
+    assert.equal(n["ssh-password"].value, "");
+    n["ssh-key-cancel"].onclick();
+    assert.match(n["ssh-prior-fingerprint"].textContent, /SHA256:reviewedLocalOnly/);
+    assert.equal(n["ssh-password"].disabled, true);
+
+    h.setProbed(CHANGED);
+    await n["ssh-probe"].onclick();
+    assert.equal(n["ssh-trust-cancel"].textContent, "取消核对，保留旧信任");
+    n["ssh-trust-cancel"].onclick();
+    assert.match(n["ssh-prior-fingerprint"].textContent, /SHA256:reviewedLocalOnly/);
+    assert.equal(h.openCalls().length, 1);
+  } finally { h.restore(); }
+});
+
+test("mobile target edits retire late probe and private key paste replies", async () => {
+  const pending = Promise.withResolvers();
+  const clipboard = Promise.withResolvers();
+  const h = setup({compact:true,clipboardRead:()=>clipboard.promise});
+  const n = h.nodes;
+  try {
+    h.holdProbe(pending.promise);
+    const old = h.probe();
+    n["ssh-user"].value = "edited-user";
+    n["ssh-user"].dispatchEvent({type:"input"});
+    pending.resolve();
+    await old;
+    assert.equal(n["home-ssh"].dataset.sshStep, "target");
+    assert.equal(n["ssh-password"].disabled, true);
+
+    await h.probe();
+    n["ssh-trust-confirm"].onclick();
+    n["ssh-auth-key"].onclick();
+    const paste = n["ssh-paste-key"].onclick();
+    n["ssh-auth-password"].onclick();
+    clipboard.resolve("retired-private-key");
+    await paste;
+    assert.equal(n["ssh-key"].value, "");
+    assert.equal(h.openCalls().length, 0);
+  } finally { h.restore(); }
+});
+
+test("mobile private key gate checks a complete envelope and recognized encrypted headers", () => {
+  const pem = (type,body) => `-----BEGIN ${type}-----\n${body}\n-----END ${type}-----`;
+  const body = Buffer.alloc(18, 1).toString("base64");
+  const openSSH = cipher => {
+    const count = Buffer.alloc(4);
+    count.writeUInt32BE(cipher.length);
+    const record = Buffer.concat([Buffer.from("openssh-key-v1\0"),count,Buffer.from(cipher),Buffer.alloc(32, 1)]);
+    return pem("OPENSSH PRIVATE KEY",record.toString("base64"));
+  };
+  assert.equal(privateKeyReady("   ",""),false);
+  assert.equal(privateKeyReady("-----BEGIN PRIVATE KEY-----",""),false);
+  assert.equal(privateKeyReady(pem("PRIVATE KEY",body)," "),true);
+  assert.equal(privateKeyReady(pem("ENCRYPTED PRIVATE KEY",body),""),false);
+  assert.equal(privateKeyReady(pem("ENCRYPTED PRIVATE KEY",body),"passphrase"),true);
+  const legacy = pem("RSA PRIVATE KEY",`Proc-Type: 4,ENCRYPTED\nDEK-Info: AES-256-CBC,00112233\n\n${body}`);
+  assert.equal(privateKeyReady(legacy,""),false);
+  assert.equal(privateKeyReady(legacy,"passphrase"),true);
+  assert.equal(privateKeyReady(openSSH("none"),""),true);
+  assert.equal(privateKeyReady(openSSH("aes256-ctr"),""),false);
+  assert.equal(privateKeyReady(openSSH("aes256-ctr"),"passphrase"),true);
+});
+
+test("an acknowledged explicit close announces once and preserves the mobile target", async () => {
+  const announced = [];
+  const h = setup({compact:true,onBack:closed=>announced.push(closed)});
+  const n = h.nodes;
+  try {
+    assert.equal(n["ssh-closed-feedback"].hidden,true);
+    n["ssh-step-back"].onclick();
+    assert.deepEqual(announced,[false]);
+    h.setAccept(true);
+    await h.probe();
+    n["ssh-trust-confirm"].onclick();
+    await h.connect();
+    assert.equal(n["ssh-live"].hidden,false);
+    n["ssh-disconnect"].onclick();
+    n["ssh-disconnect"].onclick();
+    await flush();
+    assert.equal(h.calls.filter(call=>call.cmd==="ssh_shell_close").length,1);
+    assert.equal(n["ssh-closed-feedback"].hidden,false);
+    assert.equal(n["ssh-password"].value,"");
+    assert.equal(n["ssh-host"].value,"127.0.0.1");
+    assert.equal(n["ssh-user"].value,"tester");
+    assert.equal(n["ssh-port"].value,"2222");
+    n["ssh-return-home"].onclick();
+    n["ssh-return-home"].onclick();
+    assert.equal(n["ssh-closed-feedback"].hidden,true);
+    assert.deepEqual(announced,[false,true]);
+  } finally { h.restore(); }
+});
+
+test("an unconfirmed close is reported without creating a home disconnect notice", async () => {
+  const announced = [];
+  const h = setup({compact:true,failClose:true,onBack:closed=>announced.push(closed)});
+  const n = h.nodes;
+  try {
+    h.setAccept(true);
+    await h.probe();
+    n["ssh-trust-confirm"].onclick();
+    await h.connect();
+    n["ssh-disconnect"].onclick();
+    await flush();
+    assert.match(n["ssh-status"].textContent,/无法确认/);
+    assert.equal(n["ssh-closed-feedback"].hidden,true);
+    assert.equal(n["ssh-return-home"].hidden,true);
+    n["ssh-step-back"].onclick();
+    assert.deepEqual(announced,[false]);
+  } finally { h.restore(); }
 });

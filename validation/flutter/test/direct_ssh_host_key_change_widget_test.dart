@@ -68,9 +68,16 @@ Future<void> probeAndTrust(WidgetTester tester) async {
 }
 
 void expectReviewLocked(WidgetTester tester, {required bool locked}) {
-  expect(tester.widget<TextField>(find.byKey(const ValueKey('direct-secret'))).enabled, !locked);
-  expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).onChanged, locked ? isNull : isNotNull);
-  expect(tester.widget<OutlinedButton>(find.byKey(const ValueKey('direct-probe'))).onPressed, isNotNull);
+  final dynamic state = tester.state(find.byType(DirectSshPage));
+  if (state.mobileLayout) {
+    expect(find.byKey(const ValueKey('direct-secret')), locked ? findsNothing : findsOneWidget);
+    expect(find.byKey(const ValueKey('direct-connect')), locked ? findsNothing : findsOneWidget);
+    if (locked) expect(find.byKey(const ValueKey('direct-probe')), findsOneWidget);
+  } else {
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('direct-secret'))).enabled, !locked);
+    expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).onChanged, locked ? isNull : isNotNull);
+    expect(tester.widget<OutlinedButton>(find.byKey(const ValueKey('direct-probe'))).onPressed, isNotNull);
+  }
 }
 
 Future<void> pushDirectSsh(WidgetTester tester, DesignTokens tokens) async {
@@ -149,13 +156,13 @@ void main() {
       expect(state.hostKeyReviewRequired, isTrue);
       expect(state.fingerprint, oldFingerprint);
       expectReviewLocked(tester, locked: true);
-      expect(tester.widget<FilledButton>(find.byKey(const ValueKey('direct-connect'))).onPressed, isNull);
+      if (!state.mobileLayout) expect(tester.widget<FilledButton>(find.byKey(const ValueKey('direct-connect'))).onPressed, isNull);
       evidence['refusedReprobeKeepsOldTrust'] = true;
       evidence['credentialsLockedWhileReviewPending'] = true;
 
       // Independent approval of the rotated key unlocks and reconnects.
       await tester.tap(find.byKey(const ValueKey('direct-probe'))); await tester.pump();
-      await waitFor(tester, find.byKey(const ValueKey('direct-trust-key')));
+      await waitFor(tester, find.byKey(const ValueKey('direct-trust-key'))); await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('direct-trust-key'))); await tester.pumpAndSettle();
       expect(state.hostKeyReviewRequired, isFalse);
       expect(state.fingerprint, first.newFingerprint);
@@ -168,6 +175,13 @@ void main() {
       await tester.tap(find.text('断开')); await tester.pumpAndSettle();
       expect(state.fingerprint, first.newFingerprint);
 
+      // The mobile disconnected view requires another explicit probe before credentials.
+      if (state.mobileLayout) {
+        await tester.tap(find.byKey(const ValueKey('direct-probe'))); await tester.pump();
+        await waitFor(tester, find.byKey(const ValueKey('direct-trust-key'))); await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('direct-trust-key'))); await tester.pumpAndSettle();
+        expect(state.fingerprint, first.newFingerprint);
+      }
       // Second key change on the same target: new peer, new key material, same port.
       await tester.runAsync(peer1.stop);
       final peer2 = (await tester.runAsync(() => RotationPeer.start(fixedPort: peer1.port)))!;
@@ -190,10 +204,16 @@ void main() {
       expect(find.byKey(const ValueKey('direct-form')), findsOneWidget);
       expect(state.fingerprint, first.newFingerprint);
       expectReviewLocked(tester, locked: true);
-      expect(tester.widget<FilledButton>(find.byKey(const ValueKey('direct-connect'))).onPressed, isNull);
-      state.setState(() { state.keyAuth = true; }); await tester.pump();
-      expect(tester.widget<TextButton>(find.byKey(const ValueKey('direct-paste-key'))).onPressed, isNull);
-      expect(tester.widget<TextField>(find.byKey(const ValueKey('direct-passphrase'))).enabled, isFalse);
+      if (state.mobileLayout) {
+        expect(find.byKey(const ValueKey('direct-connect')), findsNothing);
+        expect(find.byKey(const ValueKey('direct-paste-key')), findsNothing);
+        expect(find.byKey(const ValueKey('direct-passphrase')), findsNothing);
+      } else {
+        expect(tester.widget<FilledButton>(find.byKey(const ValueKey('direct-connect'))).onPressed, isNull);
+        state.setState(() { state.keyAuth = true; }); await tester.pump();
+        expect(tester.widget<TextButton>(find.byKey(const ValueKey('direct-paste-key'))).onPressed, isNull);
+        expect(tester.widget<TextField>(find.byKey(const ValueKey('direct-passphrase'))).enabled, isFalse);
+      }
       evidence['cancelAfterSecondChangeKeepsOldTrust'] = true;
       expect(peer2.sawAuthentication, isFalse);
       evidence['secondChangeSentNoAuthentication'] = true;

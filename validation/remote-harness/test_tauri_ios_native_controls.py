@@ -234,6 +234,43 @@ precondition(verify([fact("", "添加连接", "staticText")] + Array(choice.suff
 let heading: [(String?, String, Bool)] = [("ssh-page-heading", "普通 SSH 终端", false)]
 precondition(verify([home[3], fact("", "普通 SSH 终端", "staticText")], heading,
     paths: [[0, 0, 0], [0, 0, 0, 1]]) == nil)
+let wrapper = [fact("ssh-page-heading", "", "other"), fact("", "普通 SSH 终端", "staticText")]
+let wrapperPaths = [[0, 0, 0], [0, 0, 0, 1, 0]]
+precondition(verify(wrapper, heading, paths: wrapperPaths) == [0])
+precondition(NativeControlPolicy.pageWitness(wrapper, paths: wrapperPaths, windows: [[0], [0]],
+    webs: [[0, 0], [0, 0, 0, 1]], targets: heading) == nil)
+''')
+
+    def test_mobile_trust_uses_full_target_algorithm_and_fingerprint_in_one_owner(self):
+        self.compile_and_run(r'''
+import Foundation
+typealias Fact = NativeControlPolicy.Fact
+let fingerprint = "SHA256:" + String(repeating: "A", count: 43)
+let labels = ["核对主机密钥", "fixture@127.0.0.1:2222", "ssh-rsa", fingerprint, "取消核对", "指纹一致，确认继续"]
+let ids = ["ssh-step-title", "ssh-reviewed-endpoint", "ssh-reviewed-algorithm", "ssh-reviewed-fingerprint",
+           "ssh-trust-cancel", "ssh-trust-confirm"]
+let targets: [(String?, String, Bool)] = ids.indices.map { (ids[$0], labels[$0], $0 >= 4) }
+let wrap = "SHA256:" + String(repeating: "A", count: 21) + "\n" + String(repeating: "A", count: 22)
+func verify(_ candidate: [String], otherOwner: Int? = nil, extra: Bool = false) -> [Int]? {
+    var fields = ids.indices.map { Fact(identifier: ids[$0], label: NativeControlPolicy.fingerprintText(candidate[$0]),
+        role: $0 >= 4 ? "button" : "staticText", value: nil) }
+    if extra { fields.append(fields[5]) }
+    let windows = fields.indices.map { $0 == otherOwner ? [1] : [0] }
+    let webs = windows.map { $0 + [0] }
+    return NativeControlPolicy.pageWitness(fields, paths: fields.indices.map { webs[$0] + [$0] },
+        windows: windows, webs: webs, targets: targets)
+}
+var candidate = labels
+candidate[3] = wrap
+precondition(verify(candidate) == Array(0..<6))
+precondition(verify(candidate, otherOwner: 3) == nil)
+precondition(verify(candidate, extra: true) == nil)
+for (index, wrong) in [(1, "fixture@127.0.0.1:22220"), (2, "ssh-ed25519"), (3, fingerprint + "A"),
+                       (4, "取消核对，保留旧信任")] {
+    var invalid = candidate
+    invalid[index] = wrong
+    precondition(verify(invalid) == nil)
+}
 ''')
 
     def test_production_adapter_roles_and_owner_boundaries(self):
@@ -369,6 +406,11 @@ final class XCUIElement {
     var inputValue: String?
     var forcedReadback: String?
     var exists = false
+    var descendantsByRole: [ElementType: [XCUIElement]] = [:]
+    var identity: [String: String] = [:]
+    func descendants(matching role: ElementType) -> Query {
+        Query(allElementsBoundByIndex: descendantsByRole[role] ?? [])
+    }
     func coordinate(withNormalizedOffset: CGVector) -> XCUICoordinate {
         XCUICoordinate(element: self, offset: withNormalizedOffset)
     }
@@ -432,8 +474,13 @@ struct RevealedControl {
     let web: Observed
 }
 struct Query {
-    let allElementsBoundByIndex: [XCUIElement] = []
-    var firstMatch: XCUIElement { XCUIElement() }
+    var allElementsBoundByIndex: [XCUIElement] = []
+    var count: Int { allElementsBoundByIndex.count }
+    var firstMatch: XCUIElement { allElementsBoundByIndex.first ?? XCUIElement() }
+    func element(boundBy index: Int) -> XCUIElement { allElementsBoundByIndex[index] }
+    func matching(_ predicate: NSPredicate) -> Query {
+        Query(allElementsBoundByIndex: allElementsBoundByIndex.filter { predicate.evaluate(with: $0.identity) })
+    }
 }
 struct App {
     let frame: CGRect
@@ -452,10 +499,14 @@ final class XCUIScreen {
     }
 }
 struct Rejected: Error { let reason: String }
+enum Thread {
+    static func sleep(forTimeInterval _: TimeInterval) {}
+}
 struct Date: Comparable {
     private static var clock: Double = 0
+    static var tick: Double = 25
     private let instant: Double
-    init() { Self.clock += 25; instant = Self.clock }
+    init() { Self.clock += Self.tick; instant = Self.clock }
     private init(_ instant: Double) { self.instant = instant }
     func addingTimeInterval(_ seconds: Double) -> Self { Self(instant + seconds) }
     static func < (lhs: Self, rhs: Self) -> Bool { lhs.instant < rhs.instant }
@@ -466,9 +517,11 @@ final class Observations {
     var occlusionSamples: [[CGRect]]
     var hittableSamples: [Bool]
     var liveReads = 0
+    var treeReads = 0
     var resolved: [Observed] = []
     var checkpoints: [(String, [String: Any])] = []
     var reviewActionChecks = 0
+    var beforeTree: (() -> Void)?
     let webSurface = Element()
     init(_ trees: [[Observed]], liveSnapshots: [Snapshot] = [], occlusionSamples: [[CGRect]] = [],
          hittableSamples: [Bool] = []) {
@@ -478,7 +531,9 @@ final class Observations {
         self.hittableSamples = hittableSamples
     }
     func next(_ fallback: [Observed]) -> [Observed] {
-        trees.isEmpty ? fallback : trees.removeFirst()
+        treeReads += 1
+        beforeTree?()
+        return trees.isEmpty ? fallback : trees.removeFirst()
     }
     func live(_ fallback: LiveControl) -> LiveControl {
         liveReads += 1
@@ -487,18 +542,37 @@ final class Observations {
                            element: fallback.element)
     }
 }
-struct Adapter {
+// Match the XCTestCase driver's reference semantics so the Swift compiler
+// checks escaping instance captures in the extracted production methods.
+final class Adapter {
     let app: App
     let current: LiveControl
     let rows: [Observed]
     let blockers: [CGRect]
-    var observations: Observations? = nil
-    var formControls: [String: LiveControl] = [:]
-    var nativePhase = "ordinary_port"
-    var pathControls: [[Int]: LiveControl] = [:]
+    let observations: Observations?
+    let formControls: [String: LiveControl]
+    var nativePhase: String
+    let pathControls: [[Int]: LiveControl]
     let config: [String: Any] = ["fingerprintA": "SHA256:fixture-complete-old", "fingerprintB": "SHA256:fixture-complete-new"]
-    func require(_ condition: Bool, _ reason: String) throws {
-        if !condition { throw Rejected(reason: reason) }
+    var mobileFlow = false
+
+    init(app: App, current: LiveControl, rows: [Observed], blockers: [CGRect], observations: Observations? = nil,
+         formControls: [String: LiveControl] = [:], nativePhase: String = "ordinary_port", pathControls: [[Int]: LiveControl] = [:]) {
+        self.app = app
+        self.current = current
+        self.rows = rows
+        self.blockers = blockers
+        self.observations = observations
+        self.formControls = formControls
+        self.nativePhase = nativePhase
+        self.pathControls = pathControls
+    }
+
+    func require(_ condition: Bool, _ reason: String, passwordObservation: [String: Any]? = nil) throws {
+        if !condition {
+            if let passwordObservation { observations?.checkpoints.append((reason, passwordObservation)) }
+            throw Rejected(reason: reason)
+        }
     }
     func nativeOcclusions() -> [CGRect] {
         guard let observations = observations, !observations.occlusionSamples.isEmpty else { return blockers }
@@ -509,6 +583,7 @@ struct Adapter {
     func role(_ type: XCUIElement.ElementType) -> String {
         if type == .secureTextField { return "secureTextField" }
         if type == .staticText { return "staticText" }
+        if type == .button { return "button" }
         return type == .textField ? "textField" : "other"
     }
     func texts(_ node: Snapshot) -> [String] { [node.label, node.value ?? ""] }
@@ -546,7 +621,10 @@ struct Adapter {
                                 isEnabled: live.snapshot.isEnabled, value: value)
         return LiveControl(snapshot: snapshot, hittable: live.hittable, element: live.element)
     }
-    func liveControl(_ element: XCUIElement) -> LiveControl? { observations?.live(current) ?? current }
+    func liveControl(_ element: XCUIElement) -> LiveControl? {
+        if element === current.element { return observations?.live(current) ?? current }
+        return pathControls.values.first { $0.element === element }
+    }
     func owner(_ snapshot: Snapshot, _ rows: [Observed]) -> Observed? {
         let scopes = rows.filter { $0.window != nil && !$0.webs.isEmpty }.flatMap { row in
             [Observed(snapshot: Snapshot(identifier: "", label: "", elementType: .window, frame: row.window!),
@@ -559,6 +637,23 @@ struct Adapter {
     func tapPort() throws { _ = try tapForm("port") }
     func port() throws -> LiveControl { try formControl("port").live }
     func revealCurrent() throws -> LiveControl { try reveal(current.element).live }
+    func tapMobile(_ anchor: Observed) throws {
+        let failure = "native_mobile_confirmation_owner_unproven"
+        try tapMobileButton(try mobileControl(anchor, rows, failure), failure)
+    }
+    func bindMobile(_ anchor: Observed) throws -> RevealedControl {
+        try mobileControl(anchor, rows, "native_mobile_password_owner_unproven")
+    }
+    func sameMobileOwner(_ lhs: RevealedControl, _ rhs: RevealedControl) -> Bool {
+        sameControlScope(lhs, rhs)
+    }
+    func auth(_ previous: RevealedControl, ready: Bool = false) throws -> (password: RevealedControl, submit: RevealedControl) {
+        try mobileAuth(port: 2222, ready: ready, previous: previous)
+    }
+    func authPageOnly() throws -> [Observed] {
+        try mobileWitness([("ssh-step-title", "SSH 账号认证", false), ("ssh-reviewed-endpoint", target(2222), false),
+            ("ssh-approved-note", "本次主机密钥已确认", false), ("ssh-connect", "连接 SSH", true)]).0
+    }
     func button(_ label: String) -> XCUIElement { current.element }
     func submit(_ attempt: NativeConnectPolicy.Attempt, expected: String) throws { try submitConnection(attempt, waitingFor: expected) }
     func fillCurrent(_ text: String) throws { try fillPassword(current.element, text) }
@@ -577,6 +672,11 @@ struct Adapter {
             "func passwordGeometryDetail(_ viewport:", "func scrollToControl(_ owner:",
             "func controlIdentityRows(_ current:", "func controlOwner(_ current:",
             "func reveal(_ item:", "func tapForm(_ name:",
+            "func mobileLiveControl(_ owner:", "func sameControlScope(_ lhs:",
+            "func sameControlScope(_ scope:", "func mobileControl(_ anchor:", "func mobileBinding(_ anchor:",
+            "func tapMobileButton(_ control:", "enum MobileWitnessObservation<Proof>", "func mobileWitness(_ targets:",
+            "func waitForMobileWitness<Proof>", "func mobileAuth(port:", "func mobilePassword(in rows:",
+            "func mobilePasswordObservation(in rows:",
             "func controlGeometry(_ owner:", "func routeTabsOcclusion(_ owner:",
             "func reportFormGeometry(_ failure:", "func failControlGeometry(_ failure:",
             "func tap(_ item:", "func fillPassword(_ item:",
@@ -642,6 +742,226 @@ check(adapter.owner(snapshot(label: ""), [row(snapshot(label: ""))]) == nil,
       "an empty identity cannot authorize a control")
 check(adapter.owner(snapshot(), [row(snapshot(), eligible: false)]) == nil,
       "a typed identity without WebView ownership cannot authorize a control")
+func mobileCase(_ type: XCUIElement.ElementType, id: String, label: String,
+                raw: [[Int]] = [], queries: Int = 1, hits: Bool = true, enabled: Bool = true,
+                queriedFrame: CGRect = oldFrame, changeOwner: Bool = false,
+                pathAlias: Bool = false) -> (Adapter, Observed, Element) {
+    let live = Element()
+    live.identity = ["identifier": id, "label": label]
+    let liveSnapshot = Snapshot(identifier: id, label: label, elementType: type, frame: queriedFrame, isEnabled: enabled)
+    let action = row(Snapshot(identifier: id, label: label, elementType: type, frame: oldFrame,
+                              isEnabled: enabled), path: [0, 0, 4, 0])
+    let alternate = raw.map { path in row(action.snapshot, path: path, window: [path[0]], web: Array(path.prefix(2))) }
+    let base = Array(formRows(snapshot()).suffix(2))
+    let distinctOwner = [row(base[0].snapshot, path: [1]), row(base[1].snapshot, path: [1, 0])] +
+        [row(action.snapshot, path: [1, 0, 4, 0], window: [1], web: [1, 0])]
+    let observations = Observations(changeOwner ? [distinctOwner] : [])
+    observations.webSurface.descendantsByRole[type] = Array(repeating: live, count: queries)
+    let current = LiveControl(snapshot: liveSnapshot, hittable: hits, element: live)
+    let wrong = pathAlias ? snapshot(type, frame: movedFrame, identifier: id, label: label) : snapshot(.other, label: "proxy wrapper")
+    let unrelated = LiveControl(snapshot: wrong, hittable: true, element: Element())
+    return (Adapter(app: App(frame: screen), current: current, rows: base + [action] + alternate, blockers: [],
+                    observations: observations, pathControls: [action.path: unrelated]), action, live)
+}
+for id in ["ssh-trust-confirm", ""] {
+    let (candidate, anchor, live) = mobileCase(.button, id: id, label: "指纹一致，确认继续")
+    check((try? candidate.revealCurrent()) == nil, "the legacy raw path alone cannot bind a flattened child")
+    do { try candidate.tapMobile(anchor) } catch { failures.append("a flattened AX child must keep its owned typed action: \(error)") }
+    check(live.taps == 1, "an exact live action under the proven WebView must be tapped exactly once")
+}
+let (aliasCandidate, aliasAnchor, scoped) = mobileCase(.button, id: "ssh-trust-confirm", label: "指纹一致，确认继续", pathAlias: true)
+try aliasCandidate.tapMobile(aliasAnchor)
+check(scoped.taps == 1 && aliasCandidate.pathControls[aliasAnchor.path]?.element.taps == 0,
+      "a same-name index alias with a different frame must never replace the scoped live action")
+for (candidate, anchor, live) in [mobileCase(.button, id: "", label: "指纹一致，确认继续", raw: [[1, 0, 2]]),
+    mobileCase(.button, id: "", label: "指纹一致，确认继续", raw: [[0, 0, 5]]),
+    mobileCase(.button, id: "ssh-trust-confirm", label: "指纹一致，确认继续", queries: 2),
+    mobileCase(.button, id: "ssh-trust-confirm", label: "指纹一致，确认继续", queriedFrame: movedFrame),
+    mobileCase(.button, id: "ssh-trust-confirm", label: "指纹一致，确认继续", changeOwner: true),
+    mobileCase(.button, id: "ssh-trust-confirm", label: "指纹一致，确认继续", hits: false),
+    mobileCase(.button, id: "ssh-trust-confirm", label: "指纹一致，确认继续", enabled: false)] {
+    var rejected = false
+    do { try candidate.tapMobile(anchor) } catch { rejected = true }
+    check(rejected && live.taps == 0, "duplicate, moved, hidden, or disabled live actions must never be tapped")
+}
+let (becameAmbiguous, ambiguousAnchor, ambiguousLive) = mobileCase(.button, id: "ssh-trust-confirm", label: "指纹一致，确认继续")
+weak var webSurface = becameAmbiguous.observations?.webSurface
+becameAmbiguous.observations?.beforeTree = { webSurface?.descendantsByRole[.button] = [ambiguousLive, ambiguousLive] }
+do { try becameAmbiguous.tapMobile(ambiguousAnchor); failures.append("a fresh duplicate must fail before tapping") } catch { }
+check(ambiguousLive.taps == 0, "a unique initial query is not permission to tap an ambiguous later query")
+let (authCandidate, fieldAnchor, liveField) = mobileCase(.secureTextField, id: "", label: "密码（仅本次使用）")
+let passwordControl = try authCandidate.bindMobile(fieldAnchor)
+check(passwordControl.live.element === liveField && liveField.taps == 0,
+      "password proof must bind the actual typed secure field in its WebView without editing")
+let confirmation = try aliasCandidate.bindMobile(aliasAnchor)
+check(authCandidate.sameMobileOwner(confirmation, passwordControl), "credential proof may keep the review window and WebView")
+let replacedView = row(passwordControl.web.snapshot, path: [0, 1])
+let replacedAuthOwner = RevealedControl(live: passwordControl.live, owner: passwordControl.owner,
+    window: passwordControl.window, web: replacedView)
+check(!authCandidate.sameMobileOwner(confirmation, replacedAuthOwner), "an otherwise equal auth control in a different WebView must fail")
+func authFixture(_ fieldSamples: [[Observed]], liveSnapshot: Snapshot = fieldAnchor.snapshot,
+                 scope: [Int] = [0, 0], liveCopies: Int = 1, hits: Bool = true,
+                 ready: Bool = false) -> (Adapter, Observations, Element, Element) {
+    let window = [scope[0]]
+    let submit = Snapshot(identifier: "ssh-connect", label: "连接 SSH", elementType: .button,
+        frame: CGRect(x: 24, y: 550, width: 342, height: 42), isEnabled: ready)
+    let submitRow = row(submit, path: scope + [7], window: window, web: scope)
+    let headings = [("ssh-step-title", "SSH 账号认证"), ("ssh-reviewed-endpoint", "fixture-target"),
+                    ("ssh-approved-note", "本次主机密钥已确认")].enumerated().map { index, name in
+        row(snapshot(.staticText, identifier: name.0, label: name.1), path: scope + [index + 1], window: window, web: scope)
+    }
+    let page = [row(snapshot(.window, frame: screen, label: ""), path: window),
+                row(snapshot(.webView, frame: screen, label: ""), path: scope), submitRow] + headings
+    let observations = Observations(fieldSamples.map { page + $0 })
+    let password = Element(), button = Element()
+    password.identity = ["identifier": liveSnapshot.identifier, "label": liveSnapshot.label]
+    button.identity = ["identifier": submit.identifier, "label": submit.label]
+    observations.webSurface.descendantsByRole[.secureTextField] = Array(repeating: password, count: liveCopies)
+    observations.webSurface.descendantsByRole[.button] = [button]
+    let candidate = Adapter(app: App(frame: screen),
+        current: LiveControl(snapshot: liveSnapshot, hittable: hits, element: password),
+        rows: page + (fieldSamples.last ?? []), blockers: [], observations: observations,
+        pathControls: [submitRow.path: LiveControl(snapshot: submit, hittable: ready, element: button)])
+    return (candidate, observations, password, button)
+}
+func checkAuthObservation() throws {
+    Date.tick = 3
+    defer { Date.tick = 25 }
+    let invalidFrame = row(snapshot(.secureTextField, frame: .zero, label: fieldAnchor.snapshot.label), path: fieldAnchor.path)
+    let changingFrame = row(snapshot(.secureTextField, frame: movedFrame, label: fieldAnchor.snapshot.label), path: fieldAnchor.path)
+    let samples = [[], [invalidFrame], [changingFrame], [fieldAnchor]]
+    let (baseline, before, oldField, _) = authFixture(samples)
+    let earliest = try baseline.authPageOnly()
+    check(before.treeReads == 1 && !earliest.contains { $0.snapshot.elementType == .secureTextField } && oldField.taps == 0,
+          "the original shell witness returns before the password can be resolved")
+    let (updated, after, newField, submit) = authFixture(samples)
+    let proof = try updated.auth(confirmation)
+    check(after.treeReads == 4 && proof.password.live.element === newField && proof.submit.live.element === submit &&
+          newField.taps == 0 && submit.taps == 0 && newField.inputs.isEmpty && after.webSurface.drags.isEmpty,
+          "the actual auth witness must passively wait for the fresh full sheet and stable identity/frame")
+
+    let wrongOwner = row(fieldAnchor.snapshot, path: [0, 1, 4], web: [0, 1])
+    let repeated = row(fieldAnchor.snapshot, path: [0, 0, 8])
+    let insecure = row(snapshot(.textField, label: fieldAnchor.snapshot.label), path: [0, 0, 8])
+    let rawDisabled = row(Snapshot(identifier: "", label: fieldAnchor.snapshot.label, elementType: .secureTextField,
+                                   frame: oldFrame, isEnabled: false), path: fieldAnchor.path)
+    let liveDisabled = rawDisabled.snapshot
+    let noRole = row(snapshot(.staticText, label: fieldAnchor.snapshot.label), path: fieldAnchor.path)
+    let unknown = row(snapshot(.secureTextField, label: "other identity"), path: fieldAnchor.path)
+    let lostWindow = row(fieldAnchor.snapshot, path: [0, 1, 4], web: [0, 1])
+    let lostScope = authFixture([[lostWindow]], scope: [0, 1])
+    let cases = [(authFixture([[unknown]]), "identity_missing", false),
+        (authFixture([[noRole]]), "secure_role_missing", false),
+        (authFixture([[fieldAnchor]], liveCopies: 0), "live_missing", false),
+        (authFixture([[invalidFrame]]), "frame_unsettled", false),
+        (authFixture([[fieldAnchor]], hits: false), "unhittable", false),
+        (authFixture([[fieldAnchor, repeated], [fieldAnchor]]), "raw_ambiguous", true),
+        (authFixture([[fieldAnchor, insecure], [fieldAnchor]]), "wrong_role", true),
+        (authFixture([[wrongOwner], [fieldAnchor]]), "raw_owner_unproven", true),
+        (authFixture([[fieldAnchor]], liveCopies: 2), "live_ambiguous", true),
+        (lostScope, "owner_changed", true),
+        (authFixture([[rawDisabled], [fieldAnchor]]), "native_control_disabled", true),
+        (authFixture([[fieldAnchor]], liveSnapshot: liveDisabled), "native_control_disabled", true)]
+    for ((candidate, samples, password, button), reason, immediate) in cases {
+        let expected = reason.hasPrefix("native_") ? reason : "native_mobile_password_" + reason
+        do { _ = try candidate.auth(confirmation); failures.append("invalid auth observation accepted: \(reason)") }
+        catch let failure as Rejected { check(failure.reason == expected, "wrong failure classification for \(reason)") }
+        check((immediate ? samples.treeReads == 1 : (2...8).contains(samples.treeReads)) &&
+              password.taps == 0 && password.inputs.isEmpty && button.taps == 0 && samples.webSurface.drags.isEmpty,
+              "auth sampling must remain bounded and passive before \(reason)")
+    }
+
+    let offscreen = Snapshot(identifier: "", label: fieldAnchor.snapshot.label, elementType: .secureTextField,
+        frame: oldFrame.offsetBy(dx: 0, dy: 500))
+    let scrolled = row(offscreen, path: fieldAnchor.path)
+    let (scrollCandidate, scrollObs, scrollField, _) = authFixture([[scrolled]], liveSnapshot: offscreen, hits: false)
+    _ = try scrollCandidate.auth(confirmation)
+    check(scrollObs.treeReads == 1 && scrollField.taps == 0 && scrollObs.webSurface.drags.isEmpty,
+          "a stable offscreen field can proceed to the existing reveal guard without touching it during observation")
+    var entered = offscreen
+    entered.value = "••••"
+    let enteredRow = row(entered, path: fieldAnchor.path)
+    let (submitCandidate, submitObs, enteredField, _) = authFixture([[enteredRow]], liveSnapshot: entered, hits: false, ready: true)
+    _ = try submitCandidate.auth(proof.password, ready: true)
+    check(submitObs.treeReads == 1 && enteredField.taps == 0, "submit proof does not need to refocus the password field")
+}
+do { try checkAuthObservation() }
+catch let failure as Rejected { failures.append("auth observation failed before complete evidence: \(failure.reason)") }
+
+func checkPasswordAXAliases() throws {
+    let spaced = "密码 （仅本次使用）"
+    let spacedField = snapshot(.secureTextField, label: spaced)
+    let spacedRow = row(spacedField, path: fieldAnchor.path)
+    for identifier in ["", spaced, "ssh-password"] {
+        let field = snapshot(.secureTextField, identifier: identifier, label: spaced)
+        let (candidate, observations, password, submit) = authFixture([[row(field, path: fieldAnchor.path)]], liveSnapshot: field)
+        let proof = try candidate.auth(confirmation)
+        check(proof.password.live.element === password && observations.treeReads == 1 && password.taps + submit.taps == 0,
+              "the measured WebKit label should identify only the stable same-owner secure input")
+    }
+    let (liveAmbiguous, liveObservations, liveField, _) = authFixture([[spacedRow]], liveSnapshot: spacedField)
+    let compactAlias = Element()
+    compactAlias.identity = ["identifier": "", "label": fieldAnchor.snapshot.label]
+    liveObservations.webSurface.descendantsByRole[.secureTextField]?.append(compactAlias)
+    let wrongIdentity = snapshot(.secureTextField, identifier: "unrelated-control", label: spaced)
+    let doubledSpace = snapshot(.secureTextField, label: "密码  （仅本次使用）")
+    let unknown = snapshot(.secureTextField, label: "密码（本次使用）")
+    let wrongOwner = row(spacedField, path: [1, 0, 4], window: [1], web: [1, 0])
+    let foreignAlias = row(fieldAnchor.snapshot, path: [1, 0, 4], window: [1], web: [1, 0])
+    let rawAlias = row(fieldAnchor.snapshot, path: [0, 0, 8])
+    let plain = row(snapshot(.textField, label: spaced), path: [0, 0, 8])
+    func testCase(_ fixture: (Adapter, Observations, Element, Element), _ reason: String) -> (Adapter, Element, String) {
+        (fixture.0, fixture.2, reason)
+    }
+    let cases: [(Adapter, Element, String)] = [
+        (liveAmbiguous, liveField, "live_ambiguous"),
+        testCase(authFixture([[spacedRow, rawAlias]], liveSnapshot: spacedField), "raw_ambiguous"),
+        testCase(authFixture([[spacedRow, foreignAlias]], liveSnapshot: spacedField), "raw_ambiguous"),
+        testCase(authFixture([[wrongOwner]], liveSnapshot: spacedField), "raw_owner_unproven"),
+        testCase(authFixture([[spacedRow, plain]], liveSnapshot: spacedField), "wrong_role"),
+        testCase(authFixture([[row(wrongIdentity, path: fieldAnchor.path)]], liveSnapshot: wrongIdentity), "identity_missing"),
+        testCase(authFixture([[row(doubledSpace, path: fieldAnchor.path)]], liveSnapshot: doubledSpace), "identity_missing"),
+        testCase(authFixture([[row(unknown, path: fieldAnchor.path)]], liveSnapshot: unknown), "identity_missing"),
+    ]
+    for (candidate, field, reason) in cases {
+        do { _ = try candidate.auth(confirmation); failures.append("alias failed open: \(reason)") }
+        catch let failure as Rejected { check(failure.reason == "native_mobile_password_" + reason, "unexpected alias verdict") }
+        check(field.taps == 0 && field.inputs.isEmpty, "disputed password alias must never interact")
+    }
+
+    var privateSnapshot = snapshot(.secureTextField, identifier: "private-id", label: "private-label")
+    privateSnapshot.value = "private-value"
+    privateSnapshot.placeholderValue = "private-placeholder"
+    let otherWeb = row(snapshot(.secureTextField, label: "other-private-label"), path: [0, 1, 2], web: [0, 1])
+    let base = row(snapshot(.staticText, label: "密码"), path: [0, 0, 8])
+    let hint = row(snapshot(.staticText, label: "（仅本次使用）"), path: [0, 0, 9])
+    let (privacy, observation, _, _) = authFixture([[row(privateSnapshot, path: fieldAnchor.path), otherWeb, base, hint]],
+                                                    liveSnapshot: privateSnapshot, hits: false)
+    do { _ = try privacy.auth(confirmation); failures.append("opaque password identity accepted") }
+    catch let failure as Rejected { check(failure.reason == "native_mobile_password_identity_missing", "opaque name stays unresolved") }
+    let evidence = observation.checkpoints.first?.1 ?? [:]
+    let raw = evidence["raw"] as? [[String: Any]] ?? []
+    let scoped = evidence["scopedSecure"] as? [[String: Any]] ?? []
+    let encoded = try JSONSerialization.data(withJSONObject: evidence)
+    check(observation.checkpoints.count == 1 && Set(raw.compactMap { $0["owner"] as? String }) == ["sameWeb", "otherWeb"] &&
+          Set(raw.compactMap { $0["labelKind"] as? String }) == ["base", "hint", "other"] &&
+          evidence["rawCount"] as? Int == 4 && evidence["scopedSecureCount"] as? Int == 1 &&
+          scoped.first?["hit"] as? String == "no" && scoped.first?["frameKind"] as? String == "inside" &&
+          !String(decoding: encoded, as: UTF8.self).contains("private"),
+          "the last failure must expose only fixed classifications of the scoped native query and raw snapshot")
+
+    let (stale, staleReads, staleField, staleSubmit) = authFixture([[], [spacedRow]], liveSnapshot: spacedField)
+    let departed = staleReads.trees[1].filter { $0.snapshot.identifier != "ssh-step-title" }
+    staleReads.trees = [staleReads.trees[0]] + Array(repeating: departed, count: 9)
+    Date.tick = 3
+    defer { Date.tick = 25 }
+    do { _ = try stale.auth(confirmation); failures.append("late field accepted on a departed authentication page") }
+    catch let failure as Rejected { check(failure.reason == "native_mobile_setup_unproven", "the current page must still be proven") }
+    check(staleReads.treeReads > 1 && staleReads.checkpoints.isEmpty && staleField.taps + staleSubmit.taps == 0,
+          "the deadline must not publish or act from the old authenticated-page snapshot")
+}
+do { try checkPasswordAXAliases() }
+catch let failure as Rejected { failures.append("verified WebKit mapping failed before completing the auth gate: \(failure.reason)") }
 func expectTap(_ frame: CGRect, treeFrame: CGRect? = nil, blockers: [CGRect],
                appFrame: CGRect = screen, windowFrame: CGRect = screen, webAncestors: [CGRect] = [screen],
                hittable: Bool = true, diagnostic: String? = nil, samples: Int = 1, reason: String) {
@@ -718,7 +1038,7 @@ for insetKeyboard in insetKeyboards {
         (field.label, LiveControl(snapshot: field, hittable: true, element: Element()))
     })
     let samples = Observations([], occlusionSamples: [[statusBar]])
-    var candidate = Adapter(app: App(frame: screen), current: controls[host.label]!,
+    let candidate = Adapter(app: App(frame: screen), current: controls[host.label]!,
                             rows: formRows(moved, host: host, user: user, probe: probe),
                             blockers: [statusBar, insetKeyboard], observations: samples, formControls: controls)
     var succeeded = true
@@ -1352,7 +1672,7 @@ if !failures.isEmpty {
                                         check=True, timeout=10).stdout
                 self.assertEqual(hashlib.sha256(source).hexdigest(), digest, name)
         controls = evidence["controls"]
-        self.assert_current_form_markup(repo, controls)
+        desktop_password, mobile_password = self.assert_current_form_markup(repo, controls)
         self.assertEqual([row["ax_role"] for row in controls], ["AXTextField"] * 3 + ["AXButton"])
         self.assertTrue(all(not row["ax_identifier_present"] and row["same_window"] for row in controls))
         self.assertTrue(all(row.get("editable") for row in controls[:3]))
@@ -1366,7 +1686,17 @@ if !failures.isEmpty {
             samples.extend([f'F(identifier: "", label: {label}, role: "staticText", value: nil)',
                             f'F(identifier: "", label: {label}, role: "{role}", value: nil)'])
         program = "import Foundation\nimport CoreGraphics\ntypealias F = NativeControlPolicy.Fact\nlet observed = [\n" + ",\n".join(samples) + "]\n"
+        program += f"let desktopPassword = {json.dumps(desktop_password, ensure_ascii=False)}\n"
+        program += f"let mobilePassword = {json.dumps(mobile_password, ensure_ascii=False)}\n"
         program += r'''
+precondition(NativeControlPolicy.desktopPasswordLabel == desktopPassword)
+precondition(NativeControlPolicy.mobilePasswordLabel == mobilePassword)
+for label in [desktopPassword, mobilePassword] {
+    precondition(NativeControlPolicy.isPasswordField(identifier: "", label: label))
+}
+precondition(NativeControlPolicy.isPasswordField(identifier: "ssh-password", label: ""))
+precondition(!NativeControlPolicy.isPasswordField(identifier: "", label: "请填写密码"))
+
 let edit: Set<String> = ["textField", "textView", "searchField"]
 func verdict(_ rows: [F], _ paths: [[Int]], _ label: String, _ roles: Set<String>, _ id: String? = nil)
   -> (index: Int?, role: String, reason: String, matches: Int) {
@@ -1439,6 +1769,7 @@ precondition(verdict(moved, [[0, 1], [0, 0]], "主机地址", edit).index == 0,
         class SSHMarkup(HTMLParser):
             inside_form = False
             label = None
+            label_variant = None
             probe = None
 
             def __init__(self):
@@ -1455,14 +1786,21 @@ precondition(verdict(moved, [[0, 1], [0, 0]], "主机地址", edit).index == 0,
                     return
                 if tag == "label":
                     self.label = []
+                elif tag == "span" and self.label is not None:
+                    classes = attrs.get("class", "").split()
+                    self.label_variant = next((name for name in classes if name in ("ssh-mobile-only", "ssh-desktop-only")), None)
                 elif tag == "input" and self.label is not None:
-                    self.fields.setdefault(identifier, []).append((attrs.get("type", "text"), "".join(self.label).strip()))
+                    desktop, mobile = (
+                        "".join(text for variant, text in self.label if variant in (None, layout)).strip()
+                        for layout in ("ssh-desktop-only", "ssh-mobile-only")
+                    )
+                    self.fields.setdefault(identifier, []).append((attrs.get("type", "text"), desktop, mobile))
                 elif tag == "button" and identifier == "ssh-probe":
                     self.probe = (attrs.get("type"), [])
 
             def handle_data(self, text):
                 if self.label is not None:
-                    self.label.append(text)
+                    self.label.append((self.label_variant, text))
                 if self.probe is not None:
                     self.probe[1].append(text)
 
@@ -1471,6 +1809,9 @@ precondition(verdict(moved, [[0, 1], [0, 0]], "主机地址", edit).index == 0,
                     self.inside_form = False
                 elif tag == "label":
                     self.label = None
+                    self.label_variant = None
+                elif tag == "span":
+                    self.label_variant = None
                 elif tag == "button" and self.probe is not None:
                     kind, text = self.probe
                     self.probes.append((kind, "".join(text).strip()))
@@ -1479,9 +1820,12 @@ precondition(verdict(moved, [[0, 1], [0, 0]], "主机地址", edit).index == 0,
         markup = SSHMarkup()
         markup.feed((repo / "validation/tauri/index.html").read_text())
         for identifier, kind, control in zip(("ssh-host", "ssh-port", "ssh-user"), ("text", "number", "text"), controls):
-            self.assertEqual(markup.fields.get(identifier), [(kind, control["visible_name"])], identifier)
-        self.assertEqual(markup.fields.get("ssh-password"), [("password", "密码")])
+            name = control["visible_name"]
+            self.assertEqual(markup.fields.get(identifier), [(kind, name, name)], identifier)
+        password = markup.fields.get("ssh-password")
+        self.assertEqual(password, [("password", "密码", "密码（仅本次使用）")])
         self.assertEqual(markup.probes, [("button", controls[3]["visible_name"])])
+        return password[0][1:]
 
     def test_real_label_samples_and_ambiguity(self):
         program = r'''

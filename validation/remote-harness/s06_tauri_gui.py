@@ -61,6 +61,65 @@ return {text:focusPreserved && hit(final) ? row.textContent.replace(/\u00a0/g,' 
 """
 
 
+DIRECT_EXIT_SCRIPT = r"""
+const [panels, targets, arm] = arguments;
+const one = (root, selector) => {
+    const matches = root?.querySelectorAll(selector);
+    return matches?.length === 1 ? matches[0] : null;
+};
+const root = one(document, '#view-content');
+const page = one(document, '#remote-page');
+const views = panels.map(selector => one(root, ':scope > ' + selector));
+const [a, b] = views;
+const visible = element => !!element && !element.closest('[hidden]') &&
+    !!element.getClientRects().length && getComputedStyle(element).visibility === 'visible';
+const originalTargetsActive = !document.hidden && !document.querySelector('dialog[open]') &&
+    visible(page) && root?.dataset.split === '2' &&
+    root.querySelectorAll(':scope > [data-role="workbench-panel"]').length === 2 &&
+    views.every((view, index) => visible(view) &&
+        one(view, ':scope > p:not([data-role])')?.textContent.split(' · ').slice(-2)
+            .join(' · ') === targets[index].join(' · ') &&
+        one(view, '.tab-connection-actions')?.dataset.state === 'active');
+const selectedB = a?.dataset.focus === 'false' && b?.dataset.focus === 'true';
+const xterms = views.map(view => one(view, '.terminal-host textarea.xterm-helper-textarea'));
+const modes = views.map(view => one(view, '.tab-mobile-controls')?.dataset.mode);
+const editor = xterms[1];
+const directXterm = !!editor && visible(editor) && document.activeElement === editor &&
+    !editor.readOnly && editor.getAttribute('inputmode') === 'text' && modes[1] === 'direct';
+const bReceipt = one(b, '[data-role="input-receipt"]:not([hidden]) > p')?.textContent;
+const bReceiptMatched = bReceipt?.includes(
+    ` · pane：${targets[1][0]} · terminal：${targets[1][1]} · 受理 1 字节。`) === true;
+const aFocusButton = one(a, '.panel-head > button[data-role="panel-focus"]');
+const aFocusButtonReady = visible(aFocusButton) && !aFocusButton.disabled &&
+    aFocusButton.textContent.trim() === '设为输入焦点' &&
+    aFocusButton.getAttribute('aria-pressed') === 'false';
+
+let armed = false;
+if (arm && originalTargetsActive && selectedB && directXterm && bReceiptMatched &&
+    aFocusButtonReady && !window.__s06DirectExitKey) {
+    const record = {editor, destination: aFocusButton, count: 0, matched: false};
+    window.__s06DirectExitKey = record;
+    // Passive observer on the router's same capture target, registered later.
+    // Read the native key after the router has had the opportunity to consume it.
+    document.addEventListener('keydown', event => {
+        if (event.key !== 'F6') return;
+        record.count++;
+        record.matched = event.target === record.editor && event.isTrusted && event.defaultPrevented &&
+            event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey &&
+            !event.repeat && !event.isComposing;
+    }, {capture: true, passive: true});
+    armed = true;
+}
+const record = window.__s06DirectExitKey;
+return {originalTargetsActive, selectedB, directXterm, bReceiptMatched, aFocusButtonReady, armed,
+    aFocusButtonFocused: aFocusButtonReady && aFocusButton === record?.destination &&
+        document.activeElement === aFocusButton,
+    bothReadOnly: xterms.every((item, index) => !!item?.readOnly &&
+        item.getAttribute('inputmode') === 'none' && modes[index] === 'observe'),
+    keyCount: record?.count ?? 0, trustedConsumedChord: record?.matched === true};
+"""
+
+
 MANUAL_PAUSE_SCRIPT = r"""
 const [selectors,targets,element]=arguments;
 const one=(root,selector)=>{
@@ -235,12 +294,37 @@ class SplitDriver:
         path = wait_for(locate, 's06_tauri_public_control_missing')
         self.driver.call('POST', path + '/click', {})
 
-    def keyboard(self, text):
-        actions = []
+    def keyboard(self, text, *, modifiers=()):
+        actions = [{'type': 'keyDown', 'value': key} for key in modifiers]
         for char in text:
             actions.extend([{'type': 'keyDown', 'value': char}, {'type': 'keyUp', 'value': char}])
+        actions.extend({'type': 'keyUp', 'value': key} for key in reversed(modifiers))
         self.driver.call('POST', self.driver.session + '/actions', {'actions': [
             {'type': 'key', 'id': 's06-native-keyboard', 'actions': actions}]})
+
+    def escape_direct_input(self, panels, targets):
+        before = ('originalTargetsActive', 'selectedB', 'directXterm', 'bReceiptMatched', 'aFocusButtonReady')
+
+        def ready(arm=False):
+            evidence = self.read(DIRECT_EXIT_SCRIPT, panels, targets, arm)
+            return (isinstance(evidence, dict) and all(evidence.get(key) is True for key in before) and
+                    (not arm or evidence.get('armed') is True))
+
+        def escaped():
+            evidence = self.read(DIRECT_EXIT_SCRIPT, panels, targets, False)
+            return (isinstance(evidence, dict) and type(evidence.get('keyCount')) is int and
+                    evidence['keyCount'] == 1 and all(evidence.get(key) is True for key in (
+                        'originalTargetsActive', 'selectedB', 'aFocusButtonFocused',
+                        'bothReadOnly', 'trustedConsumedChord')))
+
+        # The independent peer has received b. Wait for the matching local
+        # receipt as well, so this exit cannot interrupt an in-flight send.
+        wait_for(ready, 's06_tauri_direct_escape_not_ready')
+        if not ready(arm=True):
+            raise GuiFailure('s06_tauri_direct_escape_not_armed')
+        # W3C WebDriver key values for F6, Control and Shift. Send exactly once.
+        self.keyboard('\ue036', modifiers=('\ue009', '\ue008'))
+        wait_for(escaped, 's06_tauri_direct_escape_unconfirmed')
 
     def focus(self, panel):
         if self.read('return document.querySelector(arguments[0])?.dataset.focus;', panel) != 'true':
@@ -690,6 +774,7 @@ def exercise(args, root, env, configs, approvals, expected):
                     return Object.fromEntries(['left','right','top','width','height'].map(k=>[k,Math.round(r[k])]));});''', panels)
                 (args.output / 's06-tauri-panel-geometry.json').write_text(json.dumps(geometry))
                 require_side_by_side(geometry)
+                targets = []
                 for index, panel in enumerate(panels):
                     stage = 'connect_' + str(index)
                     ui.focus(panel)
@@ -697,8 +782,11 @@ def exercise(args, root, env, configs, approvals, expected):
                     ui.named('连接', panel + ' .tab-connection-actions')
                     pane = panel + ' button[data-pane-id="' + configs[index]['paneId'] + '"]'
                     driver.wait_control(pane)
-                    if driver.attribute(pane, 'data-terminal-id') != fixture_terminal_id(configs[index]):
+                    displayed_terminal = driver.attribute(pane, 'data-terminal-id')
+                    terminal = fixture_terminal_id(configs[index])
+                    if displayed_terminal != terminal:
                         raise GuiFailure('s06_tauri_live_target_mismatch')
+                    targets.append((configs[index]['paneId'], terminal))
                     driver.click(pane)
                     driver.wait_control(panel + ' .terminal-select-button')
                 stage = 'visible_frames'
@@ -727,6 +815,13 @@ def exercise(args, root, env, configs, approvals, expected):
                              's06_tauri_direct_mode_not_ready')
                     ui.keyboard('b')
                     wait_for(lambda: bounded_wire(other / 'received.bin', 4096) == b'b', 's06_tauri_direct_input_missing')
+                    stage = 'direct_escape'
+                    ui.escape_direct_input(panels, targets)
+                    if any(peer_connection_evidence(approval) != {'authenticationCount': 1, 'closed': False}
+                           for approval in approvals):
+                        raise GuiFailure('s06_tauri_direct_escape_peer_changed')
+                    check_bytes((b'', b'b'))
+                    stage = 'input_focus'
                 ui.focus(panels[0])
                 driver.click(panels[1] + ' .terminal-host')
                 ui.keyboard('x')  # Late key on the old panel, without selecting its header.
@@ -774,6 +869,9 @@ def exercise(args, root, env, configs, approvals, expected):
                               for first, second in ticks],
                     'peerAuthenticationCounts': [peer_connection_evidence(a)['authenticationCount'] for a in approvals],
                     'peersClosedBeforeDriverExit': True, 'frameEvidence': 'public visible-terminal-text UI snapshots; native WebDriver actions',
+                    **({'guardedDirectEscape': {'trustedChordConsumed': True, 'domFocusMovedToA': True,
+                        'selectedTargetStayedB': True, 'originalTargetsAndPeersPreserved': True,
+                        'readOnlyAfterEscape': True, 'noExtraInputBytes': True}} if guarded else {}),
                     **({'windowResize': resize_evidence} if resize_evidence is not None else {})}
             finally:
                 driver.close()

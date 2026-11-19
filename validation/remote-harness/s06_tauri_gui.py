@@ -135,6 +135,8 @@ return {text:focusPreserved && hit(final) ? row.textContent.replace(/\u00a0/g,' 
 
 FIRST_DIRECT_KEY_SCRIPT = r"""
 const [panels, targets, action] = arguments;
+const kinds = ['keydown', 'keypress', 'beforeinput', 'input', 'keyup', 'compositionstart', 'compositionend'];
+const count = (sample, name) => { sample[name] = Math.min(sample[name] + 1, 64); };
 const one = (root, selector) => {
     const matches = root?.querySelectorAll(selector);
     return matches?.length === 1 ? matches[0] : null;
@@ -171,27 +173,91 @@ const bReceipt = !receipt ? 'absent' :
 let record = window.__s06FirstDirectKey;
 if (action === 'prepare' && !record && originalTargetsActive && selectedB && aReadOnly &&
     visible(editor) && bReadOnly && bMode === 'observe' && bReceipt === 'absent') {
-    record = {editor, keyDowns: 0, matched: false};
+    record = {editor, keyDowns: 0, matched: false, modeResources: 0, sendResources: 0,
+        events: Object.fromEntries(kinds.map(kind => [kind, {atDocument: 0, trustedOriginal: 0,
+            fixtureCharacter: 0, usableLegacyCode: 0, composed: 0, whileComposing: 0, preventedAtDocument: 0,
+            atEditorAfterHandlers: 0, preventedAtEditor: 0}]))};
+    // The mode grant calibrates custom-protocol resource timing in this WebView.
+    // The native fallback may have no resource entry, which stays unavailable.
+    try {
+        const runtime = window.__TAURI_INTERNALS__;
+        const mode = runtime.convertFileSrc('remote_tab_input_mode', 'ipc');
+        const send = runtime.convertFileSrc('remote_tab_input_send', 'ipc');
+        record.countResources = entries => {
+            for (const entry of entries) {
+                if (entry.name === mode) count(record, 'modeResources');
+                if (entry.name === send) count(record, 'sendResources');
+            }
+        };
+        record.resources = new PerformanceObserver(list => record.countResources(list.getEntries()));
+        record.resources.observe({type: 'resource'});
+    } catch {
+        record.resources = null;
+    }
     window.__s06FirstDirectKey = record;
 }
 const originalEditorB = !!record && editor === record.editor;
-if (action === 'arm' && originalEditorB && !record.onKey && originalTargetsActive && selectedB && aReadOnly &&
+if (action === 'arm' && originalEditorB && !record.onCapture && originalTargetsActive && selectedB && aReadOnly &&
     documentFocused && bEditorFocused && bEditorWritable && bModeReady && bReceipt === 'absent') {
-    // Observe delivery without stopping, re-targeting or synthesizing the key.
-    record.onKey = event => {
-        record.keyDowns++;
-        record.matched = event.key === 'b' && event.isTrusted && !event.repeat && !event.isComposing &&
+    const original = event => event.isTrusted && document.hasFocus() && event.target === record.editor &&
+        document.activeElement === record.editor && !record.editor.readOnly &&
+        record.editor.getAttribute('inputmode') === 'text';
+    const plain = event => !event.repeat && !event.isComposing &&
             !event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey &&
-            document.hasFocus() && event.target === record.editor && document.activeElement === record.editor &&
-            !record.editor.readOnly && record.editor.getAttribute('inputmode') === 'text';
+            event.key === 'b';
+    // Observe on either side of the existing target handlers without changing
+    // the event. No key value, text, resource URL or IPC payload is retained.
+    record.onCapture = event => {
+        const kind = event.type;
+        if (kind === 'keydown') {
+            record.keyDowns++;
+            record.matched = plain(event) && original(event);
+        }
+        if (event.target !== record.editor) return;
+        const sample = record.events[kind];
+        count(sample, 'atDocument');
+        if (event.defaultPrevented) count(sample, 'preventedAtDocument');
+        if (!original(event)) return;
+        count(sample, 'trustedOriginal');
+        if (event.composed) count(sample, 'composed');
+        if (event.isComposing) count(sample, 'whileComposing');
+        if (kind === 'keydown' || kind === 'keyup') {
+            if (plain(event)) count(sample, 'fixtureCharacter');
+            if (event.keyCode === 66) count(sample, 'usableLegacyCode');
+        } else if (kind === 'keypress') {
+            if (plain(event)) count(sample, 'fixtureCharacter');
+            if (event.charCode === 98 || (event.which == null && event.keyCode === 98))
+                count(sample, 'usableLegacyCode');
+        } else if ((kind === 'beforeinput' || kind === 'input') &&
+                   event.inputType === 'insertText' && event.data === 'b' && !event.isComposing) {
+            count(sample, 'fixtureCharacter');
+        }
     };
-    document.addEventListener('keydown', record.onKey, {capture: true, passive: true});
+    record.onEditor = event => {
+        if (!original(event)) return;
+        const sample = record.events[event.type];
+        count(sample, 'atEditorAfterHandlers');
+        if (event.defaultPrevented) count(sample, 'preventedAtEditor');
+    };
+    for (const kind of kinds) {
+        document.addEventListener(kind, record.onCapture, {capture: true, passive: true});
+        record.editor.addEventListener(kind, record.onEditor, {capture: true, passive: true});
+    }
 }
+if (record?.resources) record.countResources(record.resources.takeRecords());
 const result = {originalTargetsActive, selectedB, originalEditorB, aReadOnly, bReadOnly,
     documentFocused, bEditorFocused, bEditorWritable, bModeReady, bMode, bReceipt,
-    armed: !!record?.onKey, keyDowns: record?.keyDowns ?? 0, trustedKeyOnOriginalB: record?.matched === true};
+    armed: !!record?.onCapture, keyDowns: record?.keyDowns ?? 0, trustedKeyOnOriginalB: record?.matched === true,
+    events: record?.events ?? null, ipcTiming: {calibrated: (record?.modeResources ?? 0) > 0,
+        completedSendResources: record?.sendResources ?? 0}};
 if (action === 'finish' && record) {
-    if (record.onKey) document.removeEventListener('keydown', record.onKey, true);
+    if (record.onCapture) {
+        for (const kind of kinds) {
+            document.removeEventListener(kind, record.onCapture, true);
+            record.editor.removeEventListener(kind, record.onEditor, true);
+        }
+    }
+    record.resources?.disconnect();
     delete window.__s06FirstDirectKey;
 }
 return result;
@@ -515,18 +581,32 @@ class SplitDriver:
         ready = ('originalTargetsActive', 'selectedB', 'originalEditorB', 'aReadOnly',
                  'documentFocused', 'bEditorFocused', 'bEditorWritable', 'bModeReady', 'armed')
         boolean_fields = (*ready, 'bReadOnly', 'trustedKeyOnOriginalB')
+        event_kinds = ('keydown', 'keypress', 'beforeinput', 'input', 'keyup', 'compositionstart', 'compositionend')
+        event_fields = ('atDocument', 'trustedOriginal', 'fixtureCharacter', 'usableLegacyCode', 'composed', 'whileComposing',
+                        'preventedAtDocument', 'atEditorAfterHandlers', 'preventedAtEditor')
         report = {'stage': 'before_mode', 'keyboardAttempted': False,
                   'beforeMode': None, 'beforeKey': None, 'afterKey': None}
+
+        def bounded_count(value):
+            return value if type(value) is int and 0 <= value <= 64 else None
 
         def read(action):
             state = self.read(FIRST_DIRECT_KEY_SCRIPT, panels, targets, action)
             if not isinstance(state, dict):
                 raise GuiFailure('s06_tauri_direct_key_observation_invalid')
+            events = state.get('events')
+            stages = {kind: {field: bounded_count(events[kind].get(field)) for field in event_fields}
+                      for kind in event_kinds if isinstance(events, dict) and isinstance(events.get(kind), dict)}
+            timing = state.get('ipcTiming')
+            calibrated = isinstance(timing, dict) and timing.get('calibrated') is True
+            sends = bounded_count(timing.get('completedSendResources')) if isinstance(timing, dict) else None
+            observed = calibrated or bool(sends)
             return {**{field: state.get(field) is True for field in boolean_fields},
                     'bMode': state.get('bMode') if state.get('bMode') in ('observe', 'draft', 'direct') else None,
                     'bReceipt': state.get('bReceipt') if state.get('bReceipt') in ('absent', 'matched', 'other') else None,
-                    'keyDowns': state.get('keyDowns') if type(state.get('keyDowns')) is int and
-                    0 <= state['keyDowns'] <= 64 else None}
+                    'keyDowns': bounded_count(state.get('keyDowns')), 'events': stages,
+                    'ipcTiming': {'calibrated': calibrated, 'status': 'observed' if observed else 'unavailable',
+                                  'completedSendResources': sends if observed else None}}
 
         def peer_inputs():
             result = []

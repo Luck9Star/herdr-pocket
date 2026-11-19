@@ -133,6 +133,10 @@ void main() {
         expect(tabs.active, same(bFocused ? tabB : tabA));
         expect(tabB.visible.value, isTrue);
         expect(tabB.inputEligible.value, bFocused);
+        final inputNotice = inside(tabB, find.byKey(const ValueKey('remote-input-ineligible')));
+        if (!bFocused) {
+          expect(tester.widget<Text>(inputNotice).data, '只读观察 · 获取输入焦点后可选择输入模式');
+        }
         expect(bAdapter.pauses, 0);
         expect(aAdapter.calls, 1);
         expect(bAdapter.calls, 1);
@@ -208,12 +212,14 @@ void main() {
         await tester.pump();
         expect(bAdapter.writes, isEmpty);
         if (scenario == CloseCase.focused) {
+          expect(tester.widget<Text>(inputNotice).data, '只读观察 · 获取输入焦点后可选择输入模式');
           final direct = inside(tabB, find.byKey(const ValueKey('remote-mode-direct')));
           expect(tester.widget<ChoiceChip>(direct).onSelected, isNull);
           final focus = inside(tabB, find.byKey(ValueKey('workspace-focus-${tabB.id}')));
           expect(find.descendant(of: focus, matching: find.text('B · 观察中 · 获取输入焦点')), findsOneWidget);
           await tap(focus);
           expect(tabB.inputEligible.value, isTrue);
+          expect(inputNotice, findsNothing);
           expect(focus, findsNothing);
           expect(bAdapter.inputTarget, same(originalTarget));
           expect(bAdapter.resumes, 0);

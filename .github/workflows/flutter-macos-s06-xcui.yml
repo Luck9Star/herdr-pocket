@@ -1,0 +1,50 @@
+name: Flutter macOS stock S06 native window
+on:
+  push:
+    branches: ['codex/macos-s06-native-window']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: flutter-macos-s06-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  native-stock-s06:
+    if: github.ref == 'refs/heads/codex/macos-s06-native-window'
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Check the dedicated runner and install the locked Flutter SDK
+        run: |
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$(uname -m)" = arm64
+          xcodebuild -version
+          python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/flutter-sdk"
+      - name: Prepare the normal Flutter macOS app and stock herdr
+        run: |
+          python3 -m venv "$RUNNER_TEMP/macos-s06-venv"
+          "$RUNNER_TEMP/macos-s06-venv/bin/pip" install -r validation/pairing/requirements.txt
+          curl --fail --silent --show-error --location --retry 2 \
+            https://github.com/herdrdev/herdr/releases/download/v0.9.5/herdr-macos-aarch64 \
+            -o "$RUNNER_TEMP/macos-s06-herdr"
+          printf '%s  %s\n' fb77c2232a05a8035421382c894392f4174e4e38a18e48af3dd0290157c3a7e2 \
+            "$RUNNER_TEMP/macos-s06-herdr" | shasum -a 256 -c
+          chmod 700 "$RUNNER_TEMP/macos-s06-herdr"
+          python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/macos-s06-flutter"
+          cd "$RUNNER_TEMP/macos-s06-flutter"
+          flutter pub get --enforce-lockfile
+          flutter build macos --debug --config-only --no-pub
+      - name: Exercise two paired targets in the actual window
+        run: |
+          "$RUNNER_TEMP/macos-s06-venv/bin/python" validation/remote-harness/macos_s06.py \
+            --app "$RUNNER_TEMP/macos-s06-flutter" --herdr "$RUNNER_TEMP/macos-s06-herdr" \
+            --output "$RUNNER_TEMP/macos-s06-evidence"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: flutter-macos-s06-stock-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/macos-s06-evidence/result.json
+          if-no-files-found: warn

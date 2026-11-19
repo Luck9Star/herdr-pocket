@@ -42,6 +42,12 @@ class Failure(ValueError):
     pass
 
 
+class ScreenshotReadFailure(Failure):
+    def __init__(self, diagnostic):
+        super().__init__('direct_android_screenshot_' + diagnostic['outcome'])
+        self.diagnostic = diagnostic
+
+
 def checked_paths(app, output, env):
     if (env.get('GITHUB_ACTIONS') != 'true' or not env.get('GITHUB_REF', '').startswith('refs/heads/codex/') or
             not re.fullmatch(r'[0-9a-f]{40}', env.get('GITHUB_SHA', '')) or
@@ -158,6 +164,10 @@ def rotation_checkpoint(fixture, value, completed):
     phase, stage = checked_rotation_stage(value, completed)
     if phase in completed:
         return None
+    return closed_rotation_evidence(fixture, stage)
+
+
+def closed_rotation_evidence(fixture, stage):
     if not fixture.wait_for_connections_closed(stage):
         raise Failure('direct_android_rotation_connection_not_closed')
     try:
@@ -248,6 +258,80 @@ def read_public_json(relative, limit=4096, *, package_known=False):
     return checked_public_reply(reply, relative, limit)
 
 
+SCREENSHOT_MAX_BYTES = 8_000_000
+PNG_SIGNATURE = b'\x89PNG\r\n\x1a\n'
+
+
+def screenshot_read_failure(source, operation, outcome, reply=None, expected=None):
+    offline = (b'error: device offline', b'adb: error: device offline', b'adb: device offline', b'device offline')
+    observed_offline = reply is not None and any(stream.strip() in offline for stream in (reply.stdout, reply.stderr))
+    # A later state check is evidence about this observation, not necessarily
+    # the earlier ADB call. Keep the failure category unless that call said offline.
+    diagnostic = {'source': source, 'operation': operation,
+                  'outcome': 'offline' if observed_offline else outcome,
+                  'deviceState': 'offline' if observed_offline else encrypted_device_state()}
+    if reply is not None:
+        diagnostic.update(returnCode=reply.returncode, stdoutBytes=len(reply.stdout), stderrBytes=len(reply.stderr))
+    if expected is not None:
+        diagnostic['expectedBytes'] = expected
+    raise ScreenshotReadFailure(diagnostic)
+
+
+def screenshot_adb(*args, source, operation, expected=None):
+    try:
+        return adb(*args, check=False)
+    except subprocess.TimeoutExpired:
+        screenshot_read_failure(source, operation, 'read_timeout', expected=expected)
+
+
+def screenshot_missing(reply, command, path):
+    missing = {f"{command}: {path}: No such file or directory".encode(),
+               f"{command}: '{path}': No such file or directory".encode()}
+    lines = [stream.strip() for stream in (reply.stdout, reply.stderr) if stream.strip()]
+    return bool(lines) and all(line in missing for line in lines)
+
+
+def read_screen_png(source, *, relative=None, name=None):
+    expected, path = None, None
+    if source == 'integration':
+        if (not re.fullmatch(r'cache/herdr-direct-ssh-[0-9]+', relative or '') or
+                name not in ('connected', 'rotation-connected')):
+            raise Failure('direct_android_screenshot_path_invalid')
+        path = f'{relative}/{name}.png'
+        metadata = screenshot_adb('shell', '-T', 'run-as', PACKAGE, 'stat', '-c', '%s', path,
+                                  source=source, operation='stat')
+        size = metadata.stdout.strip()
+        if metadata.returncode or metadata.stderr or not re.fullmatch(rb'[0-9]{1,12}', size):
+            outcome = 'missing' if screenshot_missing(metadata, 'stat', path) else 'stat_failed'
+            screenshot_read_failure(source, 'stat', outcome, metadata)
+        expected = int(size)
+        if expected == 0 or expected > SCREENSHOT_MAX_BYTES:
+            screenshot_read_failure(source, 'stat', 'empty' if not expected else 'oversize', metadata, expected)
+        command = ('exec-out', 'run-as', PACKAGE, 'cat', path)
+    elif source == 'device':
+        command = ('exec-out', 'screencap', '-p')
+    else:
+        raise Failure('direct_android_screenshot_path_invalid')
+    reply = screenshot_adb(*command, source=source, operation='read', expected=expected)
+    missing = path is not None and screenshot_missing(reply, 'cat', path)
+    if reply.returncode or reply.stderr or missing:
+        outcome = 'missing' if missing else 'read_failed'
+        screenshot_read_failure(source, 'read', outcome, reply, expected)
+    if not reply.stdout:
+        screenshot_read_failure(source, 'read', 'empty', reply, expected)
+    if len(reply.stdout) > SCREENSHOT_MAX_BYTES:
+        screenshot_read_failure(source, 'read', 'oversize', reply, expected)
+    has_signature = reply.stdout.startswith(PNG_SIGNATURE)
+    if (expected is not None and len(reply.stdout) < expected and
+            (has_signature or PNG_SIGNATURE.startswith(reply.stdout))):
+        screenshot_read_failure(source, 'read', 'short_read', reply, expected)
+    if not has_signature:
+        screenshot_read_failure(source, 'read', 'signature_invalid', reply, expected)
+    if expected is not None and len(reply.stdout) != expected:
+        screenshot_read_failure(source, 'read', 'size_mismatch', reply, expected)
+    return reply.stdout
+
+
 def screen_checkpoint(request, completed, fixture, rotation_fixture, relative, output, *, require_rotation=True):
     # Device writes the actual surface first and publishes this fixed-shape
     # request atomically. Each acknowledgement refers to exactly one frame.
@@ -276,14 +360,13 @@ def screen_checkpoint(request, completed, fixture, rotation_fixture, relative, o
     if tag in completed and completed[tag]['accepted']:
         raise Failure('direct_android_screen_already_accepted')
     name = 'connected' if tag == 'ordinary' else 'rotation-connected'
-    png = adb('exec-out', 'run-as', PACKAGE, 'cat', relative + '/' + name + '.png').stdout
-    if not png.startswith(b'\x89PNG\r\n\x1a\n') or len(png) > 8_000_000:
-        raise Failure('direct_android_screenshot_invalid')
-    # Capture Android's displayed framebuffer while the SSH screen remains
-    # active; this is independent of integration_test's surface conversion.
-    device_png = adb('exec-out', 'screencap', '-p').stdout
-    if not device_png.startswith(b'\x89PNG\r\n\x1a\n') or len(device_png) > 8_000_000:
-        raise Failure('direct_android_screenshot_invalid')
+    try:
+        png = read_screen_png('integration', relative=relative, name=name)
+        # Capture the displayed framebuffer independently of the Flutter surface.
+        device_png = read_screen_png('device')
+    except ScreenshotReadFailure as error:
+        error.diagnostic.update(tag=tag, attempt=attempt)
+        raise
     # Both screenshots must use the Flutter view's full physical dimensions.
     # Preserve originals and geometry for diagnosing a cropped surface or inset.
     sizes = {}
@@ -527,6 +610,8 @@ def run(args, env):
         primary = str(error) if isinstance(error, Failure) else 'direct_android_runner_failed'
         report['failureCode'] = primary
         report['diagnostic'] = safe_failure(error, phase)
+        if isinstance(error, ScreenshotReadFailure):
+            report['screenshotReadDiagnostic'] = error.diagnostic
     finally:
         report['lastPhase'] = phase
         report['protocol'] = fixture.snapshot()
@@ -588,18 +673,22 @@ ENCRYPTED_PUBLIC_FIELDS = {
     'remoteEchoVisible', 'disconnectUiConfirmed', 'credentialsCleared',
     'privateInputRemoved', 'clipboardCleared', 'physicalImeVerified',
 }
+ENCRYPTED_ROTATION_PUBLIC_FIELDS = (ENCRYPTED_PUBLIC_FIELDS - {'wrongPassphraseRejectedLocally'}) | ROTATION_PUBLIC_FIELDS
+ENCRYPTED_CHECKPOINTS = ('review', 'rejected')
+ENCRYPTED_ROTATION_CHECKPOINTS = ('review', 'rejected', 'cancelled', 'reprobed')
 
 
-def safe_encrypted_result(raw):
+def safe_encrypted_result(raw, *, rotating=False):
     try:
         value = json.loads(raw)
     except (ValueError, UnicodeError):
         raise Failure('direct_android_encrypted_result_not_json') from None
-    if (not isinstance(value, dict) or set(value) != ENCRYPTED_PUBLIC_FIELDS
+    fields = ENCRYPTED_ROTATION_PUBLIC_FIELDS if rotating else ENCRYPTED_PUBLIC_FIELDS
+    if (not isinstance(value, dict) or set(value) != fields
             or type(value['schemaVersion']) is not int or value['schemaVersion'] != 1
             or value['platform'] != 'android-api35-emulator'
             or value['physicalImeVerified'] is not False
-            or any(value[key] is not True for key in ENCRYPTED_PUBLIC_FIELDS -
+            or any(value[key] is not True for key in fields -
                    {'schemaVersion', 'platform', 'physicalImeVerified'})):
         raise Failure('direct_android_encrypted_result_invalid')
     return value
@@ -624,16 +713,32 @@ def encrypted_probe_evidence(fixture):
     return expected
 
 
-def checked_encrypted_stage(value, completed):
+def checked_encrypted_stage(value, completed, *, rotating=False):
+    phases = ENCRYPTED_ROTATION_CHECKPOINTS if rotating else ENCRYPTED_CHECKPOINTS
     if (not isinstance(value, dict) or set(value) != {'phase'}
-            or type(value['phase']) is not str or value['phase'] not in ('review', 'rejected')):
+            or type(value['phase']) is not str or value['phase'] not in phases):
         raise Failure('direct_android_encrypted_stage_invalid')
     name = value['phase']
     if name in completed:
+        if rotating and name != next(reversed(completed)):
+            raise Failure('direct_android_encrypted_stage_out_of_order')
         return None
-    if len(completed) >= 2 or name != ('review', 'rejected')[len(completed)]:
+    if len(completed) >= len(phases) or name != phases[len(completed)]:
         raise Failure('direct_android_encrypted_stage_out_of_order')
     return name
+
+
+def encrypted_rotation_final_evidence(fixture):
+    try:
+        evidence = fixture.public_key_auth_evidence()
+    except ValueError:
+        raise Failure('direct_android_encrypted_rotation_evidence_invalid') from None
+    # The fixture recognizes a complete hp-check line. Exact bytes rule out
+    # extra input and ensure that the accepted command was sent only once.
+    if (type(evidence.get('authAttempts')) is not int or evidence['authAttempts'] != 1
+            or type(evidence.get('inputBytes')) is not int or evidence['inputBytes'] != len(b'hp-check\r')):
+        raise Failure('direct_android_encrypted_rotation_evidence_invalid')
+    return evidence
 
 
 ENCRYPTED_UI_PHASES = {
@@ -766,6 +871,8 @@ ENCRYPTED_APP_STAGES = ENCRYPTED_UI_PHASES | {
     'fixture_validation', 'encrypted_waiting_private', 'encrypted_home',
     'encrypted_probe', 'encrypted_review', 'encrypted_prepare_rejection', 'encrypted_rejected',
     'encrypted_prepare_connect', 'encrypted_connect', 'encrypted_disconnect',
+    'rotation_home', 'rotation_initial_probe', 'rotation_rejected',
+    'rotation_cancelled', 'rotation_fresh_probe',
 }
 
 
@@ -856,7 +963,9 @@ def cleanup_encrypted_device(reverse, before):
     return cleanup, checks
 
 
-def run_encrypted(args, env):
+def run_encrypted(args, env, *, rotating=False):
+    if rotating and env.get('GITHUB_EVENT_NAME') != 'workflow_dispatch':
+        raise Failure('direct_android_encrypted_rotation_requires_manual_dispatch')
     app, output = checked_paths(args.project, args.output, env)
     verify_prepared(app, env)
     devices = [line.split()[:2] for line in text('devices').splitlines()[1:] if line.strip()]
@@ -871,12 +980,17 @@ def run_encrypted(args, env):
     cleanup = {'reverseRemoved': False, 'packageRemoved': False, 'ownedForwardsRemoved': False,
                'fixtureClosed': False, 'temporaryKeyRemoved': False,
                'flutterToolStopped': False, 'rawLogsUploaded': False}
-    report = {'schemaVersion': 1, 'sourceSHA': env['GITHUB_SHA'],
-              'kind': 'flutter-android-encrypted-ed25519', 'status': 'failed',
+    kind = 'flutter-android-encrypted-ed25519-rotation' if rotating else 'flutter-android-encrypted-ed25519'
+    report = {'schemaVersion': 1, 'sourceSHA': env['GITHUB_SHA'], 'kind': kind, 'status': 'failed',
               'cleanup': cleanup, 'physicalImeVerified': False}
-    from tauri_encrypted_key_fixture import EncryptedKeyFixture
-    from screen_proof_token import token_lines
-    fixture = EncryptedKeyFixture(screen_proof=True)
+    if rotating:
+        from tauri_encrypted_key_fixture import RotatingEncryptedKeyFixture
+        fixture = RotatingEncryptedKeyFixture()
+    else:
+        from tauri_encrypted_key_fixture import EncryptedKeyFixture
+        fixture = EncryptedKeyFixture(screen_proof=True)
+    screen_tag = 'key-rotation' if rotating else 'ordinary'
+    expected_phases = ENCRYPTED_ROTATION_CHECKPOINTS if rotating else ENCRYPTED_CHECKPOINTS
     screens, checkpoints = {}, {}
     report['checkpoints'] = checkpoints
     primary = None
@@ -899,7 +1013,9 @@ def run_encrypted(args, env):
             fixture_path = Path(fixture._temp.name)
             # This peer's existing echo marker is extended with the same public,
             # per-session OCR proof used by the ordinary screen gate.
-            fixture.echo_marker += '\r\n' + '\r\n'.join(token_lines(fixture.screen_token))
+            if not rotating:
+                from screen_proof_token import token_lines
+                fixture.echo_marker += '\r\n' + '\r\n'.join(token_lines(fixture.screen_token))
             phase = 'reverse_setup'
             candidate = 'tcp:' + str(fixture.port)
             if any(candidate in line.split()[1:2] for line in text('reverse', '--list').splitlines()):
@@ -909,10 +1025,14 @@ def run_encrypted(args, env):
             phase = 'private_defines'
             private = Path(tempfile.mkdtemp(prefix='herdr-direct-android-key-', dir=env['RUNNER_TEMP']))
             defines = private / 'defines.json'
+            target = {'host': '127.0.0.1', 'port': fixture.port,
+                      'username': fixture.username, 'fingerprint': fixture.fingerprint}
+            if rotating:
+                target['rotatedFingerprint'] = fixture.rotated_fingerprint
             defines.write_text(json.dumps({'HERDR_ANDROID_DIRECT_SSH': '1',
-                'HERDR_ANDROID_RUN_ID': env['GITHUB_RUN_ID'], 'HERDR_ANDROID_ENCRYPTED_KEY_CASE': '1',
-                'HERDR_ANDROID_ENCRYPTED_KEY_TARGET': json.dumps({'host': '127.0.0.1', 'port': fixture.port,
-                    'username': fixture.username, 'fingerprint': fixture.fingerprint})}))
+                'HERDR_ANDROID_RUN_ID': env['GITHUB_RUN_ID'],
+                'HERDR_ANDROID_ENCRYPTED_KEY_CASE': 'rotation' if rotating else '1',
+                'HERDR_ANDROID_ENCRYPTED_KEY_TARGET': json.dumps(target)}))
             defines.chmod(0o600)
             relative = 'cache/herdr-direct-ssh-' + env['GITHUB_RUN_ID']
             command = ['flutter', 'test', '--no-pub', '--no-uninstall', '--reporter', 'expanded', '-d', SERIAL,
@@ -957,7 +1077,10 @@ def run_encrypted(args, env):
                     startup['privateInputDelivered'] = True
                 screen = read_public_json(relative + '/screen-request.json', package_known=True)
                 if screen is not None:
-                    screen_checkpoint(screen, screens, fixture, None, relative, output, require_rotation=False)
+                    if rotating and (screen.get('tag') != screen_tag or tuple(checkpoints) != expected_phases):
+                        raise Failure('direct_android_encrypted_rotation_screen_unexpected')
+                    screen_checkpoint(screen, screens, fixture, fixture if rotating else None,
+                                      relative, output, require_rotation=rotating)
                 if current_stage == 'encrypted_connect':
                     connect_diagnostic = read_public_json(relative + '/encrypted-connect-diagnostic.json', 2048, package_known=True)
                     if connect_diagnostic is not None:
@@ -967,9 +1090,12 @@ def run_encrypted(args, env):
                     report['uiDiagnostic'] = safe_encrypted_diagnostic(diagnostic)
                 checkpoint = read_public_json(relative + '/encrypted-stage.json', package_known=True)
                 if checkpoint is not None:
-                    name = checked_encrypted_stage(checkpoint, checkpoints)
+                    name = checked_encrypted_stage(checkpoint, checkpoints, rotating=rotating)
                     if name is not None:
-                        checkpoints[name] = encrypted_probe_evidence(fixture)
+                        if rotating and name != 'review':
+                            checkpoints[name] = closed_rotation_evidence(fixture, ROTATION_PHASES[name])
+                        else:
+                            checkpoints[name] = encrypted_probe_evidence(fixture)
                         if process.poll() is not None:
                             raise Failure('direct_android_driver_exited_before_encrypted_confirmation')
                         reply = json.dumps({'phase': name, 'serverEvidenceAccepted': True}).encode()
@@ -978,16 +1104,19 @@ def run_encrypted(args, env):
                         adb('shell', 'run-as', PACKAGE, 'mv', pending, pending[:-4] + '.json')
                 public = read_public_json(relative + '/encrypted-result.json', package_known=True)
                 if public is not None:
-                    report['device'] = safe_encrypted_result(json.dumps(public))
-                    if not credential_sent or tuple(checkpoints) != ('review', 'rejected'):
+                    report['device'] = safe_encrypted_result(json.dumps(public), rotating=rotating)
+                    if not credential_sent or tuple(checkpoints) != expected_phases:
                         raise Failure('direct_android_encrypted_checkpoints_incomplete')
-                    if set(screens) != {'ordinary'} or screens['ordinary']['accepted'] is not True:
+                    if set(screens) != {screen_tag} or screens[screen_tag]['accepted'] is not True:
                         raise Failure('direct_android_screen_proof_missing')
                     phase = 'peer_close_confirmation'
                     if (not fixture.wait_for('markerReceived') or not fixture.wait_for('sessionClosed')
-                            or not fixture.wait_for_connections_closed(2)):
+                            or not fixture.wait_for_connections_closed(4 if rotating else 2)):
                         raise Failure('direct_android_remote_input_or_close_missing')
-                    ordinary_session_evidence(fixture, closed=True)
+                    if rotating:
+                        report['rotatedSessionEvidence'] = encrypted_rotation_final_evidence(fixture)
+                    else:
+                        ordinary_session_evidence(fixture, closed=True)
                     report['authenticationMethod'] = 'publickey'
                     if process.poll() is not None:
                         raise Failure('direct_android_driver_exited_before_peer_confirmation')
@@ -1023,7 +1152,7 @@ def run_encrypted(args, env):
                 raise Failure('direct_android_peer_confirmation_missing')
             cleanup['flutterToolStopped'] = True
             phase = 'read_screenshots'
-            for name in ('home', 'connected', 'disconnected'):
+            for name in (('home', 'disconnected') if rotating else ('home', 'connected', 'disconnected')):
                 png = adb('exec-out', 'run-as', PACKAGE, 'cat', relative + '/' + name + '.png').stdout
                 if not png.startswith(b'\x89PNG\r\n\x1a\n') or len(png) > 8_000_000:
                     raise Failure('direct_android_screenshot_invalid')
@@ -1034,6 +1163,8 @@ def run_encrypted(args, env):
         primary = str(error) if isinstance(error, Failure) else 'direct_android_runner_failed'
         report['failureCode'] = primary
         report['diagnostic'] = safe_failure(error, phase)
+        if isinstance(error, ScreenshotReadFailure):
+            report['screenshotReadDiagnostic'] = error.diagnostic
         if process is not None:
             startup['deviceState'] = encrypted_device_state()
     finally:
@@ -1069,8 +1200,11 @@ def run_encrypted(args, env):
         if not all(cleanup[key] for key in cleanup if key != 'rawLogsUploaded'):
             report['status'] = 'failed'
             report['cleanupCode'] = 'direct_android_cleanup_incomplete'
-        report['screenProof'] = {tag: {field: screens[tag][field] for field in ('attempt', 'accepted', 'expectedTarget')}
-                                 for tag in ('ordinary',) if tag in screens}
+        report['screenProof'] = {}
+        if screen_tag in screens:
+            report['screenProof'][screen_tag] = {
+                field: screens[screen_tag][field] for field in ('attempt', 'accepted', 'expectedTarget')
+            }
         (output / 'result.json').write_text(json.dumps(report, indent=2) + '\n')
     if report['status'] != 'passed':
         raise Failure(primary or 'direct_android_cleanup_incomplete')
@@ -1080,10 +1214,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--project', required=True)
     parser.add_argument('--output', required=True)
-    parser.add_argument('--encrypted-key', action='store_true')
+    auth = parser.add_mutually_exclusive_group()
+    auth.add_argument('--encrypted-key', action='store_true')
+    auth.add_argument('--encrypted-key-rotation', action='store_true')
     args = parser.parse_args()
     try:
-        report = (run_encrypted if args.encrypted_key else run)(args, dict(os.environ))
+        env = dict(os.environ)
+        report = (run_encrypted(args, env, rotating=args.encrypted_key_rotation)
+                  if args.encrypted_key or args.encrypted_key_rotation else run(args, env))
         print(json.dumps({'status': report['status'], 'kind': report['kind']}))
     except Exception as error:
         print(str(error) if isinstance(error, Failure) else 'direct_android_runner_failed', file=sys.stderr)

@@ -21,6 +21,7 @@ class BatchFailure(RuntimeError):
 
 TERMINAL_PROOFS = {'ordinary-terminal.png': 'ordinary-terminal-ocr.json',
                    'key-change-terminal.png': 'key-change-terminal-ocr.json'}
+ENCRYPTED_KEY_PROOF = {'encrypted-key-terminal.png': 'encrypted-key-terminal-ocr.json'}
 REQUIRED_IMAGES = {*TERMINAL_PROOFS, 'key-change-review.png'}
 
 
@@ -42,18 +43,45 @@ def read_public_json(root, name):
     return data, value
 
 
-def publish_evidence(root, destination, *, shell, source_sha):
+def encrypted_key_case_valid(case):
+    if (not isinstance(case, dict) or case.get('status') != 'passed'
+            or not all(case.get(key) is True for key in
+                       ('fingerprintReviewed', 'terminalInputReceived', 'disconnected', 'returnedHome'))):
+        return False
+    wrong = case.get('wrongPassphrase')
+    peer = wrong.get('peer') if isinstance(wrong, dict) else None
+    if (not isinstance(wrong, dict) or wrong.get('rejected') is not True or not isinstance(peer, dict)
+            or peer.get('closed') is not True
+            or any(type(peer.get(key)) is not int or peer[key] != 0 for key in
+                   ('authAttempts', 'authSuccesses', 'ptyRequests', 'shellRequests', 'inputBytes', 'outputBytes'))):
+        return False
+    # Flutter rejects the wrong passphrase locally: the only peer event is the original host-key probe.
+    accepted = case.get('acceptedSession')
+    counts = {'id': 2, 'authAttempts': 1, 'authSuccesses': 1, 'ptyRequests': 1, 'shellRequests': 1, 'inputBytes': 9}
+    return (type(peer.get('id')) is int and peer['id'] == 1 and peer.get('hostKey') == 'A'
+            and isinstance(case.get('modeSwitch'), dict) and all(case['modeSwitch'].get(key) is True for key in
+                ('passwordToKeyCleared', 'keyToPasswordCleared', 'sameTrust'))
+            and isinstance(accepted, dict) and accepted.get('hostKey') == 'A'
+            and all(type(accepted.get(key)) is int and accepted[key] == count for key, count in counts.items())
+            and type(accepted.get('outputBytes')) is int and accepted['outputBytes'] > 0
+            and all(accepted.get(key) is True for key in ('markerReceived', 'singleMarkerLineExact', 'sessionClosed', 'closed'))
+            and case.get('authenticationMethod') == 'publickey' and case.get('peerClosedBeforeDriverExit') is True)
+
+
+def publish_evidence(root, destination, *, shell, source_sha, include_encrypted_key=False):
     """Copy only this run's bound public files; leave SSH/OCR to the runners.
 
     Failed runs may retain an already completed scene. A passed result must
-    supply all three original system captures and both accepted OCR reports.
+    supply all standard system captures and accepted OCR reports. The encrypted
+    key opt-in adds one Flutter terminal capture and its OCR report.
     Even an incomplete passed result retains its sanitized result for diagnosis.
     """
     from PIL import Image
     root, destination = Path(root), Path(destination)
     if root.is_symlink() or not root.is_dir() or destination.exists() or destination.is_symlink():
         raise BatchFailure('ios_batch_public_directory_invalid')
-    if shell not in ('flutter', 'tauri') or not re.fullmatch(r'[0-9a-f]{40}', source_sha):
+    if (shell not in ('flutter', 'tauri') or (include_encrypted_key and shell != 'flutter')
+            or not re.fullmatch(r'[0-9a-f]{40}', source_sha)):
         raise BatchFailure('ios_batch_source_invalid')
     raw, report = read_public_json(root, 'result.json')
     if report.get('sourceSHA') != source_sha or report.get('status') not in ('passed', 'failed'):
@@ -62,13 +90,23 @@ def publish_evidence(root, destination, *, shell, source_sha):
     (destination / 'result.json').write_bytes(raw)
     passed = report['status'] == 'passed'
     artifacts = report.get('artifacts', {})
-    allowed = REQUIRED_IMAGES | ({'preconnect.png'} if shell == 'flutter' else set())
+    terminal_proofs = TERMINAL_PROOFS | (ENCRYPTED_KEY_PROOF if include_encrypted_key else {})
+    required = REQUIRED_IMAGES | terminal_proofs.keys()
+    allowed = required | ({'preconnect.png'} if shell == 'flutter' else set())
     if (not isinstance(artifacts, dict) or set(artifacts) - allowed or
             any(not isinstance(value, str) or not re.fullmatch(r'[0-9a-f]{64}', value)
                 for value in artifacts.values())):
         raise BatchFailure('ios_batch_artifact_manifest_invalid')
-    if passed and not REQUIRED_IMAGES.issubset(artifacts):
+    if passed and not required.issubset(artifacts):
         raise BatchFailure('ios_batch_required_images_missing')
+    if passed and include_encrypted_key:
+        encrypted_image = next(iter(ENCRYPTED_KEY_PROOF))
+        if artifacts[encrypted_image] in {artifacts[name] for name in REQUIRED_IMAGES}:
+            raise BatchFailure('ios_batch_encrypted_key_image_reused')
+        cases = report.get('cases')
+        case = cases.get('encryptedKey') if isinstance(cases, dict) else None
+        if not encrypted_key_case_valid(case):
+            raise BatchFailure('ios_batch_encrypted_key_case_missing')
     published = {'result.json'}
     for name in sorted(allowed):
         if name not in artifacts:
@@ -81,7 +119,7 @@ def publish_evidence(root, destination, *, shell, source_sha):
                 if image.format != 'PNG' or image.width * image.height > 16_000_000:
                     raise BatchFailure('ios_batch_image_invalid')
                 image.verify()
-            proof_name = TERMINAL_PROOFS.get(name)
+            proof_name = terminal_proofs.get(name)
             if proof_name:
                 proof_raw, proof = read_public_json(root, proof_name)
                 if proof.get('imageSha256') != artifacts[name]:
@@ -152,12 +190,14 @@ def main():
     publish.add_argument('--destination', required=True)
     publish.add_argument('--shell', required=True, choices=('flutter', 'tauri'))
     publish.add_argument('--source-sha', required=True)
+    publish.add_argument('--include-encrypted-key', action='store_true')
     args = parser.parse_args()
     try:
         if args.action == 'select-app':
             print(select_simulator_app(args.root))
         elif args.action == 'publish':
-            names = publish_evidence(args.root, args.destination, shell=args.shell, source_sha=args.source_sha)
+            names = publish_evidence(args.root, args.destination, shell=args.shell, source_sha=args.source_sha,
+                                     include_encrypted_key=args.include_encrypted_key)
             print('Verified public files: ' + ', '.join(sorted(names)))
             if read_public_json(Path(args.destination), 'result.json')[1]['status'] != 'passed':
                 raise BatchFailure('ios_batch_runner_reported_failure')

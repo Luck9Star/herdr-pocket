@@ -630,6 +630,7 @@ pub fn run() {
     let builder=builder.plugin(ios_keys::init());
     builder
         .manage(direct_shell::Shells::default())
+        .on_window_event(direct_shell::on_window_event)
         .manage(Mutex::new(Streams::default()))
         .manage(Mutex::new(AttemptGate::default()))
         .manage(Hosts::default())

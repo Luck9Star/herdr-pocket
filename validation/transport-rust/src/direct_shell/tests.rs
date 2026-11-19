@@ -214,6 +214,26 @@ impl server::Handler for Peer {
             session.channel_failure(id)?;
             return Ok(());
         }
+        if matches!(
+            self.reject,
+            "no-report" | "status-zero" | "TERM" | "USR2" | "fixture-signal"
+        ) {
+            session.channel_success(id)?;
+            match self.reject {
+                "status-zero" => session.exit_status_request(id, 0)?,
+                "no-report" => {}
+                signal => session.exit_signal_request(
+                    id,
+                    russh::Sig::Custom(signal.into()),
+                    false,
+                    "fixture detail",
+                    "en",
+                )?,
+            }
+            session.eof(id)?;
+            session.close(id)?;
+            return Ok(());
+        }
         self.facts.shells.fetch_add(1, Ordering::SeqCst);
         let slave = self.slave.take().unwrap();
         let mut command = Process::new("/bin/sh");
@@ -704,6 +724,111 @@ async fn exact_output_ack_bounds_delivery_and_close_interrupts_pending_ack() {
         Err("cancelled")
     );
     fixture.cleaned().await;
+}
+
+#[tokio::test]
+async fn cancellation_waits_for_the_background_ssh_connection() {
+    let fixture = Fixture::start("").await;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let mut config = fixture.config(true);
+    config.port = listener.local_addr().unwrap().port();
+    let (control, commands) = shell_commands();
+    let mut shell = std::pin::pin!(run_shell(config, commands, |_| Ok(())));
+    let mut peer = tokio::select! {
+        result = &mut shell => panic!("unexpected shell result {result:?}"),
+        peer = timeout(Duration::from_secs(2), async {
+            let (mut peer, _) = listener.accept().await.unwrap();
+            peer.write_all(b"SSH-2.0-local-retirement-test\r\n").await.unwrap();
+            let mut byte = [0];
+            loop {
+                peer.read_exact(&mut byte).await.unwrap();
+                if byte[0] == b'\n' {
+                    break;
+                }
+            }
+            // The background task writes the first KEX packet. This peer never
+            // completes KEX, so the shell worker has not received a Handle.
+            peer.read_exact(&mut byte).await.unwrap();
+            peer
+        }) => peer.unwrap(),
+    };
+    control.close();
+    // Only this task is running until its next Pending poll.
+    assert!(
+        std::future::poll_fn(|cx| Poll::Ready(shell.as_mut().poll(cx)))
+            .await
+            .is_pending(),
+        "cancellation completed before the background task could release the TCP stream"
+    );
+    assert_eq!(
+        timeout(Duration::from_secs(2), shell).await.unwrap(),
+        Err("cancelled")
+    );
+    timeout(Duration::from_secs(2), peer.read_to_end(&mut Vec::new()))
+        .await
+        .unwrap()
+        .unwrap();
+}
+
+#[tokio::test]
+async fn cancellation_waits_for_the_authenticated_ssh_task() {
+    let fixture = Fixture::start("").await;
+    let (control, commands) = shell_commands();
+    let (ready, mut arrived) = oneshot::channel();
+    let mut ready = Some(ready);
+    let mut shell = std::pin::pin!(run_shell(fixture.config(true), commands, move |event| {
+        if event.kind == "ready" {
+            ready.take().unwrap().send(()).unwrap();
+        }
+        Ok(())
+    }));
+    tokio::select! {
+        result = &mut shell => panic!("unexpected shell result {result:?}"),
+        ready = timeout(Duration::from_secs(2), &mut arrived) => ready.unwrap().unwrap(),
+    }
+    control.close();
+    assert!(
+        std::future::poll_fn(|cx| Poll::Ready(shell.as_mut().poll(cx)))
+            .await
+            .is_pending(),
+        "cancellation completed before the authenticated SSH task could stop"
+    );
+    assert_eq!(
+        timeout(Duration::from_secs(2), shell).await.unwrap(),
+        Err("cancelled")
+    );
+    fixture.cleaned().await;
+}
+
+#[tokio::test]
+async fn exit_events_only_include_evidence_sent_by_the_peer() {
+    for (peer, status, signal) in [
+        ("no-report", None, None),
+        ("status-zero", Some(0), None),
+        ("TERM", None, Some("TERM")),
+        ("USR2", None, Some("USR2")),
+        ("fixture-signal", None, Some("other")),
+    ] {
+        let fixture = Fixture::start(peer).await;
+        let mut shell = OpenShell::start(fixture.config(true));
+        shell.ready().await;
+        let event = shell.event().await;
+        assert_eq!(event.kind, "exit");
+        assert_eq!(event.exit_status, status);
+        assert_eq!(event.exit_signal, signal);
+        let json = serde_json::to_value(&event).unwrap();
+        assert_eq!(
+            json.get("exitStatus"),
+            status.map(|s| serde_json::json!(s)).as_ref()
+        );
+        assert_eq!(
+            json.get("exitSignal"),
+            signal.map(|s| serde_json::json!(s)).as_ref()
+        );
+        assert!(!json.to_string().contains("fixture"));
+        assert_eq!(shell.task.await.unwrap(), Ok(()));
+        fixture.cleaned().await;
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

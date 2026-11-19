@@ -129,6 +129,7 @@ pub async fn probe_host_key(host: String, port: u16) -> Result<HostKey> {
             AbortableStream {
                 inner: Box::new(stream),
                 cancel: cancel.clone(),
+                _released: None,
             },
             Discover(found.clone()),
         ),
@@ -156,6 +157,8 @@ pub struct ShellEvent {
     pub data: Option<Vec<u8>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exit_status: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exit_signal: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub presented_fingerprint: Option<String>,
 }
@@ -262,28 +265,50 @@ async fn request_reply(
 pub async fn run_shell(
     config: ShellConfig,
     commands: ShellCommands,
-    emit: impl FnMut(ShellEvent) -> Result<()> + Send,
+    mut emit: impl FnMut(ShellEvent) -> Result<()> + Send,
 ) -> Result<()> {
     let cancel = commands.cancel.clone();
     let _abort = CancelOnDrop(cancel.clone());
-    let result = shell_connection(config, commands, emit).await;
+    let (release, released) = oneshot::channel();
+    let mut ssh = None;
+    let result = shell_connection(config, commands, &mut emit, &mut ssh, release).await;
     // Cancellation can make the underlying I/O fail during the same poll.
-    if cancel.is_cancelled() {
+    let cancelled = cancel.is_cancelled();
+    cancel.cancel();
+    timeout(Duration::from_secs(3), async {
+        // A live handle contains the russh task, including authentication state.
+        // Cancellation deliberately aborts its I/O; network errors after the
+        // task joins do not prevent local retirement.
+        if let Some(ssh) = ssh {
+            if matches!(ssh.await, Err(russh::Error::Join(_))) {
+                return Err("close_failed");
+            }
+        }
+        // A cancelled KEX may have spawned the task without returning its
+        // handle. The sender drops only after the TCP stream (if any).
+        let _ = released.await;
+        Ok(())
+    })
+    .await
+    .map_err(|_| "close_timeout")??;
+    if cancelled {
         Err("cancelled")
     } else {
-        result
+        emit(result?)
     }
 }
 async fn shell_connection(
     config: ShellConfig,
     mut commands: ShellCommands,
-    mut emit: impl FnMut(ShellEvent) -> Result<()> + Send,
-) -> Result<()> {
+    emit: &mut (impl FnMut(ShellEvent) -> Result<()> + Send),
+    ssh: &mut Option<client::Handle<Pinned>>,
+    release: oneshot::Sender<()>,
+) -> Result<ShellEvent> {
     let cancel = commands.cancel.clone();
     let expected = config.validate()?;
     let audit = Arc::new(Audit::default());
     let observed = audit.clone();
-    let (mut ssh, _) = match connect_pinned_endpoint(
+    let (connected, _) = match connect_pinned_endpoint(
         &config.host,
         config.port,
         &cancel,
@@ -291,6 +316,7 @@ async fn shell_connection(
         expected,
         None,
         &transport::SystemDialer,
+        Some(release),
     )
     .await
     {
@@ -304,6 +330,7 @@ async fn shell_connection(
                         kind: "host_key_change",
                         data: None,
                         exit_status: None,
+                        exit_signal: None,
                         presented_fingerprint: Some(fingerprint),
                     })?;
                 }
@@ -311,6 +338,7 @@ async fn shell_connection(
             return Err(code);
         }
     };
+    let ssh = ssh.insert(connected);
     let authenticated = if let Some(password) = &config.password {
         bounded(
             &cancel,
@@ -388,9 +416,11 @@ async fn shell_connection(
         kind: "ready",
         data: None,
         exit_status: None,
+        exit_signal: None,
         presented_fingerprint: None,
     })?;
     let mut exit_status = None;
+    let mut exit_signal = None;
     loop {
         tokio::select! { biased;
             _ = cancel.wait() => return Err("cancelled"),
@@ -413,13 +443,14 @@ async fn shell_connection(
                     seq += 1;
                     let (tx, rx) = oneshot::channel();
                     *commands.ack.lock().map_err(|_| "state_unavailable")? = Some((seq, tx));
-                    emit(ShellEvent { seq, kind: "data", data: Some(data.to_vec()), exit_status: None, presented_fingerprint: None })?;
+                    emit(ShellEvent { seq, kind: "data", data: Some(data.to_vec()), exit_status: None, exit_signal: None, presented_fingerprint: None })?;
                     // One packet at a time reaches the UI. SSH's bounded window
                     // then provides backpressure all the way to the remote PTY.
                     bounded(&cancel, 30, "output_ack_failed", rx).await
                         .map_err(|code| if code == "timeout" { "output_ack_failed" } else { code })?;
                 }
                 Some(ChannelMsg::ExitStatus { exit_status: status }) => exit_status = Some(status),
+                Some(ChannelMsg::ExitSignal { signal_name, .. }) => exit_signal = Some(exit_signal_name(signal_name)),
                 Some(ChannelMsg::Close) | None => break,
                 _ => {},
             }
@@ -433,13 +464,35 @@ async fn shell_connection(
         ssh.disconnect(Disconnect::ByApplication, "", "en"),
     )
     .await;
-    emit(ShellEvent {
+    Ok(ShellEvent {
         seq: seq + 1,
         kind: "exit",
         data: None,
         exit_status,
+        exit_signal,
         presented_fingerprint: None,
     })
+}
+
+fn exit_signal_name(signal: russh::Sig) -> &'static str {
+    use russh::Sig;
+    match signal {
+        Sig::ABRT => "ABRT",
+        Sig::ALRM => "ALRM",
+        Sig::FPE => "FPE",
+        Sig::HUP => "HUP",
+        Sig::ILL => "ILL",
+        Sig::INT => "INT",
+        Sig::KILL => "KILL",
+        Sig::PIPE => "PIPE",
+        Sig::QUIT => "QUIT",
+        Sig::SEGV => "SEGV",
+        Sig::TERM => "TERM",
+        Sig::USR1 => "USR1",
+        // RFC 4254 also defines USR2, which russh parses as Custom.
+        Sig::Custom(name) if name == "USR2" => "USR2",
+        Sig::Custom(_) => "other",
+    }
 }
 
 #[cfg(all(test, unix))]

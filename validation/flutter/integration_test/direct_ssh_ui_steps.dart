@@ -591,6 +591,19 @@ Future<void> finishAndroidEncryptedPassphrase(WidgetTester tester) async {
   }, timeoutReason: 'direct_ssh_encrypted_passphrase_layout_timeout');
 }
 
+const _rotationTrustEvidence = <String, bool>{
+  'sameTarget': true,
+  'oldFingerprintMatchedIndependentA': true,
+  'changedFingerprintMatchedIndependentB': true,
+  'rejectedBeforeAuthentication': true,
+  'reviewNavigationBlocked': true,
+  'cancelKeepsOldTrust': true,
+  'credentialsLockedBeforeApproval': true,
+  'noAutomaticConnection': true,
+  'freshProbeMatchedIndependentB': true,
+  'explicitRotatedTrustRequired': true,
+};
+
 Future<void> runEncryptedDirectSshUi(
   WidgetTester tester, {
   required IntegrationTestWidgetsFlutterBinding binding,
@@ -601,6 +614,7 @@ Future<void> runEncryptedDirectSshUi(
   required void Function(String, Object) publish,
   required Future<void> Function(String) capture,
   Future<void> Function()? afterTrust,
+  bool rotating = false,
 }) async {
   Future<void> checkpoint(String phase) async {
     publish('encrypted-stage.json', {'phase': phase});
@@ -712,69 +726,112 @@ Future<void> runEncryptedDirectSshUi(
     }
   }
 
-  step('encrypted_home');
-  await app.main();
-  await until(
-    tester,
-    () =>
-        find.byType(HostCatalogPage).evaluate().length == 1 &&
-        control('hosts-direct-ssh').evaluate().isNotEmpty,
-  );
-  final home = tester.widget<HostCatalogPage>(find.byType(HostCatalogPage));
-  expect(home.catalog, isNull);
-  expect(home.adapterFactory, isNull);
-  expect(home.keys, isNull);
-  await capture('home');
-  await openDirectSshFromHome(tester);
-  for (final entry in {
-    'direct-host': '127.0.0.1',
-    'direct-port': '${config['port']}',
-    'direct-user': 'fixture',
-  }.entries) {
-    await tester.ensureVisible(control(entry.key));
-    await tester.enterText(control(entry.key), entry.value);
-    await tester.pump();
+  Future<void> confirmHome() async {
+    await until(
+      tester,
+      () =>
+          find.byType(HostCatalogPage).evaluate().length == 1 &&
+          control('hosts-direct-ssh').evaluate().isNotEmpty,
+    );
+    final home = tester.widget<HostCatalogPage>(find.byType(HostCatalogPage));
+    expect(home.catalog, isNull);
+    expect(home.adapterFactory, isNull);
+    expect(home.keys, isNull);
+    await capture('home');
   }
-  expect(control('direct-secret'), findsNothing);
-  step('encrypted_probe');
-  await tap(tester, 'direct-probe');
-  await until(
-    tester,
-    () => control('direct-trust-key').evaluate().length == 1,
-  );
-  expect(
-    find.textContaining(config['fingerprint'] as String),
-    findsOneWidget,
-  );
-  step('encrypted_review');
-  await checkpoint('review');
-  await tap(tester, 'direct-trust-key');
-  if (afterTrust != null) await afterTrust();
-  await tap(tester, 'direct-auth-key');
-  await pasteKey();
+
   final passphrase = control('direct-passphrase');
   final android = platform == 'android-api35-emulator';
-  expect(tester.widget<TextField>(passphrase).obscureText, isTrue);
-  await tester.ensureVisible(passphrase);
-  await tester.enterText(passphrase, 'invalid-fixture-passphrase');
-  await tester.pump();
-  if (android) {
-    step('encrypted_prepare_rejection');
-    await finishAndroidEncryptedPassphrase(tester);
+  Future<void> fillEncryptedCredentials({String? incorrectPassphrase}) async {
+    await tap(tester, 'direct-auth-key');
+    await pasteKey();
+    expect(tester.widget<TextField>(passphrase).obscureText, isTrue);
+    await tester.ensureVisible(passphrase);
+    await tester.enterText(
+      passphrase,
+      incorrectPassphrase ?? config['passphrase'] as String,
+    );
+    await tester.pump();
   }
-  await tap(tester, 'direct-connect', requireEnabled: true);
-  await until(
-    tester,
-    () => find.textContaining('私钥无法解析或解密').evaluate().isNotEmpty,
-  );
+
+  if (rotating) {
+    await reviewDirectSshRotation(
+      tester,
+      config: config,
+      step: step,
+      checkpoint: (phase, _) => checkpoint(phase),
+      confirmHome: confirmHome,
+      initialReview: () => checkpoint('review'),
+      rejectedConnect: () async {
+        await fillEncryptedCredentials();
+        step('encrypted_prepare_rejection');
+        await finishAndroidEncryptedPassphrase(tester);
+        final dynamic state = tester.state(find.byType(DirectSshPage));
+        expect(state.fingerprint, config['fingerprint']);
+        await tap(
+          tester,
+          'direct-connect',
+          requireEnabled: true,
+          stableHitPoint: true,
+        );
+      },
+    );
+  } else {
+    step('encrypted_home');
+    await app.main();
+    await confirmHome();
+    await openDirectSshFromHome(tester);
+    for (final entry in {
+      'direct-host': '127.0.0.1',
+      'direct-port': '${config['port']}',
+      'direct-user': 'fixture',
+    }.entries) {
+      await tester.ensureVisible(control(entry.key));
+      await tester.enterText(control(entry.key), entry.value);
+      await tester.pump();
+    }
+    expect(control('direct-secret'), findsNothing);
+    step('encrypted_probe');
+    await tap(tester, 'direct-probe');
+    await until(
+      tester,
+      () => control('direct-trust-key').evaluate().length == 1,
+    );
+    expect(
+      find.textContaining(config['fingerprint'] as String),
+      findsOneWidget,
+    );
+    step('encrypted_review');
+    await checkpoint('review');
+    await tap(tester, 'direct-trust-key');
+    if (afterTrust != null) await afterTrust();
+    await fillEncryptedCredentials(
+      incorrectPassphrase: 'invalid-fixture-passphrase',
+    );
+    if (android) {
+      step('encrypted_prepare_rejection');
+      await finishAndroidEncryptedPassphrase(tester);
+    }
+    await tap(tester, 'direct-connect', requireEnabled: true);
+    await until(
+      tester,
+      () => find.textContaining('私钥无法解析或解密').evaluate().isNotEmpty,
+    );
+    final dynamic state = tester.state(find.byType(DirectSshPage));
+    expect(state.secret.text.isEmpty, isTrue);
+    expect(state.passphrase.text.isEmpty, isTrue);
+    step('encrypted_rejected');
+    await checkpoint('rejected');
+  }
   final dynamic state = tester.state(find.byType(DirectSshPage));
-  expect(state.secret.text.isEmpty, isTrue);
-  expect(state.passphrase.text.isEmpty, isTrue);
-  step('encrypted_rejected');
-  await checkpoint('rejected');
-  await pasteKey();
-  await tester.ensureVisible(passphrase);
-  await tester.enterText(passphrase, config['passphrase'] as String);
+  if (rotating) {
+    expect(state.fingerprint, config['rotatedFingerprint']);
+    await fillEncryptedCredentials();
+  } else {
+    await pasteKey();
+    await tester.ensureVisible(passphrase);
+    await tester.enterText(passphrase, config['passphrase'] as String);
+  }
   config.remove('privateKey');
   config.remove('passphrase');
   await tester.pump();
@@ -852,6 +909,7 @@ Future<void> runEncryptedDirectSshUi(
   });
   expect(state.secret.text.isEmpty, isTrue);
   expect(state.passphrase.text.isEmpty, isTrue);
+  if (rotating) expect(state.connectHostKeyMatched, isTrue);
   final surface = ui.PlatformDispatcher.instance.implicitView!;
   step('encrypted_wait_idle_ime');
   await waitForEncryptedIdleTerminal(
@@ -889,7 +947,7 @@ Future<void> runEncryptedDirectSshUi(
   }
   step('encrypted_capture');
   diagnostic('encrypted_capture', terminal);
-  await capture('connected');
+  await capture(rotating ? 'rotation-connected' : 'connected');
   step('encrypted_disconnect');
   await tapControl(
     tester,
@@ -901,6 +959,10 @@ Future<void> runEncryptedDirectSshUi(
   expect(state.secret.text.isEmpty, isTrue);
   expect(state.passphrase.text.isEmpty, isTrue);
   expect(find.textContaining('已断开'), findsOneWidget);
+  if (rotating) {
+    expect(state.fingerprint, config['rotatedFingerprint']);
+    expect(state.hostKeyReviewRequired, isFalse);
+  }
   await capture('disconnected');
   expect(tester.takeException(), isNull);
   final report = {
@@ -911,7 +973,8 @@ Future<void> runEncryptedDirectSshUi(
     'explicitTrustRequired': true,
     'privateKeyPasted': true,
     'passphraseObscured': true,
-    'wrongPassphraseRejectedLocally': true,
+    if (rotating) ..._rotationTrustEvidence
+    else 'wrongPassphraseRejectedLocally': true,
     'realTerminalView': true,
     'normalTextInputCommit': true,
     'remoteEchoVisible': true,
@@ -931,32 +994,23 @@ Future<void> runEncryptedDirectSshUi(
   binding.reportData = report;
 }
 
-Future<void> runDirectSshRotationUi(
+Future<void> reviewDirectSshRotation(
   WidgetTester tester, {
   required Map<String, dynamic> config,
-  required String directory,
-  required String platform,
   required void Function(String) step,
-  required void Function(String, Object) publish,
-  required Future<void> Function(String) capture,
+  required Future<void> Function(String, int) checkpoint,
+  Future<void> Function()? confirmHome,
+  Future<void> Function()? initialReview,
+  Future<void> Function()? rejectedConnect,
+  Future<void> Function(String)? captureRejected,
 }) async {
-  Future<void> checkpoint(String phase, int stage) async {
-    publish('rotation-stage.json', {'phase': phase, 'stage': stage});
-    final reply = File('$directory/rotation-$phase-confirmed.json');
-    await until(tester, reply.existsSync);
-    expect(jsonDecode(reply.readAsStringSync()), {
-      'phase': phase,
-      'stage': stage,
-      'serverEvidenceAccepted': true,
-    });
-  }
-
   step('rotation_home');
   await app.main();
   await until(
     tester,
     () => find.byKey(const ValueKey('hosts-direct-ssh')).evaluate().length == 1,
   );
+  if (confirmHome != null) await confirmHome();
   await openDirectSshFromHome(tester);
   final dynamic state = tester.state(find.byType(DirectSshPage));
   for (final entry in {
@@ -976,12 +1030,21 @@ Future<void> runDirectSshRotationUi(
     () => find.byKey(const ValueKey('direct-trust-key')).evaluate().length == 1,
   );
   expect(find.textContaining(config['fingerprint'] as String), findsOneWidget);
+  if (rejectedConnect != null) {
+    expect(control('direct-secret'), findsNothing);
+    expect(control('direct-connect'), findsNothing);
+  }
+  if (initialReview != null) await initialReview();
   await tap(tester, 'direct-trust-key');
   final secret = find.byKey(const ValueKey('direct-secret'));
-  await tester.ensureVisible(secret);
-  await tester.enterText(secret, config['password'] as String);
-  await tester.pump();
-  await tap(tester, 'direct-connect', requireEnabled: true);
+  if (rejectedConnect != null) {
+    await rejectedConnect();
+  } else {
+    await tester.ensureVisible(secret);
+    await tester.enterText(secret, config['password'] as String);
+    await tester.pump();
+    await tap(tester, 'direct-connect', requireEnabled: true);
+  }
   await until(
     tester,
     () =>
@@ -992,6 +1055,10 @@ Future<void> runDirectSshRotationUi(
         1,
   );
   step('rotation_rejected');
+  if (rejectedConnect != null) {
+    expect(state.connectFailure, DirectSshConnectFailure.hostKeyChanged);
+    expect(state.connectHostKeyMatched, isFalse);
+  }
   expect(
     tester
         .widget<SelectableText>(
@@ -1012,6 +1079,7 @@ Future<void> runDirectSshRotationUi(
   expect(state.fingerprint, config['fingerprint']);
   expect(state.hostKeyReviewRequired, isTrue);
   expect(state.secret.text, isEmpty);
+  expect(state.passphrase.text, isEmpty);
   expect(find.byType(TerminalView), findsNothing);
   // S10 removes the ordinary back affordance and blocks the framework's
   // platform-back route. This does not verify physical navigation hardware.
@@ -1020,7 +1088,7 @@ Future<void> runDirectSshRotationUi(
   await tester.pump(const Duration(milliseconds: 300));
   expect(find.byType(DirectSshPage), findsOneWidget);
   expect(find.byKey(const ValueKey('direct-host-key-change')), findsOneWidget);
-  await capture('rotation-rejected');
+  if (captureRejected != null) await captureRejected('rotation-rejected');
   await checkpoint('rejected', 2);
 
   step('rotation_cancelled');
@@ -1056,6 +1124,7 @@ Future<void> runDirectSshRotationUi(
   expect(state.hostKeyReviewRequired, isFalse);
   expect(tester.widget<TextField>(secret).enabled, isTrue);
   expect(tester.widget<TextField>(secret).controller!.text, isEmpty);
+  expect(state.passphrase.text, isEmpty);
   expect(
     tester
         .widget<FilledButton>(find.byKey(const ValueKey('direct-connect')))
@@ -1063,7 +1132,37 @@ Future<void> runDirectSshRotationUi(
     isNull,
   );
   expect(find.byType(TerminalView), findsNothing);
+}
 
+Future<void> runDirectSshRotationUi(
+  WidgetTester tester, {
+  required Map<String, dynamic> config,
+  required String directory,
+  required String platform,
+  required void Function(String) step,
+  required void Function(String, Object) publish,
+  required Future<void> Function(String) capture,
+}) async {
+  Future<void> checkpoint(String phase, int stage) async {
+    publish('rotation-stage.json', {'phase': phase, 'stage': stage});
+    final reply = File('$directory/rotation-$phase-confirmed.json');
+    await until(tester, reply.existsSync);
+    expect(jsonDecode(reply.readAsStringSync()), {
+      'phase': phase,
+      'stage': stage,
+      'serverEvidenceAccepted': true,
+    });
+  }
+
+  await reviewDirectSshRotation(
+    tester,
+    config: config,
+    step: step,
+    checkpoint: checkpoint,
+    captureRejected: capture,
+  );
+  final dynamic state = tester.state(find.byType(DirectSshPage));
+  final secret = control('direct-secret');
   step('rotation_authenticate');
   await tester.ensureVisible(secret);
   await tester.enterText(secret, config['password'] as String);
@@ -1095,16 +1194,7 @@ Future<void> runDirectSshRotationUi(
     'schemaVersion': 1,
     'platform': platform,
     'homepageEntry': true,
-    'sameTarget': true,
-    'oldFingerprintMatchedIndependentA': true,
-    'changedFingerprintMatchedIndependentB': true,
-    'rejectedBeforeAuthentication': true,
-    'reviewNavigationBlocked': true,
-    'cancelKeepsOldTrust': true,
-    'credentialsLockedBeforeApproval': true,
-    'noAutomaticConnection': true,
-    'freshProbeMatchedIndependentB': true,
-    'explicitRotatedTrustRequired': true,
+    ..._rotationTrustEvidence,
     'realTerminalView': true,
     'normalTextInputCommit': true,
     'remoteEchoVisible': true,

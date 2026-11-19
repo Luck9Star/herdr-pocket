@@ -532,9 +532,9 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
     def test_workflow_explicit_case_keeps_standard_default_and_push_scope(self):
         workflow = (HERE.parents[1] / '.github/workflows/direct-ssh-android.yml').read_text()
         self.assertIn("'codex/acceptance/direct-ssh-android-*'", workflow)
-        self.assertIn('options: [standard, encrypted-key]', workflow)
+        self.assertIn('options: [standard, encrypted-key, encrypted-key-rotation]', workflow)
         self.assertIn('default: standard', workflow)
-        self.assertIn("if: ${{ inputs.auth_case == 'encrypted-key' }}", workflow)
+        self.assertIn("if: ${{ inputs.auth_case == 'encrypted-key' || inputs.auth_case == 'encrypted-key-rotation' }}", workflow)
         self.assertIn('flutter build apk --debug --target-platform android-x64 --no-pub -t integration_test/android_direct_ssh_test.dart', workflow)
         self.assertIn('AUTH_CASE: ${{ inputs.auth_case }}', workflow)
         self.assertIn('case "${AUTH_CASE:-}" in', workflow)
@@ -549,7 +549,8 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
         start = workflow.index('          case "${AUTH_CASE:-}" in')
         end = workflow.index('          esac', start) + len('          esac')
         program = workflow[start:end] + '\nprintf "<%s>" "$@"'
-        for value, expected in [('', '<>'), ('standard', '<>'), ('encrypted-key', '<--encrypted-key>')]:
+        for value, expected in [('', '<>'), ('standard', '<>'), ('encrypted-key', '<--encrypted-key>'),
+                                ('encrypted-key-rotation', '<--encrypted-key-rotation>')]:
             result = subprocess.run(['bash', '-c', program], env={**os.environ, 'AUTH_CASE': value},
                                     capture_output=True, text=True, check=False)
             self.assertEqual((result.returncode, result.stdout), (0, expected))
@@ -559,6 +560,12 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(result.stdout, '')
             self.assertNotIn(value, result.stderr)
+
+    def test_encrypted_rotation_rejects_push_before_opening_a_fixture(self):
+        with patch.object(runner, 'checked_paths') as paths, self.assertRaisesRegex(
+                runner.Failure, 'direct_android_encrypted_rotation_requires_manual_dispatch'):
+            runner.run_encrypted(None, {'GITHUB_EVENT_NAME': 'push'}, rotating=True)
+        paths.assert_not_called()
 
     def test_startup_observation_does_not_probe_app_before_install(self):
         path = 'cache/herdr-direct-ssh-123'
@@ -698,6 +705,19 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
         with self.assertRaises(runner.Failure):
             runner.encrypted_probe_evidence(fixture)
 
+    def test_encrypted_rotation_result_requires_both_evidence_families_without_wrong_passphrase(self):
+        value = dict.fromkeys(runner.ENCRYPTED_ROTATION_PUBLIC_FIELDS, True)
+        value.update(schemaVersion=1, platform='android-api35-emulator', physicalImeVerified=False)
+        self.assertEqual(runner.safe_encrypted_result(json.dumps(value), rotating=True), value)
+        standard = {key: value.get(key, True) for key in runner.ENCRYPTED_PUBLIC_FIELDS}
+        with self.assertRaises(runner.Failure):
+            runner.safe_encrypted_result(json.dumps(value))
+        for bad in (standard, {**value, 'wrongPassphraseRejectedLocally': True},
+                    {**value, 'cancelKeepsOldTrust': False}, {**value, 'privateKeyPasted': False},
+                    {k: v for k, v in value.items() if k != 'freshProbeMatchedIndependentB'}):
+            with self.subTest(value=bad), self.assertRaises(runner.Failure):
+                runner.safe_encrypted_result(json.dumps(bad), rotating=True)
+
     def test_encrypted_stages_are_ordered_and_only_accept_public_phase(self):
         self.assertEqual(runner.checked_encrypted_stage({'phase': 'review'}, {}), 'review')
         self.assertIsNone(runner.checked_encrypted_stage({'phase': 'review'}, {'review': {}}))
@@ -706,6 +726,33 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
                                  ({'phase': False}, {}), ({'phase': 'connected'}, {}), ([], {})]:
             with self.subTest(value=value), self.assertRaises(runner.Failure):
                 runner.checked_encrypted_stage(value, completed)
+
+    def test_encrypted_rotation_stages_require_order_and_reject_a_replayed_review(self):
+        completed = {}
+        for phase in ('review', 'rejected', 'cancelled', 'reprobed'):
+            value = {'phase': phase}
+            self.assertEqual(runner.checked_encrypted_stage(value, completed, rotating=True), phase)
+            completed[phase] = {}
+            self.assertIsNone(runner.checked_encrypted_stage(value, completed, rotating=True))
+        for phases in (completed, {'review': {}}, {'review': {}, 'rejected': {}}):
+            invalid = 'review' if 'reprobed' in phases else 'reprobed'
+            with self.assertRaises(runner.Failure):
+                runner.checked_encrypted_stage({'phase': invalid}, phases, rotating=True)
+        with self.assertRaises(runner.Failure):
+            runner.checked_encrypted_stage({'phase': 'cancelled'}, {'review': {}, 'rejected': {}})
+
+    def test_encrypted_rotation_rejects_repeated_auth_and_extra_terminal_input(self):
+        fixture = Mock()
+        value = {'authAttempts': 1, 'inputBytes': 9}
+        fixture.public_key_auth_evidence.return_value = value
+        self.assertEqual(runner.encrypted_rotation_final_evidence(fixture), value)
+        for correction in ({'authAttempts': 2}, {'authAttempts': True}, {'inputBytes': 18}, {'inputBytes': 8}):
+            fixture.public_key_auth_evidence.return_value = {**value, **correction}
+            with self.subTest(correction=correction), self.assertRaises(runner.Failure):
+                runner.encrypted_rotation_final_evidence(fixture)
+        fixture.public_key_auth_evidence.side_effect = ValueError('raw private data')
+        with self.assertRaisesRegex(runner.Failure, '^direct_android_encrypted_rotation_evidence_invalid$'):
+            runner.encrypted_rotation_final_evidence(fixture)
 
     def test_encrypted_diagnostic_only_exports_fixed_token_free_metrics(self):
         data = {'phase': 'encrypted_wait_idle_ime', 'terminalCount': 1,
@@ -932,12 +979,20 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
             self.assertFalse(Path(key_temp.name).exists())
 
     def test_complete_case_requires_review_rejection_ocr_and_live_peer_confirmation(self):
+        self.assert_complete_encrypted_case(rotating=False)
+
+    def test_complete_rotation_case_requires_the_single_rotating_peer_for_ocr_and_auth(self):
+        self.assert_complete_encrypted_case(rotating=True)
+
+    def assert_complete_encrypted_case(self, *, rotating):
         from screen_proof_token import SCREEN_WORDS
+        phases = ('review', 'rejected', 'cancelled', 'reprobed') if rotating else ('review', 'rejected')
+        screen_tag = 'key-rotation' if rotating else 'ordinary'
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); app = root / 'app'; app.mkdir(); output = root / 'public'
             key_temp = tempfile.TemporaryDirectory(dir=temp)
             fixture = MagicMock(port=40001, username='fixture', private_key='sensitive-test-key',
-                passphrase='sensitive-test-phrase', fingerprint='SHA256:public',
+                passphrase='sensitive-test-phrase', fingerprint='SHA256:public', rotated_fingerprint='SHA256:rotated',
                 screen_token=' '.join(SCREEN_WORDS[:8]), echo_marker='POCKET-ANDROID-SSH-OK')
             fixture._temp = key_temp; fixture.__enter__.return_value = fixture
             def exit_fixture(*unused):
@@ -952,10 +1007,17 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
                 authAccepted=True, markerReceived=True, sessionClosed=True, closed=True)
             before = dict(connections=1, connectionsClosed=True, connectionEvents=[probe])
             closed = dict(connections=2, connectionsClosed=True, connectionEvents=[probe, session])
-            fixture.snapshot.side_effect = [before, before, closed, closed, closed, closed]
+            if rotating:
+                events = [probe, {**probe, 'id': 2, 'hostKey': 'B'}, {**probe, 'id': 3, 'hostKey': 'B'},
+                          {**session, 'id': 4, 'hostKey': 'B', 'publicKeyAccepted': True}]
+                closed = dict(connections=4, connectionsClosed=True, connectionEvents=events)
+                fixture.rotation_evidence.side_effect = [{'stage': 2}, {'stage': 2}, {'stage': 3}]
+                fixture.public_key_auth_evidence.return_value = {'authAttempts': 1, 'inputBytes': 9}
+            fixture.snapshot.side_effect = ([before] if rotating else [before, before]) + [closed] * 4
             fixture.wait_for_connections_closed.return_value = True
             fixture.wait_for.return_value = True
-            fake_module = types.SimpleNamespace(EncryptedKeyFixture=Mock(return_value=fixture))
+            fake_module = types.SimpleNamespace(EncryptedKeyFixture=Mock(return_value=fixture),
+                                                RotatingEncryptedKeyFixture=Mock(return_value=fixture))
             process = Mock(pid=12345); process.stdout = __import__('io').BytesIO(b'')
             process.poll.return_value = None
             def wait(**unused): process.poll.return_value = 0; return 0
@@ -968,7 +1030,8 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
                     ('shell', 'settings', 'get', 'secure', 'show_ime_with_hard_keyboard'): '1'}
                 return values.get(args, '')
             current = {'round': 0}
-            device = {key: True for key in runner.ENCRYPTED_PUBLIC_FIELDS}
+            fields = runner.ENCRYPTED_ROTATION_PUBLIC_FIELDS if rotating else runner.ENCRYPTED_PUBLIC_FIELDS
+            device = dict.fromkeys(fields, True)
             device.update(schemaVersion=1, platform='android-api35-emulator', physicalImeVerified=False)
             diagnostic = {'phase': 'encrypted_capture', 'terminalCount': 1,
                 'terminalHit': True, 'disconnectHit': True, 'toggleHit': True, 'enterHit': False, 'headerHit': True,
@@ -979,37 +1042,61 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
             def read_json(path, *unused, **kwargs):
                 if path.endswith('/stage.json'): return {'stage': 'encrypted_waiting_private'}
                 if path.endswith('encrypted-diagnostic.json'): return diagnostic
-                if path.endswith('screen-request.json'): return {'valid': True} if current['round'] == 2 else None
-                if path.endswith('encrypted-stage.json'): return {'phase': 'review' if current['round'] == 0 else 'rejected'}
+                if path.endswith('screen-request.json'):
+                    return {'tag': screen_tag} if current['round'] == len(phases) else None
+                if path.endswith('encrypted-stage.json'):
+                    return {'phase': phases[min(current['round'], len(phases) - 1)]}
                 if path.endswith('encrypted-result.json'):
-                    result = device if current['round'] == 2 else None
+                    result = device if current['round'] == len(phases) else None
                     current['round'] += 1
                     return result
                 return None
-            def screenshot(request, screens, *unused, **kwargs):
-                self.assertFalse(kwargs['require_rotation'])
-                screens['ordinary'] = {'attempt': 1, 'accepted': True, 'expectedTarget': 'fixture@127.0.0.1:40001'}
+            def screenshot(request, screens, ordinary_peer, rotation_peer, *unused, require_rotation):
+                self.assertIs(require_rotation, rotating)
+                self.assertIs(ordinary_peer, fixture)
+                self.assertIs(rotation_peer, fixture if rotating else None)
+                screens[request['tag']] = {'attempt': 1, 'accepted': True, 'expectedTarget': 'fixture@127.0.0.1:40001'}
+            def start_tool(command, **unused):
+                defines_path = next(item.split('=', 1)[1] for item in command if item.startswith('--dart-define-from-file='))
+                defines = json.loads(Path(defines_path).read_text())
+                self.assertEqual(defines['HERDR_ANDROID_ENCRYPTED_KEY_CASE'], 'rotation' if rotating else '1')
+                target = json.loads(defines['HERDR_ANDROID_ENCRYPTED_KEY_TARGET'])
+                self.assertEqual(target['fingerprint'], fixture.fingerprint)
+                self.assertEqual(target.get('rotatedFingerprint'), fixture.rotated_fingerprint if rotating else None)
+                self.assertNotIn('sensitive-test-key', json.dumps(defines))
+                return process
             png = b'\x89PNG\r\n\x1a\n' + b'test'
-            env = {'GITHUB_SHA': 'a'*40, 'GITHUB_RUN_ID': '123', 'RUNNER_TEMP': temp}
+            env = {'GITHUB_SHA': 'a'*40, 'GITHUB_RUN_ID': '123', 'RUNNER_TEMP': temp,
+                   'GITHUB_EVENT_NAME': 'workflow_dispatch'}
             args = types.SimpleNamespace(project=app, output=output)
             with patch.dict(sys.modules, {'tauri_encrypted_key_fixture': fake_module}), \
                  patch.object(runner, 'checked_paths', return_value=(app, output)), \
                  patch.object(runner, 'verify_prepared'), patch.object(runner, 'text', side_effect=fake_text), \
                  patch.object(runner, 'encrypted_device_state', return_value='device'), \
-                 patch.object(runner, 'package_present', side_effect=[False, True, True, True, True, False]), \
+                 patch.object(runner, 'package_present', side_effect=[False] + [True] * (len(phases) + 2) + [False]), \
                  patch.object(runner, 'forward_set', return_value=set()), \
                  patch.object(runner, 'adb', return_value=CompletedProcess([], 0, png, b'')) as adb, \
                  patch.object(runner, 'read_public_json', side_effect=read_json), \
                  patch.object(runner, 'screen_checkpoint', side_effect=screenshot), \
-                 patch.object(runner.time, 'sleep'), patch.object(runner.subprocess, 'Popen', return_value=process):
-                report = runner.run_encrypted(args, env)
+                 patch.object(runner.time, 'sleep'), patch.object(runner.subprocess, 'Popen', side_effect=start_tool):
+                report = runner.run_encrypted(args, env, rotating=rotating)
             self.assertEqual(report['status'], 'passed')
             self.assertTrue(report['startup']['packageObserved'])
             self.assertTrue(report['startup']['appStageObserved'])
             self.assertTrue(report['startup']['privateInputDelivered'])
             self.assertEqual(report['startup']['tool']['streamState'], 'eof')
             self.assertEqual(report['uiDiagnostic'], diagnostic)
-            self.assertEqual(tuple(report['checkpoints']), ('review', 'rejected'))
+            self.assertEqual(tuple(report['checkpoints']), phases)
+            self.assertEqual(tuple(report['screenProof']), (screen_tag,))
+            self.assertEqual(report['authenticationMethod'], 'publickey')
+            if rotating:
+                self.assertEqual(report['kind'], 'flutter-android-encrypted-ed25519-rotation')
+                self.assertEqual(report['rotatedSessionEvidence'], {'authAttempts': 1, 'inputBytes': 9})
+                self.assertEqual([call.args[0] for call in fixture.rotation_evidence.call_args_list], [2, 2, 3])
+                fake_module.RotatingEncryptedKeyFixture.assert_called_once_with()
+                fake_module.EncryptedKeyFixture.assert_not_called()
+            else:
+                fake_module.RotatingEncryptedKeyFixture.assert_not_called()
             self.assertTrue(report['peerClosedBeforeDriverExit'])
             self.assertTrue(report['cleanup']['temporaryKeyRemoved'])
             self.assertFalse(report['cleanup']['rawLogsUploaded'])
@@ -1057,6 +1144,56 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
             self.assertTrue(fixture.wait_for_connections_closed(2))
             runner.ordinary_session_evidence(fixture, closed=True)
         self.assertFalse(Path(private_dir).exists())
+        self.assertEqual((fixture.private_key, fixture.passphrase), ('', ''))
+
+    @unittest.skipUnless(importlib.util.find_spec('paramiko') and __import__('shutil').which('ssh-keygen'),
+                         'Paramiko and ssh-keygen required')
+    def test_real_encrypted_rotation_peer_rejects_b_before_one_public_key_session(self):
+        import io
+        import paramiko
+        from tauri_encrypted_key_fixture import RotatingEncryptedKeyFixture
+        from screen_proof_token import token_lines
+        with RotatingEncryptedKeyFixture() as fixture:
+            private_dir = Path(fixture._temp.name)
+            key = paramiko.Ed25519Key.from_private_key(io.StringIO(fixture.private_key), fixture.passphrase)
+            with paramiko.Transport(('127.0.0.1', fixture.port)) as probe:
+                probe.start_client(timeout=5)
+                self.assertEqual(probe.get_remote_server_key(), fixture._key)
+            runner.encrypted_probe_evidence(fixture)
+            for stage in (2, 3):
+                with paramiko.Transport(('127.0.0.1', fixture.port)) as probe:
+                    probe.start_client(timeout=5)
+                    self.assertEqual(probe.get_remote_server_key(), fixture._rotated_key)
+                    self.assertNotEqual(probe.get_remote_server_key(), fixture._key)
+                checkpoints = runner.closed_rotation_evidence(fixture, stage)
+                self.assertEqual(checkpoints['connections'], stage)
+                self.assertEqual(checkpoints['rejectedTransport']['authAttempts'], 0)
+                if stage == 2:
+                    self.assertEqual(runner.closed_rotation_evidence(fixture, 2), checkpoints)
+            with paramiko.Transport(('127.0.0.1', fixture.port)) as session:
+                session.start_client(timeout=5)
+                self.assertEqual(session.get_remote_server_key(), fixture._rotated_key)
+                session.auth_publickey(fixture.username, key)
+                channel = session.open_session(timeout=5)
+                channel.get_pty(); channel.invoke_shell(); channel.settimeout(5)
+                channel.sendall(b'hp-check\r')
+                last_token = token_lines(fixture.screen_token)[-1].encode()
+                output = b''
+                while last_token not in output and len(output) < 8192:
+                    data = channel.recv(8192)
+                    if not data:
+                        break
+                    output += data
+                self.assertIn(b'POCKET-ANDROID-SSH-OK', output)
+                for token in token_lines(fixture.screen_token):
+                    self.assertIn(token.encode(), output)
+                channel.close()
+                self.assertTrue(fixture.wait_for('sessionClosed'))
+            self.assertTrue(fixture.wait_for_connections_closed(4))
+            evidence = runner.encrypted_rotation_final_evidence(fixture)
+            self.assertEqual((evidence['authAttempts'], evidence['ptyRequests'], evidence['shellRequests']), (1, 1, 1))
+            self.assertTrue(evidence['publicKeyAccepted'])
+        self.assertFalse(private_dir.exists())
         self.assertEqual((fixture.private_key, fixture.passphrase), ('', ''))
 
 if __name__ == '__main__':

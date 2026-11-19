@@ -23,7 +23,9 @@ ZIP 仅含 `result.json` 和 `ordinary-terminal.png`。PNG 是 1920 × 1080 的�
 
 Flutter 的原图是全 X11 帧缓冲，既有两次 Tauri 的原图是 1440 × 1200 的 WebKitGTK WebDriver 视口。窗口和截图范围不同，输入分别采用 Flutter 测试接口与原生 WebDriver。两份原图可核对连接目标和回显，逐点视觉等价需统一窗口和取景后另行验证。[既有 Tauri 两次原生结果](../tauri-linux-ordinary-ssh-password-20261119/README.md)
 
-同源码的 [Tauri 作业 135595726743](https://github.com/Luck9Star/herdr-pocket/actions/runs/44534351332/job/135595726743)另行运行。本归档的 Flutter 通过结论限于普通密码与独立回环。两壳的换钥、私钥认证、物理键盘、系统中文 IME、真实跨网、部署安装及 Windows 均仍待验证。[普通 SSH 矩阵](../../63-design-parity-and-direct-ssh.md#普通-ssh-验收矩阵2026-11-18-汇总)
+同源码的 [Tauri 作业 135595726743](https://github.com/Luck9Star/herdr-pocket/actions/runs/44534351332/job/135595726743)在依赖准备阶段达到 45 分钟上限，于 14:17:05 UTC 取消。8 项 Python 保护测试已通过，随后 APT 日志对 Ubuntu 区域镜像和官方归档源持续记录 `Ign`。该作业未构建或启动 Tauri GUI，也没有证据工件。同源的 Tauri 原生结果仍待验证，既有两次独立通过记录继续有效。
+
+本归档的 Flutter 通过结论限于普通密码与独立回环。两壳的换钥、私钥认证、物理键盘、系统中文 IME、真实跨网、部署安装及 Windows 均仍待验证。[普通 SSH 矩阵](../../63-design-parity-and-direct-ssh.md#普通-ssh-验收矩阵2026-11-18-汇总)
 
 ## 校验原件
 

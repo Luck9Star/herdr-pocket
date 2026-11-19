@@ -1,0 +1,240 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-11-19",
+  "scope": "Tauri production frontend and xterm in browsers, with a simulated Tauri IPC peer",
+  "sourceSHA": {
+    "before": "c6b5e2e446ddbe77a92aea98c3d61c8a6f0839db",
+    "after": "1c9e310b8b910c6a8c58091efb4acd0ef0857e6f"
+  },
+  "browserDriver": {
+    "playwright": "1.62.1",
+    "node": "24.22.2"
+  },
+  "viewportSequence": [
+    [
+      1440,
+      1000
+    ],
+    [
+      700,
+      1000
+    ],
+    [
+      1440,
+      1000
+    ]
+  ],
+  "devicePixelRatio": 1,
+  "rapidPauseReplyDelayMs": 500,
+  "tests": {
+    "tauriFrontendPassed": 677,
+    "desktopFocusedPassed": 54,
+    "bothFailed": 0
+  },
+  "webkitPlainTabControl": {
+    "browser": "26.5",
+    "scope": "Unscripted HTML with an input, a native button and a second input",
+    "Tab": "next input",
+    "Alt+Tab": "native button"
+  },
+  "engines": {
+    "chromium": {
+      "version": "151.0.7922.34",
+      "normal": {
+        "beforePassed": true,
+        "afterPassed": true,
+        "keyboard": {
+          "tabKey": "Tab",
+          "terminalSelected": "fixture-alpha · w1:p1 · 观察已暂停",
+          "manualRecovery": "恢复观察",
+          "returnHome": "返回主机看板"
+        },
+        "narrowPanel": {
+          "title": "fixture-beta · w1:p2 · term_b002",
+          "x": 21,
+          "width": 658,
+          "splitHidden": true,
+          "returnHome": true,
+          "secondaryPauseLabel": "fixture-alpha · w1:p1 · 观察已暂停"
+        }
+      },
+      "rapid": {
+        "before": {
+          "passed": false,
+          "secondaryState": "paused",
+          "secondaryControls": [
+            "pause"
+          ],
+          "panels": [
+            {
+              "title": "fixture-beta · w1:p2 · term_b002",
+              "inputFocus": true,
+              "x": 265,
+              "width": 560,
+              "text": "BETA-D2-START$"
+            },
+            {
+              "title": "fixture-alpha · w1:p1 · term_a001",
+              "inputFocus": false,
+              "x": 839,
+              "width": 560,
+              "text": "ALPHA-D2-RESUME-2$"
+            }
+          ],
+          "png": {
+            "path": "screens/chromium-before.png",
+            "sha256": "37c9e92d2317efa71a357d1a9b4e836309b02cdbf125392e2929fe7818344a3b"
+          },
+          "failedAssertion": "widening during a pending pause must resume the non-focus pane when pause is acknowledged"
+        },
+        "after": {
+          "passed": true,
+          "secondaryState": "active",
+          "secondaryControls": [
+            "pause",
+            "resume"
+          ],
+          "panels": [
+            {
+              "title": "fixture-beta · w1:p2 · term_b002",
+              "inputFocus": true,
+              "x": 265,
+              "width": 560,
+              "text": "BETA-D2-START$"
+            },
+            {
+              "title": "fixture-alpha · w1:p1 · term_a001",
+              "inputFocus": false,
+              "x": 839,
+              "width": 560,
+              "text": "ALPHA-D2-RESUME-3$"
+            }
+          ],
+          "png": {
+            "path": "screens/chromium-after.png",
+            "sha256": "cd7a6ca485430f592a128e38274aadc3bd802643d0ebbf7f2c7e7ca5e820d375"
+          },
+          "newFull": {
+            "epoch": 7,
+            "seq": 4,
+            "paneId": "w1:p1",
+            "terminalId": "term_a001",
+            "full": true,
+            "acknowledged": true
+          },
+          "observeCanvases": [
+            {
+              "cols": 80,
+              "rows": 24
+            },
+            {
+              "cols": 80,
+              "rows": 24
+            }
+          ],
+          "inputCalls": 0,
+          "resizeCalls": 0
+        }
+      }
+    },
+    "webkit": {
+      "version": "26.5",
+      "normal": {
+        "beforePassed": true,
+        "afterPassed": true,
+        "keyboard": {
+          "tabKey": "Alt+Tab",
+          "terminalSelected": "fixture-alpha · w1:p1 · 观察已暂停",
+          "manualRecovery": "恢复观察",
+          "returnHome": "返回主机看板"
+        },
+        "narrowPanel": {
+          "title": "fixture-beta · w1:p2 · term_b002",
+          "x": 21,
+          "width": 658,
+          "splitHidden": true,
+          "returnHome": true,
+          "secondaryPauseLabel": "fixture-alpha · w1:p1 · 观察已暂停"
+        }
+      },
+      "rapid": {
+        "before": {
+          "passed": false,
+          "secondaryState": "paused",
+          "secondaryControls": [
+            "pause"
+          ],
+          "panels": [
+            {
+              "title": "fixture-beta · w1:p2 · term_b002",
+              "inputFocus": true,
+              "x": 265,
+              "width": 560,
+              "text": "BETA-D2-START$"
+            },
+            {
+              "title": "fixture-alpha · w1:p1 · term_a001",
+              "inputFocus": false,
+              "x": 839,
+              "width": 560,
+              "text": "ALPHA-D2-RESUME-2$"
+            }
+          ],
+          "png": {
+            "path": "screens/webkit-before.png",
+            "sha256": "1236f8481e5be2cd056c063cf0e0383105f5238596b8b43813bff8dc665e0d17"
+          },
+          "failedAssertion": "widening during a pending pause must resume the non-focus pane when pause is acknowledged"
+        },
+        "after": {
+          "passed": true,
+          "secondaryState": "active",
+          "secondaryControls": [
+            "pause",
+            "resume"
+          ],
+          "panels": [
+            {
+              "title": "fixture-beta · w1:p2 · term_b002",
+              "inputFocus": true,
+              "x": 265,
+              "width": 560,
+              "text": "BETA-D2-START$"
+            },
+            {
+              "title": "fixture-alpha · w1:p1 · term_a001",
+              "inputFocus": false,
+              "x": 839,
+              "width": 560,
+              "text": "ALPHA-D2-RESUME-3$"
+            }
+          ],
+          "png": {
+            "path": "screens/webkit-after.png",
+            "sha256": "faa03a65bc9e72486b18ad49c6895402614bea30c9b4efd3a62ac6602f822997"
+          },
+          "newFull": {
+            "epoch": 7,
+            "seq": 4,
+            "paneId": "w1:p1",
+            "terminalId": "term_a001",
+            "full": true,
+            "acknowledged": true
+          },
+          "observeCanvases": [
+            {
+              "cols": 80,
+              "rows": 24
+            },
+            {
+              "cols": 80,
+              "rows": 24
+            }
+          ],
+          "inputCalls": 0,
+          "resizeCalls": 0
+        }
+      }
+    }
+  }
+}

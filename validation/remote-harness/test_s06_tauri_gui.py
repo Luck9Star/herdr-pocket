@@ -60,6 +60,86 @@ class TauriSplitEvidenceTests(unittest.TestCase):
             with self.assertRaises(GuiFailure):
                 window_dimensions(rectangle)
 
+    def test_direct_escape_uses_one_native_chord_and_waits_for_consumed_key(self):
+        calls = []
+        def call(method, path, body):
+            calls.append((method, path, body))
+
+        def one_poll(probe, code, **kwargs):
+            result = probe()
+            if result is not True:
+                raise GuiFailure(code)
+            return result
+
+        ui = SplitDriver(SimpleNamespace(session='/session/test', call=call))
+        before = {'originalTargetsActive': True, 'selectedB': True, 'directXterm': True,
+                  'bReceiptMatched': True, 'aFocusButtonReady': True}
+        after = {'originalTargetsActive': True, 'selectedB': True, 'aFocusButtonFocused': True,
+                 'bothReadOnly': True, 'keyCount': 1, 'trustedConsumedChord': True}
+        with (patch.object(ui, 'read', side_effect=[before, {**before, 'armed': True}, after]) as read,
+              patch('s06_tauri_gui.wait_for', side_effect=one_poll)):
+            ui.escape_direct_input(['a', 'b'], [('pane-a', 'terminal-a'), ('pane-b', 'terminal-b')])
+        self.assertEqual([call.args[-1] for call in read.call_args_list], [False, True, False])
+        self.assertEqual(calls, [('POST', '/session/test/actions', {'actions': [{
+            'type': 'key', 'id': 's06-native-keyboard', 'actions': [
+                {'type': 'keyDown', 'value': '\ue009'}, {'type': 'keyDown', 'value': '\ue008'},
+                {'type': 'keyDown', 'value': '\ue036'}, {'type': 'keyUp', 'value': '\ue036'},
+                {'type': 'keyUp', 'value': '\ue008'}, {'type': 'keyUp', 'value': '\ue009'},
+            ],
+        }]})])
+
+    def test_direct_escape_fails_closed_without_resending_key_actions(self):
+        before = {'originalTargetsActive': True, 'selectedB': True, 'directXterm': True,
+                  'bReceiptMatched': True, 'aFocusButtonReady': True}
+        after = {'originalTargetsActive': True, 'selectedB': True, 'aFocusButtonFocused': True,
+                 'bothReadOnly': True, 'keyCount': 1, 'trustedConsumedChord': True}
+
+        def one_poll(probe, code, **kwargs):
+            result = probe()
+            if result is not True:
+                raise GuiFailure(code)
+            return result
+
+        cases = [
+            ([{**before, 'directXterm': False}], 'direct_escape_not_ready', 0),
+            ([{**before, 'bReceiptMatched': False}], 'direct_escape_not_ready', 0),
+            ([before, {**before, 'armed': False}], 'direct_escape_not_armed', 0),
+            *[([before, {**before, 'armed': True}, {**after, **changed}],
+               'direct_escape_unconfirmed', 1) for changed in (
+                   {'keyCount': 0}, {'keyCount': 2}, {'keyCount': True},
+                   {'trustedConsumedChord': False}, {'aFocusButtonFocused': False},
+                   {'bothReadOnly': False}, {'selectedB': False}, {'originalTargetsActive': False},
+               )],
+        ]
+        for samples, error, expected_calls in cases:
+            with self.subTest(samples=samples):
+                calls = []
+                def call(method, path, body):
+                    calls.append((method, path, body))
+
+                ui = SplitDriver(SimpleNamespace(session='/session/test', call=call))
+                with (patch.object(ui, 'read', side_effect=samples),
+                      patch('s06_tauri_gui.wait_for', side_effect=one_poll)):
+                    with self.assertRaisesRegex(GuiFailure, '^s06_tauri_' + error + '$'):
+                        ui.escape_direct_input(['a', 'b'], [('pane-a', 'terminal-a'), ('pane-b', 'terminal-b')])
+                self.assertEqual([(method, path) for method, path, _ in calls],
+                                 [('POST', '/session/test/actions')] * expected_calls)
+
+    def test_webdriver_action_error_never_resends_chord_or_claims_observation(self):
+        calls = []
+        def call(method, path, body):
+            calls.append((method, path))
+            raise GuiFailure('webdriver_actions_unknown_error')
+
+        ui = SplitDriver(SimpleNamespace(session='/session/test', call=call))
+        before = {'originalTargetsActive': True, 'selectedB': True, 'directXterm': True,
+                  'bReceiptMatched': True, 'aFocusButtonReady': True}
+        with patch.object(ui, 'read', side_effect=[before, {**before, 'armed': True}]) as read:
+            with self.assertRaisesRegex(GuiFailure, '^webdriver_actions_unknown_error$'):
+                ui.escape_direct_input(['a', 'b'], [('pane-a', 'terminal-a'), ('pane-b', 'terminal-b')])
+        self.assertEqual(calls, [('POST', '/session/test/actions')])
+        self.assertEqual(read.call_count, 2)
+
     def test_layout_requires_original_target_focus_and_current_frame(self):
         targets = [('w1:p1', 'term_a001'), ('w1:p1', 'term_b001')]
         a = {'target': list(targets[0]), 'phase': 'active', 'focused': False,

@@ -205,9 +205,15 @@ class IosDirectSshTests(unittest.TestCase):
         value.update(schemaVersion=1, platform='ios-simulator', physicalImeVerified=False)
         self.assertEqual(runner.check_result(value), value)
         for changed in ({**value, 'remoteEchoVisible': False}, {**value, 'password': 'secret'},
-                        {**value, 'platform': 'android-api35-emulator'}, {**value, 'physicalImeVerified': True}):
+                        {**value, 'platform': 'android-api35-emulator'}, {**value, 'physicalImeVerified': True},
+                        {**value, 'platformKeyboardOpenedAndClosed': False},
+                        {**value, 'boardNetworkSettingsReturnedToSameTerminal': 1}):
             with self.assertRaises(runner.Failure):
                 runner.check_result(changed)
+        del value['boardNetworkSettingsReturnedToSameTerminal']
+        with self.assertRaises(runner.Failure):
+            runner.check_result(value)
+        self.assertTrue(set(runner.ORDINARY_MOBILE_PHASES) <= runner.STAGES)
 
     def test_oversize_exchange_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -1,45 +1,28 @@
-00:00 +0: loading /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/parent_real_ssh_pixels_test.dart
-00:00 +0: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/direct_ssh_desktop_return_test.dart: desktop ordinary SSH return 1440.0 chooser=false (variant: TargetPlatform.linux)
-DESKTOP_GEOMETRY 1440.0 feedback=Rect.fromLTRB(264.0, 76.0, 824.0, 142.0) return=Rect.fromLTRB(264.0, 452.0, 824.0, 500.0)
-DESKTOP_GEOMETRY 1440.0 home=Rect.fromLTRB(264.0, 62.0, 824.0, 106.0) empty=Rect.fromLTRB(264.0, 122.0, 824.0, 390.0) sidebar=Rect.fromLTRB(0.0, 0.0, 224.0, 900.0)
-00:01 +0: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/parent_real_ssh_pixels_test.dart: desktop ordinary SSH return 1440.0 chooser=false (variant: TargetPlatform.linux)
-DESKTOP_GEOMETRY 1440.0 feedback=Rect.fromLTRB(264.0, 76.0, 824.0, 142.0) return=Rect.fromLTRB(264.0, 452.0, 824.0, 500.0)
-00:01 +1: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/direct_ssh_return_widget_test.dart: only a user-disconnected shell reports once on empty board (variant: TargetPlatform.iOS)
-00:01 +1 ~1: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/direct_ssh_return_widget_test.dart: only a user-disconnected shell reports once on empty board (variant: TargetPlatform.iOS)
-00:01 +1 ~1: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/parent_real_ssh_pixels_test.dart: desktop ordinary SSH return 1440.0 chooser=false (variant: TargetPlatform.linux)
-DESKTOP_GEOMETRY 1440.0 home=Rect.fromLTRB(264.0, 62.0, 824.0, 106.0)
-00:01 +2 ~1: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/direct_ssh_return_widget_test.dart: only a user-disconnected shell reports once on empty board (variant: TargetPlatform.iOS)
-00:02 +2 ~1: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/direct_ssh_desktop_return_test.dart: desktop ordinary SSH return 980.0 chooser=false (variant: TargetPlatform.linux)
-DESKTOP_GEOMETRY 980.0 feedback=Rect.fromLTRB(264.0, 76.0, 824.0, 142.0) return=Rect.fromLTRB(264.0, 452.0, 824.0, 500.0)
-DESKTOP_GEOMETRY 980.0 home=Rect.fromLTRB(264.0, 62.0, 824.0, 106.0) empty=Rect.fromLTRB(264.0, 122.0, 824.0, 390.0) sidebar=Rect.fromLTRB(0.0, 0.0, 224.0, 780.0)
-00:02 +3 ~1: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/direct_ssh_return_widget_test.dart: only a user-disconnected shell reports once on empty board (variant: TargetPlatform.iOS)
-00:02 +3 ~2: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/direct_ssh_return_widget_test.dart: only a user-disconnected shell reports once on empty board (variant: TargetPlatform.iOS)
-00:02 +3 ~2: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/parent_real_ssh_pixels_test.dart: desktop ordinary SSH return 980.0 chooser=false (variant: TargetPlatform.linux)
-DESKTOP_GEOMETRY 980.0 feedback=Rect.fromLTRB(264.0, 76.0, 824.0, 142.0) return=Rect.fromLTRB(264.0, 452.0, 824.0, 500.0)
-DESKTOP_GEOMETRY 980.0 home=Rect.fromLTRB(264.0, 62.0, 824.0, 106.0)
-00:02 +4 ~2: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/direct_ssh_return_widget_test.dart: only a user-disconnected shell reports once on empty board (variant: TargetPlatform.iOS)
-00:02 +5 ~2: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/direct_ssh_desktop_return_test.dart: desktop ordinary SSH return 700.0 chooser=false (variant: TargetPlatform.linux)
-DESKTOP_GEOMETRY 700.0 feedback=Rect.fromLTRB(104.0, 76.0, 660.0, 142.0) return=Rect.fromLTRB(104.0, 452.0, 660.0, 500.0)
-DESKTOP_GEOMETRY 700.0 home=Rect.fromLTRB(104.0, 62.0, 660.0, 106.0) empty=Rect.fromLTRB(104.0, 122.0, 660.0, 390.0) sidebar=Rect.fromLTRB(0.0, 0.0, 64.0, 900.0)
-00:03 +6 ~2: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/parent_real_ssh_pixels_test.dart: desktop ordinary SSH return 700.0 chooser=false (variant: TargetPlatform.linux)
-DESKTOP_GEOMETRY 700.0 feedback=Rect.fromLTRB(104.0, 76.0, 660.0, 142.0) return=Rect.fromLTRB(104.0, 452.0, 660.0, 500.0)
-DESKTOP_GEOMETRY 700.0 home=Rect.fromLTRB(104.0, 62.0, 660.0, 106.0)
-00:03 +7 ~2: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/direct_ssh_return_widget_test.dart: only a user-disconnected shell reports once on empty board (variant: TargetPlatform.android)
-00:04 +7 ~2: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/direct_ssh_desktop_return_test.dart: desktop ordinary SSH return 700.0 chooser=true (variant: TargetPlatform.linux)
-DESKTOP_GEOMETRY 700.0 feedback=Rect.fromLTRB(104.0, 76.0, 660.0, 142.0) return=Rect.fromLTRB(104.0, 452.0, 660.0, 500.0)
-DESKTOP_GEOMETRY 700.0 home=Rect.fromLTRB(104.0, 62.0, 660.0, 106.0) empty=Rect.fromLTRB(104.0, 122.0, 660.0, 390.0) sidebar=Rect.fromLTRB(0.0, 0.0, 64.0, 900.0)
-00:04 +8 ~2: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/direct_ssh_return_widget_test.dart: only a user-disconnected shell reports once on empty board (variant: TargetPlatform.android)
-00:04 +9 ~2: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/parent_real_ssh_pixels_test.dart: desktop ordinary SSH return 390.0 chooser=false (variant: TargetPlatform.iOS)
-DESKTOP_GEOMETRY 390.0 feedback=Rect.fromLTRB(24.0, 123.0, 366.0, 189.0) return=Rect.fromLTRB(24.0, 499.0, 366.0, 547.0)
-DESKTOP_GEOMETRY 390.0 home=Rect.fromLTRB(24.0, 119.0, 366.0, 163.0)
-00:04 +10 ~2: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/direct_ssh_return_widget_test.dart: only a user-disconnected shell reports once on saved-host board (variant: TargetPlatform.iOS)
-00:05 +10 ~2: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/parent_real_ssh_pixels_test.dart: desktop ordinary SSH return 320.0 chooser=false (variant: TargetPlatform.iOS)
-DESKTOP_GEOMETRY 320.0 feedback=Rect.fromLTRB(16.0, 100.0, 304.0, 166.0) return=Rect.fromLTRB(16.0, 476.0, 304.0, 524.0)
-DESKTOP_GEOMETRY 320.0 home=Rect.fromLTRB(16.0, 96.0, 304.0, 140.0)
-00:06 +11 ~2: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/direct_ssh_return_widget_test.dart: only a user-disconnected shell reports once on saved-host board (variant: TargetPlatform.iOS)
-00:08 +12 ~2: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/direct_ssh_return_widget_test.dart: only a user-disconnected shell reports once on saved-host board (variant: TargetPlatform.android)
-00:11 +13 ~2: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/direct_ssh_return_widget_test.dart: iOS edge swipe commits disconnect only when completed from connection chooser (variant: TargetPlatform.iOS)
-00:12 +14 ~2: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/direct_ssh_return_widget_test.dart: iOS edge swipe commits disconnect only when completed from saved board (variant: TargetPlatform.iOS)
-00:13 +15 ~2: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/direct_ssh_return_widget_test.dart: a failed local disconnect keeps its failure on the home board (variant: TargetPlatform.iOS)
-00:13 +16 ~2: /private/tmp/herdr-returned-dashboard-r20/flutter-device/test/direct_ssh_return_widget_test.dart: a failed local disconnect keeps its failure on the home board (variant: TargetPlatform.android)
-00:13 +17 ~2: All tests passed!
+00:00 +0: loading /private/tmp/herdr-flutter-responsive-return.ADBtEerg/app/test/close_layout_pixels_test.dart
+00:00 +0: ordinary SSH close layout at 1440px (variant: TargetPlatform.linux)
+ANCHOR 1440 direct-closed-feedback [264.0, 76.0, 560.0, 66.0]
+ANCHOR 1440 direct-return-home [264.0, 452.0, 560.0, 48.0]
+ANCHOR 1440 home-ssh-closed [264.0, 62.0, 560.0, 44.0]
+ANCHOR 1440 home-empty-card [264.0, 122.0, 560.0, 268.0]
+SIDEBAR 1440 224.0
+00:01 +1: ordinary SSH close layout at 980px (variant: TargetPlatform.linux)
+ANCHOR 980 direct-closed-feedback [264.0, 76.0, 560.0, 66.0]
+ANCHOR 980 direct-return-home [264.0, 452.0, 560.0, 48.0]
+ANCHOR 980 home-ssh-closed [264.0, 62.0, 560.0, 44.0]
+ANCHOR 980 home-empty-card [264.0, 122.0, 560.0, 268.0]
+SIDEBAR 980 224.0
+00:02 +2: ordinary SSH close layout at 700px (variant: TargetPlatform.linux)
+ANCHOR 700 direct-closed-feedback [104.0, 76.0, 556.0, 66.0]
+ANCHOR 700 direct-return-home [104.0, 452.0, 556.0, 48.0]
+ANCHOR 700 home-ssh-closed [104.0, 62.0, 556.0, 44.0]
+ANCHOR 700 home-empty-card [104.0, 122.0, 556.0, 268.0]
+SIDEBAR 700 64.0
+00:03 +3: ordinary SSH close layout at 390px (variant: TargetPlatform.iOS)
+ANCHOR 390 direct-closed-feedback [24.0, 123.0, 342.0, 66.0]
+ANCHOR 390 direct-return-home [24.0, 499.0, 342.0, 48.0]
+ANCHOR 390 home-ssh-closed [24.0, 119.0, 342.0, 44.0]
+00:04 +4: ordinary SSH close layout at 320px (variant: TargetPlatform.iOS)
+ANCHOR 320 direct-closed-feedback [16.0, 100.0, 288.0, 66.0]
+ANCHOR 320 direct-return-home [16.0, 476.0, 288.0, 48.0]
+ANCHOR 320 home-ssh-closed [16.0, 96.0, 288.0, 44.0]
+00:05 +5: All tests passed!

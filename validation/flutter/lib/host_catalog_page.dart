@@ -34,7 +34,9 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   static const desktopMinWidth = 960.0;
   static const wideSidebarWidth = 224.0;
   static const splitWorkspaceMinWidth = 960.0;
-  double get desktopSidebarWidth => MediaQuery.sizeOf(context).width >= desktopMinWidth ? wideSidebarWidth : 64.0;
+  bool get canToggleDesktopSidebar => MediaQuery.sizeOf(context).width < desktopMinWidth;
+  bool get desktopSidebarExpanded => !canToggleDesktopSidebar || narrowSidebarExpanded;
+  double get desktopSidebarWidth => desktopSidebarExpanded ? wideSidebarWidth : 64.0;
 
   late final catalog = widget.catalog ?? HostCatalog();
   late final tabs = widget.tabs ?? HostTabs();
@@ -49,6 +51,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   int destination = 0;
   bool splitUpdatePending = false;
   bool workspaceWide = false;
+  bool narrowSidebarExpanded = false;
   final hostSearch = TextEditingController();
   final expandedHostManagement = <String>{};
   HostTaskFilter taskFilter = HostTaskFilter.all;
@@ -333,30 +336,25 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       setState(() => sshVisible.value = true);
       return;
     }
-    final mobile = MediaQuery.sizeOf(context).width < desktopRailMinWidth;
     final generation = ++sshRouteGeneration;
-    if (mobile) {
-      setState(() {
-        sshRouteOpen = true;
-        sshVisible.value = true;
-      });
-    }
-    final navigator = mobile
-        ? sshNavigator.currentState!
-        : Navigator.of(context);
+    // The viewport can cross either breakpoint while the shell is connected.
+    // Keep its route in the same Navigator when the catalog covers it.
+    setState(() {
+      sshRouteOpen = true;
+      sshVisible.value = true;
+    });
+    final navigator = sshNavigator.currentState!;
     final route = MaterialPageRoute<void>(
       builder: (_) => DirectSshPage(
         tokens: widget.tokens,
         catalog: catalog,
-        sessionVisible: mobile ? sshVisible : null,
-        onSelectDestination: mobile
-            ? (index) {
-                setState(() {
-                  destination = index;
-                  sshVisible.value = false;
-                });
-              }
-            : null,
+        sessionVisible: sshVisible,
+        onSelectDestination: (index) {
+          setState(() {
+            destination = index;
+            sshVisible.value = false;
+          });
+        },
         closeCatalogTabs: (ids) {
           for (final id in ids) {
             tabs.closeHost(id);
@@ -369,7 +367,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
     );
     await navigator.push<void>(route);
     await route.completed;
-    if (mobile && mounted) {
+    if (mounted) {
       setState(() {
         sshRouteOpen = false;
         sshVisible.value = false;
@@ -982,13 +980,27 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
     ),
   );
   Widget desktopSidebar({required bool canSplit}) {
-    if (MediaQuery.sizeOf(context).width < desktopMinWidth) return narrowDesktopSidebar();
     return Material(color: widget.tokens.color('card'), child: Container(
       key: const ValueKey('app-sidebar'),
       width: desktopSidebarWidth,
       decoration: BoxDecoration(border: Border(right: BorderSide(color: widget.tokens.color('border')))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      const Padding(padding: EdgeInsets.all(16), child: Text('Herdr Pocket', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+      if (canToggleDesktopSidebar)
+        Padding(padding: const EdgeInsets.fromLTRB(10, 8, 9, 0), child: Row(children: [
+          SizedBox.square(dimension: 44, child: IconButton(
+            key: const ValueKey('sidebar-toggle'),
+            tooltip: desktopSidebarExpanded ? '收起侧栏' : '展开侧栏',
+            onPressed: () => setState(() => narrowSidebarExpanded = !narrowSidebarExpanded),
+            icon: Icon(desktopSidebarExpanded ? Icons.menu_open : Icons.menu),
+          )),
+          if (desktopSidebarExpanded)
+            const Expanded(child: Text('Herdr Pocket', overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+        ]))
+      else
+        const Padding(padding: EdgeInsets.all(16), child: Text('Herdr Pocket', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+      if (!desktopSidebarExpanded) Expanded(child: desktopRail()),
+      if (desktopSidebarExpanded) ...[
       TextButton.icon(key: const ValueKey('hosts-board-tab'),
         onPressed: () { tabs.select(null); setState(() => destination = 0); },
         icon: const Icon(Icons.dashboard_outlined), label: const Text('主机看板')),
@@ -1026,21 +1038,13 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
         selected: destination == 2, onTap: () { tabs.select(null); setState(() => destination = 2); }),
       ListTile(key: const ValueKey('home-tab-3'), leading: const Icon(Icons.settings_outlined), title: const Text('设置'),
         selected: destination == 3, onTap: () { tabs.select(null); setState(() => destination = 3); }),
+      ],
     ])));
   }
-  // Icon rail for desktop widths below desktopMinWidth: same destinations and keys as the
-  // mobile bottom bar so 看板/终端/网络/设置 stay reachable without the wide sidebar.
-  Widget narrowDesktopSidebar() {
+  Widget desktopRail() {
     final entries = [(Icons.dashboard_outlined, '看板'), (Icons.terminal, '终端'),
       (Icons.language, '网络'), (Icons.settings_outlined, '设置')];
-    return Material(color: widget.tokens.color('card'), child: Container(
-      key: const ValueKey('app-sidebar'),
-      width: 64.0,
-      decoration: BoxDecoration(border: Border(right: BorderSide(color: widget.tokens.color('border')))),
-      child: ListView(padding: const EdgeInsets.fromLTRB(10, 8, 10, 0), children: [
-        SizedBox(height: 44, child: Align(alignment: Alignment.centerLeft, child: Container(width: 34, height: 34, alignment: Alignment.center,
-          decoration: BoxDecoration(color: widget.tokens.color('brand'), borderRadius: BorderRadius.circular(10)),
-          child: Text('HP', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: widget.tokens.color('textInverse')))))),
+    return ListView(padding: const EdgeInsets.only(left: 10, right: 9), children: [
         for (var i = 0; i < entries.length; i++)
           Padding(padding: EdgeInsets.only(top: i == 0 ? 16 : 8), child: Material(
             color: destination == i ? widget.tokens.color('brandSoft') : Colors.transparent,
@@ -1057,7 +1061,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
               },
               child: SizedBox(height: 44, child: Center(child: Semantics(label: entries[i].$2, button: true, selected: destination == i,
                 child: Icon(entries[i].$1, size: 24, color: widget.tokens.color(destination == i ? 'brand' : 'textSecondary')))))))),
-      ])));
+    ]);
   }
   void syncSplitAvailability(bool canSplit) {
     workspaceWide = canSplit;
@@ -1133,19 +1137,19 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
           final split = canSplit && tabs.splitAvailable && tabs.active != null && tabs.splitId != null;
           final showingTab = destination == 1 && tabs.active != null;
           bool showFocusControl(HostTab tab) => split || (tab.id == tabs.activeId && !tab.inputEligible.value);
-          final narrowWorkspace = desktop && MediaQuery.sizeOf(context).width < desktopMinWidth;
+          final inlineHostTabs = !desktop || !desktopSidebarExpanded;
           return Row(children: [
           if (desktop) desktopSidebar(canSplit: canSplit),
           Expanded(child: Column(
             children: [
-              if ((!desktop || narrowWorkspace) && tabs.tabs.isNotEmpty && (destination == 0 || destination == 1))
+              if (inlineHostTabs && tabs.tabs.isNotEmpty && (destination == 0 || destination == 1))
                 ConstrainedBox(
                   constraints: BoxConstraints(
                     maxHeight: available.maxHeight * .18,
                   ),
                   child: SingleChildScrollView(child: tabBar()),
                 ),
-              if (tabs.active != null && (!desktop || narrowWorkspace))
+              if (tabs.active != null && inlineHostTabs)
                 ConstrainedBox(
                   constraints: BoxConstraints(
                     maxHeight: available.maxHeight * .28,

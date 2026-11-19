@@ -19,6 +19,14 @@ void main() {
         await tester.pumpWidget(MaterialApp(theme: tokens.theme.copyWith(platform: TargetPlatform.macOS), home: HostCatalogPage(tokens: tokens, catalog: catalog, offlineBuilder: (_) => const SizedBox())));
         await tester.pumpAndSettle();
         Finder key(String value) => find.byKey(ValueKey(value));
+        final expandedRail = size.width == 700 && chooser;
+        if (expandedRail) {
+          final toggle = key('sidebar-toggle');
+          expect(toggle.hitTestable(), findsOneWidget);
+          expect(tester.getSize(toggle), const Size(44, 44));
+          await tester.tap(toggle); await tester.pumpAndSettle();
+          expect(tester.getSize(key('app-sidebar')).width, 224);
+        }
         if (chooser) { await tester.ensureVisible(key('hosts-add')); await tester.tap(key('hosts-add')); await tester.pumpAndSettle(); await tester.tap(key('choose-ssh')); }
         else { await tester.ensureVisible(key('hosts-direct-ssh')); await tester.tap(key('hosts-direct-ssh')); }
         await tester.pumpAndSettle();
@@ -38,8 +46,8 @@ void main() {
         await tester.tap(key('direct-return-home')); await tester.pumpAndSettle();
         expect(key('home-ssh-closed'), findsOneWidget);
         expect(find.text('本机已断开'), findsOneWidget);
-        final sidebar = size.width >= 960 ? 224.0 : 64.0;
-        final contentWidth = size.width == 700 ? 556.0 : 560.0;
+        final sidebar = size.width >= 960 || expandedRail ? 224.0 : 64.0;
+        final contentWidth = size.width == 700 ? size.width - sidebar - 80 : 560.0;
         void rect(String label, Rect actual, Rect expected) {
           for (final value in [actual.left - expected.left, actual.top - expected.top,
             actual.width - expected.width, actual.height - expected.height]) {
@@ -54,6 +62,12 @@ void main() {
         rect('hosts-direct-ssh', tester.getRect(key('hosts-direct-ssh')), Rect.fromLTWH(sidebar + 56, 326, contentWidth - 32, 48));
         print('DESKTOP_GEOMETRY ${size.width} home=${tester.getRect(key('home-ssh-closed'))} '
           'empty=${tester.getRect(key('home-empty-card'))} sidebar=${tester.getRect(key('app-sidebar'))}');
+        if (expandedRail) {
+          expect(key('hosts-direct-ssh').hitTestable(), findsOneWidget);
+          await tester.tap(key('sidebar-toggle')); await tester.pumpAndSettle();
+          expect(tester.getSize(key('app-sidebar')).width, 64);
+          expect(key('home-ssh-closed').hitTestable(), findsOneWidget);
+        }
         for (final entry in [('home-tab-1', '终端'), ('hosts-networks', '网络配置'), ('home-tab-3', '设置')]) {
           final navKey = key(entry.$1);
           expect(navKey.hitTestable(), findsOneWidget, reason: entry.$2);

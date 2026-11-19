@@ -1,0 +1,5 @@
+00:00 +0: loading /private/tmp/herdr-flutter-responsive-return.ADBtEerg/app/test/direct_ssh_responsive_navigation_test.dart
+00:00 +0: ordinary SSH keeps its shell across navigation from width 390.0 (variant: TargetPlatform.iOS)
+00:02 +1: ordinary SSH keeps its shell across navigation from width 700.0 (variant: TargetPlatform.iOS)
+00:03 +2: ordinary SSH keeps its shell across navigation from width 980.0 (variant: TargetPlatform.iOS)
+00:04 +3: All tests passed!

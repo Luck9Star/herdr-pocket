@@ -1,12 +1,18 @@
-00:00 +0: loading /private/tmp/herdr-ssh-retire-parent.plLqcjpR/flutter-device-before/test/parent_real_ssh_pixels_test.dart
+Waiting for another flutter command to release the startup lock...
+00:00 +0: loading /private/tmp/herdr-ssh-retire-parent.plLqcjpR/flutter-device/test/parent_real_ssh_pixels_test.dart
 00:00 +0: desktop ordinary SSH return 1440.0 chooser=false (variant: TargetPlatform.linux)
-OLD_RETURN 1440.0 dedicated=false
+DESKTOP_GEOMETRY 1440.0 feedback=Rect.fromLTRB(264.0, 76.0, 824.0, 142.0) return=Rect.fromLTRB(264.0, 452.0, 824.0, 500.0)
+DESKTOP_GEOMETRY 1440.0 home=Rect.fromLTRB(240.0, 100.0, 1424.0, 144.0)
 00:01 +1: desktop ordinary SSH return 980.0 chooser=false (variant: TargetPlatform.linux)
-OLD_RETURN 980.0 dedicated=false
+DESKTOP_GEOMETRY 980.0 feedback=Rect.fromLTRB(264.0, 76.0, 824.0, 142.0) return=Rect.fromLTRB(264.0, 452.0, 824.0, 500.0)
+DESKTOP_GEOMETRY 980.0 home=Rect.fromLTRB(240.0, 100.0, 964.0, 144.0)
 00:02 +2: desktop ordinary SSH return 700.0 chooser=false (variant: TargetPlatform.linux)
-OLD_RETURN 700.0 dedicated=false
+DESKTOP_GEOMETRY 700.0 feedback=Rect.fromLTRB(104.0, 76.0, 660.0, 142.0) return=Rect.fromLTRB(104.0, 452.0, 660.0, 500.0)
+DESKTOP_GEOMETRY 700.0 home=Rect.fromLTRB(24.0, 72.0, 676.0, 116.0)
 00:03 +3: desktop ordinary SSH return 390.0 chooser=false (variant: TargetPlatform.iOS)
-OLD_RETURN 390.0 dedicated=true
+DESKTOP_GEOMETRY 390.0 feedback=Rect.fromLTRB(24.0, 123.0, 366.0, 189.0) return=Rect.fromLTRB(24.0, 499.0, 366.0, 547.0)
+DESKTOP_GEOMETRY 390.0 home=Rect.fromLTRB(24.0, 119.0, 366.0, 163.0)
 00:04 +4: desktop ordinary SSH return 320.0 chooser=false (variant: TargetPlatform.iOS)
-OLD_RETURN 320.0 dedicated=true
+DESKTOP_GEOMETRY 320.0 feedback=Rect.fromLTRB(16.0, 100.0, 304.0, 166.0) return=Rect.fromLTRB(16.0, 476.0, 304.0, 524.0)
+DESKTOP_GEOMETRY 320.0 home=Rect.fromLTRB(16.0, 96.0, 304.0, 140.0)
 00:05 +5: All tests passed!

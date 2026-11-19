@@ -1,0 +1,862 @@
+{
+  "schemaVersion": 1,
+  "scope": "Production Tauri frontend in Playwright WebKit 26.5 with controlled IPC and synthetic fixture. Native desktop and SSH peer behavior were not exercised in these runs. An accepted close IPC means local command acknowledgement; it is not an SSH peer close receipt.",
+  "baselineSourceCommit": "d37a4fe491876b0657aa4ed05f1513c6c08b71ba",
+  "baselineTauriTreeEquivalentToCommit": "887dbb16a225d2327dfc47eb492f56cdade00bed",
+  "fixedSourceCommit": "9c58f2ac4eafb189c792c2120ca944f9a05f46f4",
+  "designCommit": "880fcf767b381b15452095afcebd16c1f81c0632",
+  "designGeometrySha256": "bade99df7b48c0b95a941869bd61fbdbfdc5c76d66cdb41c9688accd3b43fd0b",
+  "extraction": "Selected fields from original local geometry.json records, screenshot manifests and IPC event lists. sourceRecordSha256 identifies each source record. Addresses, authentication values, key material, process identifiers and temporary paths are excluded from this JSON.",
+  "cases": [
+    {
+      "sourceCommit": "d37a4fe491876b0657aa4ed05f1513c6c08b71ba",
+      "sourceRecordSha256": "d34fa75926a9ecbbc4c3a50edb0d02660d8448f4d67872c9a7ceef313bb741dd",
+      "viewport": [
+        1440,
+        900
+      ],
+      "case": "1440x900-password",
+      "engine": "Playwright WebKit 26.5",
+      "imageStage": "disconnected",
+      "entry": "choose",
+      "authentication": "password",
+      "scroll": [
+        0,
+        24
+      ],
+      "status": {
+        "rect": [
+          260,
+          902.8125,
+          920,
+          18
+        ],
+        "visible": true,
+        "fullyInViewport": false,
+        "ownCenterHit": false
+      },
+      "dedicatedReturn": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "fullyInViewport": false,
+        "ownCenterHit": false
+      },
+      "returnControlClicked": "#show-remote",
+      "returnCenterHit": true,
+      "returnRequiredScroll": false,
+      "credentialsCleared": true,
+      "completeFingerprintVisible": true,
+      "sameXtermAcrossBoardNetworkSettings": true,
+      "ipcCalls": {
+        "probe": 1,
+        "open": 1,
+        "close": 1,
+        "write": 22,
+        "writeBytes": 22,
+        "submittedLines": 1,
+        "writesAfterClose": 0,
+        "sameOpenCloseAndWriteSession": true
+      },
+      "images": {
+        "disconnected": {
+          "file": "1440x900-before.png",
+          "sha256": "2434cc2e20afab69df8e5de27cda1426465e366a8501f503e764c99530d11a51",
+          "viewport": [
+            1440,
+            900
+          ],
+          "scroll": [
+            0,
+            24
+          ],
+          "dpr": 1
+        }
+      },
+      "closeIpcOutcome": "accepted",
+      "closeIpcOutcomeEvidence": "fixtureScenario"
+    },
+    {
+      "sourceCommit": "9c58f2ac4eafb189c792c2120ca944f9a05f46f4",
+      "sourceRecordSha256": "c84e2d45def7d0aed4862f607889b34f5b27a34e6bb55c0e654125a607d790e3",
+      "viewport": [
+        1440,
+        900
+      ],
+      "case": "1440x900-password-choose-close-confirmed",
+      "engine": "Playwright WebKit 26.5",
+      "imageStage": "disconnected",
+      "entry": "choose",
+      "authentication": "password",
+      "scroll": [
+        0,
+        0
+      ],
+      "status": {
+        "rect": [
+          260,
+          207.8125,
+          560,
+          66
+        ],
+        "visible": true,
+        "fullyInViewport": true,
+        "ownCenterHit": true,
+        "text": "已断开；重新连接需要再次输入凭据。"
+      },
+      "dedicatedReturn": {
+        "rect": [
+          260,
+          537.8125,
+          560,
+          48
+        ],
+        "visible": true,
+        "fullyInViewport": true,
+        "ownCenterHit": true
+      },
+      "returnControlClicked": "#ssh-return-home",
+      "returnCenterHit": true,
+      "returnRequiredScroll": false,
+      "credentialsCleared": true,
+      "completeFingerprintVisible": true,
+      "sameXtermAcrossBoardNetworkSettings": true,
+      "ipcCalls": {
+        "probe": 1,
+        "open": 1,
+        "close": 1,
+        "write": 22,
+        "writeBytes": 22,
+        "submittedLines": 1,
+        "writesAfterClose": 0,
+        "sameOpenCloseAndWriteSession": true
+      },
+      "images": {
+        "disconnected": {
+          "file": "1440x900-after.png",
+          "sha256": "ee2320b78628d187f056d998f35f9d7f1e68ddeaa7d451ea68ead26eef345920",
+          "viewport": [
+            1440,
+            900
+          ],
+          "scroll": [
+            0,
+            0
+          ],
+          "dpr": 1
+        }
+      },
+      "reviewCleared": true,
+      "targetPreserved": true,
+      "portAppearance": "textfield",
+      "portDigits": 5,
+      "designComparison": {
+        "status": {
+          "designRect": [
+            264,
+            76,
+            560,
+            66
+          ],
+          "actualMinusDesign": [
+            -4,
+            131.8125,
+            0,
+            0
+          ],
+          "within2pt": false
+        },
+        "dedicatedReturn": {
+          "designRect": [
+            264,
+            452,
+            560,
+            48
+          ],
+          "actualMinusDesign": [
+            -4,
+            85.8125,
+            0,
+            0
+          ],
+          "within2pt": false
+        }
+      },
+      "closeIpcOutcome": "accepted",
+      "closeIpcOutcomeEvidence": "ipcEvent"
+    },
+    {
+      "sourceCommit": "d37a4fe491876b0657aa4ed05f1513c6c08b71ba",
+      "sourceRecordSha256": "497166f6420f5f7254fcc8e57e83f4f75910df46f6e3a97753703aac3406896e",
+      "viewport": [
+        980,
+        780
+      ],
+      "case": "980x780-password",
+      "engine": "Playwright WebKit 26.5",
+      "imageStage": "disconnected",
+      "entry": "choose",
+      "authentication": "password",
+      "scroll": [
+        0,
+        130
+      ],
+      "status": {
+        "rect": [
+          30,
+          796.8125,
+          920,
+          18
+        ],
+        "visible": true,
+        "fullyInViewport": false,
+        "ownCenterHit": false
+      },
+      "dedicatedReturn": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "fullyInViewport": false,
+        "ownCenterHit": false
+      },
+      "returnControlClicked": "#show-remote",
+      "returnCenterHit": true,
+      "returnRequiredScroll": true,
+      "credentialsCleared": true,
+      "completeFingerprintVisible": true,
+      "sameXtermAcrossBoardNetworkSettings": true,
+      "ipcCalls": {
+        "probe": 1,
+        "open": 1,
+        "close": 1,
+        "write": 22,
+        "writeBytes": 22,
+        "submittedLines": 1,
+        "writesAfterClose": 0,
+        "sameOpenCloseAndWriteSession": true
+      },
+      "images": {
+        "disconnected": {
+          "file": "980x780-before.png",
+          "sha256": "5f846084904e9ae9b4a57fda5edc4207c79ea96d1fb2681192fa42a994610341",
+          "viewport": [
+            980,
+            780
+          ],
+          "scroll": [
+            0,
+            130
+          ],
+          "dpr": 1
+        }
+      },
+      "closeIpcOutcome": "accepted",
+      "closeIpcOutcomeEvidence": "fixtureScenario"
+    },
+    {
+      "sourceCommit": "9c58f2ac4eafb189c792c2120ca944f9a05f46f4",
+      "sourceRecordSha256": "4dc67bb5c4de2f848ccb9e7d4de7a848050db1012875d0641e70830b74146f5a",
+      "viewport": [
+        980,
+        780
+      ],
+      "case": "980x780-password-choose-close-confirmed",
+      "engine": "Playwright WebKit 26.5",
+      "imageStage": "disconnected",
+      "entry": "choose",
+      "authentication": "password",
+      "scroll": [
+        0,
+        0
+      ],
+      "status": {
+        "rect": [
+          30,
+          207.8125,
+          560,
+          66
+        ],
+        "visible": true,
+        "fullyInViewport": true,
+        "ownCenterHit": true,
+        "text": "已断开；重新连接需要再次输入凭据。"
+      },
+      "dedicatedReturn": {
+        "rect": [
+          30,
+          537.8125,
+          560,
+          48
+        ],
+        "visible": true,
+        "fullyInViewport": true,
+        "ownCenterHit": true
+      },
+      "returnControlClicked": "#ssh-return-home",
+      "returnCenterHit": true,
+      "returnRequiredScroll": false,
+      "credentialsCleared": true,
+      "completeFingerprintVisible": true,
+      "sameXtermAcrossBoardNetworkSettings": true,
+      "ipcCalls": {
+        "probe": 1,
+        "open": 1,
+        "close": 1,
+        "write": 22,
+        "writeBytes": 22,
+        "submittedLines": 1,
+        "writesAfterClose": 0,
+        "sameOpenCloseAndWriteSession": true
+      },
+      "images": {
+        "disconnected": {
+          "file": "980x780-after.png",
+          "sha256": "9e258f8923b662085048dbf2a214c05062cf3c9cda63785f1b72dd00fac31d77",
+          "viewport": [
+            980,
+            780
+          ],
+          "scroll": [
+            0,
+            0
+          ],
+          "dpr": 1
+        }
+      },
+      "reviewCleared": true,
+      "targetPreserved": true,
+      "portAppearance": "textfield",
+      "portDigits": 5,
+      "designComparison": {
+        "status": {
+          "designRect": [
+            264,
+            76,
+            560,
+            66
+          ],
+          "actualMinusDesign": [
+            -234,
+            131.8125,
+            0,
+            0
+          ],
+          "within2pt": false
+        },
+        "dedicatedReturn": {
+          "designRect": [
+            264,
+            452,
+            560,
+            48
+          ],
+          "actualMinusDesign": [
+            -234,
+            85.8125,
+            0,
+            0
+          ],
+          "within2pt": false
+        }
+      },
+      "closeIpcOutcome": "accepted",
+      "closeIpcOutcomeEvidence": "ipcEvent"
+    },
+    {
+      "sourceCommit": "d37a4fe491876b0657aa4ed05f1513c6c08b71ba",
+      "sourceRecordSha256": "fd8e5b1ca93c44650cb1e7cae37e9243d19399478fcf34ed676f55701c6b8d15",
+      "viewport": [
+        700,
+        900
+      ],
+      "case": "700x900-password",
+      "engine": "Playwright WebKit 26.5",
+      "imageStage": "disconnected",
+      "entry": "choose",
+      "authentication": "password",
+      "scroll": [
+        0,
+        24
+      ],
+      "status": {
+        "rect": [
+          20,
+          957.8125,
+          660,
+          18
+        ],
+        "visible": true,
+        "fullyInViewport": false,
+        "ownCenterHit": false
+      },
+      "dedicatedReturn": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "fullyInViewport": false,
+        "ownCenterHit": false
+      },
+      "returnControlClicked": "#show-remote",
+      "returnCenterHit": true,
+      "returnRequiredScroll": false,
+      "credentialsCleared": true,
+      "completeFingerprintVisible": true,
+      "sameXtermAcrossBoardNetworkSettings": true,
+      "ipcCalls": {
+        "probe": 1,
+        "open": 1,
+        "close": 1,
+        "write": 22,
+        "writeBytes": 22,
+        "submittedLines": 1,
+        "writesAfterClose": 0,
+        "sameOpenCloseAndWriteSession": true
+      },
+      "images": {
+        "disconnected": {
+          "file": "700x900-before.png",
+          "sha256": "875e44138bc0ac9baee83976a0e825d5d7ba3884f79f3320aea07863f4fa8328",
+          "viewport": [
+            700,
+            900
+          ],
+          "scroll": [
+            0,
+            24
+          ],
+          "dpr": 1
+        }
+      },
+      "closeIpcOutcome": "accepted",
+      "closeIpcOutcomeEvidence": "fixtureScenario"
+    },
+    {
+      "sourceCommit": "9c58f2ac4eafb189c792c2120ca944f9a05f46f4",
+      "sourceRecordSha256": "478ce196ff6411ceeff01f3711a0bd5df6c7056940d0b3ceba23f6daf019d8fb",
+      "viewport": [
+        700,
+        900
+      ],
+      "case": "700x900-password-choose-close-confirmed",
+      "engine": "Playwright WebKit 26.5",
+      "imageStage": "disconnected",
+      "entry": "choose",
+      "authentication": "password",
+      "scroll": [
+        0,
+        0
+      ],
+      "status": {
+        "rect": [
+          20,
+          207.8125,
+          560,
+          66
+        ],
+        "visible": true,
+        "fullyInViewport": true,
+        "ownCenterHit": true,
+        "text": "已断开；重新连接需要再次输入凭据。"
+      },
+      "dedicatedReturn": {
+        "rect": [
+          20,
+          537.8125,
+          560,
+          48
+        ],
+        "visible": true,
+        "fullyInViewport": true,
+        "ownCenterHit": true
+      },
+      "returnControlClicked": "#ssh-return-home",
+      "returnCenterHit": true,
+      "returnRequiredScroll": false,
+      "credentialsCleared": true,
+      "completeFingerprintVisible": true,
+      "sameXtermAcrossBoardNetworkSettings": true,
+      "ipcCalls": {
+        "probe": 1,
+        "open": 1,
+        "close": 1,
+        "write": 22,
+        "writeBytes": 22,
+        "submittedLines": 1,
+        "writesAfterClose": 0,
+        "sameOpenCloseAndWriteSession": true
+      },
+      "images": {
+        "disconnected": {
+          "file": "700x900-after.png",
+          "sha256": "e05682b67f8ae9cbf87ee56c956a84278e6fcffff12f247f1b32ca0bc1f667d2",
+          "viewport": [
+            700,
+            900
+          ],
+          "scroll": [
+            0,
+            0
+          ],
+          "dpr": 1
+        }
+      },
+      "reviewCleared": true,
+      "targetPreserved": true,
+      "portAppearance": "textfield",
+      "portDigits": 5,
+      "designComparison": {
+        "status": {
+          "designRect": [
+            104,
+            76,
+            556,
+            66
+          ],
+          "actualMinusDesign": [
+            -84,
+            131.8125,
+            4,
+            0
+          ],
+          "within2pt": false
+        },
+        "dedicatedReturn": {
+          "designRect": [
+            104,
+            452,
+            556,
+            48
+          ],
+          "actualMinusDesign": [
+            -84,
+            85.8125,
+            4,
+            0
+          ],
+          "within2pt": false
+        }
+      },
+      "closeIpcOutcome": "accepted",
+      "closeIpcOutcomeEvidence": "ipcEvent"
+    },
+    {
+      "sourceCommit": "d37a4fe491876b0657aa4ed05f1513c6c08b71ba",
+      "sourceRecordSha256": "fbb1c02fba1782b589de349119f116af284ccead4155a50f5a5820ebe08c30be",
+      "viewport": [
+        700,
+        900
+      ],
+      "case": "700x900-password-close-refusal",
+      "engine": "Playwright WebKit 26.5",
+      "imageStage": "disconnected-scrolled",
+      "entry": "choose",
+      "authentication": "password",
+      "scroll": [
+        0,
+        156
+      ],
+      "status": {
+        "rect": [
+          20,
+          825.8125,
+          660,
+          18
+        ],
+        "visible": true,
+        "fullyInViewport": true,
+        "ownCenterHit": true,
+        "text": "已断开；重新连接需要再次输入凭据。"
+      },
+      "dedicatedReturn": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "fullyInViewport": false,
+        "ownCenterHit": false
+      },
+      "returnControlClicked": "#show-remote",
+      "returnCenterHit": true,
+      "returnRequiredScroll": true,
+      "credentialsCleared": true,
+      "completeFingerprintVisible": true,
+      "sameXtermAcrossBoardNetworkSettings": true,
+      "ipcCalls": {
+        "probe": 1,
+        "open": 1,
+        "close": 1,
+        "write": 22,
+        "writeBytes": 22,
+        "submittedLines": 1,
+        "writesAfterClose": 0,
+        "sameOpenCloseAndWriteSession": true
+      },
+      "images": {
+        "disconnected-scrolled": {
+          "file": "700x900-rejected-before-scrolled.png",
+          "sha256": "dcd06e7d088fcdd645c28a82a7af1966e11d0f78beee1f606828ef8a7fbc02b9",
+          "viewport": [
+            700,
+            900
+          ],
+          "scroll": [
+            0,
+            156
+          ],
+          "dpr": 1
+        }
+      },
+      "closeIpcOutcome": "rejected",
+      "closeIpcOutcomeEvidence": "ipcEvent"
+    },
+    {
+      "sourceCommit": "9c58f2ac4eafb189c792c2120ca944f9a05f46f4",
+      "sourceRecordSha256": "ac7d91c07c10c34c371e36039cb164717168d22ac8b9f03d7a6862abffd2b97c",
+      "viewport": [
+        700,
+        900
+      ],
+      "case": "700x900-password-choose-close-rejected",
+      "engine": "Playwright WebKit 26.5",
+      "imageStage": "disconnected",
+      "entry": "choose",
+      "authentication": "password",
+      "scroll": [
+        0,
+        0
+      ],
+      "status": {
+        "rect": [
+          20,
+          207.8125,
+          560,
+          66
+        ],
+        "visible": true,
+        "fullyInViewport": true,
+        "ownCenterHit": true,
+        "text": "远端关闭未确认。本次本地会话已结束，凭据已清空。"
+      },
+      "dedicatedReturn": {
+        "rect": [
+          20,
+          537.8125,
+          560,
+          48
+        ],
+        "visible": true,
+        "fullyInViewport": true,
+        "ownCenterHit": true
+      },
+      "returnControlClicked": "#ssh-return-home",
+      "returnCenterHit": true,
+      "returnRequiredScroll": false,
+      "credentialsCleared": true,
+      "completeFingerprintVisible": true,
+      "sameXtermAcrossBoardNetworkSettings": true,
+      "ipcCalls": {
+        "probe": 1,
+        "open": 1,
+        "close": 1,
+        "write": 22,
+        "writeBytes": 22,
+        "submittedLines": 1,
+        "writesAfterClose": 0,
+        "sameOpenCloseAndWriteSession": true
+      },
+      "images": {
+        "disconnected": {
+          "file": "700x900-rejected-after.png",
+          "sha256": "f0eb207720c515b1cd6898695ebe7c62bc7e9220a1e00db8a0bb1e3ea8901f96",
+          "viewport": [
+            700,
+            900
+          ],
+          "scroll": [
+            0,
+            0
+          ],
+          "dpr": 1
+        },
+        "compact-returned-home": {
+          "file": "390x844-rejected-returned-home.png",
+          "sha256": "f1596bc81bce2f8218db78e30f5fcb1fff725a75fbd630db6e8ada28b99de326",
+          "viewport": [
+            390,
+            844
+          ],
+          "scroll": [
+            0,
+            0
+          ],
+          "dpr": 1
+        }
+      },
+      "reviewCleared": true,
+      "targetPreserved": true,
+      "portAppearance": "textfield",
+      "portDigits": 5,
+      "resizeCheck": {
+        "compactViewport": [
+          390,
+          844
+        ],
+        "successCardVisibleAfterResize": false,
+        "successNoticeVisibleAfterReturnAndResize": false,
+        "unknownStatusRenderedAfterResize": true
+      },
+      "closeIpcOutcome": "rejected",
+      "closeIpcOutcomeEvidence": "ipcEvent"
+    },
+    {
+      "sourceCommit": "9c58f2ac4eafb189c792c2120ca944f9a05f46f4",
+      "sourceRecordSha256": "1b6a26f82b0c0cd0b22ca8e793ceca465c1ab0a0592534f9522542bdbc12cce5",
+      "viewport": [
+        980,
+        780
+      ],
+      "case": "980x780-password-direct-close-false",
+      "engine": "Playwright WebKit 26.5",
+      "imageStage": "disconnected",
+      "entry": "direct",
+      "authentication": "password",
+      "scroll": [
+        0,
+        0
+      ],
+      "status": {
+        "rect": [
+          30,
+          207.8125,
+          560,
+          66
+        ],
+        "visible": true,
+        "fullyInViewport": true,
+        "ownCenterHit": true,
+        "text": "远端关闭未确认。本次本地会话已结束，凭据已清空。"
+      },
+      "dedicatedReturn": {
+        "rect": [
+          30,
+          537.8125,
+          560,
+          48
+        ],
+        "visible": true,
+        "fullyInViewport": true,
+        "ownCenterHit": true
+      },
+      "returnControlClicked": "#ssh-return-home",
+      "returnCenterHit": true,
+      "returnRequiredScroll": false,
+      "credentialsCleared": true,
+      "completeFingerprintVisible": true,
+      "sameXtermAcrossBoardNetworkSettings": true,
+      "ipcCalls": {
+        "probe": 1,
+        "open": 1,
+        "close": 1,
+        "write": 22,
+        "writeBytes": 22,
+        "submittedLines": 1,
+        "writesAfterClose": 0,
+        "sameOpenCloseAndWriteSession": true
+      },
+      "images": {},
+      "reviewCleared": true,
+      "targetPreserved": true,
+      "portAppearance": "textfield",
+      "portDigits": 5,
+      "resizeCheck": {
+        "compactViewport": [
+          390,
+          844
+        ],
+        "successCardVisibleAfterResize": false,
+        "successNoticeVisibleAfterReturnAndResize": false,
+        "unknownStatusRenderedAfterResize": true
+      },
+      "closeIpcOutcome": "returnedFalse",
+      "closeIpcOutcomeEvidence": "ipcEvent"
+    },
+    {
+      "sourceCommit": "9c58f2ac4eafb189c792c2120ca944f9a05f46f4",
+      "sourceRecordSha256": "6cb083411cb669b5a6bbeb4541dad35aa455f61ab704066748feae2a75e54e6e",
+      "viewport": [
+        700,
+        900
+      ],
+      "case": "700x900-private-key-direct-close-confirmed",
+      "engine": "Playwright WebKit 26.5",
+      "imageStage": "disconnected",
+      "entry": "direct",
+      "authentication": "private-key",
+      "scroll": [
+        0,
+        0
+      ],
+      "status": {
+        "rect": [
+          20,
+          207.8125,
+          560,
+          66
+        ],
+        "visible": true,
+        "fullyInViewport": true,
+        "ownCenterHit": true,
+        "text": "已断开；重新连接需要再次输入凭据。"
+      },
+      "dedicatedReturn": {
+        "rect": [
+          20,
+          537.8125,
+          560,
+          48
+        ],
+        "visible": true,
+        "fullyInViewport": true,
+        "ownCenterHit": true
+      },
+      "returnControlClicked": "#ssh-return-home",
+      "returnCenterHit": true,
+      "returnRequiredScroll": false,
+      "credentialsCleared": true,
+      "completeFingerprintVisible": true,
+      "sameXtermAcrossBoardNetworkSettings": true,
+      "ipcCalls": {
+        "probe": 1,
+        "open": 1,
+        "close": 1,
+        "write": 22,
+        "writeBytes": 22,
+        "submittedLines": 1,
+        "writesAfterClose": 0,
+        "sameOpenCloseAndWriteSession": true
+      },
+      "images": {},
+      "reviewCleared": true,
+      "targetPreserved": true,
+      "portAppearance": "textfield",
+      "portDigits": 5,
+      "closeIpcOutcome": "accepted",
+      "closeIpcOutcomeEvidence": "ipcEvent"
+    }
+  ]
+}

@@ -22,7 +22,7 @@ on:
       linux_direct_ssh:
         description: Run only Linux ordinary SSH (password selects Tauri)
         type: choice
-        options: ['off', password, tauri-key, flutter-password, flutter-key, flutter-key-rotation]
+        options: ['off', password, tauri-key, tauri-key-rotation, flutter-password, flutter-key, flutter-key-rotation]
         default: 'off'
       s06_split:
         description: Run two real SSH/herdr targets through the Flutter split UI
@@ -40,11 +40,11 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: paired-gui-${{ github.ref }}-${{ inputs.input_fixture }}-${{ inputs.s06_split }}-${{ inputs.s06_guarded }}-${{ inputs.s06_route }}${{ contains(fromJSON('["password","tauri-key","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) && format('-linux-direct-{0}', inputs.linux_direct_ssh) || '' }}
+  group: paired-gui-${{ github.ref }}-${{ inputs.input_fixture }}-${{ inputs.s06_split }}-${{ inputs.s06_guarded }}-${{ inputs.s06_route }}${{ contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) && format('-linux-direct-{0}', inputs.linux_direct_ssh) || '' }}
   cancel-in-progress: true
 jobs:
   s06-input-fixture:
-    if: ${{ !contains(fromJSON('["password","tauri-key","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) && inputs.s06_split && inputs.s06_guarded }}
+    if: ${{ !contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) && inputs.s06_split && inputs.s06_guarded }}
     uses: ./.github/workflows/input-extension-validation.yml
   paired-observe:
     needs: s06-input-fixture
@@ -52,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        route: ${{ fromJSON(contains(fromJSON('["flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) && '["flutter"]' || contains(fromJSON('["password","tauri-key"]'), inputs.linux_direct_ssh) && '["tauri"]' || inputs.s06_split && (inputs.s06_route == 'tauri' && '["tauri"]' || inputs.s06_route == 'both' && '["flutter","tauri"]' || '["flutter"]') || inputs.flutter_only && '["flutter"]' || '["flutter","tauri"]') }}
+        route: ${{ fromJSON(contains(fromJSON('["flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) && '["flutter"]' || contains(fromJSON('["password","tauri-key","tauri-key-rotation"]'), inputs.linux_direct_ssh) && '["tauri"]' || inputs.s06_split && (inputs.s06_route == 'tauri' && '["tauri"]' || inputs.s06_route == 'both' && '["flutter","tauri"]' || '["flutter"]') || inputs.flutter_only && '["flutter"]' || '["flutter","tauri"]') }}
     runs-on: ubuntu-24.04
     timeout-minutes: ${{ matrix.route == 'tauri' && inputs.s06_split && 65 || 45 }}
     env:
@@ -68,7 +68,7 @@ jobs:
           S06_ROUTE: ${{ inputs.s06_route }}
           LINUX_DIRECT_SSH: ${{ inputs.linux_direct_ssh }}
         run: |
-          if { [ "$LINUX_DIRECT_SSH" = password ] || [ "$LINUX_DIRECT_SSH" = tauri-key ] || [ "$LINUX_DIRECT_SSH" = flutter-password ] || [ "$LINUX_DIRECT_SSH" = flutter-key ] || [ "$LINUX_DIRECT_SSH" = flutter-key-rotation ]; } && { [ "$S06_SPLIT" = true ] || [ "$S06_GUARDED" = true ]; }; then
+          if { [ "$LINUX_DIRECT_SSH" = password ] || [ "$LINUX_DIRECT_SSH" = tauri-key ] || [ "$LINUX_DIRECT_SSH" = tauri-key-rotation ] || [ "$LINUX_DIRECT_SSH" = flutter-password ] || [ "$LINUX_DIRECT_SSH" = flutter-key ] || [ "$LINUX_DIRECT_SSH" = flutter-key-rotation ]; } && { [ "$S06_SPLIT" = true ] || [ "$S06_GUARDED" = true ]; }; then
             echo 'linux_direct_ssh requires both S06 options to be disabled' >&2
             exit 1
           fi
@@ -78,7 +78,7 @@ jobs:
           fi
           case "$S06_ROUTE" in flutter|tauri|both|'') ;; *) echo 'invalid s06_route' >&2; exit 1 ;; esac
       - name: Install isolated helper and loopback sshd dependencies
-        if: ${{ !contains(fromJSON('["password","tauri-key","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) }}
+        if: ${{ !contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) }}
         run: |
           python3 -m venv "$RUNNER_TEMP/pairing-venv"
           "$RUNNER_TEMP/pairing-venv/bin/pip" install -r validation/pairing/requirements.txt 'paramiko==4.0.0' 'pillow==12.2.0'
@@ -86,7 +86,7 @@ jobs:
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120 install -y openssh-server
       - name: Prepare the ordinary SSH peer and check its evidence gates
-        if: contains(fromJSON('["password","tauri-key","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh)
+        if: contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh)
         env:
           PY_TEST: ${{ matrix.route == 'flutter' && 'test_flutter_linux_direct_ssh.py' || 'test_tauri_linux_direct_ssh.py' }}
         run: |
@@ -105,7 +105,7 @@ jobs:
           flutter pub get
           python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-gui"
       - name: Prepare Linux ordinary SSH window dependencies
-        if: contains(fromJSON('["password","tauri-key","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh)
+        if: contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh)
         timeout-minutes: 10
         env:
           NATIVE_ROUTE: ${{ matrix.route }}
@@ -167,7 +167,7 @@ jobs:
           S06_SPLIT: ${{ inputs.s06_split }}
           LINUX_DIRECT_SSH: ${{ inputs.linux_direct_ssh }}
         run: |
-          if [ "$LINUX_DIRECT_SSH" != password ] && [ "$LINUX_DIRECT_SSH" != tauri-key ]; then
+          if [ "$LINUX_DIRECT_SSH" != password ] && [ "$LINUX_DIRECT_SSH" != tauri-key ] && [ "$LINUX_DIRECT_SSH" != tauri-key-rotation ]; then
             packages=(libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev build-essential patchelf webkit2gtk-driver xvfb xauth dbus-x11)
             if [ "$S06_SPLIT" = true ]; then packages+=(fonts-noto-cjk fontconfig); fi
             sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120 install -y "${packages[@]}"
@@ -198,12 +198,12 @@ jobs:
           npm run tauri -- icon icon.svg
           npm run tauri -- build --debug --no-bundle -- --locked
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        if: ${{ !contains(fromJSON('["password","tauri-key","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) && (inputs.input_fixture || inputs.s06_guarded) }}
+        if: ${{ !contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) && (inputs.input_fixture || inputs.s06_guarded) }}
         with:
           name: input-fixture-${{ github.sha }}
           path: ${{ runner.temp }}/input-fixture
       - name: Review pairing, authorize the displayed key, choose pane and observe updates
-        if: ${{ !contains(fromJSON('["password","tauri-key","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) }}
+        if: ${{ !contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) }}
         env:
           GUI_ROUTE: ${{ matrix.route }}
           INPUT_FIXTURE: ${{ inputs.input_fixture || inputs.s06_guarded }}
@@ -228,16 +228,16 @@ jobs:
             cp "$RUNNER_TEMP/s06-gtk-fonts.txt" "$RUNNER_TEMP/paired-evidence/gtk-fonts.txt"
           fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always() && !contains(fromJSON('["password","tauri-key","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh)
+        if: always() && !contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh)
         with:
           name: paired-gui-${{ matrix.route }}-${{ inputs.s06_split && 's06-' || '' }}${{ (inputs.input_fixture || inputs.s06_guarded) && 'guarded-input' || 'stock-observe' }}-${{ github.sha }}
           path: ${{ runner.temp }}/paired-evidence/
           retention-days: 14
           if-no-files-found: warn
       - name: Connect the native Linux app to a disposable ordinary SSH peer
-        if: contains(fromJSON('["password","tauri-key"]'), inputs.linux_direct_ssh)
+        if: contains(fromJSON('["password","tauri-key","tauri-key-rotation"]'), inputs.linux_direct_ssh)
         env:
-          DIRECT_SSH_AUTH: ${{ inputs.linux_direct_ssh == 'tauri-key' && 'key' || 'password' }}
+          DIRECT_SSH_AUTH: ${{ inputs.linux_direct_ssh == 'tauri-key-rotation' && 'key-rotation' || inputs.linux_direct_ssh == 'tauri-key' && 'key' || 'password' }}
           GDK_SCALE: '1'
           GDK_DPI_SCALE: '1'
           WEBKIT_DISABLE_COMPOSITING_MODE: '1'
@@ -261,9 +261,9 @@ jobs:
             "$RUNNER_TEMP/direct-ssh-venv/bin/python" validation/remote-harness/flutter_linux_direct_ssh.py \
             --app "$RUNNER_TEMP/flutter-gui" --authentication "$DIRECT_SSH_AUTH" --source-sha "$GITHUB_SHA" --output "$RUNNER_TEMP/linux-direct-ssh-evidence"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always() && contains(fromJSON('["password","tauri-key","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh)
+        if: always() && contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh)
         with:
-          name: ${{ matrix.route }}-linux-direct-ssh-${{ inputs.linux_direct_ssh == 'flutter-key-rotation' && 'key-rotation' || contains(fromJSON('["flutter-key","tauri-key"]'), inputs.linux_direct_ssh) && 'key' || 'password' }}-${{ github.sha }}
+          name: ${{ matrix.route }}-linux-direct-ssh-${{ contains(fromJSON('["flutter-key-rotation","tauri-key-rotation"]'), inputs.linux_direct_ssh) && 'key-rotation' || contains(fromJSON('["flutter-key","tauri-key"]'), inputs.linux_direct_ssh) && 'key' || 'password' }}-${{ github.sha }}
           path: ${{ runner.temp }}/linux-direct-ssh-evidence/
           retention-days: 14
           if-no-files-found: warn

@@ -30,11 +30,13 @@ from tauri_linux_direct_ssh import (
     capture_terminal,
     capture_outcome,
     decode_viewport_capture,
+    exercise_rotation_review,
     exercise_wrong_passphrase,
     key_session_evidence,
     port_is_released,
     probe_evidence,
     rejected_key_evidence,
+    rotation_session_evidence,
     session_evidence,
     wait_for,
 )
@@ -118,54 +120,63 @@ class PeerEvidenceTests(unittest.TestCase):
             session_evidence(mislabeled, sent=True, closed=True)
 
 
+def real_encrypted_peer_evidence(*, rotating=False):
+    with EncryptedKeyFixture(screen_proof=True, rotate_after_probe=rotating,
+                             channel_deadline=time.monotonic() + 20) as fixture:
+        prefix = []
+        public_keys = [fixture.public_key, fixture.rotated_public_key, fixture.rotated_public_key] if rotating else [
+            fixture.public_key, fixture.public_key]
+        for connection, expected_key in enumerate(public_keys, 1):
+            with paramiko.Transport(('127.0.0.1', fixture.port)) as rejected:
+                rejected.start_client(timeout=3)
+                host_key = rejected.get_remote_server_key()
+                assert f'{host_key.get_name()} {host_key.get_base64()}' == expected_key
+                if connection == 2 and not rotating:
+                    # Wrong passphrase is local to the client after key exchange.
+                    try:
+                        paramiko.Ed25519Key(file_obj=io.StringIO(fixture.private_key), password=fixture.wrong_passphrase)
+                    except paramiko.SSHException:
+                        pass
+                    else:
+                        raise AssertionError('the fixture accepted the wrong passphrase')
+            assert fixture.wait_for_connections_closed(connection, timeout=3)
+            prefix.append(fixture.snapshot())
+        key = paramiko.Ed25519Key(file_obj=io.StringIO(fixture.private_key), password=fixture.passphrase)
+        with paramiko.Transport(('127.0.0.1', fixture.port)) as session:
+            session.start_client(timeout=3)
+            session.auth_publickey(fixture.username, key)
+            with session.open_session(timeout=3) as channel:
+                channel.settimeout(3)
+                channel.get_pty()
+                channel.invoke_shell()
+                assert b'POCKET-ANDROID-READY' in channel.recv(1024)
+
+                def with_output():
+                    facts = fixture.snapshot()
+                    return facts if facts['connectionEvents'][-1]['outputBytes'] > 0 else None
+
+                no_input = wait_for(with_output, 'test_key_shell_no_output', timeout=3)
+                channel.sendall(b'hp-check\r')
+                expected = (ECHO_MARKER, *token_lines(fixture.screen_token))
+                rendered = b''
+                while not all(text.encode() in rendered for text in expected):
+                    block = channel.recv(1024)
+                    assert block
+                    rendered += block
+                pre_close = fixture.snapshot()
+                channel.shutdown_write()
+                assert fixture.wait_for_connections_closed(len(prefix) + 1, timeout=3)
+        post_close = fixture.snapshot()
+    assert not any((fixture.private_key, fixture.passphrase, fixture.wrong_passphrase, fixture.password))
+    assert port_is_released(fixture.port)
+    return prefix, no_input, pre_close, post_close
+
+
 class EncryptedPeerEvidenceTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        with EncryptedKeyFixture(screen_proof=True, channel_deadline=time.monotonic() + 20) as fixture:
-            with paramiko.Transport(('127.0.0.1', fixture.port)) as probe:
-                probe.start_client(timeout=3)
-                key = probe.get_remote_server_key()
-                assert f'{key.get_name()} {key.get_base64()}' == fixture.public_key
-            assert fixture.wait_for_connections_closed(1, timeout=3)
-            # The failed attempt has a real key exchange, then the client
-            # rejects decryption locally without sending an auth request.
-            with paramiko.Transport(('127.0.0.1', fixture.port)) as rejected:
-                rejected.start_client(timeout=3)
-                try:
-                    paramiko.Ed25519Key(file_obj=io.StringIO(fixture.private_key), password=fixture.wrong_passphrase)
-                except paramiko.SSHException:
-                    pass
-                else:
-                    raise AssertionError('the fixture accepted the wrong passphrase')
-            assert fixture.wait_for_connections_closed(2, timeout=3)
-            cls.rejected = fixture.snapshot()
-            key = paramiko.Ed25519Key(file_obj=io.StringIO(fixture.private_key), password=fixture.passphrase)
-            with paramiko.Transport(('127.0.0.1', fixture.port)) as session:
-                session.start_client(timeout=3)
-                session.auth_publickey(fixture.username, key)
-                with session.open_session(timeout=3) as channel:
-                    channel.settimeout(3)
-                    channel.get_pty()
-                    channel.invoke_shell()
-                    assert b'POCKET-ANDROID-READY' in channel.recv(1024)
-                    def with_output():
-                        facts = fixture.snapshot()
-                        return facts if facts['connectionEvents'][-1]['outputBytes'] > 0 else None
-
-                    cls.no_input = wait_for(with_output, 'test_key_shell_no_output', timeout=3)
-                    channel.sendall(b'hp-check\r')
-                    expected = (ECHO_MARKER, *token_lines(fixture.screen_token))
-                    rendered = b''
-                    while not all(text.encode() in rendered for text in expected):
-                        block = channel.recv(1024)
-                        assert block
-                        rendered += block
-                    cls.pre_close = fixture.snapshot()
-                    channel.shutdown_write()
-                    assert fixture.wait_for_connections_closed(3, timeout=3)
-            cls.post_close = fixture.snapshot()
-        assert not any((fixture.private_key, fixture.passphrase, fixture.wrong_passphrase, fixture.password))
-        assert port_is_released(fixture.port)
+        prefix, cls.no_input, cls.pre_close, cls.post_close = real_encrypted_peer_evidence()
+        cls.rejected = prefix[1]
 
     def test_real_encrypted_peer_rejection_and_single_successful_public_key_session(self):
         rejected_key_evidence(self.rejected, 2)
@@ -204,6 +215,64 @@ class EncryptedPeerEvidenceTests(unittest.TestCase):
         self.assertTrue(report['wrongPassphrase']['handshakeCompleted'])
         self.assertEqual(report['wrongPassphrase']['authenticationAttempts'], 0)
         self.assertNotIn('fixture-', json.dumps(report))
+
+
+class RotationEvidenceTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.prefix, cls.no_input, cls.pre_close, cls.post_close = real_encrypted_peer_evidence(rotating=True)
+
+    def test_four_real_transports_bind_rotated_key_and_original_signed_session(self):
+        self.assertEqual([e['hostKey'] for e in self.post_close['connectionEvents']], ['A', 'B', 'B', 'B'])
+        rotation_session_evidence(self.no_input, sent=False, closed=False)
+        rotation_session_evidence(self.pre_close, sent=True, closed=False)
+        rotation_session_evidence(self.post_close, sent=True, closed=True)
+
+    def test_refuses_new_input_or_wrong_key_before_explicit_approval(self):
+        for change in ({'authAttempts': 1}, {'inputBytes': 1}, {'hostKey': 'A'}, {'closed': False}):
+            with self.subTest(change=change), self.assertRaisesRegex(GuiFailure, 'rotation_preapproval_peer_not_empty'):
+                altered = deepcopy(self.no_input)
+                altered['connectionEvents'][1].update(change)
+                rotation_session_evidence(altered, sent=False, closed=False)
+        altered = deepcopy(self.no_input)
+        altered['connectionEvents'][-1]['hostKey'] = 'A'
+        with self.assertRaisesRegex(GuiFailure, 'key_shell_unproven'):
+            rotation_session_evidence(altered, sent=False, closed=False)
+
+    def run_review(self, checkpoints):
+        driver = Mock()
+        driver.observe.return_value = True
+        fixture = Mock(fingerprint='SHA256:old-fixture', rotated_fingerprint='SHA256:new-fixture',
+                       rotated_public_key='ssh-rsa fixture', private_key='fixture-key', passphrase='fixture-pass')
+        fixture.wait_for_connections_closed.return_value = True
+        fixture.rotation_evidence.side_effect = checkpoints
+        fixture.snapshot.return_value = self.prefix[0]
+        target = (('#ssh-host', '127.0.0.1'), ('#ssh-port', '2222'), ('#ssh-user', 'fixture'))
+        return driver, fixture, target
+
+    def test_capture_then_cancel_retain_and_review_fresh_b_before_confirmation(self):
+        old, new = {'stage': 2}, {'stage': 3}
+        driver, fixture, target = self.run_review([old, old, old, new])
+        report = {}
+        endpoint = 'fixture@127.0.0.1:2222'
+        with patch('tauri_linux_direct_ssh.capture_outcome', return_value=(b'png', {'bounds': [0, 0, 1, 1]})):
+            exercise_rotation_review(driver, fixture, endpoint, target, report)
+        self.assertEqual([c.args[0] for c in driver.click.call_args_list],
+                         ['#ssh-connect', '#ssh-key-cancel', '#ssh-probe', '#ssh-trust-confirm', '#ssh-auth-key'])
+        self.assertEqual([c.args for c in fixture.rotation_evidence.call_args_list], [(2,), (2,), (2,), (3,)])
+        self.assertTrue(report['rotation']['cancelKeptOldTrust'])
+        self.assertEqual(report['rotation']['freshProbe'], new)
+        self.assertNotIn(fixture.private_key, json.dumps(report))
+        driver.send_test_line.assert_not_called()
+
+    def test_cancellation_drift_stops_before_another_probe_or_confirmation(self):
+        old = {'stage': 2}
+        driver, fixture, target = self.run_review([old, old, {'stage': 2, 'changed': True}])
+        with patch('tauri_linux_direct_ssh.capture_outcome', return_value=(b'png', {})), \
+             self.assertRaisesRegex(GuiFailure, 'rotation_cancel_dialed'):
+            exercise_rotation_review(driver, fixture, 'fixture@127.0.0.1:2222', target, {})
+        self.assertEqual([c.args[0] for c in driver.click.call_args_list], ['#ssh-connect', '#ssh-key-cancel'])
+        driver.send_test_line.assert_not_called()
 
 
 class WebDriverTests(unittest.TestCase):

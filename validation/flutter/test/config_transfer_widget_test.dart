@@ -116,7 +116,7 @@ void main() {
     expect(find.descendant(of:impact,matching:find.textContaining('pane-a · terminal-a')),findsOneWidget);
     expect(find.descendant(of:impact,matching:find.textContaining('pane-b · terminal-b')),findsOneWidget);
     expect(find.descendant(of:impact,matching:find.textContaining('停止连接')),findsOneWidget);
-    expect(find.descendant(of:impact,matching:find.textContaining('当前没有终端输入授权')),findsOneWidget);
+    expect(find.descendant(of:impact,matching:find.text('以上标签当前均不能从本机输入。')),findsOneWidget);
     expect(find.descendant(of:impact,matching:find.textContaining('fixture-device-handle')),findsNothing);
 
     tester.view.physicalSize = const Size(320, 740);

@@ -73,7 +73,7 @@ class _ConfigTransferPageState extends State<ConfigTransferPage> {
             )),
           ),
           if (!affected.any((entry) => entry.$2.inputEligible.value))
-            const Padding(padding:EdgeInsets.only(top:6),child:Text('以上标签当前没有终端输入授权。')),
+            const Padding(padding:EdgeInsets.only(top:6),child:Text('以上标签当前均不能从本机输入。')),
         ],
       ],
     )));

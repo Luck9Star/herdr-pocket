@@ -230,11 +230,31 @@ class DualOverlayUiSteps {
   }
 
   Future<void> navigation(int index) async {
-    final bar = find.byType(NavigationBar);
-    expect(bar, findsOneWidget);
-    final destinations = find.descendant(of: bar, matching: find.byType(NavigationDestination));
-    expect(destinations.evaluate().length, 4);
-    await existing.tap(tester, destinations.at(index));
+    const labels = ['看板', '终端', '网络', '设置'];
+    final label = labels[index];
+    final homeKey = ValueKey(index == 2 ? 'hosts-networks' : 'home-tab-$index');
+    // Catalog loading can swap the Material bar for the empty-home tabs.
+    // Resolve the current control by destination throughout the hit test.
+    final control = find.byElementPredicate((element) {
+      final widget = element.widget;
+      final matches = switch (widget) {
+        InkWell() => widget.key == homeKey && widget.onTap != null,
+        NavigationDestination() => widget.label == label && widget.enabled,
+        _ => false,
+      };
+      return matches && ModalRoute.isCurrentOf(element) == true;
+    });
+    await existing.tapStablePointer(tester, control);
+    final destination = switch (index) {
+      0 => find.byKey(const ValueKey('host-catalog-list')),
+      1 => find.widgetWithText(ListView, label),
+      2 => find.descendant(of: find.byType(NetworkProfilesPage), matching: find.text('网络配置')),
+      _ => find.byKey(const ValueKey('hosts-terminal-preferences')),
+    };
+    await existing.until(tester, () {
+      existing.checkPointerError(tester);
+      return destination.hitTestable().evaluate().length == 1;
+    }, seconds: 10);
   }
 
   Future<void> showNetworkControls(String networkId) async {

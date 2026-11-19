@@ -77,7 +77,7 @@ const originalTargetsActive = !document.hidden && !document.querySelector('dialo
     visible(page) && root?.dataset.split === '2' &&
     root.querySelectorAll(':scope > [data-role="workbench-panel"]').length === 2 &&
     views.every((view, index) => visible(view) &&
-        one(view, ':scope > p:not([data-role])')?.textContent.split(' · ').slice(-2)
+        one(view, ':scope > .panel-head + p')?.textContent.split(' · ').slice(-2)
             .join(' · ') === targets[index].join(' · ') &&
         one(view, '.tab-connection-actions')?.dataset.state === 'active');
 const selectedB = a?.dataset.focus === 'false' && b?.dataset.focus === 'true';

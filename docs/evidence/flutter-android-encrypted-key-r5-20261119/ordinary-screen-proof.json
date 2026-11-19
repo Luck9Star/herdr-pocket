@@ -1,0 +1,67 @@
+{
+  "tag": "ordinary",
+  "attempt": 1,
+  "bounds": [
+    66,
+    465,
+    948,
+    1479
+  ],
+  "viewSize": [
+    1080,
+    2340
+  ],
+  "expectedTarget": "fixture@127.0.0.1:47447",
+  "checks": {
+    "integration": {
+      "status": "passed",
+      "evidence": {
+        "schemaVersion": 1,
+        "imageSha256": "c3e1043628b1560c32a9f846763056826aa2425fbf53b14499e90fbcc289640e",
+        "imageSize": [
+          1080,
+          2340
+        ],
+        "terminalBounds": [
+          66,
+          465,
+          948,
+          1479
+        ],
+        "expectedMarker": "POCKET-ANDROID-SSH-OK",
+        "expectedToken": "HEAD PAST HAVE HUNT SALT TASK TASK HEAD",
+        "markerVisible": true,
+        "tokenVisible": true,
+        "ocrEngine": "tesseract 5.3.4",
+        "ocrAttempts": 1,
+        "ocrPageSegmentationMode": 6,
+        "proofSequenceVisible": true
+      }
+    },
+    "device": {
+      "status": "passed",
+      "evidence": {
+        "schemaVersion": 1,
+        "imageSha256": "56e0ac048b8217575f05d5d4fd2e7b80b3c2e844867c4335e91e5c2edabf2f1d",
+        "imageSize": [
+          1080,
+          2340
+        ],
+        "terminalBounds": [
+          66,
+          465,
+          948,
+          1479
+        ],
+        "expectedMarker": "POCKET-ANDROID-SSH-OK",
+        "expectedToken": "HEAD PAST HAVE HUNT SALT TASK TASK HEAD",
+        "markerVisible": true,
+        "tokenVisible": true,
+        "ocrEngine": "tesseract 5.3.4",
+        "ocrAttempts": 1,
+        "ocrPageSegmentationMode": 6,
+        "proofSequenceVisible": true
+      }
+    }
+  }
+}

@@ -271,6 +271,76 @@ class BuildDiagnosticsTests(unittest.TestCase):
 
 
 class RuntimeDiagnosticsTests(unittest.TestCase):
+    def test_command_does_not_conflate_timeout_with_launch_failure(self):
+        for error, code in ((subprocess.TimeoutExpired(['private-argv'], 1), 'tauri_ios_command_timed_out'),
+                            (OSError('private-path'), 'tauri_ios_command_unavailable')):
+            with self.subTest(code=code), patch.object(ios.subprocess, 'run', side_effect=error):
+                with self.assertRaisesRegex(ios.Failure, '^' + code + '$'):
+                    ios.command(['private-argv'], timeout=1)
+
+    def test_later_http_rejection_keeps_the_first_checkpoint_failure(self):
+        state = ios.Checkpoints(None, None, '/unused', {})
+        server, thread = ios.start_checkpoints(state)
+        self.addCleanup(thread.join, 2)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        def reject(payload):
+            request = Request(f'http://127.0.0.1:{server.server_port}/checkpoint', data=json.dumps(payload).encode(),
+                              headers={'Authorization': state.secret})
+            with self.assertRaises(HTTPError) as error:
+                urlopen(request, timeout=5)
+            self.assertEqual(error.exception.code, 409)
+            error.exception.close()
+        reject({'stage': 'ordinary_probe'})
+        self.assertEqual(state.failure, 'tauri_ios_checkpoint_order_invalid')
+        reject([])
+        self.assertEqual(state.failure, 'tauri_ios_checkpoint_order_invalid')
+
+    def test_owned_xcresult_issues_contribute_only_fixed_categories_and_owned_lines(self):
+        with tempfile.TemporaryDirectory(prefix='test result ') as directory:
+            root = Path(directory)
+            bundle = root / 'run.xcresult'
+            bundle.mkdir()
+            def field(value):
+                return {'_value': value}
+            def issue(message, location, issue_type='Assertion Failure'):
+                return {'message': field(message), 'issueType': field(issue_type),
+                        'documentLocationInCreatingWorkspace': {'url': field(location)},
+                        'raw': 'PRIVATE-AX'}
+            location = (root / 'UITests/Driver.swift').as_uri() + '#StartingLineNumber=71&EndingLineNumber=71'
+            foreign = (root / 'third-party/Driver.swift').as_uri() + '#StartingLineNumber=39'
+            scope = issue('Timed out waiting for PRIVATE-CREDENTIAL', location)
+            report = {'_type': {'_name': 'ActionsInvocationRecord'}, 'issues': {'testFailureSummaries': {'_values': [scope]}},
+                      'actions': {'_values': [{'actionResult': {'issues': {'testFailureSummaries': {'_values': [scope,
+                          issue('private context', foreign, 'Uncaught Exception'),
+                          issue('raw value', location + '&StartingLineNumber=90', 'PRIVATE-TYPE')]}}}}]},
+                      'attachments': {'message': 'XCTAssertTrue failed PRIVATE-ATTACHMENT'}}
+            def subprocess_result(args, *, stdout, stderr, check, timeout):
+                self.assertEqual(args, ['xcrun', 'xcresulttool', 'get', 'object', '--legacy', '--path', str(bundle), '--format', 'json'])
+                self.assertEqual(stderr, subprocess.DEVNULL)
+                self.assertEqual(timeout, 15)
+                stdout.write(json.dumps(report).encode())
+                return subprocess.CompletedProcess(args, 0)
+            with patch.object(ios.subprocess, 'run', side_effect=subprocess_result):
+                result = ios.xcresult_diagnostics(root)
+            self.assertEqual(result, {'status': 'readable', 'issues': [
+                {'classification': 'xctest_timeout', 'file': 'Driver.swift', 'line': 72},
+                {'classification': 'xctest_uncaught_exception'}, {'classification': 'xctest_reported_issue'}]})
+
+    def test_missing_or_malformed_xcresult_does_not_mask_first_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(ios.subprocess, 'run') as run:
+                self.assertEqual(ios.xcresult_diagnostics(root), {'status': 'missing', 'issues': []})
+                run.assert_not_called()
+            (root / 'run.xcresult').mkdir()
+            for output in (b'PRIVATE', b'{"_type":"PRIVATE"}', b'x' * 2_000_001):
+                def subprocess_result(args, *, stdout, **_):
+                    stdout.write(output)
+                    return subprocess.CompletedProcess(args, 0)
+                with patch.object(ios.subprocess, 'run', side_effect=subprocess_result):
+                    self.assertEqual(ios.xcresult_diagnostics(root), {'status': 'unreadable', 'issues': []})
+
     def test_failure_categories_export_only_owned_basename_and_line(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -320,9 +390,13 @@ class RuntimeDiagnosticsTests(unittest.TestCase):
             self.assertEqual(ios.runtime_diagnostics(root / 'missing', root), [{'classification': 'xctest_failed'}])
 
     def test_runtime_failure_preserves_checkpoint_error_and_cleans_all_private_files(self):
-        for checkpoint_failure, command_failed in ((None, True), ('tauri_ios_native_check_failed', True),
-                                                   ('tauri_ios_native_check_failed', False)):
-            with self.subTest(checkpoint_failure=checkpoint_failure, command_failed=command_failed), \
+        variants = ((None, 'failed', 'nonzero_exit', False), ('tauri_ios_native_check_failed', 'failed', 'nonzero_exit', False),
+                    ('tauri_ios_native_check_failed', None, None, False),
+                    ('tauri_ios_native_check_failed', 'timed_out', 'timeout', True),
+                    (None, 'timed_out', 'timeout', False), (None, 'unavailable', 'launch_unavailable', False),
+                    (None, 'signalled', 'signalled', False))
+        for checkpoint_failure, command_failure, outcome, delete_fails in variants:
+            with self.subTest(checkpoint_failure=checkpoint_failure, command_failure=command_failure), \
                     tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 project, app = InputAndPrivacyTests().build_inputs(root)
@@ -345,6 +419,8 @@ class RuntimeDiagnosticsTests(unittest.TestCase):
                             'identifier': 'com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max'}]}).encode()
                     if arguments[:3] == ['xcrun', 'simctl', 'create']:
                         return b'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE'
+                    if delete_fails and arguments[:3] == ['xcrun', 'simctl', 'delete']:
+                        raise ios.Failure('tauri_ios_command_failed')
                     if 'test-without-building' in arguments:
                         private = Path(arguments[2]).parent
                         private_paths.append(private)
@@ -359,18 +435,25 @@ class RuntimeDiagnosticsTests(unittest.TestCase):
                         states[0].accept({'stage':'ordinary_form'})
                         states[0].failure = checkpoint_failure
                         log.write(f'{private}/UITests/Driver.swift:123: error: No matches found for {config["ordinaryPassword"]}\n'.encode())
-                        if command_failed:
-                            raise ios.Failure('tauri_ios_command_failed')
+                        if command_failure:
+                            raise ios.Failure('tauri_ios_command_' + command_failure)
                     return b''
                 with patch.object(ios, 'command', side_effect=command), \
                         patch.object(ios, 'Checkpoints', side_effect=checkpoints), \
+                        patch.object(ios, 'xcresult_diagnostics', return_value={'status': 'readable', 'issues': []}) as result_info, \
                         patch.object(ios.shutil, 'which', return_value='/tools/present'):
                     result = ios.run(project, app, root / 'public', source_sha='a' * 40,
                                      env={'GITHUB_ACTIONS': 'true', 'RUNNER_OS': 'macOS'})
-                self.assertEqual(result['error'], checkpoint_failure or 'tauri_ios_xctest_failed')
+                primary = 'tauri_ios_xctest_failed' if command_failure == 'failed' else 'tauri_ios_xctest_command_' + str(command_failure)
+                self.assertEqual(result['error'], checkpoint_failure or primary)
+                self.assertEqual(result.get('runtimeCommandOutcome'), outcome)
+                self.assertEqual(result.get('runtimeTimeoutBudget'), 'xctest_limit' if outcome == 'timeout' else None)
+                self.assertEqual(result['xcresultDiagnostics'], {'status': 'readable', 'issues': []})
+                result_info.assert_called_once_with(private_paths[0])
                 self.assertEqual(result['runtimeDiagnostics'], [{'classification': 'xctest_element_absent_or_query_unresolved',
                                                                 'file': 'Driver.swift', 'line': 123}])
-                self.assertTrue(all(result['cleanup'].values()))
+                self.assertEqual(result['cleanup'], {'simulatorDeleted': not delete_fails, 'fixturesClosed': True,
+                                                     'privateFilesRemoved': True})
                 self.assertTrue(private_paths and all(not p.exists() for p in private_paths))
                 encoded = (root / 'public/result.json').read_text()
                 observations = json.loads(encoded)['cases']['ordinary']['failurePeerObservations']
@@ -2048,6 +2131,38 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
 
 
 class EncryptedKeyFixtureTests(unittest.TestCase):
+    def test_paste_trace_is_bound_to_attempt_phase_and_fixed_nonsecret_enums(self):
+        state = ios.Checkpoints(None, None, '/unused', {}, encrypted=object())
+        event = {'stage': 'native_encrypted_paste'}
+        contexts = [('wrongPassphrase', 'encrypted_key_clipboard_wrong', 'encrypted_key_wrong_ready'),
+                    ('retry', 'encrypted_key_clipboard_retry', 'encrypted_key_retry_ready')]
+        for attempt, preseed, ready in contexts:
+            state.index = state.stages.index(preseed)
+            with self.assertRaisesRegex(ios.Failure, 'paste_diagnostic_invalid'):
+                state.accept(event | {'step': 'prepare'})  # no paste phase yet
+            state.accept({'stage': 'native_progress', 'nativeCheckpoint': 'encrypted_key_paste'})
+            state.accept(event | {'step': 'prepare'})
+            with self.assertRaisesRegex(ios.Failure, 'paste_diagnostic_invalid'):
+                state.accept(event | {'step': 'product_entered'})
+            state.accept(event | {'step': 'prepared'})
+            state.index = state.stages.index(ready)
+            expected = [{'step': 'product_entered'}, {'step': 'product_returned'}, {'step': 'snapshot_entered'},
+                        {'step': 'observation', 'state': 'field_empty'}, {'step': 'observation', 'state': 'menu_observed'},
+                        {'step': 'consent_entered'}, {'step': 'consent_returned', 'state': 'menu_unbound'},
+                        {'step': 'observation', 'state': 'field_populated'}, {'step': 'form_entered'},
+                        {'step': 'form_observed', 'state': 'ready'}]
+            for item in expected:
+                state.accept(event | item)
+            self.assertEqual(state.result['pasteTrace'][attempt], [{'step': 'prepare'}, {'step': 'prepared'}, *expected])
+            for payload in ({'step': 'prepare'}, {'step': 'observation', 'state': [1]},
+                            {'step': 'observation', 'state': 'PRIVATE-AX'}, {'step': 'consent_entered', 'frame': [1, 1, 2, 2]},
+                            expected[3], {'step': 'PRIVATE-PEM'}):
+                with self.assertRaisesRegex(ios.Failure, 'paste_diagnostic_invalid'):
+                    state.accept(event | payload)
+            self.assertNotIn('PRIVATE', json.dumps(state.result))
+            self.assertEqual(state.stages[state.index], ready)
+            state.result.pop('nativeCheckpoint')
+
     def test_auth_choice_diagnostics_distinguish_selection_and_selected_form(self):
         for phase in ios.ENCRYPTED_AUTH_PHASES:
             payload = {'stage': 'native_progress', 'nativeCheckpoint': phase}

@@ -2746,10 +2746,15 @@ final class TauriDirectSSHUITests: XCTestCase {
         return candidate
     }
 
+    private enum PasteConsentResult: String {
+        case windowUnproven = "window_unproven", menuUnbound = "menu_unbound", actionUnbound = "action_unbound"
+        case notHittable = "not_hittable", unsafeFrame = "unsafe_frame", tapped
+    }
+
     @MainActor
-    private func tapNativePasteConsent(_ menu: Observed, action: Observed, owner: RevealedControl) throws -> Bool {
+    private func tapNativePasteConsent(_ menu: Observed, action: Observed, owner: RevealedControl) throws -> PasteConsentResult {
         guard app.state == .runningForeground, let window = liveOnPath(owner.window),
-              window.snapshot.frame == menu.window, menu.window == action.window else { return false }
+              window.snapshot.frame == menu.window, menu.window == action.window else { return .windowUnproven }
         let failure = "native_encrypted_key_paste_unproven"
         func rebind(_ row: Observed, in scope: XCUIElement) throws -> LiveControl? {
             let snapshot = row.snapshot
@@ -2761,60 +2766,97 @@ final class TauriDirectSSHUITests: XCTestCase {
                   snapshot.frame == live.snapshot.frame else { return nil }
             return live
         }
-        guard let boundMenu = try rebind(menu, in: window.element),
-              let boundAction = try rebind(action, in: boundMenu.element),
-              action.snapshot.isEnabled, boundAction.snapshot.isEnabled, boundAction.hittable else { return false }
+        guard let boundMenu = try rebind(menu, in: window.element) else { return .menuUnbound }
+        guard let boundAction = try rebind(action, in: boundMenu.element) else { return .actionUnbound }
+        guard action.snapshot.isEnabled, boundAction.snapshot.isEnabled, boundAction.hittable else { return .notHittable }
         let appBounds = window.snapshot.frame.intersection(app.frame)
         let menuBounds = boundMenu.snapshot.frame
         let frame = boundAction.snapshot.frame
         guard [appBounds, menuBounds, frame].allSatisfy(NativeFramePolicy.valid),
-              appBounds.contains(frame), menuBounds.contains(frame) else { return false }
+              appBounds.contains(frame), menuBounds.contains(frame) else { return .unsafeFrame }
         boundAction.element.tap()
-        return true
+        return .tapped
     }
 
     @MainActor
     private func encryptedDraft(port: Int, owner: RevealedControl, retry: Bool) throws -> RevealedControl {
         let attempt = retry ? "retry" : "wrong"
+        var emitted: Set<[String]> = []
+        @MainActor func trace(_ step: String, _ state: String? = nil) throws {
+            guard emitted.insert([step, state ?? ""]).inserted else { return }
+            var report = ["step": step]
+            if let state { report["state"] = state }
+            try post("native_encrypted_paste", report)
+        }
         let before = try encryptedForm(port: port, owner: owner)
         try require(credentialEmpty(before.pem.live.snapshot) && credentialEmpty(before.passphrase.live.snapshot) &&
                     !before.submit.live.snapshot.isEnabled, "native_encrypted_key_credentials_retained")
         try phase("paste")
+        try trace("prepare")
         let beforePaste = try observedNodes()
         let staleMenu = try nativePasteMenu(beforePaste, owner: before.pem)
         try require(staleMenu == nil && !pasteOverlayVisible(beforePaste), "native_encrypted_key_paste_unproven")
+        try trace("prepared")
         try post("encrypted_key_clipboard_" + attempt)
+        try trace("product_entered")
         try tapMobileButton(before.paste, "native_encrypted_key_paste_unproven")
+        try trace("product_returned")
         let deadline = Date().addingTimeInterval(12)
         var confirmed = false
         var method = "productPaste"
         let fallbackNotice = "无法读取剪贴板，可在私钥框用系统粘贴。"
+        try trace("snapshot_entered")
         repeat {
             let rows = try observedNodes()
             let connection = connectionRows(rows, in: before.pem)
             let drafts = connection.filter { sameIdentity($0.snapshot, before.pem.owner.snapshot) }
-            if app.state == .runningForeground, drafts.count == 1, let draft = drafts.first {
-                if !credentialEmpty(draft.snapshot) { break }
+            if app.state != .runningForeground {
+                try trace("observation", "not_foreground")
+            } else if connection.isEmpty {
+                try trace("observation", "owner_missing")
+            } else if drafts.isEmpty {
+                try trace("observation", "field_missing")
+            } else if drafts.count > 1 {
+                try trace("observation", "field_ambiguous")
+            } else if let draft = drafts.first {
+                if !credentialEmpty(draft.snapshot) {
+                    try trace("observation", "field_populated")
+                    break
+                }
+                try trace("observation", "field_empty")
                 if let candidate = try nativePasteMenu(rows, owner: before.pem) {
+                    try trace("observation", "menu_observed")
                     if !confirmed {
-                        confirmed = try tapNativePasteConsent(candidate.menu, action: candidate.action, owner: before.pem)
+                        let event = method == "productPaste" ? "consent" : "edit_consent"
+                        try trace(event + "_entered")
+                        let result = try tapNativePasteConsent(candidate.menu, action: candidate.action, owner: before.pem)
+                        confirmed = result == .tapped
+                        try trace(event + "_returned", result.rawValue)
                     }
-                } else if method == "productPaste", !pasteOverlayVisible(rows),
+                } else if pasteOverlayVisible(rows) {
+                    try trace("observation", "overlay_observed")
+                } else if method == "productPaste",
                           visibleWitness(connection, [("ssh-credential-note", fallbackNotice, false)]) != nil {
+                    try trace("observation", "read_failure_visible")
+                    try trace("edit_entered")
                     // Follow the product's explicit fallback on the still-empty, bound PEM field.
                     let field = try reveal(before.pem.live.element, matching: before.pem, protectRouteTabs: true,
                                            mobileOwnerFailure: "native_encrypted_key_paste_unproven").live
                     try require(credentialEmpty(field.snapshot) && field.snapshot.isEnabled, "native_encrypted_key_paste_unproven")
                     field.element.press(forDuration: 0.8)
+                    try trace("edit_returned")
                     method = "systemEditMenu"
                     confirmed = false
                 }
             }
             Thread.sleep(forTimeInterval: 0.2)
         } while Date() < deadline
+        try trace("form_entered")
         let pasted = try encryptedForm(port: port, owner: owner)
-        try require(!credentialEmpty(pasted.pem.live.snapshot) && credentialEmpty(pasted.passphrase.live.snapshot) &&
-                    !pasted.submit.live.snapshot.isEnabled, "native_encrypted_key_paste_unproven")
+        let ready = !credentialEmpty(pasted.pem.live.snapshot) && credentialEmpty(pasted.passphrase.live.snapshot) &&
+            !pasted.submit.live.snapshot.isEnabled
+        try trace("form_observed", ready ? "ready" : "unproven")
+        try require(ready, "native_encrypted_key_paste_unproven")
         try phase("passphrase")
         guard let passphrase = try post("encrypted_key_" + attempt + "_ready", ["pasteMethod": method], expectingPassphrase: true) else {
             throw NSError(domain: "checkpoint_rejected", code: 1)

@@ -52,7 +52,7 @@ class NativeControlPolicyTests(unittest.TestCase):
         self.assertLess(poll.index('!credentialEmpty('), poll.index('nativePasteMenu('))
         self.assertLess(poll.index('!credentialEmpty('), poll.index('tapNativePasteConsent('))
         self.assertIn('if !confirmed', poll)
-        self.assertIn('!pasteOverlayVisible(rows)', poll)
+        self.assertLess(poll.index('else if pasteOverlayVisible(rows)'), poll.index('else if method == "productPaste"'))
         self.assertLess(poll.index('visibleWitness(connection,'), poll.index('.press(forDuration:'))
         self.assertEqual(draft.count('try tapMobileButton(before.paste,'), 1)
         self.assertEqual(draft.count('.press(forDuration:'), 1)
@@ -681,7 +681,7 @@ final class Adapter {
     }
     func observePasteConsent(_ owner: RevealedControl) throws -> Bool {
         guard let candidate = try nativePasteMenu(observedNodes(), owner: owner) else { return false }
-        return try tapNativePasteConsent(candidate.menu, action: candidate.action, owner: owner)
+        return try tapNativePasteConsent(candidate.menu, action: candidate.action, owner: owner) == .tapped
     }
     func hasPasteOverlay() -> Bool { pasteOverlayVisible(rows) }
     func auth(_ previous: RevealedControl, ready: Bool = false) throws -> (password: RevealedControl, submit: RevealedControl) {
@@ -723,7 +723,7 @@ final class Adapter {
             "func visibleWitness(_ rows:", "func waitForMobileWitness<Proof>", "func mobileAuth(port:", "func mobilePassword(in rows:",
             "func mobilePasswordObservation(in rows:", "func encryptedField(_ field:",
             "func authMethodFact(_ node:", "func selectAuthMethod(_ method:",
-            "func pasteOverlayVisible(_ rows:", "func nativePasteMenu(_ rows:", "func tapNativePasteConsent(_ menu:",
+            "func pasteOverlayVisible(_ rows:", "func nativePasteMenu(_ rows:", "enum PasteConsentResult:", "func tapNativePasteConsent(_ menu:",
             "func controlGeometry(_ owner:", "func controlVisibleFrame(_ owner:", "func routeTabsOcclusion(_ owner:",
             "func reportFormGeometry(_ failure:", "func failControlGeometry(_ failure:",
             "func tap(_ item:", "func fillPassword(_ item:",

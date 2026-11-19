@@ -26,6 +26,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from urllib.parse import parse_qs, unquote, urlsplit
 import uuid
 
 from terminal_screenshot_gate import ScreenshotGateError, verify_terminal_screenshot
@@ -52,6 +53,19 @@ ENCRYPTED_AUTH_PHASES = frozenset(('encrypted_key_select_key', 'encrypted_key_ke
 ENCRYPTED_AUTH_FAILURES = frozenset('native_encrypted_auth_' + code for code in (
     'page_unproven', 'method_missing', 'method_ambiguous', 'method_identity_invalid', 'method_role_invalid',
     'method_owner_unproven', 'method_live_unproven'))
+PASTE_PRESEED_STEPS = frozenset(('prepare', 'prepared'))
+PASTE_UI_STEPS = frozenset(('product_entered', 'product_returned', 'snapshot_entered', 'observation',
+                            'consent_entered', 'consent_returned', 'edit_entered', 'edit_returned',
+                            'edit_consent_entered', 'edit_consent_returned',
+                            'form_entered', 'form_observed'))
+PASTE_CONSENT_RESULTS = frozenset(('window_unproven', 'menu_unbound', 'action_unbound', 'not_hittable', 'unsafe_frame', 'tapped'))
+PASTE_STATES = {
+    'observation': frozenset(('not_foreground', 'owner_missing', 'field_missing', 'field_ambiguous', 'field_populated',
+                              'field_empty', 'menu_observed', 'overlay_observed', 'read_failure_visible')),
+    'consent_returned': PASTE_CONSENT_RESULTS,
+    'edit_consent_returned': PASTE_CONSENT_RESULTS,
+    'form_observed': frozenset(('ready', 'unproven')),
+}
 ORDINARY_ACTIVE_STEPS = ('keyboard_opened', 'keyboard_closed', 'board', 'terminal_from_board',
                          'network', 'terminal_from_network', 'settings', 'terminal_from_settings')
 NATIVE_PHASES = frozenset(prefix + '_' + phase for prefix in ('ordinary', 'key_change', 'encrypted_key') for phase in (
@@ -542,8 +556,11 @@ def command(args, *, log=None, timeout=180, cwd=None):
         result = subprocess.run(args, cwd=cwd, stdout=subprocess.PIPE if log is None else log,
                                 stderr=subprocess.PIPE if log is None else subprocess.STDOUT,
                                 timeout=timeout, check=False)
-    except (OSError, subprocess.TimeoutExpired):
-        raise Failure('tauri_ios_command_unavailable_or_timeout') from None
+    except subprocess.TimeoutExpired:
+        raise Failure('tauri_ios_command_timed_out') from None
+    except OSError:
+        raise Failure('tauri_ios_command_unavailable') from None
+    require(result.returncode >= 0, 'tauri_ios_command_signalled')
     require(result.returncode == 0, 'tauri_ios_command_failed')
     return result.stdout if log is None else b''
 
@@ -612,12 +629,8 @@ def build_diagnostics(log_path, private, *, phase):
                         else 'xcode_build_failed'}]
 
 
-def runtime_diagnostics(log_path, private):
-    """Inspect a private XCTest log; export only fixed codes and owned locations."""
-    owned = {str((Path(private) / relative).resolve()): Path(relative).name
-             for relative in ('UITests/Driver.swift', 'Host/Host.swift')}
-    records = []
-    patterns = (
+def runtime_issue_kind(message):
+    for code, pattern in (
         ('xctest_ambiguous_match', r'multiple matching elements found|ambiguous match'),
         ('xctest_element_absent_or_query_unresolved',
          r'failed to get matching snapshots?:\s*no matches found|failed to resolve query|no matches found for'),
@@ -626,7 +639,29 @@ def runtime_diagnostics(log_path, private):
         ('xctest_actor_isolation', r'incorrect actor executor assumption|main actor isolation violation'),
         ('xctest_process_failure', r'failed to launch (?:the )?app|lost connection to the test process|'
          r'early unexpected exit|test runner exited with (?:code|signal)'),
-    )
+    ):
+        if re.search(pattern, message, re.I):
+            return code
+    return None
+
+
+def owned_runtime_location(private, path, line):
+    if not 1 <= line <= 100000:
+        return {}
+    try:
+        path = Path(path)
+        resolved = (path if path.is_absolute() else Path(private) / path).resolve()
+        for relative in ('UITests/Driver.swift', 'Host/Host.swift'):
+            if resolved == (Path(private) / relative).resolve():
+                return {'file': Path(relative).name, 'line': line}
+    except (OSError, ValueError, RuntimeError):
+        pass
+    return {}
+
+
+def runtime_diagnostics(log_path, private):
+    """Inspect a private XCTest log; export only fixed codes and owned locations."""
+    records = []
     try:
         with Path(log_path).open('rb') as source:
             for raw in source:
@@ -639,24 +674,77 @@ def runtime_diagnostics(log_path, private):
                                                    r'lost connection to the test process|'
                                                    r'incorrect actor executor assumption', line, re.I):
                     continue
-                for code, pattern in patterns:
-                    if not re.search(pattern, failure, re.I):
-                        continue
+                code = runtime_issue_kind(failure)
+                if code:
                     value = {'classification': code}
-                    if match and 1 <= int(match[2]) <= 100000:
-                        path = Path(match[1])
-                        try:
-                            resolved = str((path if path.is_absolute() else Path(private) / path).resolve())
-                        except (OSError, ValueError):
-                            resolved = None
-                        if resolved in owned:
-                            value.update(file=owned[resolved], line=int(match[2]))
+                    if match:
+                        value.update(owned_runtime_location(private, match[1], int(match[2])))
                     if value not in records and len(records) < 12:
                         records.append(value)
-                    break
     except OSError:
         pass
     return records or [{'classification': 'xctest_failed'}]
+
+
+def xcresult_diagnostics(private):
+    """Read only structured issues in the owned result; never open attachments or publish messages."""
+    private = Path(private)
+    bundle = private / 'run.xcresult'
+    if bundle.is_symlink() or not bundle.is_dir():
+        return {'status': 'missing', 'issues': []}
+    unavailable = {'status': 'unreadable', 'issues': []}
+    try:
+        with tempfile.TemporaryFile(dir=private) as output:
+            run = subprocess.run(['xcrun', 'xcresulttool', 'get', 'object', '--legacy', '--path', str(bundle), '--format', 'json'],
+                                 stdout=output, stderr=subprocess.DEVNULL, check=False, timeout=15)
+            if run.returncode != 0 or output.tell() > 2_000_000:
+                return unavailable
+            output.seek(0)
+            report = json.load(output)
+    except (OSError, subprocess.TimeoutExpired, ValueError, RecursionError):
+        return unavailable
+    kind = report.get('_type') if isinstance(report, dict) else None
+    if not isinstance(kind, dict) or kind.get('_name') not in ('ActionInvocationRecord', 'ActionsInvocationRecord'):
+        return unavailable
+
+    def child(node, key):
+        return node.get(key) if isinstance(node, dict) else None
+
+    def values(node, key):
+        items = child(child(node, key), '_values')
+        return items[:12] if isinstance(items, list) else []
+
+    def string(node, key):
+        value = child(child(node, key), '_value')
+        return value[:8192] if isinstance(value, str) else ''
+
+    def location(issue):
+        value = string(child(issue, 'documentLocationInCreatingWorkspace'), 'url')
+        try:
+            url = urlsplit(value)
+            lines = parse_qs(url.fragment, max_num_fields=16).get('StartingLineNumber', [])
+            if url.scheme == 'file' and not url.netloc and not url.query and len(lines) == 1 and re.fullmatch(r'[0-9]{1,6}', lines[0]):
+                return owned_runtime_location(private, unquote(url.path), int(lines[0]) + 1)
+        except ValueError:
+            pass
+        return {}
+
+    issues = [child(report, 'issues')]
+    issues.extend(child(child(action, 'actionResult'), 'issues') for action in values(report, 'actions'))
+    records = []
+    for group in issues:
+        for issue in values(group, 'testFailureSummaries') + values(group, 'errorSummaries'):
+            message = string(issue, 'message')
+            kind = string(issue, 'issueType')
+            if not message and not kind:
+                continue
+            code = runtime_issue_kind(message) or {
+                'Assertion Failure': 'xctest_native_assertion', 'Uncaught Exception': 'xctest_uncaught_exception',
+            }.get(kind, 'xctest_reported_issue')
+            record = {'classification': code, **location(issue)}
+            if record not in records and len(records) < 12:
+                records.append(record)
+    return {'status': 'readable', 'issues': records}
 
 
 def build_driver(private, build, result, *, deadline=None):
@@ -1165,6 +1253,28 @@ class Checkpoints:
     def accept(self, payload):
         stage = payload.get('stage')
         require('passwordObservation' not in payload or stage == 'native_failure', 'tauri_ios_native_diagnostic_invalid')
+        if stage == 'native_encrypted_paste':
+            code = 'tauri_ios_native_paste_diagnostic_invalid'
+            step = payload.get('step')
+            require(self.failure is None and self.encrypted is not None and self.index < len(self.stages)
+                    and self.result.get('nativeCheckpoint') == 'encrypted_key_paste' and type(step) is str, code)
+            slot = self.stages[self.index]
+            if step in PASTE_PRESEED_STEPS:
+                attempts = {'encrypted_key_clipboard_wrong': 'wrongPassphrase', 'encrypted_key_clipboard_retry': 'retry'}
+            else:
+                require(step in PASTE_UI_STEPS, code)
+                attempts = {'encrypted_key_wrong_ready': 'wrongPassphrase', 'encrypted_key_retry_ready': 'retry'}
+            require(slot in attempts, code)
+            entry = {'step': step}
+            if step in PASTE_STATES:
+                value = payload.get('state')
+                require(type(value) is str and value in PASTE_STATES[step], code)
+                entry['state'] = value
+            require(set(payload) == {'stage', *entry}, code)
+            trace = self.result.setdefault('pasteTrace', {}).setdefault(attempts[slot], [])
+            require(len(trace) < 36 and entry not in trace, code)
+            trace.append(entry)
+            return
         if stage == 'native_active_diagnostic':
             invalid = 'tauri_ios_active_diagnostic_invalid'
             require(set(payload) == {'stage', 'nativeCheckpoint', 'detail'} and self.failure is None
@@ -1518,9 +1628,9 @@ def start_checkpoints(state):
                     reply = state.accept(payload)
                     response = {'ok': True, **(reply or {})}
                 except Failure as error:
-                    state.failure, response = str(error), {'ok': False}
+                    state.failure, response = state.failure or str(error), {'ok': False}
                 except Exception:
-                    state.failure, response = 'tauri_ios_checkpoint_invalid', {'ok': False}
+                    state.failure, response = state.failure or 'tauri_ios_checkpoint_invalid', {'ok': False}
             body = json.dumps(response).encode()
             self.send_response(200 if response['ok'] else 409)
             self.send_header('Content-Type', 'application/json')
@@ -1648,17 +1758,30 @@ def run(project, app, output, *, source_sha=None, env=None, include_encrypted_ke
         build_driver(private, build, result, deadline=batch_deadline)
         runtime_log = private / 'xctest-private.log'
         result['stage'] = 'xctest_launch'
+        runtime_remaining = batch_deadline - time.monotonic()
         try:
             with runtime_log.open('wb') as log:
                 runtime_log.chmod(0o600)
                 command([*build, 'test-without-building', '-resultBundlePath', str(private / 'run.xcresult'),
                          '-only-testing:PocketUITests/TauriDirectSSHUITests/testOrdinaryAndKeyChange'],
-                        log=log, timeout=max(.1, min(900, batch_deadline - time.monotonic())))
-        except Failure:
+                         log=log, timeout=max(.1, min(900, runtime_remaining)))
+        except Failure as error:
+            outcome, code = {
+                'tauri_ios_command_timed_out': ('timeout', 'tauri_ios_xctest_command_timed_out'),
+                'tauri_ios_command_unavailable': ('launch_unavailable', 'tauri_ios_xctest_command_unavailable'),
+                'tauri_ios_command_signalled': ('signalled', 'tauri_ios_xctest_command_signalled'),
+                'tauri_ios_command_failed': ('nonzero_exit', 'tauri_ios_xctest_failed'),
+            }.get(str(error), ('unclassified', 'tauri_ios_xctest_failed'))
+            primary = state.failure or code
+            result['runtimeCommandOutcome'] = outcome
+            if outcome == 'timeout':
+                result['runtimeTimeoutBudget'] = 'batch_remaining' if runtime_remaining < 900 else 'xctest_limit'
             result['runtimeDiagnostics'] = runtime_diagnostics(runtime_log, private)
-            raise Failure(state.failure or 'tauri_ios_xctest_failed') from None
+            result['xcresultDiagnostics'] = xcresult_diagnostics(private)
+            raise Failure(primary) from None
         if state.failure is not None:
             result['runtimeDiagnostics'] = runtime_diagnostics(runtime_log, private)
+            result['xcresultDiagnostics'] = xcresult_diagnostics(private)
             raise Failure(state.failure)
         require(state.index == len(state.stages) and state.failure is None, 'tauri_ios_checkpoints_incomplete')
         expected_cases = {'ordinary', 'keyChange'} | ({'encryptedKey'} if include_encrypted_key else set())
@@ -1693,7 +1816,8 @@ def run(project, app, output, *, source_sha=None, env=None, include_encrypted_ke
         result['cleanup']['fixturesClosed'] = all(f is None or f.snapshot()['connectionsClosed']
                                                  for _, f in fixtures)
         if not result['cleanup']['fixturesClosed']:
-            result['status'], result['error'] = 'failed', 'tauri_ios_fixture_cleanup_failed'
+            result['status'] = 'failed'
+            result.setdefault('error', 'tauri_ios_fixture_cleanup_failed')
         if device is not None:
             if state is not None and state.clipboard_dirty:
                 try:
@@ -1709,7 +1833,8 @@ def run(project, app, output, *, source_sha=None, env=None, include_encrypted_ke
                 command(['xcrun', 'simctl', 'delete', device], timeout=60)
                 result['cleanup']['simulatorDeleted'] = True
             except Failure:
-                result['status'], result['error'] = 'failed', 'tauri_ios_simulator_cleanup_failed'
+                result['status'] = 'failed'
+                result.setdefault('error', 'tauri_ios_simulator_cleanup_failed')
         elif create_attempted:
             # A timed-out create might have succeeded: recover only our unique name.
             try:
@@ -1724,7 +1849,8 @@ def run(project, app, output, *, source_sha=None, env=None, include_encrypted_ke
             try:
                 shutil.rmtree(private)
             except OSError:
-                result['status'], result['error'] = 'failed', 'tauri_ios_private_cleanup_failed'
+                result['status'] = 'failed'
+                result.setdefault('error', 'tauri_ios_private_cleanup_failed')
         result['cleanup']['privateFilesRemoved'] = private is None or not private.exists()
         if result['status'] != 'passed':
             for name, fixture in fixtures:

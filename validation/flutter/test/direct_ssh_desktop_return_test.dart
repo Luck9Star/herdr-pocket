@@ -38,7 +38,29 @@ void main() {
         await tester.tap(key('direct-return-home')); await tester.pumpAndSettle();
         expect(key('home-ssh-closed'), findsOneWidget);
         expect(find.text('本机已断开'), findsOneWidget);
-        print('DESKTOP_GEOMETRY ${size.width} home=${tester.getRect(key('home-ssh-closed'))}');
+        final sidebar = size.width >= 960 ? 224.0 : 64.0;
+        final contentWidth = size.width == 700 ? 556.0 : 560.0;
+        void rect(String label, Rect actual, Rect expected) {
+          for (final value in [actual.left - expected.left, actual.top - expected.top,
+            actual.width - expected.width, actual.height - expected.height]) {
+            expect(value.abs(), lessThanOrEqualTo(2), reason: '$label: $actual vs $expected');
+          }
+        }
+        rect('app-sidebar', tester.getRect(key('app-sidebar')), Rect.fromLTWH(0, 0, sidebar, size.height));
+        rect('home-board-title', tester.getRect(key('home-board-title')), Rect.fromLTWH(sidebar + 40, 16, contentWidth, 30));
+        rect('home-ssh-closed', tester.getRect(key('home-ssh-closed')), Rect.fromLTWH(sidebar + 40, 62, contentWidth, 44));
+        rect('home-empty-card', tester.getRect(key('home-empty-card')), Rect.fromLTWH(sidebar + 40, 122, contentWidth, 268));
+        rect('hosts-add', tester.getRect(key('hosts-add')), Rect.fromLTWH(sidebar + 56, 266, contentWidth - 32, 48));
+        rect('hosts-direct-ssh', tester.getRect(key('hosts-direct-ssh')), Rect.fromLTWH(sidebar + 56, 326, contentWidth - 32, 48));
+        print('DESKTOP_GEOMETRY ${size.width} home=${tester.getRect(key('home-ssh-closed'))} '
+          'empty=${tester.getRect(key('home-empty-card'))} sidebar=${tester.getRect(key('app-sidebar'))}');
+        for (final entry in [('home-tab-1', '终端'), ('hosts-networks', '网络配置'), ('home-tab-3', '设置')]) {
+          final navKey = key(entry.$1);
+          expect(navKey.hitTestable(), findsOneWidget, reason: entry.$2);
+          await tester.tap(navKey); await tester.pumpAndSettle();
+          if (entry.$1 == 'home-tab-1') expect(key('terminal'), findsOneWidget, reason: entry.$2);
+          else expect(find.text(entry.$2), findsWidgets, reason: entry.$2);
+        }
         expect(tester.takeException(), isNull); await tester.pumpWidget(const SizedBox()); catalog.dispose();
       }, variant: TargetPlatformVariant.only(TargetPlatform.linux), skip: Platform.environment['HERDR_DIRECT_SSH_FIXTURE_PORT'] == null || (chooser && size.width >= 960));
     }

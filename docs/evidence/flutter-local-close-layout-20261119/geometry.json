@@ -1,0 +1,284 @@
+{
+  "baseline": "122f82e4ad5640567bacdae886dd8224963cd05c",
+  "design": "design/penpot/direct-ssh-desktop.svg returned-1440 / returned-980 / returned-700",
+  "environment": "macOS Flutter 3.47.9 widget renderer; logical device scale 1; real Paramiko loopback SSH; widget taps for disconnect and return home",
+  "maximumAllowedDeviationPoints": 2,
+  "measurements": [
+    {
+      "phase": "before",
+      "width": 1440,
+      "anchor": "home-ssh-closed",
+      "expected": [
+        264,
+        62,
+        560,
+        44
+      ],
+      "actual": [
+        240,
+        100,
+        1184,
+        44
+      ],
+      "maximumDeviation": 624,
+      "passWithinTwoPoints": false,
+      "source": "parent /tmp/herdr-ssh-retire-parent.plLqcjpR/screen-before"
+    },
+    {
+      "phase": "before",
+      "width": 980,
+      "anchor": "home-ssh-closed",
+      "expected": [
+        264,
+        62,
+        560,
+        44
+      ],
+      "actual": [
+        240,
+        100,
+        724,
+        44
+      ],
+      "maximumDeviation": 164,
+      "passWithinTwoPoints": false,
+      "source": "parent /tmp/herdr-ssh-retire-parent.plLqcjpR/screen-before"
+    },
+    {
+      "phase": "before",
+      "width": 700,
+      "anchor": "home-ssh-closed",
+      "expected": [
+        104,
+        62,
+        556,
+        44
+      ],
+      "actual": [
+        24,
+        72,
+        652,
+        44
+      ],
+      "maximumDeviation": 96,
+      "passWithinTwoPoints": false,
+      "source": "parent /tmp/herdr-ssh-retire-parent.plLqcjpR/screen-before"
+    },
+    {
+      "phase": "after",
+      "width": 1440,
+      "anchor": "home-ssh-closed",
+      "expected": [
+        264,
+        62,
+        560,
+        44
+      ],
+      "actual": [
+        264.0,
+        62.0,
+        560.0,
+        44.0
+      ],
+      "maximumDeviation": 0.0,
+      "passWithinTwoPoints": true,
+      "source": "screen-after/widgets.log"
+    },
+    {
+      "phase": "after",
+      "width": 1440,
+      "anchor": "home-empty-card",
+      "expected": [
+        264,
+        122,
+        560,
+        268
+      ],
+      "actual": [
+        264.0,
+        122.0,
+        560.0,
+        268.0
+      ],
+      "maximumDeviation": 0.0,
+      "passWithinTwoPoints": true,
+      "source": "screen-after/widgets.log"
+    },
+    {
+      "phase": "after",
+      "width": 1440,
+      "anchor": "app-sidebar",
+      "actual": [
+        0.0,
+        0.0,
+        224.0,
+        900.0
+      ],
+      "expectedWidth": 224,
+      "passWithinTwoPoints": true,
+      "source": "screen-after/widgets.log"
+    },
+    {
+      "phase": "after",
+      "width": 980,
+      "anchor": "home-ssh-closed",
+      "expected": [
+        264,
+        62,
+        560,
+        44
+      ],
+      "actual": [
+        264.0,
+        62.0,
+        560.0,
+        44.0
+      ],
+      "maximumDeviation": 0.0,
+      "passWithinTwoPoints": true,
+      "source": "screen-after/widgets.log"
+    },
+    {
+      "phase": "after",
+      "width": 980,
+      "anchor": "home-empty-card",
+      "expected": [
+        264,
+        122,
+        560,
+        268
+      ],
+      "actual": [
+        264.0,
+        122.0,
+        560.0,
+        268.0
+      ],
+      "maximumDeviation": 0.0,
+      "passWithinTwoPoints": true,
+      "source": "screen-after/widgets.log"
+    },
+    {
+      "phase": "after",
+      "width": 980,
+      "anchor": "app-sidebar",
+      "actual": [
+        0.0,
+        0.0,
+        224.0,
+        780.0
+      ],
+      "expectedWidth": 224,
+      "passWithinTwoPoints": true,
+      "source": "screen-after/widgets.log"
+    },
+    {
+      "phase": "after",
+      "width": 700,
+      "anchor": "home-ssh-closed",
+      "expected": [
+        104,
+        62,
+        556,
+        44
+      ],
+      "actual": [
+        104.0,
+        62.0,
+        556.0,
+        44.0
+      ],
+      "maximumDeviation": 0.0,
+      "passWithinTwoPoints": true,
+      "source": "screen-after/widgets.log"
+    },
+    {
+      "phase": "after",
+      "width": 700,
+      "anchor": "home-empty-card",
+      "expected": [
+        104,
+        122,
+        556,
+        268
+      ],
+      "actual": [
+        104.0,
+        122.0,
+        556.0,
+        268.0
+      ],
+      "maximumDeviation": 0.0,
+      "passWithinTwoPoints": true,
+      "source": "screen-after/widgets.log"
+    },
+    {
+      "phase": "after",
+      "width": 700,
+      "anchor": "app-sidebar",
+      "actual": [
+        0.0,
+        0.0,
+        64.0,
+        900.0
+      ],
+      "expectedWidth": 64,
+      "passWithinTwoPoints": true,
+      "source": "screen-after/widgets.log"
+    },
+    {
+      "phase": "after",
+      "width": 700,
+      "anchor": "home-ssh-closed",
+      "expected": [
+        104,
+        62,
+        556,
+        44
+      ],
+      "actual": [
+        104.0,
+        62.0,
+        556.0,
+        44.0
+      ],
+      "maximumDeviation": 0.0,
+      "passWithinTwoPoints": true,
+      "source": "screen-after/widgets.log"
+    },
+    {
+      "phase": "after",
+      "width": 700,
+      "anchor": "home-empty-card",
+      "expected": [
+        104,
+        122,
+        556,
+        268
+      ],
+      "actual": [
+        104.0,
+        122.0,
+        556.0,
+        268.0
+      ],
+      "maximumDeviation": 0.0,
+      "passWithinTwoPoints": true,
+      "source": "screen-after/widgets.log"
+    },
+    {
+      "phase": "after",
+      "width": 700,
+      "anchor": "app-sidebar",
+      "actual": [
+        0.0,
+        0.0,
+        64.0,
+        900.0
+      ],
+      "expectedWidth": 64,
+      "passWithinTwoPoints": true,
+      "source": "screen-after/widgets.log"
+    }
+  ]
+}

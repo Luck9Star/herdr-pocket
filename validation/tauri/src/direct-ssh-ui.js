@@ -1,6 +1,6 @@
-import { createDirectSsh } from './direct-ssh.js';
+import { createDirectSsh, directSshCloseFeedback } from './direct-ssh.js';
 
-export function initDirectSshUI({native, invoke, channelFactory, terminalFactory, terminalCursor, clipboardRead, keyboardRequest, onBack}) {
+export function initDirectSshUI({native, invoke, channelFactory, terminalFactory, terminalCursor, clipboardRead, keyboardRequest, onBack, onCloseUpdate}) {
   const $ = id => document.getElementById(id);
   const hideKeyboard = $('ssh-hide-keyboard');
   const compactLayout = globalThis.window?.matchMedia?.('(max-width:599px)');
@@ -75,9 +75,16 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   });
   const controller = createDirectSsh({invoke, channelFactory,
     onStatus: (message, ready, reason, details) => {
-      const desktopClose = details?.explicit && !compact();
-      if (details?.explicit && details.closed !== undefined) {
-        closeResult = details.closed ? 'confirmed' : 'failed';
+      const outcome = details?.close;
+      if (outcome) {
+        if (outcome.phase === 'pending') {
+          closeResult = outcome;
+          clearSecrets();
+          resetReview();
+        } else if (closeResult !== outcome) {
+          onCloseUpdate?.(outcome);
+          return;
+        }
       }
       $('ssh-status').textContent = message;
       $('ssh-disconnect').disabled = !ready;
@@ -90,10 +97,12 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
         resetReview();
         retainedTrust = true;
       }
-      showSetupNotice(!ready && !!reason);
+      showSetupNotice(!ready && !!reason && !outcome);
       applyView(ready, freshRefusal);
       if (freshRefusal) scrollToStep();
-      if (desktopClose && !mobileSection.hidden && !$('host-home').hidden) globalThis.window?.scrollTo?.(0, 0);
+      if (outcome?.phase === 'pending' && !document.hidden && !mobileSection.hidden && !$('host-home').hidden) {
+        globalThis.window?.scrollTo?.(0, 0);
+      }
       applyLock(ready, freshRefusal);
       if (ready) {
         retainedTrust = false;
@@ -137,23 +146,23 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   function refreshStep() {
     if (!mobileSection?.dataset) return;
     delete mobileSection.dataset.sshClose;
+    $('ssh-closed-feedback').hidden = !closeResult;
+    $('ssh-return-home').hidden = !closeResult;
+    if (closeResult) {
+      const {title, detail} = directSshCloseFeedback(closeResult);
+      $('ssh-closed-feedback').setAttribute('aria-label', title);
+      $('ssh-closed-title').textContent = title;
+      $('ssh-closed-detail').textContent = detail;
+      $('ssh-closed-detail').hidden = !detail;
+    }
     if (!compact()) {
       delete mobileSection.dataset.sshStep;
-      const ended = closeResult === 'confirmed' || closeResult === 'failed';
-      if (ended) mobileSection.dataset.sshClose = closeResult;
-      $('ssh-closed-feedback').hidden = closeResult !== 'confirmed' && closeResult !== 'failed';
-      $('ssh-return-home').hidden = !ended;
+      if (closeResult) mobileSection.dataset.sshClose = closeResult.phase;
       $('ssh-credentials').hidden = false;
       $('ssh-reviewed-target').hidden = true;
       $('ssh-trust-review').hidden = true;
       $('ssh-probe').textContent = '探测主机指纹';
       $('ssh-connect').textContent = '连接 / 重新连接';
-      if (closeResult === 'confirmed' || closeResult === 'failed') {
-        $('ssh-closed-title').textContent = $('ssh-status').textContent.split('；')[0];
-        $('ssh-closed-detail').textContent = closeResult === 'confirmed'
-          ? ($('ssh-status').textContent.includes('远端已报告结束') ? '远端已报告结束，凭据已清空。' : '凭据已清空，重连时请重新填写。')
-          : '会话可能仍在。可返回首页。';
-      }
       return;
     }
     const confirmed = evidence && $('ssh-review').checked;
@@ -161,15 +170,6 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     mobileSection.dataset.sshStep = step;
     $('ssh-step-title').textContent = confirmed ? 'SSH 账号认证' : evidence ? '核对主机密钥' : '普通 SSH';
     $('ssh-target-fields').hidden = step !== 'target';
-    const endedMobile = closeResult === 'confirmed' || closeResult === 'failed';
-    $('ssh-closed-feedback').hidden = !endedMobile;
-    $('ssh-return-home').hidden = !endedMobile;
-    if (endedMobile) {
-      $('ssh-closed-title').textContent = $('ssh-status').textContent.split('；')[0];
-      $('ssh-closed-detail').textContent = closeResult === 'confirmed'
-        ? ($('ssh-status').textContent.includes('远端已报告结束') ? '远端已报告结束，凭据已清空。' : '凭据已清空，重连时请重新填写。')
-        : '会话可能仍在。可返回首页。';
-    }
     $('ssh-credentials').hidden = step !== 'auth';
     $('ssh-reviewed-target').hidden = step === 'target';
     $('ssh-trust-review').hidden = step !== 'trust';
@@ -236,7 +236,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     return compact() ? privateKeyReady(pem, $('ssh-passphrase').value) : !!pem;
   }
   function applyLock(ready = controller.isReady(), blockedView = !$('ssh-key-change').hidden) {
-    const unavailable = !native || ready || blockedView || controller.isActive() || submitting;
+    const unavailable = !native || ready || blockedView || controller.isActive() || submitting || closeResult?.phase === 'pending';
     const locked = unavailable || probing || controller.isBlocked() || !reviewMatches() || !$('ssh-review').checked;
     for (const id of ['ssh-password','ssh-key','ssh-passphrase','ssh-auth-method','ssh-auth-password','ssh-auth-key','ssh-paste-key']) {
       const field = $(id);
@@ -290,16 +290,15 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     };
     $('ssh-trust-cancel').onclick = cancelTrust;
     const leaveTarget = (returnToDashboard = false) => {
-      const outcome = closeResult === 'confirmed' ? 'confirmed' : closeResult === 'failed' ? 'failed' : null;
+      onBack?.(closeResult?.phase ?? null, returnToDashboard);
       clearSecrets();
       resetReview();
       closeResult = null;
       showSetupNotice(false);
       refreshStep();
-      onBack?.(outcome, returnToDashboard);
     };
     $('ssh-return-home').onclick = () => {
-      if (closeResult === 'confirmed' || closeResult === 'failed') leaveTarget(true);
+      if (closeResult) leaveTarget(true);
     };
     $('ssh-step-back').onclick = () => {
       if (controller.isActive() || submitting) {
@@ -388,7 +387,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     showSetupNotice(true);
   }
   $('ssh-probe').onclick = async () => {
-    if (!native || probing || controller.isActive() || submitting) return;
+    if (!native || probing || controller.isActive() || submitting || closeResult?.phase === 'pending') return;
     const selected = target();
     if (!selected.host || !selected.username || !Number.isInteger(selected.port) || selected.port < 1 || selected.port > 65535) {
       $('ssh-status').textContent = '请输入主机地址、用户名和有效端口（1–65535）。';
@@ -483,12 +482,11 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   // the same target must be probed and confirmed again before anything is used.
   const disconnect = (requested = false) => {
     clearSecrets();
-    if (closeResult === 'pending' || (requested && !controller.isReady())) return;
-    closeResult = requested ? 'pending' : null;
+    if (closeResult?.phase === 'pending' || (requested && !controller.isReady())) return;
     $('ssh-disconnect').disabled = true;
-    if (requested || compact()) resetReview();
-    void controller.close({explicit: requested});
-    scrollToStep();
+    if (!requested && compact()) resetReview();
+    void controller.close({showOutcome:requested});
+    if (!requested) scrollToStep();
   };
   $('ssh-disconnect').onclick = () => disconnect(true);
   $('ssh-cancel').onclick = () => disconnect();
@@ -539,12 +537,16 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       visibilityEpoch++;
       if (document.activeElement === terminal?.textarea) terminal?.textarea?.blur();
       clearSecrets();
-      if (compact() && !controller.isActive() && closeResult !== 'pending') {
-        closeResult = null;
-        resetReview();
+      const outcome = closeResult;
+      closeResult = null;
+      if (outcome) {
+        $('ssh-status').textContent = '尚未连接。';
+        showSetupNotice(false);
       }
+      if (compact() && !controller.isActive()) resetReview();
       refreshStep();
       applyLock();
+      return outcome;
     },
     show: () => {
       if (terminal) bindTerminal(terminal);

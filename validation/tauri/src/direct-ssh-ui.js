@@ -147,6 +147,8 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     if (!mobileSection?.dataset) return;
     delete mobileSection.dataset.sshClose;
     $('ssh-closed-feedback').hidden = !closeResult;
+    if (closeResult) $('ssh-closed-feedback').dataset.phase = closeResult.phase;
+    else delete $('ssh-closed-feedback').dataset.phase;
     $('ssh-return-home').hidden = !closeResult;
     if (closeResult) {
       const {title, detail} = directSshCloseFeedback(closeResult);

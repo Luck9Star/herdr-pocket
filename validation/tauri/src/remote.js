@@ -871,6 +871,8 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   function renderHomeSshClose() {
     const notice = $('host-ssh-disconnected');
     notice.hidden = !homeSshClose || $('host-home').hidden || $('home-dashboard').hidden;
+    if (homeSshClose) notice.dataset.phase = homeSshClose.phase;
+    else delete notice.dataset.phase;
     if (!notice.hidden) {
       const {title} = directSshCloseFeedback(homeSshClose);
       notice.textContent = homeSshClose.phase === 'confirmed' && homeSshClose.remoteReported

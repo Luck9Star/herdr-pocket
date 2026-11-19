@@ -158,12 +158,8 @@ class DualOverlayUiSteps {
     final matches = page.catalog.networkProfiles.where((profile) => profile.label == label).toList();
     final profile = matches.single;
     expect(profile.provider, role == 'et' ? 'easytier' : 'tailscale');
-    await existing.tap(tester, find.byKey(PageStorageKey('network-details-${profile.id}')));
     await stage('${role}_identity_open');
-    final identity = find.byKey(ValueKey('network-identity-${profile.id}'));
-    await existing.until(tester, () => identity.evaluate().length == 1 &&
-      tester.widget<TextButton>(identity).onPressed != null);
-    await existing.tapStablePointer(tester, identity);
+    await openNetworkIdentity(profile.id);
     await stage('${role}_identity_load');
     await existing.until(tester, () => find.byKey(const ValueKey('network-identity-absent')).evaluate().length == 1);
     if (role == 'et') {
@@ -258,11 +254,12 @@ class DualOverlayUiSteps {
   }
 
   Future<void> showNetworkControls(String networkId) async {
-    final page = find.byType(NetworkProfilesPage);
+    final page = find.byElementPredicate((element) =>
+      element.widget is NetworkProfilesPage && ModalRoute.isCurrentOf(element) == true);
     await existing.until(tester, () => page.evaluate().length == 1);
     final list = find.descendant(of: page, matching: find.byType(ListView)).first;
     final scrollable = find.descendant(of: list, matching: find.byType(Scrollable)).first;
-    final tile = find.byKey(PageStorageKey('network-details-$networkId'));
+    final tile = find.descendant(of: page, matching: find.byKey(PageStorageKey('network-details-$networkId')));
     if (tile.evaluate().isEmpty) {
       for (var i = 0; i < 30 && tester.state<ScrollableState>(scrollable).position.pixels > 0; i++) {
         await tester.drag(scrollable, const Offset(0, 500)); await tester.pump();
@@ -273,7 +270,7 @@ class DualOverlayUiSteps {
       }
     }
     await existing.until(tester, () => tile.evaluate().length == 1);
-    final header = find.descendant(of: tile, matching: find.byType(ListTile)).first;
+    final header = existing.groupHeader(tile);
     await existing.until(tester, () => header.evaluate().length == 1);
     await tester.ensureVisible(header); await tester.pump();
     final controller = ExpansibleController.of(tester.element(header));
@@ -283,6 +280,17 @@ class DualOverlayUiSteps {
     await existing.until(tester, () => controller.isExpanded &&
       find.byKey(ValueKey('network-node-refresh-$networkId')).evaluate().length == 1);
     await tester.pump(const Duration(milliseconds: 350));
+  }
+
+  Future<void> openNetworkIdentity(String networkId) async {
+    await showNetworkControls(networkId);
+    final key = ValueKey('network-identity-$networkId');
+    final identity = find.byElementPredicate((element) {
+      final button = element.widget;
+      return button is TextButton && button.key == key && button.onPressed != null &&
+          ModalRoute.isCurrentOf(element) == true;
+    });
+    await existing.tapStablePointer(tester, identity);
   }
 
   Future<void> stopNetwork(String role, String networkId) async {

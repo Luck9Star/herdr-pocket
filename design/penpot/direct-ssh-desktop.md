@@ -23,9 +23,9 @@ node direct-ssh-desktop.mjs out.svg pages/         # 另存总览 + 每屏单页
 | --- | --- | --- | --- |
 | 空首页 | `home` | `home-add`, `home-direct-ssh`, `nav-*` | 卡片内纵向内容固定 |
 | 选择接入方式 | `choose` | `choose-ssh`, `choose-herdr` | 无需滚动（980 档亦完整） |
-| 填写连接目标 | `target` | `host`, `username`, `port`, `probe` | 560 阅读列；700 档列宽自适应 396 |
+| 填写连接目标 | `target` | `host`, `username`, `port`, `probe` | 560 阅读列；700 档实际列宽 `span=556`（客户区 636 − 双边 80） |
 | 目标聚焦 | `target-focused` | `host`（含光标） | 同上 |
-| 首次核对指纹 | `trust` | `trust-confirm`, `trust-cancel` | 完整 SHA256 两行展示，不截断 |
+| 首次核对指纹 | `trust` | `trust-confirm`, `trust-cancel` | 完整 SHA256 两行展示，不截断；算法 ssh-ed25519 与旧指纹一致 |
 | 密码认证 | `password` | `password`, `connect` | 凭据仅本次使用 |
 | 已有私钥 | `private-key` | `key-pem`, `paste-key`, `passphrase`, `connect`（disabled 直至填键） | PEM 两行框内滚动 |
 | 活动终端 | `terminal` | `disconnect`, `terminal-scrollbar`（geometry） | 终端占满剩余宽度与高度；滚动条为键鼠连续控件 |
@@ -36,7 +36,7 @@ node direct-ssh-desktop.mjs out.svg pages/         # 另存总览 + 每屏单页
 | 返回首页 | `returned` | `home-direct-ssh` | 断开反馈条 |
 | 换钥拒绝 | `key-changed` | `recheck`, `keep-previous-trust` | 新旧指纹并列，算法可不同（旧 ssh-ed25519 / 新 rsa-sha2-512） |
 | 保留旧信任 | `previous-trust` | `probe` | 提示重新探测 |
-| 重新核对 | `recheck-trust` | `trust-confirm`, `trust-cancel` | 与 `trust` 同构，新指纹 |
+| 重新核对 | `recheck-trust` | `trust-confirm`, `trust-cancel` | 算法与指纹逐项等于 `key-changed` 新指纹（rsa-sha2-512） |
 会话进行中的状态（`terminal`、`board-active`、`network-active`、`settings-active`）在 `terminal` 导航处显示在线状态：1440/980 为 8×8 圆点加「在线」文字；700 rail 为 8×8 圆点（`<title>` 会话在线）。`nav-*` 与 `sidebar-toggle` 命中区允许位于侧栏（x < 224 / < 64），其余 hit 全部位于内容区。
 ### 键盘焦点顺序与返回语义（双壳同一规则）
 - 表单页：`host` → `username` → `port` → `probe`；认证页：方式选择（`auth-password`/`auth-key`）→ 凭据框 → `connect`；核对页：`trust-confirm` → `trust-cancel`。
@@ -46,10 +46,10 @@ node direct-ssh-desktop.mjs out.svg pages/         # 另存总览 + 每屏单页
 ## 逐点验收门槛
 对每屏、每锚点（以 `geometry.json` 为准）：
 1. 锚点几何 `{x,y,width,height}` 与实现实测差值 ≤ 2 逻辑像素（tolerance）。
-2. `hit` 角色最小边 ≥ 44（规范框口径）；`disabled` 视觉与 `hit` 区分。
+2. `hit` 角色最小边 ≥ 44；规范框是控件组内首个透明矩形，导入量测分组即得声明的 44×44；可见形状允许小于规范框；`disabled` 视觉与 `hit` 区分。设计命中声明与真实运行时点击是两回事：后者由各壳平台输入实现验收，不由画板断言。
 3. 文本不越过 `textLimits[].maxWidth`（溢出即失败）；长主机名/指纹可滚动或换行，不截断声明值。
 4. 三档视口下同一状态锚点集合一致；700 档阅读列收窄但语义位置不变。
-5. 终端滚动条为连续控件（`geometry`），无 44pt 要求；键盘输入为系统级，不在画板内绘制；终端光标按字体列宽求值（14px mono ≈ 8.4/列），不做任意装饰偏移。
+5. 终端滚动条为连续控件（`geometry`），无 44pt 要求；键盘输入为系统级，不在画板内绘制；终端光标按提示符 12 字形（`demo@lab:~$`，无尾空格）实测字宽求值：JetBrainsMono hmtx 每字形 600/1000 UPM = 0.6em × 14px = 8.4px/列，12 列 = 100.8px；网页/其它等宽字体按各自实测字宽独立校准，列数不变。
 6. atlas 总览中所有画板 bbox 互不重叠且在总览画布内（生成器逐尺寸累计实际行高并自检，重叠即构建失败）。
 ## 实测与界限
 - 本批验证：生成器运行通过（Node 24）；48 屏 SVG 可解析；锚点 `g` 元素、`hit ≥ 44`、内容区归属、跨视口锚点集合一致、无越界、id 唯一、atlas bbox 正交不重叠均以脚本核验通过（离线可复算命令见上）。三档关键状态已抽查渲染几何。

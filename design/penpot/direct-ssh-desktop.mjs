@@ -55,13 +55,14 @@ function createBoard(state, title, screen) {
   function layer(name, x, y, w, h, render, role = 'geometry') {
     if (anchors[name]) throw new Error(`${id} 重复锚点 ${name}`);
     if (Math.min(x, y, w, h) < 0 || x + w > width || y + h > height) throw new Error(`${id} 锚点 ${name} 越出画板`);
-    if (role === 'hit' || role === 'disabled') {
-      // 命中区规范框：透明矩形声明实际可命中范围；可见形状允许小于它，实际系统命中留给两壳验收。
-      pieces.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none"/>`);
-    }
     if (role === 'hit' && Math.min(w, h) < tokens.interaction.minTouchTarget) throw new Error(`${id} 命中区 ${name} 小于 44pt`);
     anchors[name] = { x, y, width: w, height: h, role };
     pieces.push(`<g id="${id}-${name}"><title>${escape(name)}</title>`);
+    if (role === 'hit' || role === 'disabled') {
+      // 命中区规范框：透明矩形声明实际可命中范围，放在控件组内，导入量测分组即得声明 44×44；
+      // 可见形状允许小于它；实际系统命中行为留给两壳验收。
+      pieces.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none"/>`);
+    }
     render();
     pieces.push('</g>');
   }
@@ -131,11 +132,11 @@ function createBoard(state, title, screen) {
       text(value.slice(28), margin + 12, y + 30, { size: 13, family: mono, limit: span - 24 });
     });
   }
-  function fingerprintCard(y, value) {
+  function fingerprintCard(y, value, algorithm = 'ssh-ed25519') {
     layer('key-evidence', margin, y, span, 122, () => {
       rect(margin, y, span, 122, color.card, 16, color.border);
       text('主机密钥算法', margin + 12, y + 21, { size: 12, fill: color.textSecondary, limit: span - 24 });
-      text('ssh-ed25519', margin + 12, y + 43, { family: mono, limit: span - 24 });
+      text(algorithm, margin + 12, y + 43, { family: mono, limit: span - 24 });
       line(margin + 12, y + 53.5, margin + span - 12, y + 53.5);
       text('完整 SHA256 指纹', margin + 12, y + 72, { size: 12, fill: color.textSecondary, limit: span - 24 });
       fingerprintValue('key-fingerprint', value, y + 79);
@@ -245,8 +246,8 @@ function networkActive(board) {
   const top = 28;
   text('网络', margin, top + 14, { size: 22, bold: true, limit: span });
   const y = notice('active-ssh', '普通 SSH 会话保持连接', ['切到网络不会断开。从侧栏「终端」返回原会话，不产生新连接或输入。'], top + 34, 'success') + 16;
-  layer('network-empty-card', margin, y, span, 180, () => {
-    rect(margin, y, span, 180, color.card, tokens.radii.card, color.border);
+  layer('network-empty-card', margin, y, span, 204, () => {
+    rect(margin, y, span, 204, color.card, tokens.radii.card, color.border);
     rect(margin + 16, y + 16, 44, 44, color.cardSubtle, 10);
     icon('M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 M3 12 H21 M12 3 C6 7 6 17 12 21 C18 17 18 7 12 3', margin + 22, y + 22, color.textSecondary);
     text('还没有网络配置', margin + 16, y + 89, { size: 18, bold: true, limit: span - 32 });
@@ -297,7 +298,8 @@ function trust(board, rotated) {
   const { margin, span, pageHeader, layer, text, button, targetCard, fingerprintCard } = board;
   pageHeader('核对主机密钥');
   const y = targetCard(76, { compact: true }) + 12;
-  fingerprintCard(y, rotated ? replacementKey : currentKey);
+  // 重核时展示的是待核对新密钥：算法与指纹逐项与 key-changed 的「新指纹」一致（rsa-sha2-512）。
+  fingerprintCard(y, rotated ? replacementKey : currentKey, rotated ? 'rsa-sha2-512' : 'ssh-ed25519');
   layer('independent-verification', margin, y + 138, span, 52, () => {
     text('请通过服务器控制台或向管理员独立核对。', margin, y + 152, { fill: color.textSecondary, limit: span });
     text('算法和完整指纹一致后，再确认继续。', margin, y + 173, { fill: color.textSecondary, limit: span });
@@ -348,7 +350,8 @@ function terminal(board) {
     terminalText('demo@lab:~$ pwd', base, color.termPrompt);
     terminalText('/home/demo', base + 20, color.termText);
     terminalText('demo@lab:~$', base + 40, color.termPrompt);
-    // 光标按 12 列 mono 求值（'demo@lab:~$'），非任意装饰偏移
+    // 光标位置按提示符 12 个字形（无尾空格）实测字宽求值：JetBrainsMono hmtx 每字形 600/1000 UPM
+    // = 0.6em × 14px = 8.4px/列；12 列 = 100.8px，与任意等宽 fallback 字宽一致成比例。
     rect(margin + 12 + 12 * monoColumn, base + 27, 8, 15, color.termCursor, 1);
   });
   // 滚动条是键鼠连续控件：不适用 44pt 控件下限，标注 geometry；滚轮行为遵循系统惯例。

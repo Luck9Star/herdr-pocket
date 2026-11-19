@@ -594,6 +594,16 @@ class SplitDriver:
     def read(self, script, *args):
         return self.driver.call('POST', self.driver.session + '/execute/sync', {'script': script, 'args': list(args)})
 
+    def open_pairing(self, *, empty_board):
+        board = '#host-home:not([hidden]) #home-dashboard:not([hidden])'
+        if empty_board:
+            # The empty board hides the header, even in a wide window.
+            self.driver.click(board + ' #host-empty:not([hidden]) #host-empty-add')
+        else:
+            self.driver.click('body:has(' + board + ' #host-list .saved-host-card) #host-open-remote')
+        self.driver.click('#host-home:not([hidden]) #home-add:not([hidden]) #add-herdr')
+        self.driver.wait_control('#remote-page:not([hidden]) #remote-setup[open] #remote-host')
+
     def named(self, text, scope='body', tag='button'):
         # Locate by public text, then send a real WebDriver click. Never invoke
         # a product handler, IPC command, renderer or input callback directly.
@@ -1300,8 +1310,7 @@ def exercise(args, root, env, configs, approvals, expected):
                 host_ids = []
                 for index, (config, approval) in enumerate(zip(configs, approvals)):
                     stage = 'pair_' + str(index)
-                    driver.click('#host-open-remote')
-                    driver.click('#add-herdr')
+                    ui.open_pairing(empty_board=index == 0)
                     for field, key in [('host', 'host'), ('port', 'port'), ('user', 'username'),
                             ('session', 'session'), ('herdr', 'herdrPath'), ('socket', 'socketPath'), ('pin', 'expectedHostKey')]:
                         driver.fill('#remote-' + field, config[key])

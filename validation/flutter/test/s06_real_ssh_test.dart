@@ -116,9 +116,22 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.getSize(find.byType(HostCatalogPage)), const Size(1440, 1000));
     final tabIds = <String>[];
+    final chooser = find.byKey(const ValueKey('choose-header'));
     for (var i = 0; i < 2; i++) {
       stage('s06_pair_$i');
+      expect(catalog.profiles.length, i);
       await tap('hosts-add'); await tester.pumpAndSettle();
+      if (i == 0) {
+        // The empty board opens a chooser. The saved board's pairing action
+        // opens PairingPage directly.
+        expect(chooser, findsOneWidget);
+        expect(find.byType(PairingPage), findsNothing);
+        await tap('choose-herdr'); await tester.pumpAndSettle();
+      }
+      final page = find.byType(PairingPage);
+      expect(page, findsOneWidget);
+      expect(ModalRoute.of(tester.element(page))?.isCurrent, isTrue);
+      expect(chooser, findsNothing);
       await pairing.fillPairTarget(tester, configs[i]);
       await tap('pair-target-review'); await tap('pair-create');
       final request = find.byKey(const ValueKey('pair-request'));

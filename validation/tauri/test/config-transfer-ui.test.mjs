@@ -190,6 +190,8 @@ test('native revoke matches only reviewed exact active leases and selected hosts
   const event={hostIds:['a','b'],tabs:[['one',3,7,'a'],['other',5,99,'b']]};
   assert.deepEqual(reviewedImportLeases(event,snapshot,['a']),snapshot.slice(0,2));
   assert.deepEqual(reviewedImportLeases(event,snapshot,['b']),[]);
+  const pending=[{hostId:'a',tabId:'one',clientGeneration:3,nativeGeneration:null}];
+  assert.deepEqual(reviewedImportLeases(event,pending,['a']),[{...pending[0],nativeGeneration:7}]);
 });
 
 test('revocation is retained when storage fails after native confirmation', async()=>{

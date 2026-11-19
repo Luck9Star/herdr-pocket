@@ -770,7 +770,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       const pending=invoke('remote_tab_observe',{tabId:tab.id,clientGeneration:token.generation,generation,paneId:tab.target?.paneId || '',terminalId:tab.target?.terminalId || '',canvas,onEvent:channel});
       await pending;
     } catch(error) {if(current(tab,token)){tab.diagnostics.finish(error);status(tab,observationError(error));}}
-    finally {if(tabs.get(tab.id)===tab && tab.token===token){tab.diagnostics?.finish();tab.diagnosticView?.update(tab.diagnostics);tab.board.invalidate('disconnected');boardEvent(tab,'stale');tab.selectionReady=false;tabs.invalidate(tab.id);tab.state='disconnected';tab.reviewed=false;tab.closing=false;tab.nativeGeneration=null;tab.inputEpoch=null;render();}}
+    finally {if(tabs.get(tab.id)===tab && tab.token===token){const ended=current(tab,token) && Number.isSafeInteger(tab.nativeGeneration) ? {clientGeneration:token.generation,nativeGeneration:tab.nativeGeneration} : null;tab.diagnostics?.finish();tab.diagnosticView?.update(tab.diagnostics);tab.board.invalidate('disconnected');boardEvent(tab,'stale');tab.selectionReady=false;tabs.invalidate(tab.id);tab.endedLease=ended && {...ended,retiredGeneration:tab.generation};tab.state='disconnected';tab.reviewed=false;tab.closing=false;tab.nativeGeneration=null;tab.inputEpoch=null;render();}}
   }
   function setFont(size) {for(const tab of tabs.list())if(tab.terminal){tab.localViewport.capture();tab.terminal.options.fontSize=size;}}
   function tabImpacts(ids) {
@@ -790,8 +790,15 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     });
   }
   function tabLeaseSnapshot() {return tabs.list().map(tab=>({hostId:tab.hostId,tabId:tab.id,clientGeneration:tab.generation,nativeGeneration:tab.live ? tab.nativeGeneration : null}));}
-  function prepareLeases(leases) {
-    const affected=leases.map(({tabId,clientGeneration})=>tabs.get(tabId)).filter((tab,index)=>tab && tab.generation===leases[index].clientGeneration);
+  function prepareLeases(leases,includeUnreserved=false) {
+    const affected=leases.map(lease=>{
+      const tab=tabs.get(lease.tabId);if(!tab)return null;
+      const sameGeneration=tab.generation===lease.clientGeneration;
+      if(sameGeneration && !tab.live && lease.nativeGeneration==null)return tab;
+      if(sameGeneration && tab.live && (Number.isSafeInteger(lease.nativeGeneration) || (includeUnreserved && lease.nativeGeneration===null)) && (tab.nativeGeneration===null || tab.nativeGeneration===lease.nativeGeneration))return tab;
+      const ended=tab.endedLease;
+      return !tab.live && ended && tab.generation===ended.retiredGeneration && ended.clientGeneration===lease.clientGeneration && ended.nativeGeneration===lease.nativeGeneration ? tab : null;
+    }).filter(Boolean);
     for(const tab of new Set(affected)){
       // xterm parses writes asynchronously. Keep the current rendered DOM detached from
       // its live renderer before invalidating the lease, so late writes cannot repaint it.
@@ -805,7 +812,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
         tab.element.replaceWith?.(frozen);tab.element=frozen;
       }
       retireSplitPause(tab);tab.controlRevision++;if(tab.inputBusy && tab.inflightReview){tab.unknown=true;tab.unknownReview=tab.inflightReview;}tab.diagnostics?.finish('host_selection_changed');retireDirectPending(tab);tab.board.invalidate('configuration_changed');boardEvent(tab,'stale');tab.selectionReady=false;tab.suppressBlur=true;tab.invalidated=true;tab.reviewed=false;tab.message='目标或网络配置已变更，请关闭此标签并新建。';tab.inputRevision++;tab.inputBusy=false;tab.inputEpoch=null;tab.mode='observe';tab.queue.clear();if(tab.terminal)tab.terminal.options.disableStdin=true;tabs.invalidate(tab.id);tab.closing=true;tab.state='disconnected';}render();for(const tab of affected)tab.suppressBlur=false;}
-  function prepareAffected(ids) {const hosts=new Set(ids);prepareLeases(tabLeaseSnapshot().filter(lease=>hosts.has(lease.hostId)));}
+  function prepareAffected(ids) {const hosts=new Set(ids);prepareLeases(tabLeaseSnapshot().filter(lease=>hosts.has(lease.hostId)),true);}
   function affected(ids) {for(const tab of tabs.affected(ids)){tab.diagnostics?.finish('host_selection_changed');tab.invalidated=true;tab.reviewed=false;tab.message='目标或网络配置已变更，请关闭此标签并新建。';void cancel(tab);}}
   function systemOffline(message) {
     for(const tab of tabs.list()) {

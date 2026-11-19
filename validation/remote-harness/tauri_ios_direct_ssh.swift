@@ -2,6 +2,7 @@ import XCTest
 import Foundation
 import CoreGraphics
 import UIKit
+import Vision
 
 // BEGIN NATIVE FRAME POLICY -- real Foundation/CoreGraphics, no UI substitutes.
 enum NativeFramePolicy {
@@ -275,6 +276,54 @@ enum NativeActiveContext: String {
     case routeBefore = "route_before", routeAfter = "route_after"
 }
 
+enum NativeHostObservation {
+    enum AX: String {
+        case missing = "nil"
+        case empty, nonString, match, different
+    }
+
+    enum Visual: String {
+        case match, unavailable
+        case textPresent = "text_present"
+        case noTextDetected = "no_text_detected"
+    }
+
+    static func ax(_ value: Any?, expected: String) -> AX {
+        guard let value else { return .missing }
+        guard let text = value as? String else { return .nonString }
+        if text == expected { return .match }
+        return text.isEmpty ? .empty : .different
+    }
+
+    static func region(_ field: CGRect, viewport: CGRect, occlusions: [CGRect], otherWindows: [CGRect]) -> CGRect? {
+        guard NativeFramePolicy.valid(field), viewport.contains(field),
+              (occlusions + otherWindows).allSatisfy({
+                  NativeFramePolicy.valid($0) && !NativeFramePolicy.valid(field.intersection($0))
+              }) else { return nil }
+        let interior = field.insetBy(dx: 1, dy: 1)
+        return NativeFramePolicy.valid(interior) ? interior : nil
+    }
+
+    static func pixelCrop(_ region: CGRect, screen: CGRect, pixels: CGSize) -> CGRect? {
+        guard screen.origin == .zero, NativeFramePolicy.valid(screen), NativeFramePolicy.valid(region),
+              screen.contains(region), pixels.width.isFinite, pixels.height.isFinite else { return nil }
+        let scale = (pixels.width / screen.width).rounded()
+        guard (1...4).contains(scale), pixels.width == screen.width * scale,
+              pixels.height == screen.height * scale else { return nil }
+        let left = ceil(region.minX * scale), top = ceil(region.minY * scale)
+        let crop = CGRect(x: left, y: top, width: floor(region.maxX * scale) - left,
+                          height: floor(region.maxY * scale) - top)
+        return NativeFramePolicy.valid(crop) && CGRect(origin: .zero, size: pixels).contains(crop) ? crop : nil
+    }
+
+    static func visual(_ lines: [(text: String, confidence: Float)], expected: String) -> Visual {
+        if lines.isEmpty { return .noTextDetected }
+        let recognized = lines.filter { $0.confidence >= 0.5 && !$0.text.isEmpty }
+        guard !recognized.isEmpty else { return .unavailable }
+        return lines.count == 1 && recognized[0].text == expected ? .match : .textPresent
+    }
+}
+
 enum NativeHomeReadiness {
     enum State: String {
         case ready, loading, shell, error, alert, unexpected, notForeground = "not_foreground"
@@ -307,6 +356,13 @@ enum NativeHomeReadiness {
         if flags["loading"] == true { return .loading }
         if home["knownEmptyHome"] as? Bool == true && permitsNavigation(state, from: "emptyHome") { return .ready }
         return .shell
+    }
+    static func compactEntryReady(_ geometry: [String: Any], witnessed: CGRect) -> Bool {
+        // The compact card sets a 48 CSS px minimum with initial-scale=1.
+        guard NativeFramePolicy.valid(witnessed), witnessed.height >= 48,
+              let frame = geometry["frame"] as? [Double], frame.count == 4, frame[3] >= 48 else { return false }
+        return geometry["role"] as? String == "button" &&
+            ["enabled", "hittable", "ownerResolved", "fullyVisible"].allSatisfy { geometry[$0] as? Bool == true }
     }
 
     static func canResampleUnidentifiedStartup(_ state: [String: Any], home: [String: Any]) -> Bool {
@@ -409,6 +465,49 @@ enum NativeControlPolicy {
             case .passphrase: return role == "secureTextField"
             }
         }
+    }
+    enum PEMRepresentation: String {
+        case editorValue, editorText
+        case editorUnproven = "editor_unproven"
+        case outsideEditor = "outside_editor"
+        case geometryMismatch = "geometry_mismatch"
+        case subtreeUnproven = "subtree_unproven"
+        case unsupportedNode = "unsupported_node"
+
+        var rejection: String {
+            switch self {
+            case .editorValue, .editorText: return "content_not_exact"
+            default: return rawValue
+            }
+        }
+    }
+    static let openSSHPrivateKeyHeader = "-----BEGIN OPENSSH PRIVATE KEY-----"
+    static func encryptedPEMBodyLines(_ pem: String) -> [String] {
+        let lines = pem.split(whereSeparator: \.isNewline).map(String.init)
+        guard lines.first == openSSHPrivateKeyHeader, lines.last == "-----END OPENSSH PRIVATE KEY-----" else { return [] }
+        // A complete long line identifies this fixture without matching common short fragments.
+        return lines.dropFirst().dropLast().filter {
+            $0.range(of: #"^[A-Za-z0-9+/]{40,}={0,2}$"#, options: .regularExpression) != nil
+        }
+    }
+    static func encryptedSecretHits(identifier: String, label: String, value: String, pem: String,
+                                    bodyLines: [String], passwords: [String], representation: PEMRepresentation)
+        -> (header: [Bool], body: [Bool], password: [Bool]) {
+        let fields = [identifier, label, value]
+        let passwordHits = fields.map { field in passwords.contains { field.contains($0) } }
+        var headerHits = fields.map { $0.contains(openSSHPrivateKeyHeader) }
+        var bodyHits = fields.map { field in bodyLines.contains { field.contains($0) } }
+        if representation == .editorValue && value == pem {
+            headerHits[2] = false
+            bodyHits[2] = false
+        } else if representation == .editorText && identifier.isEmpty &&
+                    (label == pem || label.isEmpty) && (value == pem || value.isEmpty) {
+            headerHits[1] = false
+            headerHits[2] = false
+            bodyHits[1] = false
+            bodyHits[2] = false
+        }
+        return (headerHits, bodyHits, passwordHits)
     }
 
     static func isMobilePasswordField(identifier: String, label: String) -> Bool {
@@ -630,6 +729,40 @@ enum NativeControlPolicy {
               NativeFramePolicy.sameOwner(windowPaths: selected.map { windows[$0] }, webPaths: selected.map { webs[$0] }) else { return nil }
         return selected
     }
+    static func compactHomeShortcut(_ facts: [Fact], paths: [[Int]], windows: [[Int]], webs: [[Int]],
+                                    frames: [CGRect], card: [Int]) -> Int? {
+        guard facts.count == paths.count, facts.count == windows.count, facts.count == webs.count,
+              facts.count == frames.count, card.count == 5, card.allSatisfy(facts.indices.contains),
+              NativeFramePolicy.sameOwner(windowPaths: card.map { windows[$0] }, webPaths: card.map { webs[$0] })
+              else { return nil }
+        let heading = card[1], description = card[2], shortcut = card[3], add = card[4]
+        let label = "普通 SSH 终端", identifier = "home-open-ssh"
+        let visible = facts.indices.filter { NativeFramePolicy.valid(frames[$0]) }
+        let candidates = visible.filter {
+            facts[$0].identifier == identifier || (facts[$0].role == "button" && facts[$0].label == label)
+        }
+        let addIDs: Set<String> = ["add-ssh", "add-ssh-label", "add-ssh-detail", "add-herdr", "add-choice-heading", "add-back"]
+        let addLabels: Set<String> = ["添加连接", "选择连接方式", "返回看板", "herdr 配对 / 手动连接",
+            "使用服务器密码或已有私钥打开远程 Shell。"]
+        guard candidates == [shortcut], !visible.contains(where: {
+            addIDs.contains(facts[$0].identifier) || addLabels.contains(facts[$0].label)
+        }), facts[shortcut].role == "button", facts[shortcut].label == label,
+              ["", label, identifier].contains(facts[shortcut].identifier) else { return nil }
+        let parent = Array(paths[shortcut].dropLast())
+        let web = webs[shortcut], window = windows[shortcut]
+        guard !window.isEmpty, web.count > window.count, web.starts(with: window), parent.starts(with: web),
+              paths[add].dropLast().elementsEqual(parent), paths[heading].starts(with: parent),
+              paths[description].starts(with: parent), paths[heading].lexicographicallyPrecedes(paths[description]),
+              paths[description].lexicographicallyPrecedes(paths[add]),
+              paths[add].lexicographicallyPrecedes(paths[shortcut]) else { return nil }
+        let title = frames[heading], hint = frames[description], first = frames[add], second = frames[shortcut]
+        let gap = second.minY - first.maxY
+        guard [title, hint, first, second].allSatisfy(NativeFramePolicy.valid),
+              title.maxY <= hint.minY, hint.maxY <= first.minY, (0...24).contains(gap),
+              abs(first.minX - second.minX) <= 1, abs(first.maxX - second.maxX) <= 1,
+              hint.minX >= first.minX - 1, hint.maxX <= first.maxX + 1 else { return nil }
+        return shortcut
+    }
     static func valueText(_ value: Any?) -> String? {
         if value == nil { return "" }
         if let text = value as? String { return text }
@@ -691,6 +824,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     private var mobileFlow = false
     private var nativePhase = "ordinary_launch"
     private var lastHomeSample: [String: Any]?
+    private var manualHomeCardSeen = false
     private var pageButtons: [String: Observed] = [:]
     private struct LiveControl {
         let element: XCUIElement
@@ -703,6 +837,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         let window: Observed
         let web: Observed
         let identified: Bool
+        let adjacentFields: [String: any XCUIElementSnapshot]
     }
     private struct RevealedControl {
         let live: LiveControl
@@ -801,7 +936,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func observedNodes() throws -> [Observed] {
+    private func observedNodes(reportLimit: Bool = true) throws -> [Observed] {
         var pending: [(any XCUIElementSnapshot, [Int], CGRect?, [Int], [CGRect], [Int])] = [(try app.snapshot(), [], nil, [], [], [])]
         var result: [Observed] = []
         while let (node, path, inheritedWindow, inheritedWindowPath, inheritedWebs, inheritedWebPath) = pending.popLast() {
@@ -812,7 +947,10 @@ final class TauriDirectSSHUITests: XCTestCase {
             let webs = isWeb ? inheritedWebs + [node.frame] : inheritedWebs
             let webPath = isWeb ? path : inheritedWebPath
             result.append(Observed(snapshot: node, path: path, window: window, windowPath: windowPath, webs: webs, webPath: webPath))
-            try require(result.count < 10000, "native_tree_limit")
+            if result.count >= 10000 {
+                if reportLimit { try require(false, "native_tree_limit") }
+                throw NSError(domain: "native_tree_limit", code: 1)
+            }
             for (index, child) in node.children.enumerated().reversed() {
                 pending.append((child, path + [index], window, windowPath, webs, webPath))
             }
@@ -937,11 +1075,18 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func formControl(_ name: String, matching expected: FormControl? = nil) throws -> FormControl {
-        func select(_ rows: [Observed]) -> (owner: Observed, window: Observed, web: Observed, identified: Bool)? {
+        func select(_ rows: [Observed]) -> (owner: Observed, window: Observed, web: Observed, identified: Bool,
+                                          adjacentFields: [String: any XCUIElementSnapshot])? {
             let selection = formSelection(rows)
             guard selection.ownerResolved, let verdict = selection.controls[name], verdict.reason == "matched",
                   let index = verdict.index, let scope = controlScope(rows[index], rows) else { return nil }
-            return (rows[index], scope.window, scope.web, verdict.identified)
+            var adjacentFields: [String: any XCUIElementSnapshot] = [:]
+            if name == "host" && nativePhase == "encrypted_key_host" {
+                for name in ["port", "user"] {
+                    if let index = selection.controls[name]?.index { adjacentFields[name] = rows[index].snapshot }
+                }
+            }
+            return (rows[index], scope.window, scope.web, verdict.identified, adjacentFields)
         }
         guard let original = try select(observedNodes()) else {
             try require(false, "native_form_control_unproven")
@@ -962,7 +1107,8 @@ final class TauriDirectSSHUITests: XCTestCase {
             try require(false, "native_form_control_changed")
             throw NSError(domain: "native_form_control_changed", code: 1)
         }
-        return FormControl(live: current, owner: fresh.owner, window: fresh.window, web: fresh.web, identified: fresh.identified)
+        return FormControl(live: current, owner: fresh.owner, window: fresh.window, web: fresh.web,
+            identified: fresh.identified, adjacentFields: fresh.adjacentFields)
     }
 
     @MainActor
@@ -1075,10 +1221,119 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
+    private func manualHostKeyboard() -> String {
+        let screen = app.frame
+        if keyboardFrames().contains(where: { NativeFramePolicy.valid($0.intersection(screen)) }) { return "visible" }
+        return app.keyboards.firstMatch.exists ? "unproven" : "hidden"
+    }
+
+    private func inputReadback(_ value: Any?, expected: String) -> String {
+        guard let text = NativeControlPolicy.valueText(value) else { return "unavailable" }
+        if text == expected { return "match" }
+        return text.isEmpty ? "empty" : "different"
+    }
+
+    @MainActor
+    private func manualHostRegion(_ expected: FormControl, screen: CGRect) -> CGRect? {
+        let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        guard app.state == .runningForeground, app.frame == screen, screen.origin == .zero,
+              !app.alerts.firstMatch.exists, !system.alerts.firstMatch.exists,
+              let rows = try? observedNodes(reportLimit: false) else { return nil }
+        let selection = formSelection(rows)
+        guard selection.ownerResolved, let verdict = selection.controls["host"], verdict.reason == "matched",
+              let index = verdict.index else { return nil }
+        let owner = rows[index]
+        guard owner.path == expected.owner.path, sameIdentity(owner.snapshot, expected.owner.snapshot),
+              owner.snapshot.elementType == .textField, owner.snapshot.isEnabled,
+              owner.snapshot.placeholderValue?.isEmpty != false,
+              let scope = controlScope(owner, rows),
+              scope.window.path == expected.window.path, scope.web.path == expected.web.path,
+              sameIdentity(scope.window.snapshot, expected.window.snapshot),
+              sameIdentity(scope.web.snapshot, expected.web.snapshot),
+              scope.window.snapshot.frame == expected.window.snapshot.frame,
+              scope.web.snapshot.frame == expected.web.snapshot.frame,
+              liveOnPath(scope.window) != nil, liveOnPath(scope.web) != nil,
+              let live = liveOnPath(owner), live.hittable, live.snapshot.isEnabled else { return nil }
+        let field = owner.snapshot.frame
+        guard field == live.snapshot.frame, field == expected.live.snapshot.frame,
+              case .success(let viewport) = NativeFramePolicy.viewport(
+                window: owner.window, screen: screen, webAncestors: owner.webs) else { return nil }
+        let keyboards = keyboardFrames().filter { NativeFramePolicy.valid($0.intersection(screen)) }
+        if app.keyboards.firstMatch.exists && keyboards.isEmpty { return nil }
+        let tabs = routeTabsOcclusion(owner, rows, viewport, [field], scrolling: false)
+        let otherWindows = rows.filter { $0.snapshot.elementType == .window && $0.path != scope.window.path }
+            .map { $0.snapshot.frame }
+        return NativeHostObservation.region(field, viewport: viewport,
+            occlusions: statusBarFrames() + keyboards + (tabs.map { [$0] } ?? []), otherWindows: otherWindows)
+    }
+
+    @MainActor
+    private func manualHostPixels(_ form: FormControl, expected: String) -> NativeHostObservation.Visual {
+        // Only the first public loopback host entry has this diagnostic. The
+        // driver publishes only the result category, which never gates the probe.
+        guard nativePhase == "encrypted_key_host", expected == "127.0.0.1" else { return .unavailable }
+        let screen = app.frame
+        guard let region = manualHostRegion(form, screen: screen) else { return .unavailable }
+        let shot = XCUIScreen.main.screenshot().image
+        guard manualHostRegion(form, screen: screen) == region, shot.imageOrientation == .up,
+              let original = shot.cgImage,
+              let crop = NativeHostObservation.pixelCrop(region, screen: screen,
+                pixels: CGSize(width: CGFloat(original.width), height: CGFloat(original.height))),
+              let image = original.cropping(to: crop) else { return .unavailable }
+        let request = VNRecognizeTextRequest()
+        request.usesLanguageCorrection = false
+        do {
+            try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
+            guard let results = request.results else { return .unavailable }
+            let lines = results.compactMap { $0.topCandidates(1).first }.map { ($0.string, $0.confidence) }
+            guard lines.count == results.count else { return .unavailable }
+            return NativeHostObservation.visual(lines, expected: expected)
+        } catch {
+            return .unavailable
+        }
+    }
+
+    @MainActor
+    private func reportManualHostEntry(_ form: FormControl, expected: String, initialKeyboard: String,
+                                       beforeInput: FormControl? = nil, visual: NativeHostObservation.Visual? = nil) throws {
+        let fields: [(String, (any XCUIElementSnapshot)?)] = [
+            ("host", form.owner.snapshot), ("port", form.adjacentFields["port"]), ("user", form.adjacentFields["user"]),
+        ]
+        let focus = fields.filter { $0.1?.hasFocus == true }.map { $0.0 }
+        func adjacentReadback(_ name: String) -> String {
+            guard let beforeInput else { return "notCompared" }
+            guard let before = beforeInput.adjacentFields[name], let after = form.adjacentFields[name],
+                  sameIdentity(before, after), let prior = NativeControlPolicy.valueText(before.value),
+                  let latest = NativeControlPolicy.valueText(after.value) else { return "unavailable" }
+            return prior == latest ? "unchanged" : "changed"
+        }
+        // hasFocus describes UI focus. XCTest's element-scoped typeText
+        // separately requires keyboard focus on that element or a descendant.
+        var detail: [String: Any] = [
+            "sample": beforeInput == nil ? "afterTap" : "afterInput",
+            "initialKeyboard": initialKeyboard, "keyboard": manualHostKeyboard(),
+            "formUIFocus": focus.count > 1 ? "multiple" : focus.first ?? "none",
+            "liveHostUIFocus": form.live.snapshot.hasFocus,
+            "treeHostReadback": NativeHostObservation.ax(form.owner.snapshot.value, expected: expected).rawValue,
+            "liveHostReadback": NativeHostObservation.ax(form.live.snapshot.value, expected: expected).rawValue,
+            "portReadback": adjacentReadback("port"), "userReadback": adjacentReadback("user"),
+        ]
+        if let visual { detail["visualReadback"] = visual.rawValue }
+        try post("native_progress", ["nativeCheckpoint": nativePhase, "manualHostEntry": detail])
+    }
+
+    @MainActor
     private func fillForm(_ name: String, _ text: String) throws {
+        let initialKeyboard = name == "host" && nativePhase == "encrypted_key_host" ? manualHostKeyboard() : nil
         let tapped = try tapForm(name)
-        try require(app.keyboards.firstMatch.waitForExistence(timeout: 10), "native_input_keyboard_missing")
-        let current = try formControl(name, matching: tapped).live
+        let keyboardAppeared = app.keyboards.firstMatch.waitForExistence(timeout: 10)
+        if !keyboardAppeared && initialKeyboard == nil { try require(false, "native_input_keyboard_missing") }
+        let afterTap = try formControl(name, matching: tapped)
+        if let initialKeyboard {
+            try reportManualHostEntry(afterTap, expected: text, initialKeyboard: initialKeyboard)
+        }
+        try require(keyboardAppeared, "native_input_keyboard_missing")
+        let current = afterTap.live
         try require(current.snapshot.isEnabled, "native_control_disabled")
         try post("native_progress", ["nativeCheckpoint": nativePhase, "nativeInputRole": role(current.snapshot.elementType)])
         if name == "port" {
@@ -1102,14 +1357,21 @@ final class TauriDirectSSHUITests: XCTestCase {
             ready.element.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: clearCount) + text)
             // WebKit's accessibility snapshot can lag behind the one input.
             // Re-read only the same proven field; never repeat the input.
-            var readbackState = "unavailable"
             for sample in 0..<6 {
-                let after = try formControl(name, matching: tapped).live
-                let value = NativeControlPolicy.valueText(after.snapshot.value)
-                readbackState = value == text ? "match" : value == nil ? "unavailable" : value!.isEmpty ? "empty" : "different"
+                let after = try formControl(name, matching: tapped)
+                let readbackState = inputReadback(after.live.snapshot.value, expected: text)
                 if readbackState == "match" || sample == 5 {
+                    let publishedState: String
+                    if let initialKeyboard {
+                        let visual = manualHostPixels(after, expected: text)
+                        try reportManualHostEntry(after, expected: text, initialKeyboard: initialKeyboard,
+                                                  beforeInput: form, visual: visual)
+                        publishedState = NativeHostObservation.ax(after.live.snapshot.value, expected: text).rawValue
+                    } else {
+                        publishedState = readbackState
+                    }
                     try post("native_progress", ["nativeCheckpoint": nativePhase,
-                        "inputReadback": ["state": readbackState, "samples": sample + 1]])
+                        "inputReadback": ["state": publishedState, "samples": sample + 1]])
                 }
                 if readbackState == "match" { return }
                 if sample < 5 { Thread.sleep(forTimeInterval: 0.2) }
@@ -1691,8 +1953,12 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func assertNoSecret(_ rows: [any XCUIElementSnapshot]) throws {
-        let secrets = ["ordinaryPassword", "rotationPassword", "encryptedWrongPassphrase", "encryptedPassphrase"]
-            .compactMap { config[$0] as? String } + (scenario == "encrypted_key" ? ["-----BEGIN OPENSSH PRIVATE KEY-----"] : [])
+        var secrets = ["ordinaryPassword", "rotationPassword", "encryptedWrongPassphrase", "encryptedPassphrase"]
+            .compactMap { config[$0] as? String }
+        if scenario == "encrypted_key" {
+            secrets.append(NativeControlPolicy.openSSHPrivateKeyHeader)
+            secrets += NativeControlPolicy.encryptedPEMBodyLines(config["encryptedPEM"] as? String ?? "")
+        }
         try require(!rows.contains { node in
             ([node.identifier] + texts(node)).contains { value in secrets.contains { value.contains($0) } }
         }, "native_secret_exposed")
@@ -2358,9 +2624,12 @@ final class TauriDirectSSHUITests: XCTestCase {
         func witness(_ targets: [(String?, String, Bool)]) -> [Observed]? {
             NativeControlPolicy.pageWitness(facts, paths: paths, windows: windows, webs: webs, targets: targets)?.map { visible[$0] }
         }
-        let homeCard = witness([(nil, "Herdr Pocket", false), (nil, "还没有主机", false),
-            (nil, "添加主机后，在这里查看会话和任务状态。", false), ("home-open-ssh", "普通 SSH 终端", true),
-            ("host-empty-add", "添加主机", true)])
+        let emptyCardText: [(String?, String, Bool)] = [(nil, "Herdr Pocket", false), (nil, "还没有主机", false),
+            (nil, "添加主机后，在这里查看会话和任务状态。", false)]
+        let addTarget = ("host-empty-add" as String?, "添加主机", true)
+        let homeTargets = emptyCardText + [("home-open-ssh", "普通 SSH 终端", true), addTarget]
+        let homeIndices = NativeControlPolicy.pageWitness(facts, paths: paths, windows: windows, webs: webs, targets: homeTargets)
+        let homeCard = homeIndices?.map { visible[$0] }
         let choices = [("add-herdr" as String?, "herdr 配对 / 手动连接", true), ("add-ssh" as String?, "普通 SSH 终端", true)]
         let mobileChoice = witness([(nil, "添加主机", false), ("add-choice-heading", "选择连接方式", false),
             ("add-back", "返回看板", true)] + choices)
@@ -2386,8 +2655,15 @@ final class TauriDirectSSHUITests: XCTestCase {
         let form = formOwnerResolved
         let page = form ? "sshForm" : choice ? "addChoice" : empty ? "emptyHome" : "unexpected"
         let compact = empty && home["compactEmptyHome"] as? Bool == true
+        manualHomeCardSeen = nativePhase == "encrypted_key_open_add" && noForm && mobileChoice == nil && legacyChoice == nil &&
+            (homeCard != nil || witness(emptyCardText + [addTarget]) != nil)
         pageButtons.removeAll()
         if compact, let entry = homeCard?.last { pageButtons["emptyAdd"] = entry }
+        if compact, nativePhase == "encrypted_key_open_add", let homeIndices,
+           let index = NativeControlPolicy.compactHomeShortcut(facts, paths: paths, windows: windows, webs: webs,
+                frames: visible.map { $0.snapshot.frame }, card: homeIndices) {
+            pageButtons["ordinaryShortcut"] = visible[index]
+        }
         if choice, let ssh = (mobileChoice ?? legacyChoice)?.last { pageButtons["sshChoice"] = ssh }
         let title = witness([("ssh-page-heading", "普通 SSH 终端", false)]) != nil
         let passwords = tree.filter { $0.snapshot.elementType == .secureTextField &&
@@ -2407,8 +2683,15 @@ final class TauriDirectSSHUITests: XCTestCase {
             try require(false, "native_control_missing")
             throw NSError(domain: "native_control_missing", code: 1)
         }
+        return try navigationGeometry(current)
+    }
+    @MainActor
+    private func navigationGeometry(_ current: LiveControl) throws -> [String: Any] {
+        navigationGeometry(current, owner: controlOwner(current.snapshot, try observedNodes()))
+    }
+    @MainActor
+    private func navigationGeometry(_ current: LiveControl, owner: Observed?) -> [String: Any] {
         let snapshot = current.snapshot
-        let owner = controlOwner(snapshot, try observedNodes())
         let measured = owner.flatMap { controlVisibleFrame($0, current) }
         let visible = measured ?? .zero
         let center = CGPoint(x: snapshot.frame.midX, y: snapshot.frame.midY)
@@ -2423,13 +2706,17 @@ final class TauriDirectSSHUITests: XCTestCase {
             "centerVisible": measured != nil && visible.contains(center) && visible.contains(selectedCenter),
             "fullyVisible": measured != nil && visible.contains(snapshot.frame) && visible.contains(selectedFrame)]
     }
-
     @MainActor
     private func navigationElement(_ member: String) -> (XCUIElement, String)? {
+        let manualShortcut = nativePhase == "encrypted_key_open_add" && member == "ordinaryShortcut"
         if let button = pageButtons[member] {
             guard let live = liveOnPath(button), live.snapshot.elementType == .button else { return nil }
+            if manualShortcut {
+                return (live.element, button.snapshot.identifier == "home-open-ssh" ? "uniqueIdentifier" : "buttonRole")
+            }
             return (live.element, button.snapshot.identifier.isEmpty ? "buttonRole" : "uniqueIdentifier")
         }
+        if manualShortcut { return nil }
         let targets = ["headerAdd": ("host-open-remote", "＋ 添加主机"), "emptyAdd": ("host-empty-add", "添加主机"),
             "ordinaryShortcut": ("home-open-ssh", "普通 SSH"), "sshChoice": ("add-ssh", "普通 SSH 终端")]
         guard let (identifier, label) = targets[member] else { return nil }
@@ -2443,6 +2730,8 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func navigate(_ member: String, compactRoute: Bool = false) throws -> (String, String, String) {
+        let manualShortcut = nativePhase == "encrypted_key_open_add" && member == "ordinaryShortcut"
+        let shortcutUnproven = "native_encrypted_key_home_shortcut_unproven"
         let before = try navigationState()
         // A delayed view transition may already have produced the real form.
         // Preserve this newly sampled source state; never rewrite it as addChoice
@@ -2456,50 +2745,91 @@ final class TauriDirectSSHUITests: XCTestCase {
             return ("sshForm", "uniqueIdentifier", role(current.snapshot.elementType))
         }
         try require(NativeHomeReadiness.permitsNavigation(before, from: member == "sshChoice" ? "addChoice" : "emptyHome"),
-                    "native_home_retry_unsafe")
+                    manualShortcut ? shortcutUnproven : "native_home_retry_unsafe")
         if compactRoute {
             let witness = member == "sshChoice" ? "mobileAddChoice" : "compactEmptyHome"
             try require(pageButtons[member] != nil && before[witness] as? Bool == true,
-                        "native_home_retry_unsafe")
+                        manualShortcut ? shortcutUnproven : "native_home_retry_unsafe")
+        }
+        if manualShortcut {
+            try require(before["addTitleSeen"] as? Bool == false && before["formByStructure"] as? Bool == false,
+                        shortcutUnproven)
         }
         guard let (item, selection) = navigationElement(member) else { return ("missing", "uniqueLabel", "otherNative") }
         // Retain the first page witness and its live owner as geometry only.
         // This records the actual native binding, never a guessed hit point.
         var binding: [String: Any]?
-        if let witness = pageButtons[member], let live = liveControl(item) {
+        var shortcutGeometry: [String: Any]?
+        let witness = pageButtons[member]
+        if let witness, let live = liveControl(item) {
             let owner = controlOwner(live.snapshot, try observedNodes())
+            if manualShortcut, let owner, owner.path == witness.path, owner.windowPath == witness.windowPath,
+               owner.webPath == witness.webPath, sameIdentity(witness.snapshot, live.snapshot),
+               owner.snapshot.frame == live.snapshot.frame, witness.snapshot.frame == live.snapshot.frame {
+                shortcutGeometry = navigationGeometry(live, owner: owner)
+            }
             binding = ["witnessFrame": NativeFramePolicy.diagnosticRect(witness.snapshot.frame),
                 "liveFrame": NativeFramePolicy.diagnosticRect(live.snapshot.frame),
                 "ownerFrame": NativeFramePolicy.diagnosticRect(owner?.snapshot.frame),
                 "windowFrame": NativeFramePolicy.diagnosticRect(witness.window),
                 "webFrames": witness.webs.map { NativeFramePolicy.diagnosticRect($0) }]
         }
-        let geometry = try navigationGeometry(item)
+        let geometry: [String: Any]
+        if manualShortcut {
+            guard let witness, let shortcutGeometry,
+                  shortcutGeometry["centerVisible"] as? Bool == true,
+                  NativeHomeReadiness.compactEntryReady(shortcutGeometry, witnessed: witness.snapshot.frame) else {
+                try require(false, shortcutUnproven)
+                throw NSError(domain: shortcutUnproven, code: 1)
+            }
+            geometry = shortcutGeometry
+        } else {
+            geometry = try navigationGeometry(item)
+        }
         let allowed = geometry["ownerResolved"] as? Bool == true && geometry["centerVisible"] as? Bool == true &&
             geometry["enabled"] as? Bool == true && geometry["hittable"] as? Bool == true
+        func reached(_ state: [String: Any]) -> Bool {
+            NativeViewPolicy.reached(member: member, page: state["page"] as! String) ||
+                (manualShortcut && state["addTitleSeen"] as? Bool == true)
+        }
         let started = ProcessInfo.processInfo.systemUptime
         if allowed { item.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
         var after = try navigationState()
-        if allowed {
+        if allowed && (!manualShortcut || !reached(after)) {
             let deadline = Date().addingTimeInterval(6)
             repeat {
                 after = try navigationState()
-                if NativeViewPolicy.reached(member: member, page: after["page"] as! String) { break }
+                if reached(after) { break }
                 Thread.sleep(forTimeInterval: 0.2)
             } while Date() < deadline
         }
         let page = after["page"] as! String
         let outcome = !allowed ? "blocked" : page == "sshForm" ? "sshForm" : page == "addChoice" ? "addChoice" :
             page == "emptyHome" ? "noProgress" : "unexpected"
-        let presentAfter = item.exists
-        let afterGeometry: Any = presentAfter ? try navigationGeometry(item) : NSNull()
+        let afterGeometry: Any
+        if manualShortcut {
+            if page == "emptyHome", let current = pageButtons[member], let witness, current.path == witness.path,
+               current.windowPath == witness.windowPath, current.webPath == witness.webPath,
+               sameIdentity(current.snapshot, witness.snapshot), let live = liveOnPath(current) {
+                afterGeometry = try navigationGeometry(live)
+            } else {
+                afterGeometry = NSNull()
+            }
+        } else {
+            afterGeometry = item.exists ? try navigationGeometry(item) : NSNull()
+        }
         var navigation: [String: Any] = ["nativeCheckpoint": nativePhase, "member": member, "selection": selection,
             "method": "elementCenter", "performed": allowed, "geometry": geometry,
-            "targetPresentAfter": presentAfter, "afterGeometry": afterGeometry,
+            "targetPresentAfter": !(afterGeometry is NSNull), "afterGeometry": afterGeometry,
             "elapsedMs": min(60000, max(0, Int((ProcessInfo.processInfo.systemUptime - started) * 1000))),
             "before": before, "after": after, "outcome": outcome]
         if let binding = binding { navigation["binding"] = binding }
         try post("native_navigation", navigation)
+        if manualShortcut {
+            try require(NativeHomeReadiness.permitsNavigation(after, from: "sshForm") &&
+                        after["addTitleSeen"] as? Bool == false && after["emptyHomeIdentity"] as? Bool == false,
+                        "native_encrypted_key_home_shortcut_no_progress")
+        }
         return (page, selection, geometry["role"] as! String)
     }
 
@@ -2521,21 +2851,23 @@ final class TauriDirectSSHUITests: XCTestCase {
         repeat {
             let sampledAt = clock()
             let state = try navigationState(publish: false)
-            let checkedAt = clock()
-            sampleSeconds += checkedAt - sampledAt
             strictSamples += 1
             // The first snapshot may be slow and represent an earlier layout.
             // Give an unfinished app time to advance and take a fresh sample.
-            if strictSamples == 1 { deadline = checkedAt + 35 }
+            if strictSamples == 1 { deadline = clock() + 35 }
             outcome = NativeHomeReadiness.classify(state, home: lastHomeSample!)
             if strictSamples == 1 && outcome == .unexpected &&
                 NativeHomeReadiness.canResampleUnidentifiedStartup(state, home: lastHomeSample!) {
                 outcome = .unidentifiedStartup
             }
+            let checkedAt = clock()
+            sampleSeconds += checkedAt - sampledAt
             if transitions.last?["state"] as? String != outcome.rawValue {
                 transitions.append(["state": outcome.rawValue, "elapsedMs": milliseconds(checkedAt - start)])
             }
             // The unidentified first observation gets only one passive resample.
+            // An already visible manual empty card with an unproven shortcut is final.
+            if outcome == .shell && manualHomeCardSeen { break }
             guard outcome == .loading || outcome == .shell || outcome == .unidentifiedStartup else { break }
             let slice = min(4, deadline - clock())
             if slice <= 0 { break }
@@ -2553,6 +2885,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         try post("native_home", ["nativeCheckpoint": nativePhase, "home": lastHomeSample!, "readiness": readiness])
         switch outcome {
         case .ready: return
+        case .shell where manualHomeCardSeen: try require(false, "native_encrypted_key_home_shortcut_unproven")
         case .error: try require(false, "native_home_known_loading_error")
         case .alert: try require(false, "native_home_alert_present")
         case .notForeground: try require(false, "native_home_not_foreground")
@@ -2564,6 +2897,15 @@ final class TauriDirectSSHUITests: XCTestCase {
     private func openHomeSSH() throws {
         try awaitEmptyHome()
         let compact = lastHomeSample?["compactEmptyHome"] as? Bool == true
+        if nativePhase == "encrypted_key_open_add" {
+            try require(compact, "native_encrypted_key_home_shortcut_unproven")
+            let (page, selection, originalRole) = try navigate("ordinaryShortcut", compactRoute: true)
+            try require(page != "missing", "native_encrypted_key_home_shortcut_unproven")
+            try require(page == "sshForm", "native_encrypted_key_home_shortcut_no_progress")
+            try post("native_home_entry", ["nativeCheckpoint": nativePhase, "member": "ordinaryShortcut", "selection": selection,
+                "role": originalRole, "enteredAddPage": false, "enteredSSHForm": true, "route": "directSSH"])
+            return
+        }
         for member in compact ? ["emptyAdd"] : ["headerAdd", "emptyAdd", "ordinaryShortcut"] {
             let (page, selection, originalRole) = try navigate(member, compactRoute: compact)
             if page == "missing" { continue }
@@ -2690,22 +3032,76 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func encryptedField(_ field: NativeControlPolicy.KeyField, rows: [Observed], owner: RevealedControl) throws -> RevealedControl {
+    private func encryptedFieldAnchor(_ field: NativeControlPolicy.KeyField, _ rows: [Observed]) -> Observed? {
         let fields = rows.filter { row in
             let snapshot = row.snapshot
             return [.textField, .secureTextField, .textView, .searchField].contains(snapshot.elementType) &&
                 field.matches(identifier: snapshot.identifier, label: snapshot.label)
         }
-        let failure = "native_encrypted_key_owner_unproven"
         guard fields.count == 1, let row = fields.first,
               field.accepts(role: row.snapshot.elementType == .textView ? "textView" : role(row.snapshot.elementType)),
-              row.snapshot.isEnabled else {
+              row.snapshot.isEnabled else { return nil }
+        return row
+    }
+
+    @MainActor
+    private func encryptedField(_ field: NativeControlPolicy.KeyField, rows: [Observed], owner: RevealedControl) throws -> RevealedControl {
+        let failure = "native_encrypted_key_owner_unproven"
+        guard let row = encryptedFieldAnchor(field, rows) else {
             try require(false, failure)
             throw NSError(domain: failure, code: 1)
         }
         let control = try mobileControl(row, rows, failure)
         try require(sameControlScope(control, owner) && control.live.snapshot.isEnabled, failure)
         return control
+    }
+
+    @MainActor
+    private func confirmedPEMEditor(_ rows: [Observed], previous: RevealedControl, pem: String) -> RevealedControl? {
+        guard let anchor = encryptedFieldAnchor(.pem, rows),
+              case .success(let editor) = mobileBinding(anchor, rows),
+              sameControlScope(editor, previous), sameIdentity(editor.owner.snapshot, previous.owner.snapshot),
+              editor.live.snapshot.isEnabled, editor.owner.snapshot.value as? String == pem,
+              editor.live.snapshot.value as? String == pem else { return nil }
+        return editor
+    }
+
+    @MainActor
+    private func pemRepresentation(_ row: Observed, editor: RevealedControl?) -> NativeControlPolicy.PEMRepresentation {
+        guard let editor else { return .editorUnproven }
+        guard row.windowPath == editor.owner.windowPath, row.webPath == editor.owner.webPath,
+              row.path.starts(with: editor.owner.path) else { return .outsideEditor }
+        let snapshot = row.snapshot
+        if row.path == editor.owner.path {
+            guard sameIdentity(snapshot, editor.owner.snapshot) else { return .subtreeUnproven }
+            return snapshot.frame == editor.owner.snapshot.frame ? .editorValue : .geometryMismatch
+        }
+        guard snapshot.elementType == .staticText, snapshot.children.isEmpty,
+              snapshot.value == nil || snapshot.value is String else { return .unsupportedNode }
+        guard NativeFramePolicy.valid(snapshot.frame),
+              editor.owner.snapshot.frame.contains(snapshot.frame) else { return .geometryMismatch }
+        // Resolve the same relative path in the editor's independently scoped live
+        // snapshot. A matching path in the application tree alone is insufficient.
+        let relative = row.path.dropFirst(editor.owner.path.count)
+        var raw: any XCUIElementSnapshot = editor.owner.snapshot
+        var live: any XCUIElementSnapshot = editor.live.snapshot
+        for (offset, index) in relative.enumerated() {
+            guard raw.children.indices.contains(index), live.children.indices.contains(index) else { return .subtreeUnproven }
+            raw = raw.children[index]
+            live = live.children[index]
+            guard sameIdentity(raw, live),
+                  NativeControlPolicy.valueText(raw.value) == NativeControlPolicy.valueText(live.value) else { return .subtreeUnproven }
+            guard raw.frame == live.frame else { return .geometryMismatch }
+            if offset < relative.count - 1 {
+                guard [.other, .group].contains(live.elementType), live.identifier.isEmpty, live.label.isEmpty,
+                      NativeControlPolicy.valueText(live.value) == "" else { return .unsupportedNode }
+            }
+        }
+        guard raw.children.isEmpty, live.children.isEmpty, sameIdentity(snapshot, raw),
+              NativeControlPolicy.valueText(raw.value) == NativeControlPolicy.valueText(snapshot.value) else {
+            return .subtreeUnproven
+        }
+        return raw.frame == snapshot.frame ? .editorText : .geometryMismatch
     }
 
     @MainActor
@@ -2778,32 +3174,37 @@ final class TauriDirectSSHUITests: XCTestCase {
         try require(filled.pem.live.snapshot.value as? String == pem &&
                     NativeControlPolicy.credentialMasked(filled.passphrase.live.snapshot.value) &&
                     filled.submit.owner.snapshot.isEnabled && filled.submit.live.snapshot.isEnabled, failure)
-        let observed = try observedNodes().filter { node in
-            !NativeControlPolicy.KeyField.pem.matches(identifier: node.snapshot.identifier, label: node.snapshot.label)
-        }
+        let observed = try observedNodes()
+        let editor = confirmedPEMEditor(observed, previous: filled.pem, pem: pem)
         let passphrases = ["ordinaryPassword", "rotationPassword", "encryptedWrongPassphrase", "encryptedPassphrase"]
             .compactMap { config[$0] as? String }
-        let header = "-----BEGIN OPENSSH PRIVATE KEY-----"
+        let bodyLines = NativeControlPolicy.encryptedPEMBodyLines(pem)
         let suspicious = observed.compactMap { node -> [String: Any]? in
-            let values = [node.snapshot.identifier, node.snapshot.label, node.snapshot.value as? String ?? ""]
-            let headerHits = values.map { $0.contains(header) }
-            let passwordHits = values.map { value in passphrases.contains { value.contains($0) } }
-            guard headerHits.contains(true) || passwordHits.contains(true) else { return nil }
-            let path = node.path, pemPath = filled.pem.owner.path
+            let snapshot = node.snapshot
+            let representation = pemRepresentation(node, editor: editor)
+            let (headerHits, bodyHits, passwordHits) = NativeControlPolicy.encryptedSecretHits(
+                identifier: snapshot.identifier, label: snapshot.label, value: snapshot.value as? String ?? "",
+                pem: pem, bodyLines: bodyLines, passwords: passphrases, representation: representation)
+            let headerHit = headerHits.contains(true), bodyHit = bodyHits.contains(true), passwordHit = passwordHits.contains(true)
+            guard headerHit || bodyHit || passwordHit else { return nil }
+            let pemOwner = editor?.owner ?? filled.pem.owner
+            let path = node.path, pemPath = pemOwner.path
             let relation = path == pemPath ? "same" : pemPath.starts(with: path) ? "ancestor" :
                 path.starts(with: pemPath) ? "descendant" : "other"
-            let scope = node.windowPath == filled.pem.owner.windowPath && node.webPath == filled.pem.owner.webPath ?
+            let scope = node.windowPath == pemOwner.windowPath && node.webPath == pemOwner.webPath ?
                 "sameWeb" : "other"
             return ["role": node.snapshot.elementType == .textView ? "textView" : role(node.snapshot.elementType),
-                "scope": scope, "relation": relation, "identifier": headerHits[0] || passwordHits[0],
-                "label": headerHits[1] || passwordHits[1], "value": headerHits[2] || passwordHits[2],
-                "privateKeyHeader": headerHits.contains(true), "passphrase": passwordHits.contains(true)]
+                "scope": scope, "relation": relation, "identifier": headerHits[0] || bodyHits[0] || passwordHits[0],
+                "label": headerHits[1] || bodyHits[1] || passwordHits[1], "value": headerHits[2] || bodyHits[2] || passwordHits[2],
+                "privateKeyHeader": headerHit, "privateKeyBody": bodyHit, "passphrase": passwordHit,
+                "pemReason": headerHit || bodyHit ? representation.rejection : "none"]
         }
         if !suspicious.isEmpty {
             try post("native_progress", ["nativeCheckpoint": nativePhase,
                 "secretDiagnostic": ["count": min(suspicious.count, 10000), "candidates": Array(suspicious.prefix(12))]])
         }
-        try assertNoSecret(observed.map { $0.snapshot })
+        try require(suspicious.isEmpty, "native_secret_exposed")
+        try require(editor != nil, failure)
         try post(prefix + "_ready")
         return filled.submit
     }

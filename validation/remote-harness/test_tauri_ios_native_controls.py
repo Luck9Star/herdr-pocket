@@ -44,6 +44,128 @@ class NativeControlPolicyTests(unittest.TestCase):
                 return self.source[start:index + 1]
         self.fail("unterminated production method: " + signature)
 
+    def test_manual_host_pixel_geometry_and_redacted_categories(self):
+        self.compile_and_run(r'''
+import Foundation
+import CoreGraphics
+let host = "127.0.0.1"
+precondition(NativeHostObservation.ax(nil, expected: host) == .missing)
+precondition(NativeHostObservation.ax("", expected: host) == .empty)
+precondition(NativeHostObservation.ax(NSNumber(value: 2), expected: host) == .nonString)
+precondition(NativeHostObservation.ax(host, expected: host) == .match)
+precondition(NativeHostObservation.ax(host + "0", expected: host) == .different)
+precondition(NativeHostObservation.visual([(host, 1)], expected: host) == .match)
+precondition(NativeHostObservation.visual([(host + "0", 1)], expected: host) == .textPresent)
+precondition(NativeHostObservation.visual([(host, 1), ("other", 1)], expected: host) == .textPresent)
+precondition(NativeHostObservation.visual([(host, 0.1)], expected: host) == .unavailable)
+precondition(NativeHostObservation.visual([], expected: host) == .noTextDetected)
+let screen = CGRect(x: 0, y: 0, width: 440, height: 956)
+let field = CGRect(x: 23.25, y: 216.5, width: 390, height: 44)
+let keyboard = CGRect(x: 0, y: 600, width: 440, height: 356)
+let blocker = CGRect(x: 0, y: 216, width: 24, height: 12)
+let region = NativeHostObservation.region(field, viewport: screen, occlusions: [keyboard], otherWindows: [])!
+precondition(region == field.insetBy(dx: 1, dy: 1))
+precondition(NativeHostObservation.region(field, viewport: screen, occlusions: [blocker], otherWindows: []) == nil)
+precondition(NativeHostObservation.region(field, viewport: screen, occlusions: [], otherWindows: [blocker]) == nil)
+precondition(NativeHostObservation.region(field, viewport: screen, occlusions: [], otherWindows: [.null]) == nil)
+precondition(NativeHostObservation.region(field, viewport: blocker, occlusions: [], otherWindows: []) == nil)
+let pixelSize = CGSize(width: 1320, height: 2868)
+let crop = NativeHostObservation.pixelCrop(region, screen: screen, pixels: pixelSize)
+precondition(crop == CGRect(x: 73, y: 653, width: 1163, height: 125))
+precondition(NativeHostObservation.pixelCrop(region, screen: screen, pixels: CGSize(width: 1320, height: 2867)) == nil)
+precondition(NativeHostObservation.pixelCrop(region, screen: screen.offsetBy(dx: 1, dy: 0), pixels: pixelSize) == nil)
+''')
+
+    def test_headerless_fixture_pem_body_outside_editor_is_detected(self):
+        self.compile_and_run(r'''
+import Foundation
+let begin = "-----BEGIN OPENSSH PRIVATE KEY-----"
+let end = "-----END OPENSSH PRIVATE KEY-----"
+let body = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567"
+let short = "AQAB"
+let pem = [begin, body, short, end].joined(separator: "\n")
+let lines = NativeControlPolicy.encryptedPEMBodyLines(pem)
+precondition(lines == [body], "only complete long fixture body lines may be used")
+func hits(_ label: String, _ value: String, _ representation: NativeControlPolicy.PEMRepresentation)
+    -> (header: [Bool], body: [Bool], password: [Bool]) {
+    NativeControlPolicy.encryptedSecretHits(identifier: "", label: label, value: value,
+        pem: pem, bodyLines: lines, passwords: [], representation: representation)
+}
+let exposed = hits(body, "", .outsideEditor)
+precondition(!exposed.header.contains(true) && exposed.body == [false, true, false] && !exposed.password.contains(true),
+             "a headerless long fixture body outside the editor must be detected separately")
+precondition(hits("", body, .editorText).body == [false, false, true], "body-only text cannot use the full PEM exception")
+for contained in [hits("PEM editor", pem, .editorValue), hits(pem, pem, .editorText)] {
+    precondition(!contained.header.contains(true) && !contained.body.contains(true), "the confirmed full editor value is allowed")
+}
+let unrelated = hits("Status AQAB", short, .outsideEditor)
+precondition(!unrelated.header.contains(true) && !unrelated.body.contains(true), "common short strings are not key evidence")
+''')
+
+    def test_manual_shortcut_requires_the_active_empty_card_and_excludes_add_choice(self):
+        self.compile_and_run(r'''
+import Foundation
+import CoreGraphics
+typealias Fact = NativeControlPolicy.Fact
+let brand = Fact(identifier: "", label: "Herdr Pocket", role: "staticText", value: nil)
+let title = Fact(identifier: "", label: "还没有主机", role: "staticText", value: nil)
+let hint = Fact(identifier: "", label: "添加主机后，在这里查看会话和任务状态。", role: "staticText", value: nil)
+let add = Fact(identifier: "host-empty-add", label: "添加主机", role: "button", value: nil)
+let fallback = Fact(identifier: "", label: "普通 SSH 终端", role: "button", value: nil)
+let explicit = Fact(identifier: "home-open-ssh", label: fallback.label, role: "button", value: nil)
+let wrong = Fact(identifier: "add-ssh", label: fallback.label, role: "button", value: nil)
+let addDetail = Fact(identifier: "", label: "使用服务器密码或已有私钥打开远程 Shell。", role: "staticText", value: nil)
+let window = [0], web = [0, 1, 2], card = web + [3]
+let paths = [web + [1], card + [1], card + [2], card + [4], card + [3]]
+let frames = [CGRect(x: 40, y: 100, width: 120, height: 30), CGRect(x: 40, y: 180, width: 100, height: 20),
+              CGRect(x: 40, y: 210, width: 330, height: 20), CGRect(x: 40, y: 322, width: 360, height: 48),
+              CGRect(x: 40, y: 262, width: 360, height: 48)]
+func selected(_ item: Fact = fallback, paths route: [[Int]] = paths, geometry: [CGRect] = frames,
+              extra: Fact? = nil, extraFrame: CGRect = .zero) -> Int? {
+    var facts = [brand, title, hint, item, add]
+    var allPaths = route, allFrames = geometry
+    var owners = Array(repeating: window, count: 5), webs = Array(repeating: web, count: 5)
+    if let extra {
+        facts.append(extra)
+        allPaths.append([1, 0, 0])
+        allFrames.append(extraFrame)
+        owners.append([1])
+        webs.append([1, 0])
+    }
+    return NativeControlPolicy.compactHomeShortcut(facts, paths: allPaths, windows: owners, webs: webs,
+                                                  frames: allFrames, card: [0, 1, 2, 3, 4])
+}
+precondition(selected() == 3 && selected(explicit) == 3)
+precondition(selected(wrong) == nil)
+precondition(selected(extra: wrong) == 3)
+precondition(selected(extra: wrong, extraFrame: frames[3]) == nil)
+precondition(selected(extra: fallback, extraFrame: frames[3]) == nil)
+precondition(selected(extra: addDetail, extraFrame: frames[2]) == nil)
+var offCard = paths
+offCard[3] = web + [9, 2]
+precondition(selected(paths: offCard) == nil)
+var wrongOrder = paths
+wrongOrder.swapAt(3, 4)
+precondition(selected(paths: wrongOrder) == nil)
+var misplaced = frames
+misplaced[3] = frames[3].offsetBy(dx: 3, dy: 0)
+precondition(selected(geometry: misplaced) == nil)
+misplaced[3] = frames[3].offsetBy(dx: 0, dy: 25)
+precondition(selected(geometry: misplaced) == nil)
+let geometry: [String: Any] = ["role": "button", "enabled": true, "hittable": true, "ownerResolved": true,
+    "fullyVisible": true, "frame": [40.0, 322.0, 360.0, 48.0]]
+precondition(NativeHomeReadiness.compactEntryReady(geometry, witnessed: frames[3]))
+for flag in ["enabled", "hittable", "ownerResolved", "fullyVisible"] {
+    var blocked = geometry
+    blocked[flag] = false
+    precondition(!NativeHomeReadiness.compactEntryReady(blocked, witnessed: frames[3]))
+}
+var undersized = geometry
+undersized["frame"] = [40.0, 322.0, 360.0, 47.0]
+precondition(!NativeHomeReadiness.compactEntryReady(undersized, witnessed: frames[3]))
+precondition(!NativeHomeReadiness.compactEntryReady(geometry, witnessed: frames[3].insetBy(dx: 0, dy: 1)))
+''')
+
     def test_production_home_wait_separates_slow_initialization_from_unsafe_navigation(self):
         # Exercise the production launch methods with deterministic XCTest
         # observations and an injectable clock for the cold-start deadline.
@@ -63,6 +185,8 @@ final class Launch {
     var wakes: [(Bool, TimeInterval)]
     var unidentifiedOverrides: [String: Any] = [:]
     var compact = false
+    var manualHomeCardWithoutShortcut = false
+    var shortcutArrival = "sshForm"
     var waits: [TimeInterval] = []
     var clicks: [String] = []
     var posts: [(String, [String: Any])] = []
@@ -93,6 +217,7 @@ final class Adapter {
     let launch: Launch
     var app: App { App(staticTexts: Query(launch: launch)) }
     var lastHomeSample: [String: Any]?
+    var manualHomeCardSeen = false
     var nativePhase = "ordinary_open_add"
     init(_ launch: Launch) { self.launch = launch }
     func navigationState(publish: Bool = true) throws -> [String: Any] {
@@ -100,6 +225,7 @@ final class Adapter {
         launch.sampled += 1
         let (state, delay) = launch.snapshots.count == 1 ? launch.snapshots[0] : launch.snapshots.removeFirst()
         Clock.time += delay
+        manualHomeCardSeen = nativePhase == "encrypted_key_open_add" && state == .shell && launch.manualHomeCardWithoutShortcut
         if state == .unidentifiedStartup {
             let members = ["brand", "headerAdd", "emptyAdd", "homeHeading", "emptyHeading", "zeroHosts",
                            "ordinaryShortcut", "addHeading", "sshOption"]
@@ -117,7 +243,7 @@ final class Adapter {
         return ["page": state == .ready ? "emptyHome" : state == .unexpected ? "addChoice" : "unexpected",
                 "appForeground": state != .notForeground, "noAlerts": state != .alert,
                 "noKnownErrors": state != .loading && state != .error, "credentialsEmpty": true,
-                "windowCount": 1, "webViewCount": 3, "inputCount": 0]
+                "windowCount": 1, "webViewCount": 3, "inputCount": 0, "compactEmptyHome": launch.compact && state == .ready]
     }
     func require(_ condition: Bool, _ code: String) throws {
         if !condition { throw Rejected(code: code) }
@@ -126,7 +252,9 @@ final class Adapter {
     func navigate(_ member: String, compactRoute: Bool) throws -> (String, String, String) {
         precondition(lastHomeSample?["knownEmptyHome"] as? Bool == true)
         precondition(compactRoute == launch.compact)
+        if member == "ordinaryShortcut", launch.shortcutArrival == "missing" { return ("missing", "uniqueLabel", "otherNative") }
         launch.clicks.append(member)
+        if member == "ordinaryShortcut" { return (launch.shortcutArrival, "buttonRole", "button") }
         if compactRoute && member == "emptyAdd" { return ("addChoice", "buttonRole", "button") }
         return ("sshForm", "buttonRole", "button")
     }
@@ -135,12 +263,15 @@ final class Adapter {
 ''' + "\n".join(self.production_method(signature) for signature in (
             "func awaitEmptyHome()", "func openHomeSSH()")) + r'''
 }
-func verify(_ launch: Launch, _ outcome: String, _ failure: String? = nil, states: [String]) -> [String: Any] {
+func verify(_ launch: Launch, _ outcome: String, _ failure: String? = nil, states: [String],
+            manualKey: Bool = false, clicks: [String]? = nil) -> [String: Any] {
     Clock.time = 0
     var caught: String?
-    do { try Adapter(launch).run() } catch let rejection as Rejected { caught = rejection.code } catch { fatalError() }
+    let adapter = Adapter(launch)
+    if manualKey { adapter.nativePhase = "encrypted_key_open_add" }
+    do { try adapter.run() } catch let rejection as Rejected { caught = rejection.code } catch { fatalError() }
     precondition(caught == failure)
-    precondition(launch.clicks == (failure == nil ? (launch.compact ? ["emptyAdd", "sshChoice"] : ["headerAdd"]) : []))
+    precondition(launch.clicks == (clicks ?? (failure == nil ? (launch.compact ? ["emptyAdd", "sshChoice"] : ["headerAdd"]) : [])))
     precondition(launch.posts.map { $0.0 } == (failure == nil ? ["native_home", "native_home_entry"] : ["native_home"]))
     let trace = launch.posts[0].1["readiness"] as! [String: Any]
     precondition(trace["outcome"] as? String == outcome && trace["strictSamples"] as? Int == launch.sampled)
@@ -172,6 +303,29 @@ precondition(recovers.sampled == 2 && recovers.waits == [4] && (recovered["elaps
 let compact = Launch([(.ready, 0.25)])
 compact.compact = true
 _ = verify(compact, "ready", states: ["ready"])
+let shortcut = Launch([(.ready, 0)])
+shortcut.compact = true
+_ = verify(shortcut, "ready", states: ["ready"], manualKey: true, clicks: ["ordinaryShortcut"])
+let entry = shortcut.posts.last!.1
+precondition(entry["member"] as? String == "ordinaryShortcut" && entry["route"] as? String == "directSSH" &&
+             entry["enteredAddPage"] as? Bool == false)
+let noCompactHome = Launch([(.ready, 0)])
+_ = verify(noCompactHome, "ready", "native_encrypted_key_home_shortcut_unproven", states: ["ready"], manualKey: true)
+let mixedShortcut = Launch([(.shell, 0), (.ready, 0)])
+mixedShortcut.manualHomeCardWithoutShortcut = true
+_ = verify(mixedShortcut, "shell", "native_encrypted_key_home_shortcut_unproven", states: ["shell"], manualKey: true)
+precondition(mixedShortcut.sampled == 1 && mixedShortcut.waits.isEmpty)
+let noOwner = Launch([(.ready, 0)])
+noOwner.compact = true
+noOwner.shortcutArrival = "missing"
+_ = verify(noOwner, "ready", "native_encrypted_key_home_shortcut_unproven", states: ["ready"], manualKey: true)
+for wrongArrival in ["emptyHome", "addChoice", "unexpected"] {
+    let missedTap = Launch([(.ready, 0)])
+    missedTap.compact = true
+    missedTap.shortcutArrival = wrongArrival
+    _ = verify(missedTap, "ready", "native_encrypted_key_home_shortcut_no_progress", states: ["ready"],
+               manualKey: true, clicks: ["ordinaryShortcut"])
+}
 let persistent = Launch([(.unidentifiedStartup, 0.317)])
 _ = verify(persistent, "unexpected", "native_home_identity_unproven", states: ["unidentified_startup", "unexpected"])
 precondition(persistent.sampled == 2 && persistent.waits == [4])
@@ -438,6 +592,9 @@ protocol XCUIElementSnapshot {
     var elementType: XCUIElement.ElementType { get }
     var frame: CGRect { get }
     var isEnabled: Bool { get }
+    var value: String? { get }
+    var hasFocus: Bool { get }
+    var children: [any XCUIElementSnapshot] { get }
 }
 struct Snapshot: XCUIElementSnapshot {
     let identifier: String
@@ -447,6 +604,8 @@ struct Snapshot: XCUIElementSnapshot {
     var isEnabled: Bool = true
     var value: String? = nil
     var placeholderValue: String? = nil
+    var hasFocus: Bool = false
+    var children: [any XCUIElementSnapshot] = []
 }
 struct Observed {
     let snapshot: Snapshot
@@ -468,6 +627,7 @@ struct FormControl {
     let window: Observed
     let web: Observed
     let identified: Bool
+    let adjacentFields: [String: any XCUIElementSnapshot]
 }
 struct RevealedControl {
     let live: LiveControl
@@ -524,6 +684,8 @@ final class Observations {
     var treeReads = 0
     var resolved: [Observed] = []
     var checkpoints: [(String, [String: Any])] = []
+    var pixelReads = 0
+    var visualHostReadback: NativeHostObservation.Visual = .match
     var reviewActionChecks = 0
     var beforeTree: (() -> Void)?
     let webSurface = Element()
@@ -608,6 +770,10 @@ final class Adapter {
         try require(actions.count == 2 && Set(actions.map { $0.snapshot.label }) == labels, "native_review_exits_invalid")
     }
     func observedNodes() throws -> [Observed] { observations?.next(rows) ?? rows }
+    func manualHostPixels(_ form: FormControl, expected: String) -> NativeHostObservation.Visual {
+        observations?.pixelReads += 1
+        return observations?.visualHostReadback ?? .unavailable
+    }
     func resolveByPath(_ row: Observed) -> Observed {
         observations?.resolved.append(row)
         return row
@@ -660,6 +826,14 @@ final class Adapter {
     func sameMobileOwner(_ lhs: RevealedControl, _ rhs: RevealedControl) -> Bool {
         sameControlScope(lhs, rhs)
     }
+    func checkPEM(_ node: Observed, previous: RevealedControl, pem: String) -> (exposed: Bool, reason: String) {
+        let editor = confirmedPEMEditor(rows, previous: previous, pem: pem)
+        let representation = pemRepresentation(node, editor: editor)
+        let hits = NativeControlPolicy.encryptedSecretHits(identifier: node.snapshot.identifier, label: node.snapshot.label,
+            value: node.snapshot.value ?? "", pem: pem, bodyLines: NativeControlPolicy.encryptedPEMBodyLines(pem),
+            passwords: [], representation: representation)
+        return (hits.header.contains(true) || hits.body.contains(true), representation.rejection)
+    }
     func auth(_ previous: RevealedControl, ready: Bool = false) throws -> (password: RevealedControl, submit: RevealedControl) {
         try mobileAuth(port: 2222, ready: ready, previous: previous)
     }
@@ -695,6 +869,7 @@ final class Adapter {
             "func reveal(_ item:", "func tapForm(_ name:",
             "func mobileLiveControl(_ owner:", "func authMethodFact(_ node:", "func sameControlScope(_ lhs:",
             "func sameControlScope(_ scope:", "func mobileControl(_ anchor:", "func mobileBinding(_ anchor:",
+            "func encryptedFieldAnchor(_ field:", "func confirmedPEMEditor(_ rows:", "func pemRepresentation(_ row:",
             "func tapMobileButton(_ control:", "enum MobileWitnessObservation<Proof>", "func mobileWitness(_ targets:",
             "func visibleWitness(_ rows:", "func waitForMobileWitness<Proof>", "func mobileAuth(port:", "func mobilePassword(in rows:",
             "func mobilePasswordObservation(in rows:",
@@ -706,7 +881,8 @@ final class Adapter {
             "func waitForCaptureKeyboardToHide(reviewSample:", "func stableCaptureLayout(_ before:",
             "func terminalCaptureFrame(_ anchors:", "struct TerminalHeader {", "func terminalHeader(_ title:", "func screenshot(_ stage:",
             "func connectionRows(_ rows:", "func connectionStatus(_ rows:", "func submitConnection(_ attempt:",
-            "func fillForm(_ name:", "func pageScope(_ item:", "func keyboardFrames()", "struct ActiveLayout {",
+            "func fillForm(_ name:", "func manualHostKeyboard()", "func inputReadback(_ value:",
+            "func reportManualHostEntry(_ form:", "func pageScope(_ item:", "func keyboardFrames()", "struct ActiveLayout {",
             "func activeLayout()", "func activeDiagnostic(_ context:", "func activePage(_ page:",
             "func activeAction(_ action:", "func activeRoute(from source:", "func activeKeyboard(open:", "func activeFlow(port:")) + r'''
 }
@@ -822,6 +998,74 @@ let replacedView = row(passwordControl.web.snapshot, path: [0, 1])
 let replacedAuthOwner = RevealedControl(live: passwordControl.live, owner: passwordControl.owner,
     window: passwordControl.window, web: replacedView)
 check(!authCandidate.sameMobileOwner(confirmation, replacedAuthOwner), "an otherwise equal auth control in a different WebView must fail")
+let keyHeader = "-----BEGIN OPENSSH PRIVATE KEY-----"
+let syntheticKey = keyHeader + "\nAX TEST ONLY\nsynthetic footer"
+let pemLabel = "私钥 PEM（仅本次使用）"
+let inputFrame = CGRect(x: 20, y: 230, width: 320, height: 120)
+let leafFrame = CGRect(x: 22, y: 232, width: 290, height: 85)
+let pemPath = [0, 0, 8]
+func pemLeaf(label: String = syntheticKey, value: String = syntheticKey, id: String = "",
+             role: XCUIElement.ElementType = .staticText, frame: CGRect = leafFrame) -> Snapshot {
+    Snapshot(identifier: id, label: label, elementType: role, frame: frame, value: value)
+}
+func checkPEMLeaf(_ leaf: Snapshot, expected: Bool, reason: String? = nil, liveLeaf: Snapshot? = nil,
+                  path: [Int] = pemPath + [0], window: [Int] = [0], web: [Int] = [0, 0],
+                  duplicate: Bool = false, liveCopies: Int = 1, attached: Bool = false, staleScope: Bool = false) {
+    let editorElement = Element()
+    editorElement.identity = ["identifier": "ssh-key", "label": pemLabel]
+    let observations = Observations([])
+    observations.webSurface.descendantsByRole[.textView] = Array(repeating: editorElement, count: liveCopies)
+    func children(_ node: Snapshot) -> [any XCUIElementSnapshot] {
+        if !attached { return [node] }
+        return [Snapshot(identifier: "", label: "", elementType: .button, frame: leafFrame, children: [node])]
+    }
+    let editor = Snapshot(identifier: "ssh-key", label: pemLabel, elementType: .textView, frame: inputFrame,
+                          value: syntheticKey, children: children(leaf))
+    var live = editor
+    live.children = children(liveLeaf ?? leaf)
+    let editorRow = row(editor, path: pemPath)
+    let leafRow = row(leaf, path: path, window: window, web: web)
+    let base = Array(formRows(snapshot()).suffix(2))
+    let actual = LiveControl(snapshot: live, hittable: true, element: editorElement)
+    let previous = RevealedControl(live: actual, owner: editorRow, window: base[0],
+                                   web: staleScope ? row(base[1].snapshot, path: [0, 1]) : base[1])
+    let extra = duplicate ? [row(editor, path: [0, 0, 9])] : []
+    let candidate = Adapter(app: App(frame: screen), current: actual, rows: base + [editorRow, leafRow] + extra,
+                            blockers: [], observations: observations)
+    let result = candidate.checkPEM(leafRow, previous: previous, pem: syntheticKey)
+    check(result.exposed == expected && (reason == nil || result.reason == reason),
+          "only the exact full owned editor leaf can be exempted")
+    if !expected {
+        check(!candidate.checkPEM(editorRow, previous: previous, pem: syntheticKey).exposed,
+              "exact value in a proven editor can be exempted independently")
+    }
+}
+checkPEMLeaf(pemLeaf(), expected: false)
+checkPEMLeaf(pemLeaf(label: keyHeader, value: keyHeader), expected: true, reason: "content_not_exact")
+checkPEMLeaf(pemLeaf(label: syntheticKey + " other", value: syntheticKey), expected: true)
+checkPEMLeaf(pemLeaf(label: syntheticKey, value: "unrelated"), expected: true)
+checkPEMLeaf(pemLeaf(id: "unrelated"), expected: true)
+checkPEMLeaf(pemLeaf(role: .button), expected: true, reason: "unsupported_node")
+checkPEMLeaf(pemLeaf(frame: leafFrame.offsetBy(dx: 110, dy: 0)), expected: true, reason: "geometry_mismatch")
+checkPEMLeaf(pemLeaf(), expected: true, liveLeaf: pemLeaf(frame: leafFrame.offsetBy(dx: 0, dy: 1)))
+checkPEMLeaf(pemLeaf(), expected: true, reason: "subtree_unproven", liveLeaf: pemLeaf(value: keyHeader))
+checkPEMLeaf(pemLeaf(), expected: true, reason: "outside_editor", path: [0, 0, 5])
+checkPEMLeaf(pemLeaf(), expected: true, window: [1])
+checkPEMLeaf(pemLeaf(), expected: true, web: [0, 1])
+checkPEMLeaf(pemLeaf(), expected: true, reason: "editor_unproven", duplicate: true)
+checkPEMLeaf(pemLeaf(), expected: true, liveCopies: 2)
+checkPEMLeaf(pemLeaf(), expected: true, path: pemPath + [0, 0], attached: true)
+checkPEMLeaf(pemLeaf(), expected: true, staleScope: true)
+let password = "AX TEST ONLY"
+for representation: NativeControlPolicy.PEMRepresentation in [.editorValue, .editorText, .editorUnproven] {
+    let hits = NativeControlPolicy.encryptedSecretHits(identifier: password, label: password, value: syntheticKey,
+        pem: syntheticKey, bodyLines: [], passwords: [password], representation: representation)
+    check(hits.password == [true, true, true], "the editor scope never exempts a password in any scanned field")
+}
+let exactButSecret = NativeControlPolicy.encryptedSecretHits(identifier: "", label: syntheticKey, value: syntheticKey,
+    pem: syntheticKey, bodyLines: [], passwords: [password], representation: .editorText)
+check(exactButSecret.header == [false, false, false] && exactButSecret.password == [false, true, true],
+      "even confirmed exact PEM text must never exempt a matching passphrase")
 func authFixture(_ fieldSamples: [[Observed]], liveSnapshot: Snapshot = fieldAnchor.snapshot,
                  scope: [Int] = [0, 0], liveCopies: Int = 1, hits: Bool = true,
                  ready: Bool = false) -> (Adapter, Observations, Element, Element) {
@@ -1833,6 +2077,46 @@ var readbackRejected = false
 do { try unread.fillPort("2222") } catch { readbackRejected = true }
 check(readbackRejected && failedReadback.inputs == ["2222"],
       "the actual fill entry must fail a wrong readback without replaying typeText")
+let manualHost = snapshot(frame: movedFrame, identifier: "ssh-host", label: "主机地址")
+let manualApp = App(frame: screen, keyboardFrame: CGRect(x: 0, y: 500, width: 390, height: 300))
+let manualElement = Element()
+manualElement.forcedReadback = ""
+let manualSamples = Observations([])
+var manualPort = moved
+manualPort.hasFocus = true
+manualPort.value = "22"
+let manualRows = formRows(manualPort, host: manualHost)
+manualSamples.beforeTree = {
+    guard !manualElement.inputs.isEmpty else { return }
+    var changedPort = manualPort
+    changedPort.value = "127"
+    manualSamples.trees = [formRows(changedPort, host: manualHost)]
+}
+manualApp.keyboard.exists = true
+let manual = Adapter(app: manualApp, current: LiveControl(snapshot: manualHost, hittable: true, element: manualElement),
+                     rows: manualRows, blockers: [], observations: manualSamples, nativePhase: "encrypted_key_host")
+var manualFailure: String?
+do { try manual.fillField("host", "127.0.0.1") } catch let e as Rejected { manualFailure = e.reason }
+let manualTrace = manualSamples.checkpoints.compactMap { $0.1["manualHostEntry"] as? [String: Any] }
+check(manualFailure == "native_input_value_invalid" && manualElement.inputs == ["127.0.0.1"] && manualSamples.pixelReads == 1,
+      "a pixel match cannot approve an empty accessibility readback or replay input")
+check(manualTrace.count == 2 &&
+      manualTrace[0]["sample"] as? String == "afterTap" && manualTrace[0]["keyboard"] as? String == "visible" &&
+      manualTrace[0]["formUIFocus"] as? String == "port" && manualTrace[0]["portReadback"] as? String == "notCompared" &&
+      manualTrace[0]["visualReadback"] == nil && manualTrace[1]["visualReadback"] as? String == "match" &&
+      manualTrace[1]["sample"] as? String == "afterInput" && manualTrace[1]["treeHostReadback"] as? String == "nil" &&
+      manualTrace[1]["liveHostReadback"] as? String == "empty" && manualTrace[1]["portReadback"] as? String == "changed" &&
+      manualTrace[1]["userReadback"] as? String == "unchanged",
+      "manual host diagnostics report only classified keyboard, focus, and same-owner readback")
+let matchedHostElement = Element()
+let matchedHostSamples = Observations([])
+matchedHostSamples.visualHostReadback = .noTextDetected
+let matchedHost = Adapter(app: manualApp, current: LiveControl(snapshot: manualHost, hittable: true, element: matchedHostElement),
+                          rows: manualRows, blockers: [], observations: matchedHostSamples, nativePhase: "encrypted_key_host")
+do { try matchedHost.fillField("host", "127.0.0.1") }
+catch { failures.append("the visual diagnostic cannot override an exact accessibility match") }
+check(matchedHostElement.inputs == ["127.0.0.1"] && matchedHostSamples.pixelReads == 1,
+      "the matching host uses one input and one diagnostic sample")
 let page = formRows(moved)[1]
 for (live, stored) in [(snapshot(identifier: "ssh-password", label: "密码"), snapshot(label: "密码")),
                        (snapshot(identifier: "ssh-password", label: "密码"), snapshot(identifier: "changed", label: "密码")),

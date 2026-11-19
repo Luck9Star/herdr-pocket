@@ -73,6 +73,7 @@ GEOMETRY_REASONS = frozenset((
     'scroll_direction_unproven', 'scroll_surface_unhittable', 'queried_unhittable',
     'bound_unhittable', 'scroll_no_progress'))
 MAX_GEOMETRY_REASONS_PER_CHECKPOINT = 24
+MANUAL_HOST_READBACKS = ('nil', 'empty', 'nonString', 'match', 'different')
 MOBILE_PASSWORD_PHASES = frozenset((
     'ordinary_fingerprint', 'ordinary_password', 'key_change_fingerprint',
     'key_change_new_fingerprint', 'key_change_password', 'encrypted_key_fingerprint'))
@@ -106,7 +107,8 @@ NATIVE_FAILURES = frozenset((
     'native_mobile_submit_owner_unproven', 'native_mobile_return_owner_unproven',
     'native_encrypted_key_owner_unproven', 'native_encrypted_key_method_unproven',
     'native_encrypted_key_entry_unproven', 'native_encrypted_key_rejection_unproven',
-    'native_encrypted_key_credentials_retained')) | MOBILE_PASSWORD_FAILURES | ENCRYPTED_AUTH_FAILURES
+    'native_encrypted_key_credentials_retained', 'native_encrypted_key_empty_add_unproven',
+    'native_encrypted_key_home_shortcut_unproven', 'native_encrypted_key_home_shortcut_no_progress')) | MOBILE_PASSWORD_FAILURES | ENCRYPTED_AUTH_FAILURES
 HOME_MEMBERS = frozenset(('brand', 'headerAdd', 'emptyAdd', 'homeHeading', 'emptyHeading',
                          'zeroHosts', 'ordinaryShortcut', 'addHeading', 'sshOption'))
 COMPACT_HOME_MEMBERS = {'emptyDescription', 'compactShortcut'}
@@ -273,8 +275,10 @@ def compact_home_identity(home):
             and all(members[key]['count'] == 0 for key in ('homeHeading', 'zeroHosts', 'headerAdd')))
 
 
-def public_home_readiness(value, home):
+def public_home_readiness(value, home, *, manual_key=False):
     states = ('ready', 'loading', 'shell', 'error', 'alert', 'unexpected', 'not_foreground')
+    pending = ('compact_add_pending',) if manual_key else ()
+    states += pending
     keys = {'outcome', 'elapsedMs', 'strictSampleMs', 'strictSamples', 'waitCalls', 'samples'}
     code = 'tauri_ios_home_diagnostic_invalid'
     require(isinstance(value, dict) and set(value) == keys and value['outcome'] in states, code)
@@ -288,7 +292,7 @@ def public_home_readiness(value, home):
         require(isinstance(sample, dict) and set(sample) == {'state', 'elapsedMs'}, code)
         state = sample['state']
         require((state in states or (state == 'unidentified_startup' and previous is None))
-                and state != previous and previous in (None, 'loading', 'shell', 'unidentified_startup')
+                and state != previous and previous in (None, 'loading', 'shell', 'unidentified_startup') + pending
                 and type(sample['elapsedMs']) is int
                 and elapsed <= sample['elapsedMs'] <= value['elapsedMs'], code)
         previous, elapsed = state, sample['elapsedMs']
@@ -303,6 +307,7 @@ def public_home_readiness(value, home):
     empty = home['knownEmptyHome'] and home['windowCount'] > 0 and home['webViewCount'] > 0 and identity
     expected = {'ready': safe and not flags['loading'] and empty, 'loading': safe and flags['loading'],
                 'shell': safe and not flags['loading'] and not empty,
+                'compact_add_pending': safe and not flags['loading'] and empty and home.get('compactEmptyHome') is True,
                 'error': foreground and not alert and error, 'alert': foreground and alert,
                 'unexpected': foreground and not (alert or error), 'not_foreground': not foreground}
     require(expected.get(previous, True), code)
@@ -1193,18 +1198,23 @@ class Checkpoints:
                 scenarios = {'encrypted_key': ('encryptedKey', self.encrypted, 'encrypted_key_probe')}
             scenario = next((name for name in scenarios if phase in (name + '_open_add', name + '_open_ssh')), None)
             require(self.failure is None and scenario is not None, 'tauri_ios_home_diagnostic_phase_invalid')
+            manual_shortcut = scenario == 'encrypted_key'
+            if manual_shortcut:
+                require(phase == 'encrypted_key_open_add' and stage != 'native_navigation_arrival',
+                        'tauri_ios_home_diagnostic_phase_invalid')
             key, fixture, next_stage = scenarios[scenario]
             require(self.index == self.stages.index(next_stage), 'tauri_ios_home_diagnostic_phase_invalid')
             require(fixture is None or fixture.snapshot()['connections'] == 0, 'tauri_ios_navigation_after_ssh')
             readiness = self.result.get('homeReadiness', {})
-            if stage != 'native_home' and key in readiness:
-                require(readiness[key]['outcome'] == 'ready', 'tauri_ios_home_retry_unsafe')
+            if stage != 'native_home' and (manual_shortcut or key in readiness):
+                require(readiness.get(key, {}).get('outcome') == 'ready', 'tauri_ios_home_retry_unsafe')
             if stage == 'native_home':
                 home = public_home_diagnostic(payload.get('home'))
                 if 'readiness' in payload:
                     require(phase.endswith('_open_add') and key not in readiness
                             and not self.result.get('navigationTrace', {}).get(key), 'tauri_ios_home_diagnostic_phase_invalid')
-                    self.result.setdefault('homeReadiness', {})[key] = public_home_readiness(payload['readiness'], home)
+                    detail = public_home_readiness(payload['readiness'], home, manual_key=scenario == 'encrypted_key')
+                    self.result.setdefault('homeReadiness', {})[key] = detail
                 self.result.setdefault('homeDiagnostics', {})[key] = home
             elif stage == 'native_navigation_arrival':
                 current = public_navigation_state(payload.get('state'))
@@ -1257,7 +1267,19 @@ class Checkpoints:
                         'tauri_ios_navigation_replay_rejected')
                 expected = 'addChoice' if payload['member'] == 'sshChoice' else 'emptyHome'
                 require(before['page'] == expected, 'tauri_ios_home_retry_unsafe')
-                if before.get('compactEmptyHome'):
+                if manual_shortcut:
+                    require(not trace, 'tauri_ios_navigation_replay_rejected')
+                    require(before.get('compactEmptyHome') is True and not before['addTitleSeen']
+                            and not before['formByStructure'] and payload['member'] == 'ordinaryShortcut'
+                            and payload['selection'] in ('buttonRole', 'uniqueIdentifier') and geometry['role'] == 'button'
+                            and payload['performed'] and geometry['fullyVisible'] and geometry['frame'][3] >= 48
+                            and binding is not None and binding['witnessFrame'] is not None
+                            and binding['witnessFrame'] == binding['liveFrame'] == binding['ownerFrame']
+                            and all(abs(a - b) <= 0.5 for a, b in zip(binding['liveFrame'], geometry['frame']))
+                            and binding['windowFrame'] is not None and binding['webFrames']
+                            and all(frame is not None for frame in binding['webFrames']),
+                            'tauri_ios_home_retry_unsafe')
+                elif before.get('compactEmptyHome'):
                     require(payload['member'] == 'emptyAdd' and geometry['role'] == 'button',
                             'tauri_ios_home_retry_unsafe')
                 if trace and trace[0]['before'].get('compactEmptyHome'):
@@ -1293,7 +1315,15 @@ class Checkpoints:
                 trace = self.result.get('navigationTrace', {}).get(key, [])
                 arrival = self.result.get('navigationArrivals', {}).get(key)
                 final_state = arrival['state'] if arrival else (trace[-1]['after'] if trace else {})
-                if trace and trace[0]['before'].get('compactEmptyHome'):
+                if manual_shortcut:
+                    require(key not in self.result.get('homeEntry', {})
+                            and len(trace) == 1 and trace[0]['performed'] and trace[0]['outcome'] == 'sshForm'
+                            and trace[0]['member'] == payload['member'] == 'ordinaryShortcut'
+                            and trace[0]['selection'] == payload['selection'] and payload['role'] == 'button'
+                            and payload['route'] == 'directSSH' and payload['enteredAddPage'] is False
+                            and not final_state['addTitleSeen'] and not final_state['emptyHomeIdentity'],
+                            'tauri_ios_home_entry_invalid')
+                elif trace and trace[0]['before'].get('compactEmptyHome'):
                     require([row['member'] for row in trace if row['performed']] == ['emptyAdd', 'sshChoice']
                             and payload['member'] == 'emptyAdd' and payload.get('route') == 'viaAdd',
                             'tauri_ios_home_entry_invalid')
@@ -1336,6 +1366,33 @@ class Checkpoints:
             require(len(trace) < 4, 'tauri_ios_capture_diagnostic_invalid')
             self.result.setdefault('captureDiagnostics', {}).setdefault(phase, []).append(detail)
             return
+        if 'manualHostEntry' in payload:
+            invalid = 'tauri_ios_native_diagnostic_invalid'
+            detail = payload['manualHostEntry']
+            keyboard_states = ('hidden', 'visible', 'unproven')
+            fields = {'sample', 'initialKeyboard', 'keyboard', 'formUIFocus', 'liveHostUIFocus',
+                      'treeHostReadback', 'liveHostReadback', 'portReadback', 'userReadback'}
+            require(set(payload) == {'stage', 'nativeCheckpoint', 'manualHostEntry'}
+                    and stage == 'native_progress' and self.failure is None and self.encrypted is not None
+                    and payload['nativeCheckpoint'] == self.result.get('nativeCheckpoint') == 'encrypted_key_host'
+                    and type(detail) is dict and detail.get('sample') in ('afterTap', 'afterInput')
+                    and set(detail) == (fields if detail['sample'] == 'afterTap' else fields | {'visualReadback'})
+                    and (detail['sample'] == 'afterTap' or detail['visualReadback'] in
+                         ('match', 'text_present', 'no_text_detected', 'unavailable'))
+                    and detail['initialKeyboard'] in keyboard_states and detail['keyboard'] in keyboard_states
+                    and detail['formUIFocus'] in ('host', 'port', 'user', 'none', 'multiple')
+                    and type(detail['liveHostUIFocus']) is bool
+                    and detail['treeHostReadback'] in MANUAL_HOST_READBACKS
+                    and detail['liveHostReadback'] in MANUAL_HOST_READBACKS,
+                    invalid)
+            trace = self.result.get('manualHostEntry', [])
+            sibling_states = ('notCompared',) if not trace else ('unchanged', 'changed', 'unavailable')
+            require((not trace and detail['sample'] == 'afterTap'
+                     or len(trace) == 1 and detail['sample'] == 'afterInput'
+                     and detail['initialKeyboard'] == trace[0]['initialKeyboard'])
+                    and detail['portReadback'] in sibling_states and detail['userReadback'] in sibling_states, invalid)
+            self.result.setdefault('manualHostEntry', []).append(dict(detail))
+            return
         if stage in ('native_progress', 'native_failure'):
             phase = payload.get('nativeCheckpoint')
             require(self.failure is None and isinstance(phase, str) and phase in NATIVE_PHASES
@@ -1365,27 +1422,37 @@ class Checkpoints:
                 diagnostic = payload['secretDiagnostic']
                 fields = {'identifier', 'label', 'value', 'privateKeyHeader', 'passphrase'}
                 roles = HOME_ROLES | {'textView'}
+                candidate_keys = fields | {'role', 'scope', 'relation'}
+                candidate_shapes = (candidate_keys, candidate_keys | {'pemReason'},
+                                    candidate_keys | {'pemReason', 'privateKeyBody'})
+                pem_reasons = ('content_not_exact', 'editor_unproven', 'outside_editor',
+                               'geometry_mismatch', 'subtree_unproven', 'unsupported_node')
                 require(stage == 'native_progress' and phase == 'encrypted_key_passphrase'
                         and set(payload) == {'stage', 'nativeCheckpoint', 'secretDiagnostic'}
                         and type(diagnostic) is dict and set(diagnostic) == {'count', 'candidates'}
                         and type(diagnostic['count']) is int and 1 <= diagnostic['count'] <= 10000
                         and type(diagnostic['candidates']) is list
                         and len(diagnostic['candidates']) == min(diagnostic['count'], 12)
-                        and all(type(item) is dict and set(item) == fields | {'role', 'scope', 'relation'}
+                        and all(type(item) is dict and set(item) in candidate_shapes
                                 and type(item['role']) is str and item['role'] in roles
                                 and item['scope'] in ('sameWeb', 'other')
                                 and item['relation'] in ('same', 'ancestor', 'descendant', 'other')
                                 and all(type(item[key]) is bool for key in fields)
+                                and type(item.get('privateKeyBody', False)) is bool
+                                and ('pemReason' not in item or type(item['pemReason']) is str
+                                     and item['pemReason'] in (
+                                         pem_reasons if item['privateKeyHeader'] or item.get('privateKeyBody') else ('none',)))
                                 and any(item[key] for key in ('identifier', 'label', 'value'))
-                                and (item['privateKeyHeader'] or item['passphrase'])
+                                and (item['privateKeyHeader'] or item.get('privateKeyBody') or item['passphrase'])
                                 for item in diagnostic['candidates']), 'tauri_ios_native_diagnostic_invalid')
                 self.result['secretDiagnostic'] = json.loads(json.dumps(diagnostic))
             if 'inputReadback' in payload:
                 readback = payload['inputReadback']
+                states = MANUAL_HOST_READBACKS if phase == 'encrypted_key_host' else ('match', 'empty', 'different', 'unavailable')
                 require(stage == 'native_progress' and phase.rsplit('_', 1)[-1] in ('host', 'port', 'username')
                         and set(payload) == {'stage', 'nativeCheckpoint', 'inputReadback'}
                         and type(readback) is dict and set(readback) == {'state', 'samples'}
-                        and type(readback['state']) is str and readback['state'] in ('match', 'empty', 'different', 'unavailable')
+                        and type(readback['state']) is str and readback['state'] in states
                         and type(readback['samples']) is int and 1 <= readback['samples'] <= 6,
                         'tauri_ios_native_diagnostic_invalid')
                 self.result.setdefault('inputReadbacks', {})[phase] = dict(readback)
@@ -1404,6 +1471,9 @@ class Checkpoints:
                 if code.startswith('native_encrypted_'):
                     require(self.encrypted is not None and set(payload) == {'stage', 'nativeCheckpoint', 'nativeFailureCode'},
                             'tauri_ios_native_diagnostic_invalid')
+                if code in ('native_encrypted_key_empty_add_unproven', 'native_encrypted_key_home_shortcut_unproven',
+                            'native_encrypted_key_home_shortcut_no_progress'):
+                    require(phase == 'encrypted_key_open_add', 'tauri_ios_native_diagnostic_invalid')
                 if observation or code in MOBILE_PASSWORD_FAILURES:
                     keys = {'stage', 'nativeCheckpoint', 'nativeFailureCode'}
                     if observation:

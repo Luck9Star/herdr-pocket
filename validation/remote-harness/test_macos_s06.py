@@ -199,6 +199,32 @@ class MacosS06Checks(unittest.TestCase):
         self.assertEqual(incomplete['lastPairControl'], 'host')
         self.assertNotIn('pairControlFailure', incomplete)
 
+    def test_pair_readback_facts_are_fixed_and_scoped_to_the_latest_field(self):
+        old = ("HP_S06_NATIVE_PAIR_CONTROL=host\n"
+               "HP_S06_NATIVE_PAIR_INPUT=host,verified\n"
+               "HP_S06_NATIVE_PAIR_READ=host,011111\n")
+        current = ("HP_S06_NATIVE_PAIR_CONTROL=host\n"
+                   "HP_S06_NATIVE_PAIR_INPUT=host,typing\n"
+                   "HP_S06_NATIVE_PAIR_INPUT=host,copiedSecret\n"
+                   "HP_S06_NATIVE_PAIR_INPUT=user,verified\n"
+                   "HP_S06_NATIVE_PAIR_READ=user,111111\n"
+                   "HP_S06_NATIVE_PAIR_READ=host,111111,private-value\n")
+        facts = log_facts(old + current)
+        self.assertEqual(facts['lastPairInputStep'], 'typing')
+        self.assertNotIn('pairReadback', facts)
+        after = ("HP_S06_NATIVE_PAIR_INPUT=host,copy\n"
+                 "HP_S06_NATIVE_PAIR_READ=host,101110\n"
+                 "HP_S06_NATIVE_PAIR_READ=host,000001\n")
+        facts = log_facts(old + current + after)
+        self.assertEqual(facts['lastPairInputStep'], 'copy')
+        self.assertEqual(facts['pairReadback'], {
+            'control': 'host', 'ownerAXBeforeExact': True, 'ownerAXAfterExact': False,
+            'ownedEditorPresent': True, 'ownedEditorAXExact': True,
+            'clipboardChanged': True, 'clipboardExact': False,
+        })
+        self.assertNotIn('private', json.dumps(facts))
+        self.assertNotIn('Secret', json.dumps(facts))
+
     def test_xcresult_counts_are_only_small_numeric_fields(self):
         raw = {'totalTestCount': 1, 'failedTests': 1, 'passedTests': True, 'skippedTests': 9000,
                'configuration': 'secret-data', 'failedDetails': ['secret-path']}

@@ -165,14 +165,62 @@ final class MacosS06UITests: XCTestCase {
         try reveal(name, in: scope, kind: kind, enabled: true, pair: control).click()
     }
 
-    private func paste(_ text: String, into label: String, pair control: PairControl) throws {
-        let field = try reveal(label, kind: .textField, enabled: true, pair: control)
-        field.click()
+    private func currentPairField(_ label: String, control: PairControl)
+        -> (owner: XCUIElement, field: XCUIElement)? {
+        guard app.state == .runningForeground, app.windows.count == 1, window.exists else { return nil }
+        let (named, fields) = pairMatches(label, kind: .textField, prefix: false, control: control)
+        guard named.count == 1, fields.count == 1 else { return nil }
+        let field = fields[0]
+        guard within(window.frame, field), within(named[0].frame, field),
+              field.isHittable, field.isEnabled else { return nil }
+        return (named[0], field)
+    }
+
+    private func enterPublicValue(_ text: String, into label: String, pair control: PairControl) throws {
+        let target = try reveal(label, kind: .textField, enabled: true, pair: control)
+        let code = control.rawValue
+        trace("PAIR_INPUT", "\(code),click")
+        target.click()
+        let before = try until("public_pair_field_owner_lost", seconds: 4) {
+            self.currentPairField(label, control: control)
+        }
+        func exact(_ value: String?) -> Bool { value?.utf8.elementsEqual(text.utf8) == true }
+        let ownerBeforeExact = exact(before.field.value as? String)
+        before.field.typeKey("a", modifierFlags: .command)
+        trace("PAIR_INPUT", "\(code),typing")
+        // XCTest requires keyboard focus on the element or its descendant.
+        // Send the fixture value once, to the named field's own native control.
+        before.field.typeText(text)
+        trace("PAIR_INPUT", "\(code),typed")
+        let after = try until("public_pair_field_owner_lost", seconds: 4) {
+            self.currentPairField(label, control: control)
+        }
+        let ownerAfterExact = exact(after.field.value as? String)
+        let editors = after.owner.descendants(matching: .textView).allElementsBoundByIndex
+            .filter { within(after.owner.frame, $0) }
+        let editorExact = editors.count == 1 && exact(editors[0].value as? String)
+        // Only the isolated runner reaches this code. Discard any earlier
+        // pasteboard content and compare only an actual copy from the live editor.
         clipboard.clearContents()
-        try require(clipboard.setString(text, forType: .string), "public_clipboard_write_failed")
-        app.typeKey("a", modifierFlags: .command)
-        app.typeKey("v", modifierFlags: .command)
-        _ = try until("public_value_not_read_back") { (field.value as? String) == text ? true : nil }
+        let cleared = clipboard.changeCount
+        var changed = false
+        var copyExact = false
+        defer {
+            clipboard.clearContents()
+            let bits = [ownerBeforeExact, ownerAfterExact, editors.count == 1, editorExact, changed, copyExact]
+                .map { $0 ? "1" : "0" }.joined()
+            trace("PAIR_READ", "\(code),\(bits)")
+        }
+        trace("PAIR_INPUT", "\(code),copy")
+        after.field.typeKey("a", modifierFlags: .command)
+        after.field.typeKey("c", modifierFlags: .command)
+        _ = try until("public_value_not_read_back") {
+            changed = self.clipboard.changeCount != cleared
+            if changed { copyExact = exact(self.clipboard.string(forType: .string)) }
+            return copyExact ? true : nil
+        }
+        try require(currentPairField(label, control: control) != nil, "public_pair_field_owner_lost")
+        trace("PAIR_INPUT", "\(code),verified")
     }
 
     private func resize(_ width: CGFloat, height: CGFloat? = nil) throws -> Int {
@@ -217,7 +265,7 @@ final class MacosS06UITests: XCTestCase {
             (.hostKey, "可信渠道核验的 Ed25519 主机公钥", peer.expectedHostKey),
             (.device, "设备名称（英文、数字、空格）", peer.session),
         ]
-        for (control, label, value) in fields { try paste(value, into: label, pair: control) }
+        for (control, label, value) in fields { try enterPublicValue(value, into: label, pair: control) }
         _ = try reveal(peer.fingerprint, kind: .staticText, pair: .fingerprint)
         try click("我已通过可信渠道核验账号、主机公钥与命名会话资料", kind: .checkBox, pair: .targetReview)
         mark(index == 0 ? "keyA" : "keyB")
@@ -235,7 +283,7 @@ final class MacosS06UITests: XCTestCase {
         guard let response = String(data: payload, encoding: .utf8) else {
             throw Failure.check("reviewed_host_response_invalid")
         }
-        try paste(response, into: "公开授权／撤销响应 JSON", pair: .response)
+        try enterPublicValue(response, into: "公开授权／撤销响应 JSON", pair: .response)
         _ = try reveal("待审查响应", prefix: true, pair: .preview)
         try click("我已独立核验响应来源、账号与两端指纹", kind: .checkBox, pair: .sourceReview)
         try click("审查并接受绑定响应", pair: .accept)

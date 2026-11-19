@@ -156,7 +156,7 @@ class ForegroundTests(unittest.TestCase):
                 return 'Display: mDisplayId=0\n mCurrentFocus=Window{7ba u0 app.private.example/.Hidden}'
             if args[-1] == 'activities':
                 return 'topResumedActivity=ActivityRecord{f8e u0 ' + ACTIVITY + ' t86}'
-            if args[0] == 'shell' and args[1].startswith('pidof'):
+            if args[0] == 'shell' and f'pidof {config.PACKAGE}' in args[1]:
                 return 'absent'
             self.fail('unexpected ADB read')
 
@@ -223,6 +223,67 @@ class PickerTests(unittest.TestCase):
             with self.assertRaisesRegex(GuiFailure, '^documents_ui_unconfirmed$'):
                 picker.tap(ancestor='dir_list', label='owned')
             adb.assert_not_called()
+
+    def test_picker_samples_only_fresh_successfully_removed_scratch(self):
+        for failure in (None, 'existing', 'dump', 'read', 'empty', 'remove', 'remaining'):
+            with self.subTest(failure=failure), patch.object(config, 'owned_display', return_value=(1080, 2000)):
+                picker = config.Picker({})
+                picker.package = PROVIDER
+                picker.window = SYSTEM_PICKER
+                calls = []
+                xml = chooser(node(f'{PROVIDER}:id/dir_list',
+                                   node('', node('android:id/title', text='owned'),
+                                        clickable='true', bounds='[20,40][400,140]')))
+
+                def adb(*args, **kwargs):
+                    if args[0] == 'shell' and args[1].startswith('test ! -e '):
+                        state = 'remaining' if calls else 'existing'
+                        calls.append('absent')
+                        self.assertIn(f'! -L {picker.scratch}', args[1])
+                    elif args[:4] == ('shell', 'test', '!', '-e'):
+                        state = 'remaining'
+                        calls.append('absent')
+                    elif args[:3] == ('shell', 'uiautomator', 'dump'):
+                        state = 'dump'
+                        calls.append(state)
+                    elif args[:2] == ('exec-out', 'cat'):
+                        state = 'read'
+                        calls.append(state)
+                    elif args[:3] == ('shell', 'rm', '-f'):
+                        state = 'remove'
+                        calls.append(state)
+                    elif args[:3] == ('shell', 'input', 'tap'):
+                        calls.append('tap')
+                        self.assertEqual(args[3:], (210, 90))
+                        return ''
+                    else:
+                        self.fail('unexpected ADB command')
+                    self.assertIn(picker.scratch, ' '.join(args))
+                    if failure == state and kwargs.get('check', True):
+                        raise GuiFailure('untrusted diagnostic')
+                    if state == 'read':
+                        return '' if failure == 'empty' else xml
+                    return ''
+
+                def one_sample(probe, code, *, timeout=25):
+                    return probe() or config.require(False, code)
+
+                with patch.object(config, 'adb', side_effect=adb), \
+                        patch.object(config, 'foreground', return_value=SYSTEM_PICKER), \
+                        patch.object(config, 'wait_for', side_effect=one_sample):
+                    if failure is None:
+                        picker.tap(ancestor='dir_list', label='owned', resource='android:id/title')
+                        self.assertEqual(calls, ['absent', 'dump', 'read', 'remove', 'absent'] * 2 + ['tap'])
+                    else:
+                        cleanup = failure in ('existing', 'remove', 'remaining')
+                        code = 'picker_hierarchy_cleanup_unconfirmed' if cleanup else 'picker_hierarchy_unavailable'
+                        with self.assertRaisesRegex(GuiFailure, '^' + code + '$'):
+                            picker.tap(ancestor='dir_list', label='owned', resource='android:id/title')
+                        self.assertNotIn('tap', calls)
+                        self.assertLessEqual(calls.count('dump'), 1)
+                        self.assertEqual(picker.scratch_cleanup_failed, cleanup)
+                        if failure == 'existing':
+                            self.assertEqual(calls, ['absent'])
 
     def test_picker_requires_actual_picker_activity_and_exact_launcher_on_return(self):
         with patch.object(config, 'owned_display', return_value=(1080, 2000)):
@@ -404,7 +465,7 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(report['cleanup'], {'hierarchyFile': True})
 
     def test_startup_requires_real_process_and_exact_foreground_before_exercise(self):
-        for scenario in ('launcher', 'system_window', 'process_exited'):
+        for scenario in ('launcher', 'system_window', 'process_exited', 'cleanup_pid_error'):
             with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as root:
                 avd = Path(root) / 'avd'
                 avd.mkdir()
@@ -452,6 +513,8 @@ class EvidenceTests(unittest.TestCase):
                         if installed:
                             events.append('pid')
                             return '42'
+                        if scenario == 'cleanup_pid_error' and kwargs.get('check', True):
+                            raise GuiFailure('untrusted diagnostic')
                         return ''
                     if args == ('shell', 'cat', '/proc/net/unix'):
                         return '' if scenario == 'process_exited' else '0000 @webview_devtools_remote_42'
@@ -467,8 +530,11 @@ class EvidenceTests(unittest.TestCase):
                         events.append('focus')
                         title = 'NotificationShade' if scenario == 'system_window' else ACTIVITY
                         return f'Display: mDisplayId=0\n mCurrentFocus=Window{{ab1 u0 {title}}}'
-                    if len(args) == 2 and args[0] == 'shell' and args[1].startswith('pidof '):
-                        return 'absent' if scenario == 'process_exited' else 'present'
+                    if len(args) == 2 and args[0] == 'shell' and f'pidof {config.PACKAGE}' in args[1]:
+                        if not installed and scenario == 'cleanup_pid_error':
+                            self.assertTrue(kwargs.get('check', True))
+                            raise GuiFailure('untrusted diagnostic')
+                        return 'absent' if not installed or scenario == 'process_exited' else 'present'
                     if args[:2] == ('shell', 'am') or args[1] in ('mkdir', 'rm', 'rmdir', 'test'):
                         return ''
                     self.fail('unexpected command')
@@ -482,7 +548,7 @@ class EvidenceTests(unittest.TestCase):
                         patch.object(config, '_connect_ready', return_value=browser), \
                         patch.object(config, 'wait_for', side_effect=one_sample), \
                         patch.object(config, 'exercise') as exercise:
-                    if scenario == 'launcher':
+                    if scenario in ('launcher', 'cleanup_pid_error'):
                         config.device_run(apk, report)
                         exercise.assert_called_once()
                     else:
@@ -491,7 +557,8 @@ class EvidenceTests(unittest.TestCase):
                             config.device_run(apk, report)
                         exercise.assert_not_called()
                 self.assertEqual(events[:4], ['resolve', 'launch', 'pid', 'focus'])
-                self.assertTrue(all(report['cleanup'].values()))
+                self.assertEqual(report['cleanup']['application'], scenario != 'cleanup_pid_error')
+                self.assertTrue(all(value for name, value in report['cleanup'].items() if name != 'application'))
                 self.assertFalse(installed)
                 self.assertFalse(forwarded)
                 self.assertEqual(report['launch']['window'], 'system_window' if scenario == 'system_window'

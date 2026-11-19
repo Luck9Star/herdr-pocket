@@ -39,7 +39,8 @@ ERRORS = {'unsafe_runner', 'unowned_device', 'invalid_display', 'install_unconfi
           'app_foreground_unconfirmed', 'app_package_unconfirmed', 'debug_forward_invalid',
           'app_launcher_unconfirmed', 'app_launch_command_failed', 'app_process_unconfirmed',
           'webview_socket_missing', 'webview_not_ready', 'documents_ui_unconfirmed',
-          'picker_hierarchy_invalid', 'picker_target_unconfirmed', 'picker_directory_unconfirmed',
+          'picker_hierarchy_invalid', 'picker_hierarchy_unavailable', 'picker_hierarchy_cleanup_unconfirmed',
+          'picker_target_unconfirmed', 'picker_directory_unconfirmed',
           'picker_return_unconfirmed', 'archive_read_failed',
           'archive_invalid', 'tamper_guard_failed', 'catalog_read_failed', 'catalog_mismatch',
           'catalog_changed', 'configuration_ui_unconfirmed', 'shared_storage_mount_unconfirmed',
@@ -158,6 +159,14 @@ def resolve_launcher():
     return matches.pop()
 
 
+def app_process_state():
+    # pidof reports no matches with status 1 and no output. Preserve any other
+    # outcome as unconfirmed, including a failed ADB transport.
+    return adb('shell', f'output=$(pidof {PACKAGE} 2>&1); '
+               'case $? in 0) [ -n "$output" ] && printf present;; '
+               '1) [ -z "$output" ] && printf absent;; esac', timeout=5)
+
+
 def launch_failure_facts(launcher, pid):
     target, note = focus_sample()
     facts = {'window': target_kind(target, launcher) if target else note,
@@ -177,9 +186,7 @@ def launch_failure_facts(launcher, pid):
     except GuiFailure:
         pass
     try:
-        # An explicit marker distinguishes a successful absent read from an ADB failure.
-        state = adb('shell', f'pidof {PACKAGE} >/dev/null; '
-                    'case $? in 0) printf present;; 1) printf absent;; esac', timeout=5)
+        state = app_process_state()
         if state == 'present':
             facts['process'] = 'present'
         elif state == 'absent':
@@ -280,16 +287,26 @@ class Picker:
     def hierarchy(self):
         if not self.window or foreground() != self.window:
             return None
+        absent = f'test ! -e {self.scratch} && test ! -L {self.scratch}'
         try:
-            adb('shell', 'uiautomator', 'dump', self.scratch, check=False, timeout=10)
-            result = adb('exec-out', 'cat', self.scratch, check=False)
-            return result if foreground() == self.window else None
+            adb('shell', absent)
+        except GuiFailure:
+            self.scratch_cleanup_failed = True
+            raise GuiFailure('picker_hierarchy_cleanup_unconfirmed') from None
+        try:
+            adb('shell', 'uiautomator', 'dump', self.scratch, timeout=10)
+            result = adb('exec-out', 'cat', self.scratch)
+        except GuiFailure:
+            raise GuiFailure('picker_hierarchy_unavailable') from None
         finally:
             try:
                 adb('shell', 'rm', '-f', self.scratch)
-                adb('shell', 'test', '!', '-e', self.scratch)
+                adb('shell', absent)
             except GuiFailure:
                 self.scratch_cleanup_failed = True
+                raise GuiFailure('picker_hierarchy_cleanup_unconfirmed') from None
+        require(result, 'picker_hierarchy_unavailable')
+        return result if foreground() == self.window else None
 
     def tap(self, **expected):
         def sample():
@@ -573,7 +590,7 @@ def device_run(apk, report):
         if installed():
             adb('shell', 'am', 'force-stop', PACKAGE)
             adb('uninstall', PACKAGE, timeout=60)
-        require(not installed() and not adb('shell', 'pidof', PACKAGE, check=False),
+        require(not installed() and app_process_state() == 'absent',
                 'app_package_unconfirmed')
 
     def forward_endpoints(target):

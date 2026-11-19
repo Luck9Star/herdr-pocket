@@ -85,6 +85,8 @@ jobs:
             --scenario "$SSH_SCENARIO"
       - name: Save and reopen a configuration through Android DocumentsUI
         if: inputs.scenario == 'config-document'
+        env:
+          AVD_EVIDENCE_DIR: ${{ runner.temp }}/tauri-config-document-avd-evidence
         run: |
           bash validation/remote-harness/with-android-emulator.sh \
             "$RUNNER_TEMP/direct-ssh-venv/bin/python" validation/remote-harness/tauri_android_config_document.py \
@@ -93,7 +95,10 @@ jobs:
         if: always() && inputs.scenario == 'config-document'
         with:
           name: tauri-android-config-document-evidence-${{ github.sha }}
-          path: ${{ runner.temp }}/tauri-config-document-evidence/manifest.json
+          # The driver manifest precedes the wrapper's emulator cleanup.
+          path: |
+            ${{ runner.temp }}/tauri-config-document-evidence/manifest.json
+            ${{ runner.temp }}/tauri-config-document-avd-evidence/lifecycle.txt
           if-no-files-found: warn
           retention-days: 14
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

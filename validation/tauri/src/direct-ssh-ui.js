@@ -13,8 +13,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   let submitting = false;
   let pasteRevision = 0;
   let retainedTrust = false;
-  let disconnected = false;
-  let disconnectRequested = false;
+  let closeResult = null;
 
   let terminal = null;
   let resizeWatch = null;
@@ -76,13 +75,10 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   });
   const controller = createDirectSsh({invoke, channelFactory,
     onStatus: (message, ready, reason, details) => {
-      if (disconnectRequested) {
-        disconnectRequested = false;
-        disconnected = details?.closed === true;
-        if (!disconnected) {
-          message = '已结束本地会话；无法确认远端连接已关闭。';
-          reason = 'close_unconfirmed';
-        }
+      const desktopClose = details?.explicit && !compact();
+      if (details?.explicit) {
+        closeResult = details.closed ? 'confirmed' : 'unconfirmed';
+        if (desktopClose && !details.closed) message = '远端关闭未确认。本次本地会话已结束，凭据已清空。';
       }
       $('ssh-status').textContent = message;
       $('ssh-disconnect').disabled = !ready;
@@ -98,10 +94,11 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       showSetupNotice(!ready && !!reason);
       applyView(ready, freshRefusal);
       if (freshRefusal) scrollToStep();
+      if (desktopClose && !mobileSection.hidden && !$('host-home').hidden) globalThis.window?.scrollTo?.(0, 0);
       applyLock(ready, freshRefusal);
       if (ready) {
         retainedTrust = false;
-        disconnected = false;
+        closeResult = null;
         const endpoint = targetText(details.target);
         $('ssh-live-endpoint').textContent = endpoint;
         $('ssh-settings-endpoint').textContent = endpoint;
@@ -140,9 +137,14 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   }
   function refreshStep() {
     if (!mobileSection?.dataset) return;
+    delete mobileSection.dataset.sshClose;
     if (!compact()) {
       delete mobileSection.dataset.sshStep;
+      const ended = closeResult !== null && closeResult !== 'pending';
+      if (ended) mobileSection.dataset.sshClose = closeResult;
       $('ssh-target-fields').hidden = false;
+      $('ssh-closed-feedback').hidden = true;
+      $('ssh-return-home').hidden = !ended;
       $('ssh-credentials').hidden = false;
       $('ssh-reviewed-target').hidden = true;
       $('ssh-trust-review').hidden = true;
@@ -155,8 +157,8 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     mobileSection.dataset.sshStep = step;
     $('ssh-step-title').textContent = confirmed ? 'SSH 账号认证' : evidence ? '核对主机密钥' : '普通 SSH';
     $('ssh-target-fields').hidden = step !== 'target';
-    $('ssh-closed-feedback').hidden = !disconnected;
-    $('ssh-return-home').hidden = !disconnected;
+    $('ssh-closed-feedback').hidden = closeResult !== 'confirmed';
+    $('ssh-return-home').hidden = closeResult !== 'confirmed';
     $('ssh-credentials').hidden = step !== 'auth';
     $('ssh-reviewed-target').hidden = step === 'target';
     $('ssh-trust-review').hidden = step !== 'trust';
@@ -276,16 +278,18 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       scrollToStep();
     };
     $('ssh-trust-cancel').onclick = cancelTrust;
-    const leaveTarget = () => {
-      const afterDisconnect = disconnected;
+    const leaveTarget = (returnToDashboard = false) => {
+      const confirmed = closeResult === 'confirmed';
       clearSecrets();
       resetReview();
-      disconnected = false;
+      closeResult = null;
       showSetupNotice(false);
       refreshStep();
-      onBack?.(afterDisconnect);
+      onBack?.(confirmed, returnToDashboard);
     };
-    $('ssh-return-home').onclick = () => { if (disconnected) leaveTarget(); };
+    $('ssh-return-home').onclick = () => {
+      if (closeResult === 'confirmed' || (!compact() && closeResult === 'unconfirmed')) leaveTarget(true);
+    };
     $('ssh-step-back').onclick = () => {
       if (controller.isActive() || submitting) {
         resetReview();
@@ -355,7 +359,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     }
   };
   for (const id of ['ssh-host','ssh-port','ssh-user']) $(id).addEventListener('input', () => {
-    disconnected = false;
+    closeResult = null;
     clearSecrets();
     resetReview();
     if (id !== 'ssh-user') {
@@ -381,7 +385,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       return;
     }
     const rechecking = retainedTrust || controller.isBlocked();
-    disconnected = false;
+    closeResult = null;
     clearSecrets();
     resetReview();
     const revision = probeRevision;
@@ -432,7 +436,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       return;
     }
     submitting = true;
-    disconnected = false;
+    closeResult = null;
     applyLock();
     const password = $('ssh-password').value, privateKeyPem = $('ssh-key').value, passphrase = $('ssh-passphrase').value;
     const credentials = $('ssh-auth-method').value === 'key'
@@ -468,12 +472,11 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   // the same target must be probed and confirmed again before anything is used.
   const disconnect = (requested = false) => {
     clearSecrets();
-    if (requested && !controller.isReady()) return;
-    disconnectRequested = compact() && requested;
-    disconnected = false;
+    if (closeResult === 'pending' || (requested && !controller.isReady())) return;
+    closeResult = requested ? 'pending' : null;
     $('ssh-disconnect').disabled = true;
-    if (compact()) resetReview();
-    void controller.close();
+    if (requested || compact()) resetReview();
+    void controller.close({explicit: requested});
     scrollToStep();
   };
   $('ssh-disconnect').onclick = () => disconnect(true);
@@ -516,7 +519,8 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     if (document.hidden) {
       clearSecrets();
       if (compact()) resetReview();
-      void controller.close();
+      // An explicit close already retired the local session and owns its status.
+      if (!closeResult) void controller.close();
     }
   });
   return {close:disconnect, isReady:controller.isReady, isActive:controller.isActive,
@@ -524,9 +528,8 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       visibilityEpoch++;
       if (document.activeElement === terminal?.textarea) terminal?.textarea?.blur();
       clearSecrets();
-      if (compact() && !controller.isActive()) {
-        disconnectRequested = false;
-        disconnected = false;
+      if (compact() && !controller.isActive() && closeResult !== 'pending') {
+        closeResult = null;
         resetReview();
       }
       refreshStep();

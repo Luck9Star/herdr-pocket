@@ -30,7 +30,7 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
     presentedFingerprint = null;
     return key;
   }
-  async function close() {
+  async function close({explicit = false} = {}) {
     const current = ++generation;
     ready = false;
     connecting = false;
@@ -38,9 +38,15 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
     sessionId = null;
     let closed = false;
     if (id) {
-      try { await invoke('ssh_shell_close', {sessionId: id}); closed = true; } catch {}
+      // The native command resolves with unit; a false reply is not confirmation.
+      try { closed = (await invoke('ssh_shell_close', {sessionId: id})) !== false; } catch {}
     }
-    if (current === generation) onStatus('已断开；重新连接需要再次输入凭据。', false, undefined, {closed});
+    if (current !== generation) return;
+    if ((id || explicit) && !closed) {
+      onStatus('已结束本地会话；无法确认远端连接已关闭。', false, 'close_unconfirmed', {closed, explicit});
+    } else {
+      onStatus(closed ? '已断开；重新连接需要再次输入凭据。' : '尚未连接。', false, undefined, {closed, explicit});
+    }
   }
   async function open(target, credentials, confirmed) {
     if (!confirmed || !sameTarget(target, reviewed)) throw Error('review_required');

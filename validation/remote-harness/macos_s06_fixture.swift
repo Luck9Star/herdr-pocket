@@ -31,3 +31,17 @@ struct MacosS06Fixture: Decodable {
             a.marker == "HPS06A" && b.marker == "HPS06B"
     }
 }
+
+enum MacosS06PairValue: String {
+    case unavailable, empty, exact, defaultValue, defaultBefore, defaultAfter, other
+
+    static func compare(_ value: String?, expected: String, initial: String) -> Self {
+        guard let value else { return .unavailable }
+        if value.isEmpty { return .empty }
+        if value.utf8.elementsEqual(expected.utf8) { return .exact }
+        if value.utf8.elementsEqual(initial.utf8) { return .defaultValue }
+        if value.utf8.elementsEqual((initial + expected).utf8) { return .defaultBefore }
+        if value.utf8.elementsEqual((expected + initial).utf8) { return .defaultAfter }
+        return .other
+    }
+}

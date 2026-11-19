@@ -11,6 +11,14 @@ final class MacosS06UITests: XCTestCase {
     private enum PairControl: String {
         case entry, host, port, user, session, socket, herdr, hostKey, device, fingerprint
         case targetReview, create, copy, response, preview, sourceReview, accept, connect, back
+
+        var initialText: String? {
+            switch self {
+            case .port: return "22"
+            case .device: return "Pocket phone"
+            default: return nil
+            }
+        }
     }
     private lazy var app = XCUIApplication()
     private lazy var clipboard = NSPasteboard.general
@@ -214,10 +222,31 @@ final class MacosS06UITests: XCTestCase {
         let ownerBeforeExact = exact(before.field.value as? String)
         app.typeKey("a", modifierFlags: .command)
         _ = try focusedPairField(label, control: control, in: windowFrame)
-        trace("PAIR_INPUT", "\(code),typing")
-        // Flutter's accessibility proxy and the native first responder can differ.
-        // The actual field outline proves ownership before app-level keyboard input.
-        app.typeText(text)
+        // Keep the clipboard private to the isolated test desktop across the
+        // selection check, single replacement, and independent final copy.
+        defer { clipboard.clearContents() }
+        if let initial = control.initialText {
+            trace("PAIR_INPUT", "\(code),selectDefault")
+            clipboard.clearContents()
+            let cleared = clipboard.changeCount
+            app.typeKey("c", modifierFlags: .command)
+            let selected: String? = try? until("public_pair_default_not_selected", seconds: 4) {
+                guard self.clipboard.changeCount != cleared else { return nil }
+                return self.clipboard.string(forType: .string)
+            }
+            let relation = MacosS06PairValue.compare(selected, expected: text, initial: initial)
+            trace("PAIR_VALUE", "\(code),before,\(relation.rawValue)")
+            try require(relation == .defaultValue, "public_pair_default_not_selected")
+            clipboard.clearContents()
+            try require(clipboard.setString(text, forType: .string), "public_clipboard_write_failed")
+            _ = try focusedPairField(label, control: control, in: windowFrame)
+            trace("PAIR_INPUT", "\(code),pasting")
+            app.typeKey("v", modifierFlags: .command)
+        } else {
+            trace("PAIR_INPUT", "\(code),typing")
+            // The focused Flutter editor receives app-level keyboard input.
+            app.typeText(text)
+        }
         trace("PAIR_INPUT", "\(code),typed")
         let after = try focusedPairField(label, control: control, in: windowFrame)
         let ownerAfterExact = exact(after.field.value as? String)
@@ -226,12 +255,14 @@ final class MacosS06UITests: XCTestCase {
         let editorExact = editors.count == 1 && exact(editors[0].value as? String)
         // Only the isolated runner reaches this code. Discard any earlier
         // pasteboard content and compare only an actual copy from the live editor.
-        clipboard.clearContents()
-        let cleared = clipboard.changeCount
         var changed = false
         var copyExact = false
+        var copied: String?
         defer {
-            clipboard.clearContents()
+            if let initial = control.initialText {
+                let relation = MacosS06PairValue.compare(copied, expected: text, initial: initial)
+                trace("PAIR_VALUE", "\(code),after,\(relation.rawValue)")
+            }
             let bits = [ownerBeforeExact, ownerAfterExact, editors.count == 1, editorExact, changed, copyExact]
                 .map { $0 ? "1" : "0" }.joined()
             trace("PAIR_READ", "\(code),\(bits)")
@@ -239,10 +270,13 @@ final class MacosS06UITests: XCTestCase {
         trace("PAIR_INPUT", "\(code),copy")
         app.typeKey("a", modifierFlags: .command)
         _ = try focusedPairField(label, control: control, in: windowFrame)
+        clipboard.clearContents()
+        let cleared = clipboard.changeCount
         app.typeKey("c", modifierFlags: .command)
         _ = try until("public_value_not_read_back") {
             changed = self.clipboard.changeCount != cleared
-            if changed { copyExact = exact(self.clipboard.string(forType: .string)) }
+            copied = changed ? self.clipboard.string(forType: .string) : nil
+            copyExact = exact(copied)
             return copyExact ? true : nil
         }
         _ = try focusedPairField(label, control: control, in: windowFrame)

@@ -14,7 +14,8 @@ PAIR_CONTROLS = {'entry', 'host', 'port', 'user', 'session', 'socket', 'herdr', 
                  'accept', 'connect', 'back'}
 PAIR_AX_COUNTS = ('named', 'expectedRole', 'withinRegion', 'hittable', 'enabled', 'namedTextViews',
                   'namedEditableChildren', 'formTitleHittable', 'storageUnavailableHittable')
-PAIR_INPUT_STEPS = {'click', 'focus', 'typing', 'typed', 'copy', 'verified'}
+PAIR_INPUT_STEPS = {'click', 'focus', 'selectDefault', 'typing', 'pasting', 'typed', 'copy', 'verified'}
+PAIR_DEFAULT_RELATIONS = {'unavailable', 'empty', 'exact', 'defaultValue', 'defaultBefore', 'defaultAfter', 'other'}
 PAIR_READ_BITS = ('ownerAXBeforeExact', 'ownerAXAfterExact', 'ownedEditorPresent',
                   'ownedEditorAXExact', 'clipboardChanged', 'clipboardExact')
 CHANNEL_FAILURES = {'scope_invalid', 'message_rejected', 'topic_occupied', 'prepare_denied',
@@ -27,6 +28,7 @@ FAILURES = {'private_channel_send_failed', 'private_channel_receive_failed',
             'unique_visible_control_missing', 'public_value_not_read_back', 'public_request_unavailable',
             'public_clipboard_write_failed', 'public_pair_field_owner_lost', 'public_pair_window_changed',
             'public_pair_click_geometry_unstable', 'public_pair_focus_image_unavailable', 'public_pair_focus_unproven',
+            'public_pair_default_not_selected',
             'reviewed_host_response_unavailable', 'reviewed_host_response_invalid',
             'peer_close_unconfirmed_while_window_running', 'peer_close_receipt_invalid', 'native_visible_peer_marker_missing',
             'native_visible_peer_marker_mismatch', 'native_visible_tick_invalid',
@@ -89,6 +91,12 @@ def log_facts(text):
         steps = [step for step in re.findall(pattern, current, re.M) if step in PAIR_INPUT_STEPS]
         if steps:
             facts['lastPairInputStep'] = steps[-1]
+        if control in {'port', 'device'}:
+            pattern = r'^HP_S06_NATIVE_PAIR_VALUE=' + control + r',(before|after),([A-Za-z]+)[ \t]*$'
+            comparisons = {step: relation for step, relation in re.findall(pattern, current, re.M)
+                           if relation in PAIR_DEFAULT_RELATIONS}
+            if comparisons:
+                facts['pairDefaultComparisons'] = comparisons
         pattern = r'^HP_S06_NATIVE_PAIR_READ=' + control + r',([01]{6})[ \t]*$'
         for bits in re.findall(pattern, current, re.M):
             if (bits[3] <= bits[2] and bits[5] <= bits[4]):

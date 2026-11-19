@@ -236,6 +236,44 @@ class MacosS06Checks(unittest.TestCase):
         self.assertEqual(facts['fixedFailure'], 'public_pair_focus_unproven')
         self.assertNotIn('private', json.dumps(facts))
 
+    def test_pair_default_diagnostics_keep_only_approved_comparisons(self):
+        log = ("HP_S06_NATIVE_PAIR_CONTROL=port\n"
+               "HP_S06_NATIVE_PAIR_VALUE=port,before,defaultValue\n"
+               "HP_S06_NATIVE_PAIR_VALUE=port,after,exact\n"
+               "HP_S06_NATIVE_PAIR_CONTROL=port\n"
+               "HP_S06_NATIVE_PAIR_INPUT=port,selectDefault\n"
+               "HP_S06_NATIVE_PAIR_INPUT=port,pasting\n"
+               "HP_S06_NATIVE_PAIR_VALUE=port,before,defaultValue\n"
+               "HP_S06_NATIVE_PAIR_VALUE=port,after,defaultBefore\n"
+               "HP_S06_NATIVE_PAIR_VALUE=port,after,exact,rawSecret\n"
+               "HP_S06_NATIVE_PAIR_VALUE=device,after,exact\n"
+               "HP_S06_NATIVE_PAIR_VALUE=port,after,rawSecret\n")
+        facts = log_facts(log)
+        self.assertEqual(facts['lastPairInputStep'], 'pasting')
+        self.assertEqual(facts['pairDefaultComparisons'], {'before': 'defaultValue', 'after': 'defaultBefore'})
+        self.assertNotIn('rawSecret', json.dumps(facts))
+        self.assertNotIn('pairDefaultComparisons', log_facts(log + "HP_S06_NATIVE_PAIR_CONTROL=port\n"))
+
+    @unittest.skipUnless(shutil.which('swiftc'), 'requires local Swift')
+    def test_pair_default_comparison_requires_the_full_expected_value(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            driver = root / 'main.swift'
+            driver.write_text('''let samples: [(String?, MacosS06PairValue)] = [
+    (nil, .unavailable), ("", .empty), ("22", .defaultValue), ("44016", .exact),
+    ("2244016", .defaultBefore), ("4401622", .defaultAfter), ("4401", .other),
+    ("44016 ", .other), ("44017", .other),
+]
+for (value, expected) in samples {
+    precondition(MacosS06PairValue.compare(value, expected: "44016", initial: "22") == expected)
+}
+precondition(MacosS06PairValue.compare("Pocket phones06-b", expected: "s06-b", initial: "Pocket phone") == .defaultBefore)
+''')
+            executable = root / 'check-value'
+            subprocess.run(['swiftc', runner.HERE / 'macos_s06_fixture.swift', driver, '-o', executable],
+                           check=True, timeout=30)
+            subprocess.run([executable], check=True, timeout=5)
+
     def test_generated_native_focus_color_comes_from_app_tokens(self):
         with tempfile.TemporaryDirectory() as temporary:
             app = Path(temporary)

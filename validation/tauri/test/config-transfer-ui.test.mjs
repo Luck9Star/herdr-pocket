@@ -103,7 +103,10 @@ test('unknown save with successful refresh shows actual new catalog without repl
   assert.ok(view.texts.some(s=>s.includes('新网络 · tailscale')));assert.ok(view.texts.some(s=>s.includes('导入结果未确认')));
 });
 
-test('import preview lists only the tabs for currently selected replacements before applying', async () => {
+for (const [field, owners] of [
+  ['activeHostIds', ['opaque-id-c','unrelated-native-owner']],
+  ['activeHostId', 'opaque-id-c'],
+]) test(`import preview lists only selected replacements and includes ${field} without a local tab`, async () => {
   const panel=new FakeElement('section'), opener=new FakeElement('button');
   const previousDocument=globalThis.document, previousWindow=globalThis.window;
   globalThis.document={hidden:false,getElementById:id=>id==='config-transfer'?panel:opener,createElement:tag=>new FakeElement(tag),createTextNode:text=>new FakeElement('#text',text),addEventListener(){}};
@@ -124,7 +127,7 @@ test('import preview lists only the tabs for currently selected replacements bef
     if(name==='config_document_platform')return 'macos';
     if(name==='network_list')return {profiles:[]};
     if(name==='config_document_open')return [1,2,3];
-    if(name==='config_preview')return {ticket:'single',activeHostIds:Object.keys(impacts),plan:{entries:[entry(0,'opaque-id-a'),entry(1,'opaque-id-b')]}};
+    if(name==='config_preview')return {ticket:'single',[field]:owners,plan:{entries:[entry(0,'opaque-id-a'),entry(1,'opaque-id-b'),entry(2,'opaque-id-c')]}};
     if(name==='config_apply') {
       appliedChoices=args.choices;
       return {added:[],retired:[],removedIds:[]};
@@ -141,19 +144,25 @@ test('import preview lists only the tabs for currently selected replacements bef
     panel.descendants().find(n=>n.tagName==='input' && n.type==='password' && n.parent.textContent==='导入口令').value='synthetic-passphrase';
     await button('解密并预览').onclick();
     assert.doesNotMatch(panel.descendants().map(n=>n.textContent).join(' '),/opaque-id-|synthetic-passphrase|将关闭.*标签/);
-    assert.doesNotMatch(impact(),/研发|运维/);
+    assert.doesNotMatch(impact(),/研发|运维|本机主机 3/);
     choose(0,'replace');choose(1,'add');
     assert.match(impact(),/标签 1 · 研发 · w1:p1.*观察已暂停.*输入已关闭/);
     assert.match(impact(),/标签 3 · 研发 · w1:p2.*正在观察.*草稿输入已启用/);
-    assert.doesNotMatch(impact(),/运维/);
+    assert.doesNotMatch(impact(),/运维|本机主机 3/);
     choose(0,'keep');choose(1,'replace');
     assert.match(impact(),/标签 2 · 运维 · 选择终端.*未连接.*输入已关闭/);
     assert.doesNotMatch(impact(),/研发/);
+    choose(1,'keep');choose(2,'replace');
+    assert.match(impact(),/停止.*连接.*本机主机 3/);
+    assert.doesNotMatch(impact(),/研发|运维|输入已启用|opaque-id-|unrelated-native-owner/);
+    choose(2,'add');
+    assert.doesNotMatch(impact(),/本机主机 3/);
+    choose(2,'keep');choose(1,'replace');
     assert.deepEqual(stopped,[]);
     assert.equal(commands.includes('config_apply'),false);
     await button('确认应用所选操作').onclick();
     assert.equal(commands.filter(name=>name==='config_apply').length,1);
-    assert.deepEqual(appliedChoices.map(choice=>choice.replaceIds),[[],['opaque-id-b']]);
+    assert.deepEqual(appliedChoices.map(choice=>choice.replaceIds),[[],['opaque-id-b'],[]]);
     assert.deepEqual(stopped,[['opaque-id-b']]);
   } finally {globalThis.document=previousDocument;globalThis.window=previousWindow;}
 });

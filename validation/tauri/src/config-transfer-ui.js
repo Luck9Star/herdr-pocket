@@ -28,11 +28,12 @@ export function initConfigTransfer({ native, invoke, getHosts, refreshHosts, onA
   const panel = document.getElementById('config-transfer');
   const opener = document.getElementById('config-transfer-open');
   let ticket = null, plan = null, fileBytes = null, busy = false, pickerPending = false, epoch = 0, platform = null, catalog = null;
+  const activeHostIds = new Set();
   const selectedNetworks = new Set(); let applyPreferences = false;
   const selections = new Map();
   const el = (tag, text, cls) => { const n = document.createElement(tag); if (text != null) n.textContent = text; if (cls) n.className = cls; return n; };
   function clearSecrets() { panel.querySelectorAll('input[type=password]').forEach(n => { n.value = ''; }); }
-  function discard() { const old = ticket; ticket = null; plan = null; selections.clear(); selectedNetworks.clear(); applyPreferences = false; if (old) void invoke('config_discard', { ticket: old }).catch(() => {}); }
+  function discard() { const old = ticket; ticket = null; plan = null; activeHostIds.clear(); selections.clear(); selectedNetworks.clear(); applyPreferences = false; if (old) void invoke('config_discard', { ticket: old }).catch(() => {}); }
   function invalidate() { epoch++; discard(); fileBytes = null; clearSecrets(); panel.querySelector('.config-preview')?.remove(); }
   const describe = target => `${target.username}@${target.host}:${target.port} · 会话 ${target.session}`;
   function render() {
@@ -90,7 +91,10 @@ export function initConfigTransfer({ native, invoke, getHosts, refreshHosts, onA
         if (!previewIsCurrent(current, epoch)) return;
         const result = await invoke('config_preview', { bytes, password: secret }); clearSecrets();
         if (!previewIsCurrent(current, epoch)) { void invoke('config_discard', { ticket: result.ticket }).catch(() => {}); return; }
-        ticket = result.ticket; plan = result.plan; fileBytes = null; busy = false; render(); panel.querySelector('.config-preview h3')?.focus();
+        ticket = result.ticket; plan = result.plan;
+        if (Array.isArray(result.activeHostIds)) for (const id of result.activeHostIds) activeHostIds.add(id);
+        if (result.activeHostId) activeHostIds.add(result.activeHostId);
+        fileBytes = null; busy = false; render(); panel.querySelector('.config-preview h3')?.focus();
       } catch { message('无法验证或解密文件，或文件不受支持；没有导入任何资料。'); }
       finally { clearSecrets(); busy = false; preview.disabled = false; close.disabled = false; if (!previewIsCurrent(current, epoch) && !panel.hidden) render(); }
     }; importBox.append(preview); panel.append(importBox);
@@ -120,22 +124,30 @@ export function initConfigTransfer({ native, invoke, getHosts, refreshHosts, onA
       affected.setAttribute('aria-atomic', 'true');
       previewBox.append(affected);
       function updateAffected() {
-        const ids = plan.entries.filter(e => selections.get(e.index) === 'replace').flatMap(e => e.conflicts.map(c => c.id));
-        const tabs = getTabImpacts(ids);
-        if (!tabs.length) {
-          affected.replaceChildren(el('p', '当前选择没有受影响的工作台标签。'));
-          return;
+        const conflicts = plan.entries.filter(e => selections.get(e.index) === 'replace').flatMap(e => e.conflicts);
+        const connected = new Map(conflicts.filter(c => activeHostIds.has(c.id)).map(c => [c.id, c.name]));
+        const tabs = getTabImpacts(conflicts.map(c => c.id));
+        const contents = [];
+        if (connected.size) {
+          const list = el('ul');
+          for (const name of connected.values()) list.append(el('li', name));
+          contents.push(el('p', '预览时检测到以下主机有连接活动，确认后将停止这些连接。'), list);
         }
-        const list = el('ul');
-        for (const {label, state, input} of tabs) list.append(el('li', `${label} · ${state} · ${input}`));
-        affected.replaceChildren(el('p', '当前选择影响以下工作台标签。'), list);
+        if (!tabs.length) {
+          contents.push(el('p', '当前选择没有受影响的工作台标签。'));
+        } else {
+          const list = el('ul');
+          for (const {label, state, input} of tabs) list.append(el('li', `${label} · ${state} · ${input}`));
+          contents.push(el('p', '当前选择影响以下工作台标签。'), list);
+        }
+        affected.replaceChildren(...contents);
       }
       updateAffected();
       const apply = el('button', '确认应用所选操作', 'primary'); apply.type = 'button'; apply.disabled = busy;
       apply.onclick = async () => {
         if (busy) return;
         let choices; try { choices = buildImportChoices(plan.entries, selections); } catch { message('请逐条选择操作；同一冲突不能被多条同时替换。'); return; }
-        const usedTicket = ticket, selectedNetworkKeys=[...selectedNetworks], shouldApplyPreferences=applyPreferences, current=epoch; ticket = null; plan = null; selections.clear(); selectedNetworks.clear(); applyPreferences=false; catalog=null; busy = true; exp.disabled=true; apply.disabled = true; close.disabled = true;
+        const usedTicket = ticket, selectedNetworkKeys=[...selectedNetworks], shouldApplyPreferences=applyPreferences, current=epoch; ticket = null; plan = null; activeHostIds.clear(); selections.clear(); selectedNetworks.clear(); applyPreferences=false; catalog=null; busy = true; exp.disabled=true; apply.disabled = true; close.disabled = true;
         let result=null, confirmed=false, refreshFailed=false;
         const affectedIds=choices.flatMap(c=>c.replaceIds || []);
         try { await onAffected(affectedIds); result = await invoke('config_apply', { ticket: usedTicket, choices, selectedNetworks:selectedNetworkKeys, applyPreferences:shouldApplyPreferences }); await onApplied(result); confirmed=true; }

@@ -111,6 +111,42 @@ const _mobile = TargetPlatformVariant({
 final _disconnect = find.byKey(const ValueKey('direct-disconnect'));
 
 void main() {
+  for (final (width, outcome, feedbackHeight) in [
+    (320.0, 'remote', 84.0), (390.0, 'remote', 66.0),
+    (320.0, 'local', 66.0), (320.0, 'failed', 66.0),
+  ]) {
+    testWidgets('mobile $width disconnect feedback reserves space for $outcome', (tester) async {
+      final state = await _openPage(tester);
+      final height = width == 320 ? 640.0 : 844.0;
+      final inset = width == 320 ? const FakeViewPadding(top: 24, bottom: 24)
+        : const FakeViewPadding(top: 47, bottom: 34);
+      tester.view.physicalSize = Size(width, height);
+      tester.view.padding = inset;
+      tester.view.viewPadding = inset;
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
+      final session = _connect(state, <String>[]);
+      if (outcome != 'local') session.remoteExitCode = 0;
+      if (outcome == 'failed') {
+        (state.client as _Client).closeThrows = true;
+        (state.socket as _Socket).destroyThrows = true;
+      }
+      await tester.pumpAndSettle();
+      await tester.tap(_disconnect);
+      await tester.pump();
+      session.peerClosed.complete();
+      await tester.pumpAndSettle();
+
+      final feedback = find.byKey(const ValueKey('direct-closed-feedback'));
+      expect(tester.getSize(feedback).height, closeTo(feedbackHeight, 2));
+      expect(find.text(outcome == 'failed' ? '本机连接关闭失败' : '本机已断开'), findsOneWidget);
+      expect(find.textContaining('远端已报告结束'), outcome == 'remote' ? findsOneWidget : findsNothing);
+      expect(find.byKey(const ValueKey('direct-return-home')).hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    }, variant: _mobile);
+  }
+
   for (final outcome in ['exit', 'no-exit', 'timeout']) {
     final confirmed = outcome == 'exit';
     testWidgets('desktop close reports only verified channel retirement: $outcome', (tester) async {

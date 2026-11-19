@@ -1,0 +1,27 @@
+00:00 +0: loading /private/tmp/herdr-mobile-remote-fix.8u5bSgZ6/app-py/test/direct_ssh_shutdown_test.dart
+00:00 +0: mobile 320.0 disconnect feedback reserves space for remote (variant: TargetPlatform.iOS)
+00:00 +1: mobile 320.0 disconnect feedback reserves space for remote (variant: TargetPlatform.android)
+00:00 +2: mobile 390.0 disconnect feedback reserves space for remote (variant: TargetPlatform.iOS)
+00:00 +3: mobile 390.0 disconnect feedback reserves space for remote (variant: TargetPlatform.android)
+00:00 +4: mobile 320.0 disconnect feedback reserves space for local (variant: TargetPlatform.iOS)
+00:00 +5: mobile 320.0 disconnect feedback reserves space for local (variant: TargetPlatform.android)
+00:00 +6: mobile 320.0 disconnect feedback reserves space for failed (variant: TargetPlatform.iOS)
+00:00 +7: mobile 320.0 disconnect feedback reserves space for failed (variant: TargetPlatform.android)
+00:01 +8: desktop close reports only verified channel retirement: exit
+00:01 +9: desktop close reports only verified channel retirement: no-exit
+00:01 +10: desktop close reports only verified channel retirement: timeout
+00:01 +11: local desktop close stays local after mobile resize and back
+00:01 +12: pending result follows current width when mobile expands
+00:01 +13: local success follows current width when mobile expands to desktop
+00:01 +14: local failure follows current width when desktop narrows to mobile
+00:01 +15: local close failure reports failure and returns home
+00:01 +16: explicit disconnect drains only the retiring session (variant: TargetPlatform.iOS)
+00:01 +17: explicit disconnect drains only the retiring session (variant: TargetPlatform.android)
+00:01 +18: pending explicit return reports only the later local success
+00:01 +19: pending system return reports only the later local failure
+00:01 +20: late return from retired route does not overwrite newer outcome
+00:02 +21: no peer EOF is bounded even after leaving the page (variant: TargetPlatform.iOS)
+00:02 +22: no peer EOF is bounded even after leaving the page (variant: TargetPlatform.android)
+00:02 +23: background cancellation retires transport immediately (variant: TargetPlatform.iOS)
+00:02 +24: background cancellation retires transport immediately (variant: TargetPlatform.android)
+00:02 +25: All tests passed!

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:terminal_view/terminal_view.dart';
 import 'design_tokens.dart';
 import 'direct_ssh_page.dart';
 import 'device_keys.dart';
@@ -12,6 +13,8 @@ import 'config_transfer_page.dart';
 import 'network_profiles_page.dart';
 import 'host_task_summary.dart';
 import 'host_catalog_search.dart';
+import 'remote_horizontal_viewport.dart';
+import 'remote_vertical_viewport.dart';
 
 String blockedSummaryGroupKey(String hostId,{bool compact=false}) => '${compact ? 'workspace' : 'host'}-blocked-$hostId';
 String blockedSummaryTargetKey(String hostId,RemotePane pane,{bool compact=false}) =>
@@ -53,6 +56,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   bool sshRouteOpen = false;
   int sshRouteGeneration = 0;
   int destination = 0;
+  String? settingsInputOwner;
   bool splitUpdatePending = false;
   bool workspaceWide = false;
   final sshSidebarPreference = ValueNotifier((narrowExpanded: false, wideCollapsed: false));
@@ -68,7 +72,10 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
     unawaited(catalog.load());
   }
   @override void didChangeAppLifecycleState(AppLifecycleState state) => summaries.setForeground(state == AppLifecycleState.resumed);
-  void changed() { tabs.reconcile(catalog.ready ? catalog.profiles : const [],catalog.networkProfiles); if (mounted) setState(() {}); }
+  void changed() {
+    if (!catalog.recoveringConfigImport) tabs.reconcile(catalog.ready ? catalog.profiles : const [],catalog.networkProfiles);
+    if (mounted) setState(() {});
+  }
   void tabChanged() { if (mounted) setState(() { if (destination == 1 && tabs.active == null && tabs.tabs.isEmpty) destination = 0; }); }
   @override
   void dispose() {
@@ -129,10 +136,29 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   }
   Future<void> transfer() async {
     if (busy || !catalog.ready || catalog.writing || catalog.pendingCreation != null) return;
-    tabs.select(null);
     await Navigator.push<void>(context,MaterialPageRoute(builder:(_) => ConfigTransferPage(catalog:catalog,tabs:tabs,
-      closeTabs:(ids) { for (final id in ids) { tabs.closeHost(id); } })));
+      closeTabs:tabs.retireReplacedHosts)));
     if (mounted) setState(() {});
+  }
+  void selectWorkspaceDestination(int index) {
+    if (index == 3 && destination != 3) {
+      // Settings covers the workspace without retiring its observations. The
+      // hidden terminal cannot write while a settings control owns focus.
+      final tab = tabs.active;
+      settingsInputOwner = destination == 1 && tab?.inputEligible.value == true ? tab!.id : null;
+      tab?.inputEligible.value = false;
+    } else if (index == 1 && destination == 3) {
+      if (settingsInputOwner != null && settingsInputOwner == tabs.activeId) tabs.select(settingsInputOwner);
+      settingsInputOwner = null;
+    } else if (index != 1 && index != 3) {
+      settingsInputOwner = null;
+      tabs.select(null);
+    }
+    setState(() {
+      destination = index;
+      sshClosedNotice = false;
+      sshClosedSucceeded = false;
+    });
   }
   Future<void> terminalPreferences() async {
     if (busy || !catalog.ready || catalog.writing) return;
@@ -398,11 +424,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
             sshVisible.value = false;
           });
         },
-        closeCatalogTabs: (ids) {
-          for (final id in ids) {
-            tabs.closeHost(id);
-          }
-        },
+        closeCatalogTabs: tabs.retireReplacedHosts,
         onReturnAfterDisconnect: (succeeded) {
           if (mounted && sshRouteGeneration == generation) setState(() { sshClosedNotice = true; sshClosedSucceeded = succeeded; });
         },
@@ -482,8 +504,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       resumeSshTerminal();
       return;
     }
-    if (index != 1) tabs.select(null);
-    setState(() => destination = index);
+    selectWorkspaceDestination(index);
   }
 
   Widget desktopSshFlowShell(Widget page, ValueChanged<int> select, [int? selected]) => Row(children: [
@@ -566,8 +587,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
             resumeSshTerminal();
             return;
           }
-          setState(() { destination = i; sshClosedNotice = false; sshClosedSucceeded = false; });
-          if (i != 1) tabs.select(null);
+          selectWorkspaceDestination(i);
         },
         child: Semantics(label: entries[i].$2, button: true, selected: i == 0, child: Stack(alignment: Alignment.topCenter, children: [
           Positioned(top: 4, child: Container(width: 40, height: 28,
@@ -1064,6 +1084,23 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
           tab.summaryLease = lease; return lease;
         },
         onOpenPane:(pane) => openPane(tab,pane))));
+  Widget retainedTab(HostTab tab) {
+    final screen = tab.retainedScreen, view = tab.view.value;
+    final style = TerminalStyle(fontFamily:'ProbeNerd',fontSize:screen?.fontSize ?? 14);
+    return ListView(key:ValueKey('retired-host-view-${tab.id}'),padding:const EdgeInsets.all(16),children:[
+      Text('${tab.label} · ${view.label}',style:Theme.of(context).textTheme.titleLarge),
+      Text('${view.target}\n${view.frameLabel}'),
+      if (screen != null) ...[
+        const SizedBox(height:12),
+        Text('${screen.session} / ${screen.paneId}'),
+        RemoteVerticalViewport(identity:null,anchors:{},frame:screen.terminal,fresh:false,
+          builder:(scroll) => SizedBox(height:MediaQuery.sizeOf(context).width < 600 ? 240 : 360,
+            child:RemoteHorizontalViewport(identity:null,anchors:{},style:style,columns:screen.terminal.viewWidth,
+              child:ExcludeFocus(child:TerminalView(screen.terminal,theme:widget.tokens.terminalTheme,textStyle:style,
+                scrollController:scroll,readOnly:true,autoResize:false,simulateScroll:false,hardwareKeyboardOnly:true,shortcuts:const {}))))),
+      ],
+    ]);
+  }
   Widget tabBar() => SingleChildScrollView(
     scrollDirection: Axis.horizontal,
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -1126,7 +1163,23 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       ],
     ),
   );
+  Widget sidebarHostTab(HostTab tab,{required bool canSplit,bool showLabel = false}) =>
+    ValueListenableBuilder<HostTabView>(valueListenable:tab.view,builder:(context,view,_) =>
+      ListTile(key:ValueKey('host-tab-${tab.id}'),dense:true,
+        selected:tabs.activeId == tab.id,selectedTileColor:widget.tokens.color('brandSoft'),
+        title:Text(showLabel ? tab.label : view.target,maxLines:1,overflow:TextOverflow.ellipsis),
+        subtitle:Text('${view.label}${tab.visible.value ? '' : '\n${view.frameLabel}'}'),
+        onTap:() { tabs.select(tab.id); setState(() => destination = 1); },
+        trailing:Row(mainAxisSize:MainAxisSize.min,children:[
+          if (canSplit && tabs.active != null && tabs.activeId != tab.id)
+            IconButton(key:ValueKey('host-split-${tab.id}'),tooltip:tab.retired ? '并排查看旧画面' : '并排观察此标签',
+              onPressed:() => tabs.splitWith(tab.id),icon:const Icon(Icons.vertical_split)),
+          IconButton(key:ValueKey('host-tab-close-${tab.id}'),tooltip:'关闭本地标签，不终止远端任务',
+            onPressed:() => tabs.close(tab.id),icon:const Icon(Icons.close)),
+        ])));
   Widget desktopSidebar({required bool canSplit}) {
+    final hosts = orderedHosts;
+    final hostIds = hosts.map((profile) => profile.id).toSet();
     return Material(color: widget.tokens.color('card'), child: Container(
       key: const ValueKey('app-sidebar'),
       width: desktopSidebarWidth,
@@ -1155,7 +1208,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
         icon: const Icon(Icons.dashboard_outlined), label: const Text('主机看板')),
       const Padding(padding: EdgeInsets.fromLTRB(16, 12, 16, 4), child: Text('主机与已开标签')),
       Expanded(child: ListView(children: [
-        for (final profile in orderedHosts)
+        for (final profile in hosts)
           ExpansionTile(key: ValueKey('sidebar-host-${profile.id}'), initiallyExpanded: true,
             title: Text(profile.label, overflow: TextOverflow.ellipsis),
             subtitle: Text(networkDescription(profile), maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -1163,30 +1216,20 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
               ListTile(dense: true, leading: const Icon(Icons.add), title: const Text('新建观察视图'),
                 onTap: profile.enabled && !busy ? () => open(profile) : null),
               for (final tab in tabs.forHost(profile.id))
-                ValueListenableBuilder<HostTabView>(valueListenable: tab.view, builder: (context, view, _) =>
-                  ListTile(key: ValueKey('host-tab-${tab.id}'), dense: true,
-                    selected: tabs.activeId == tab.id, selectedTileColor: widget.tokens.color('brandSoft'),
-                    title: Text(view.target, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text('${view.label}${tab.visible.value ? '' : '\n${view.frameLabel}'}'),
-                    onTap: () { tabs.select(tab.id); setState(() => destination = 1); },
-                    trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                      if (canSplit && tabs.active != null && tabs.activeId != tab.id)
-                        IconButton(key: ValueKey('host-split-${tab.id}'), tooltip: '并排观察此标签',
-                          onPressed: () => tabs.splitWith(tab.id), icon: const Icon(Icons.vertical_split)),
-                      IconButton(key: ValueKey('host-tab-close-${tab.id}'), tooltip: '关闭本地标签，不终止远端任务',
-                        onPressed: () => tabs.close(tab.id), icon: const Icon(Icons.close)),
-                    ]))),
+                sidebarHostTab(tab,canSplit:canSplit),
             ]),
+        for (final tab in tabs.tabs.where((tab) => tab.retired && !hostIds.contains(tab.hostId)))
+          sidebarHostTab(tab,canSplit:canSplit,showLabel:true),
       ])),
       ListTile(key: const ValueKey('home-tab-1'), leading: const Icon(Icons.terminal), title: const Text('终端'),
         selected: destination == 1, onTap: () {
           if (sshRouteOpen) { resumeSshTerminal(); return; }
-          setState(() { destination = 1; sshClosedNotice = false; sshClosedSucceeded = false; });
+          selectWorkspaceDestination(1);
         }),
       ListTile(key: const ValueKey('hosts-networks'), leading: const Icon(Icons.language), title: const Text('网络'),
         selected: destination == 2, onTap: () { tabs.select(null); setState(() => destination = 2); }),
       ListTile(key: const ValueKey('home-tab-3'), leading: const Icon(Icons.settings_outlined), title: const Text('设置'),
-        selected: destination == 3, onTap: () { tabs.select(null); setState(() => destination = 3); }),
+        selected: destination == 3, onTap: () => selectWorkspaceDestination(3)),
       ],
     ])));
   }
@@ -1204,8 +1247,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
                   resumeSshTerminal();
                   return;
                 }
-                setState(() { destination = i; sshClosedNotice = false; sshClosedSucceeded = false; });
-                if (i != 1) tabs.select(null);
+                selectWorkspaceDestination(i);
               },
               child: SizedBox(height: 44, child: Center(child: Semantics(label: entries[i].$2, button: true, selected: destination == i,
                 child: Icon(entries[i].$1, size: 24, color: widget.tokens.color(destination == i ? 'brand' : 'textSecondary')))))))),
@@ -1234,6 +1276,10 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
         resumeSshTerminal();
         return;
       }
+      if (destination == 3 && tabs.active != null) {
+        selectWorkspaceDestination(1);
+        return;
+      }
       final navigator = tabs.active?.navigator.currentState;
       if (navigator?.canPop() == true) {
         unawaited(navigator!.maybePop());
@@ -1260,12 +1306,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
             resumeSshTerminal();
             return;
           }
-          setState(() {
-            destination = index;
-            sshClosedNotice = false;
-            sshClosedSucceeded = false;
-          });
-          if (index != 1) tabs.select(null);
+          selectWorkspaceDestination(index);
         },
         destinations: const [
           NavigationDestination(
@@ -1289,7 +1330,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
           syncSplitAvailability(canSplit);
           final split = canSplit && tabs.splitAvailable && tabs.active != null && tabs.splitId != null;
           final showingTab = destination == 1 && tabs.active != null;
-          bool showFocusControl(HostTab tab) => split || (tab.id == tabs.activeId && !tab.inputEligible.value);
+          bool showFocusControl(HostTab tab) => split || (!tab.retired && tab.id == tabs.activeId && !tab.inputEligible.value);
           final inlineHostTabs = !desktop || desktopSshConnected || !desktopSidebarExpanded;
           return Row(children: [
           if (desktop) (desktopSshConnected ? desktopSshFlowSidebar(selectDesktopSshDestination, destination)
@@ -1303,7 +1344,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
                   ),
                   child: SingleChildScrollView(child: tabBar()),
                 ),
-              if (tabs.active != null && inlineHostTabs)
+              if (showingTab && inlineHostTabs)
                 ConstrainedBox(
                   constraints: BoxConstraints(
                     maxHeight: available.maxHeight * .28,
@@ -1322,7 +1363,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
                     ),
                   ),
                 ),
-              if (tabs.active != null)
+              if (showingTab)
                 ConstrainedBox(
                   constraints: BoxConstraints(
                     maxHeight: available.maxHeight * .12,
@@ -1377,7 +1418,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
                           width: split ? 2 : 0)), child: Column(children: [
                           SizedBox(height: showFocusControl(tab) ? 44 : 0, child: showFocusControl(tab) ? Row(children: [
                             Expanded(child: TextButton(key: ValueKey('workspace-focus-${tab.id}'),
-                              onPressed: () => tabs.select(tab.id),
+                              onPressed: tab.retired ? null : () => tabs.select(tab.id),
                               child: ValueListenableBuilder<HostTabView>(
                                 valueListenable: tab.view,
                                 builder: (context, view, _) => Text(
@@ -1388,7 +1429,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
                             if (tab.id == tabs.splitId) IconButton(key: const ValueKey('workspace-close-split'),
                               tooltip: '收起并排观察', onPressed: tabs.closeSplit, icon: const Icon(Icons.close)),
                           ]) : null),
-                          Expanded(child: Semantics(container: true, child: tabNavigator(tab))),
+                          Expanded(child: Semantics(container: true, child: tab.retired ? retainedTab(tab) : tabNavigator(tab))),
                         ])))),
                 ]))),
             ],

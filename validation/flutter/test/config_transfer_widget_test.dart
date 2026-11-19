@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
@@ -8,10 +9,11 @@ import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/host_catalog.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
 import 'package:herdr_flutter_probe/host_tabs.dart';
-import 'package:herdr_flutter_probe/remote_adapter.dart' show RemotePane;
+import 'package:herdr_flutter_probe/remote_adapter.dart' show RemoteFailure,RemoteFrame,RemotePane;
 import 'host_catalog_test.dart' show MemoryCatalogStorage,catalogPairing;
 import 'config_transfer_test.dart' show portable;
 import 'pairing_gui_test.dart' show TestDeviceKeys,tapVisible;
+import 'host_tabs_widget_test.dart' show TabFixtureAdapter,tabProfile,connectTab;
 import 'remote_test_data.dart';
 
 class MemoryConfigDocuments implements ConfigDocuments {
@@ -20,7 +22,62 @@ class MemoryConfigDocuments implements ConfigDocuments {
   @override Future<Uint8List?> open() async { opens++; return opened; }
   @override Future<bool> save(Uint8List archive) async { saves++; return false; }
 }
+class ImportSaveFixture extends MemoryCatalogStorage {
+  String? failure;
+  @override
+  Future<String> save(String expected,String contents) async {
+    final error = failure;
+    if (error == 'catalog_conflict') throw const RemoteFailure('catalog_conflict');
+    final revision = await super.save(expected,contents);
+    if (error != null) throw RemoteFailure(error);
+    return revision;
+  }
+}
 void main() {
+  for (final failure in ['catalog_conflict','catalog_write_unknown']) {
+    testWidgets('failed import preserves the unrelated original observation while recovering catalog: $failure', (tester) async {
+      tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(390,844);
+      addTearDown(tester.view.reset);
+      final disk = ImportSaveFixture(), catalog = HostCatalog(storage:disk,clock:() => 1000);
+      await catalog.load();
+      final old = tabProfile('Old','probeA','127.0.0.1','unspecified','opaque-import-old');
+      final peer = tabProfile('Peer','probeB','127.0.0.2','unspecified','opaque-import-peer');
+      await catalog.add(old); await catalog.add(peer);
+      final adapter = TabFixtureAdapter(), tabs = HostTabs(), tokens = (await tester.runAsync(DesignTokens.load))!;
+      await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:HostCatalogPage(tokens:tokens,catalog:catalog,tabs:tabs,
+        keys:TestDeviceKeys(fixtureConfig()['privateKeyPem'] as String),adapterFactory:(_) => adapter,offlineBuilder:(_) => const SizedBox())));
+      await tester.pumpAndSettle();
+      expect(tabs.open(old),isTrue); final affected = tabs.active!;
+      await tester.pumpAndSettle();
+      await tapVisible(tester,'host-open-${peer.id}'); await tester.pumpAndSettle();
+      await tapVisible(tester,'pair-connect'); await tester.pumpAndSettle(); await connectTab(tester,adapter);
+      final survivor = tabs.active!, generation = adapter.generation, target = adapter.inputTarget;
+      final config = catalog.exportConfig({old.id},{}), plan = catalog.previewConfigImport(config);
+      disk.failure = failure;
+      await expectLater(catalog.applyConfigImport(plan,[const ConfigImportChoice(ConfigImportAction.replace)],beforeCommit:tabs.retireReplacedHosts),
+        throwsA(isA<RemoteFailure>().having((error) => error.code,'code',failure)));
+      await tester.pumpAndSettle();
+      expect(catalog.ready,isFalse);
+      expect(tabs.tabs,[affected,survivor]);
+      expect(affected.retired,isTrue);
+      expect(adapter.generation,generation);
+      expect(adapter.inputTarget,same(target));
+      expect(adapter.cancels,0);
+      expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected,isNull);
+      await catalog.load(); await tester.pumpAndSettle();
+      expect(catalog.ready,isTrue);
+      expect(catalog.profiles.singleWhere((p) => p.id == old.id).retired,failure == 'catalog_write_unknown');
+      expect(tabs.active,same(survivor));
+      expect(tabs.tabs,[affected,survivor]);
+      expect(adapter.generation,generation);
+      expect(adapter.cancels,0);
+      adapter.frame!(generation,'w1:p1',const RemoteFrame(1,false,'Original peer continued'));
+      await tester.pump();
+      expect(survivor.view.value.state,'live');
+      expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-direct'))).onSelected,isNotNull);
+      await tester.pumpWidget(const SizedBox()); tabs.dispose(); catalog.dispose();
+    });
+  }
   testWidgets('review from settings shows every tab for selected replacements only', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(540, 860);
@@ -193,6 +250,39 @@ void main() {
     expect(tester.widget<CheckboxListTile>(find.byKey(const ValueKey('transfer-review'))).value,isFalse);
     expect(tester.widget<FilledButton>(apply).onPressed,isNull);
     expect(disk.writes,writes);
+
+    // Reconfirm the updated scope and use the real settings import action.
+    // Tabs outside this replacement, including the same-named new profile's
+    // future tabs, are identified by their own profile IDs.
+    final close = Completer<void>();
+    var closes = 0;
+    newTab.registerTransport(() { closes++; return close.future; });
+    await tapVisible(tester,'transfer-review');
+    await tapVisible(tester,'transfer-apply');
+    expect(disk.writes,writes);
+    await tester.pump(const Duration(seconds:5));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('连接关闭未确认 · 本次未保存'),findsOneWidget);
+    expect(newTab.view.value.state,'retired-unconfirmed');
+    expect(newTab.inputEligible.value,isFalse);
+    expect(disk.writes,writes);
+    expect(closes,1);
+    close.complete();
+    await tester.pumpAndSettle();
+    expect(newTab.view.value.state,'retired');
+    await tapVisible(tester,'transfer-review');
+    await tapVisible(tester,'transfer-apply');
+    await tester.pumpAndSettle();
+    expect(closes,1);
+    expect(disk.writes,writes+1);
+    expect(tabs.tabs,[...originalTabs,newTab]);
+    expect(tabs.tabs.map((tab) => tab.view.value.label),[
+      '已停用 · 连接已停止','已停用 · 连接已停止','陈旧','陈旧','已停用 · 连接已停止',
+    ]);
+    expect(newTab.inputEligible.value,isFalse);
+    final replacement = catalog.profiles.singleWhere((p) => p.label == first.label && !p.retired);
+    expect(replacement.id,isNot(first.id));
+    expect(replacement.hasIdentity,isFalse);
     await tester.pumpWidget(const SizedBox()); tabs.dispose(); catalog.dispose();
   });
 

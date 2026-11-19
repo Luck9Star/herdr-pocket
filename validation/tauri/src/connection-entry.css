@@ -66,6 +66,13 @@
     #host-empty button { display:block; width:100%; min-height:48px; font-size:14px; }
     #home-open-ssh { margin-top:12px; }
 
+  }
+
+  body:has(#host-home:not([hidden]) :is(
+    #home-dashboard:not([hidden]) #host-empty[data-compact]:not([hidden]),
+    #home-ssh:not([hidden]) #ssh-live:not([hidden]),
+    #home-settings:not([hidden]) #ssh-settings-active:not([hidden])
+  )) {
     .route-tabs {
       border:0;
       gap:0;

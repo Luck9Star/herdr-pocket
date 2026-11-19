@@ -91,6 +91,13 @@ function setup() {
         document.activeElement = this.textarea;
       },
       resize() {},
+      write(bytes, acknowledge) {
+        this.received = [...bytes];
+        acknowledge();
+      },
+    };
+    t.textarea.blur = () => {
+      if (document.activeElement === t.textarea) document.activeElement = null;
     };
     terminals.push(t);
     return t;
@@ -143,15 +150,15 @@ test("ready shows the connected identity even if form values change without even
     h.nodes["ssh-host"].value = "changed.test";
     h.nodes["ssh-user"].value = "changed";
     oldChannel.onmessage({ sessionId: "s1", seq: 1, kind: "ready" });
-    assert.equal(h.nodes["ssh-target"].textContent, "user@example.test:22 · SSH 已连接");
+    assert.equal(h.nodes["ssh-live-endpoint"].textContent, "user@example.test:22");
     h.nodes["ssh-disconnect"].onclick();
     await flush();
-    assert.equal(h.nodes["ssh-target"].textContent, "");
+    assert.equal(h.nodes["ssh-live-endpoint"].textContent, "");
     h.nodes["ssh-host"].value = "example.test";
     h.nodes["ssh-user"].value = "next";
     await h.connect();
     oldChannel.onmessage({ sessionId: "s1", seq: 2, kind: "ready" });
-    assert.equal(h.nodes["ssh-target"].textContent, "next@example.test:22 · SSH 已连接");
+    assert.equal(h.nodes["ssh-live-endpoint"].textContent, "next@example.test:22");
   } finally { h.restore(); }
 });
 
@@ -161,7 +168,7 @@ test("IPv6 and a long username remain fully represented in the connected label",
     h.nodes["ssh-host"].value = "2001:db8::1234";
     h.nodes["ssh-user"].value = "a".repeat(120);
     await h.connect();
-    assert.equal(h.nodes["ssh-target"].textContent, `${"a".repeat(120)}@[2001:db8::1234]:22 · SSH 已连接`);
+    assert.equal(h.nodes["ssh-live-endpoint"].textContent, `${"a".repeat(120)}@[2001:db8::1234]:22`);
   } finally { h.restore(); }
 });
 
@@ -322,4 +329,39 @@ test("queued and old controls cannot write after hide, target change, disconnect
   } finally {
     h.restore();
   }
+});
+
+
+test("leaving the SSH route blurs input while keeping the connected endpoint and output", async () => {
+  const h = setup();
+  try {
+    await h.connect();
+    const terminal = h.terminals[0];
+    assert.equal(h.nodes["ssh-settings-active"].hidden, false);
+    assert.equal(h.nodes["ssh-settings-endpoint"].textContent, "user@example.test:22");
+    h.nodes["ssh-focus"].onclick();
+    const previouslyFocusedHandler = terminal.output;
+    h.ui.hide();
+    h.nodes["home-ssh"].hidden = true;
+    assert.equal(h.document.activeElement, null);
+    previouslyFocusedHandler("ignored");
+    h.channel.onmessage({ sessionId: "s1", seq: 2, kind: "data", data: [97] });
+    h.nodes["home-ssh"].hidden = false;
+    h.ui.show();
+    assert.equal(h.document.activeElement, null);
+    assert.equal(h.terminals[0], terminal);
+    assert.deepEqual(terminal.received, [97]);
+    previouslyFocusedHandler("stale");
+    terminal.output("b");
+    await flush();
+    assert.deepEqual(h.calls.filter(c => c.cmd === "ssh_shell_write").map(c => c.args),
+      [{sessionId: "s1", bytes: [98]}]);
+    assert.equal(h.calls.filter(c => c.cmd === "ssh_shell_open").length, 1);
+    assert.equal(h.calls.filter(c => c.cmd === "ssh_shell_close").length, 0);
+    h.nodes["ssh-disconnect"].onclick();
+    await flush();
+    assert.deepEqual(h.calls.filter(c => c.cmd === "ssh_shell_close").map(c => c.args), [{sessionId:"s1"}]);
+    assert.equal(h.nodes["ssh-settings-active"].hidden, true);
+    assert.equal(h.nodes["ssh-settings-endpoint"].textContent, "");
+  } finally { h.restore(); }
 });

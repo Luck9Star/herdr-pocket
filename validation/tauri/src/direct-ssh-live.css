@@ -1,0 +1,236 @@
+.ssh-compact-control, #ssh-active-title { display:none; }
+.ssh-live-header, .ssh-live-status { display:contents; }
+
+#ssh-live:not([hidden]) {
+  display:grid;
+  grid-template-columns:max-content max-content minmax(0,1fr);
+  column-gap:8px;
+}
+#ssh-live :is(#ssh-target, #ssh-hide-keyboard, #ssh-terminal-output, #ssh-helper-keys) {
+  grid-column:1 / -1;
+}
+#ssh-live #ssh-target { margin-top:0; }
+#ssh-hide-keyboard { grid-row:2; justify-self:start; }
+#ssh-focus, #ssh-disconnect { grid-row:5; margin-block:12px; }
+#ssh-focus { grid-column:1; }
+#ssh-disconnect { grid-column:2; }
+
+@media (max-width:599px) {
+  body:has(#host-home:not([hidden]) :is(
+    #home-ssh:not([hidden]) #ssh-live:not([hidden]),
+    #home-settings:not([hidden]) #ssh-settings-active:not([hidden])
+  )) {
+    --ssh-tabs-space:calc(56px + env(safe-area-inset-bottom,0px));
+    padding-bottom:var(--ssh-tabs-space);
+    .app-header { display:none; }
+    #host-home { padding:var(--hp-connection-top) 0 0; }
+
+    &:has(#home-ssh:not([hidden])) {
+      #ssh-page-heading, #ssh-status { display:none; }
+    }
+  }
+
+  body.keyboard-visible:has(#host-home:not([hidden]) #home-ssh:not([hidden]) #ssh-live:not([hidden])) {
+    --ssh-tabs-space:0px;
+    padding-bottom:var(--hp-visual-inset,0px);
+    .route-tabs { display:none; }
+  }
+
+  #ssh-live:not([hidden]) {
+    display:flex;
+    flex-direction:column;
+    margin:0;
+    /* Let very short viewports scroll to the keys once the terminal reaches its minimum. */
+    min-height:calc(var(--hp-visual-height,100dvh) - var(--hp-connection-top) - var(--ssh-tabs-space));
+    padding-bottom:12px;
+    .ssh-wide-control { display:none; }
+    .ssh-compact-control, #ssh-active-title { display:block; }
+  }
+
+  .ssh-live-header, .ssh-settings-header {
+    min-height:56px;
+    padding:0 var(--hp-connection-margin) 1px;
+    border-bottom:1px solid var(--hp-border);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    position:sticky;
+    top:var(--hp-connection-top);
+    z-index:3;
+    background:var(--hp-canvas);
+  }
+  #ssh-active-title, .ssh-settings-header {
+    font-size:1.125rem;
+    font-weight:600;
+    margin:0;
+  }
+
+  #ssh-live #ssh-disconnect {
+    flex:none;
+    width:60px;
+    margin:0;
+    padding:4px 2px;
+    background:var(--hp-dangerSoft);
+    color:var(--hp-dangerText);
+    border:0;
+    font-size:0.875rem;
+  }
+
+  .ssh-live-status {
+    display:flex;
+    flex:none;
+    align-items:center;
+    gap:10px;
+    min-height:44px;
+    margin:12px var(--hp-connection-margin) 8px;
+  }
+  #ssh-live:not([hidden]) .ssh-connected-badge {
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex:none;
+    min-width:62px;
+    min-height:24px;
+    padding:2px 4px;
+    border:1px solid var(--hp-successBorder);
+    border-radius:8px;
+    background:var(--hp-successSoft);
+    color:var(--hp-successText);
+    font-size:0.75rem;
+    font-weight:600;
+  }
+  #ssh-live #ssh-target {
+    position:static;
+    flex:1;
+    min-width:0;
+    margin:0;
+    font:400 0.75rem/1.25rem ui-monospace,monospace;
+  }
+
+  #ssh-live :is(#ssh-focus, #ssh-hide-keyboard) {
+    place-items:center;
+    flex:none;
+    width:44px;
+    height:44px;
+    margin:0;
+    padding:0;
+    color:var(--hp-brand);
+    background:transparent;
+    border:0;
+    position:relative;
+  }
+  #ssh-live :is(#ssh-focus, #ssh-hide-keyboard)::before {
+    content:'';
+    position:absolute;
+    inset:4px 0;
+    border:1px solid var(--hp-borderStrong);
+    border-radius:8px;
+    background:var(--hp-card);
+  }
+  #ssh-live :is(#ssh-focus, #ssh-hide-keyboard) svg { position:relative; }
+  body:not(.keyboard-visible) #ssh-focus, body.keyboard-visible #ssh-hide-keyboard { display:grid; }
+  body.keyboard-visible #ssh-focus, body:not(.keyboard-visible) #ssh-hide-keyboard { display:none; }
+
+  #home-ssh #ssh-terminal-output {
+    flex:1 0 80px;
+    height:0;
+    margin:0 var(--hp-connection-margin);
+    padding:11px;
+    border:1px solid var(--hp-termBorder);
+  }
+  #ssh-live #ssh-helper-keys {
+    flex:none;
+    display:grid;
+    grid-template-columns:repeat(6,44px) 54px;
+    gap:4px;
+    margin:8px var(--hp-connection-margin) 0;
+  }
+  #ssh-helper-keys button {
+    padding:0;
+    min-height:44px;
+    border-radius:8px;
+    background:var(--hp-termKeyBg);
+    border-color:var(--hp-termKeyBorder);
+    color:var(--hp-termText);
+    font:400 0.75rem/1.25rem ui-monospace,monospace;
+  }
+  #ssh-helper-keys button:hover:not(:disabled) { background:var(--hp-termBorder); }
+
+  #home-settings:has(#ssh-settings-active:not([hidden])) {
+    padding:0 var(--hp-connection-margin) 20px;
+    .ssh-settings-header { margin:0 calc(-1 * var(--hp-connection-margin)) 20px; }
+    #ssh-settings-active, #ssh-settings-target {
+      border-radius:10px;
+      overflow-wrap:anywhere;
+    }
+    #ssh-settings-active {
+      display:flex;
+      align-items:center;
+      min-height:44px;
+      margin:0 0 10px;
+      padding:2px 11px;
+      border:1px solid var(--hp-successBorder);
+      background:var(--hp-successSoft);
+      color:var(--hp-successText);
+      font-size:0.875rem;
+      font-weight:600;
+    }
+    #ssh-settings-target {
+      display:block;
+      min-height:52px;
+      padding:4px 11px;
+      border:1px solid var(--hp-border);
+      background:var(--hp-card);
+      font:400 0.875rem/1.25rem ui-monospace,monospace;
+    }
+    #ssh-settings-target p {
+      margin:0;
+      color:var(--hp-textSecondary);
+      font:400 0.75rem/1.125rem Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    }
+    .host-save {
+      padding:0;
+      margin:16px 0;
+      border:0;
+      background:transparent;
+    }
+    .host-save label { font-size:0.8125rem; line-height:1.125rem; font-weight:600; }
+    #terminal-font-size {
+      display:block;
+      width:100%;
+      min-height:48px;
+      margin:4px 0 12px;
+      padding:10px 11px;
+      color:var(--hp-textPrimary);
+      background:var(--hp-card);
+      border:1px solid var(--hp-borderStrong);
+      border-radius:var(--hp-radius-button);
+      font-family:inherit;
+      font-size:1rem;
+      font-weight:400;
+      line-height:1.25rem;
+      appearance:textfield;
+    }
+    #terminal-font-size::-webkit-inner-spin-button,
+    #terminal-font-size::-webkit-outer-spin-button { appearance:none; margin:0; }
+    #terminal-font-save, #config-transfer-open {
+      display:block;
+      width:100%;
+      min-height:48px;
+      font-size:0.875rem;
+    }
+    #terminal-font-status:empty, #show-fixture, .remote-help, .terminal-notices { display:none; }
+  }
+}
+
+@media (max-width:389px) {
+  #ssh-live #ssh-helper-keys {
+    grid-template-columns:repeat(4,44px);
+    grid-template-rows:repeat(2,44px);
+  }
+  #ssh-helper-keys [data-ssh-key="ctrl-c"] { width:54px; }
+}
+
+@media (max-width:359px) {
+  #ssh-live #ssh-target { font-size:0.6875rem; }
+}

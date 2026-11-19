@@ -1,5 +1,6 @@
 import XCTest
 import AppKit
+import ApplicationServices
 import Darwin
 
 @available(macOS 15.0, *)
@@ -275,6 +276,46 @@ final class SecureCredentialUITests: XCTestCase {
         fflush(stdout)
     }
 
+    // Read system AX focus without publishing a frame, label, identifier or value.
+    // A frame match is only a geometric clue, not proof of element identity.
+    private func ordinaryFocusObservation(_ app: XCUIApplication, address: XCUIElement,
+                                          addresses: XCUIElementQuery, initialFrame: CGRect, phase: String) {
+        let exists = address.exists
+        let frame = exists ? address.frame : .zero
+        let stable = exists && addresses.count == 1 && !frame.isEmpty && frame == initialFrame
+        let value = exists ? try? ordinaryValue(address) : nil
+        let retained = value == nil ? "unavailable" : value == "127.0.0.1" ? "match" : "different"
+        let targetApp = AXUIElementCreateApplication(app.processID)
+        var focused: CFTypeRef?
+        let status = AXUIElementCopyAttributeValue(targetApp, kAXFocusedUIElementAttribute as CFString, &focused)
+        var ax = status == .apiDisabled ? "denied" : "unavailable"
+        var role = "unknown", frameMatch = "unknown"
+        if status == .success, let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() {
+            ax = "ok"
+            let element = unsafeBitCast(focused, to: AXUIElement.self)
+            var rawRole: CFTypeRef?, position: CFTypeRef?, size: CFTypeRef?
+            if AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &rawRole) == .success,
+               let name = rawRole as? String {
+                role = ["AXTextField":"textfield", "AXTextArea":"textarea", "AXWindow":"window",
+                        "AXApplication":"application"][name] ?? "other"
+            }
+            if stable && AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &position) == .success &&
+               AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &size) == .success,
+               let position, let size, CFGetTypeID(position) == AXValueGetTypeID(), CFGetTypeID(size) == AXValueGetTypeID() {
+                var origin = CGPoint.zero, dimensions = CGSize.zero
+                let p = unsafeBitCast(position, to: AXValue.self), q = unsafeBitCast(size, to: AXValue.self)
+                if AXValueGetValue(p, .cgPoint, &origin) && AXValueGetValue(q, .cgSize, &dimensions) {
+                    let observed = CGRect(origin: origin, size: dimensions)
+                    let difference = [abs(observed.minX-frame.minX), abs(observed.minY-frame.minY),
+                                      abs(observed.width-frame.width), abs(observed.height-frame.height)]
+                    frameMatch = difference.allSatisfy { $0.isFinite && $0 <= 2 } ? "yes" : "no"
+                }
+            }
+        }
+        print("HP_XCUI_FOCUS=phase:\(phase),ax:\(ax),trusted:\(AXIsProcessTrusted() ? 1 : 0),role:\(role),match:\(frameMatch),exists:\(exists ? 1 : 0),enabled:\(exists && address.isEnabled ? 1 : 0),hittable:\(exists && address.isHittable ? 1 : 0),stable:\(stable ? 1 : 0),retained:\(retained)")
+        fflush(stdout)
+    }
+
     private func verifyOrdinarySentinel(_ app: XCUIApplication) throws {
         let window = app.windows.firstMatch
         let addresses = window.descendants(matching: .any).matching(identifier: addressLabel)
@@ -291,6 +332,8 @@ final class SecureCredentialUITests: XCTestCase {
         let sentinel = "hpaddress" + String(nonce.prefix(16))
         XCTAssertFalse(try ordinaryValue(address) == sentinel, "ordinary field sentinel unexpectedly present before editing")
         tap(app, address)
+        let initialFrame = address.frame
+        ordinaryFocusObservation(app, address: address, addresses: addresses, initialFrame: initialFrame, phase: "tap")
 
         // The retained address is a short, single line. Drag from after its end to before its
         // start and replace the selection once through the focused system text field.
@@ -299,6 +342,7 @@ final class SecureCredentialUITests: XCTestCase {
         XCTAssertTrue(stableHit(address) && window.frame.contains(trailing.screenPoint) &&
                       window.frame.contains(leading.screenPoint), "requested control is not hittable")
         trailing.click(forDuration: 0.05, thenDragTo: leading)
+        ordinaryFocusObservation(app, address: address, addresses: addresses, initialFrame: initialFrame, phase: "drag")
         address.typeText(sentinel)
 
         let deadline = Date().addingTimeInterval(8)

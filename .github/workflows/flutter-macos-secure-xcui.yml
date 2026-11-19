@@ -42,7 +42,7 @@ jobs:
           "$RUNNER_TEMP/macos-secure-venv/bin/python" validation/remote-harness/macos_secure_xcui_fixture.py "$RUNNER_TEMP/macos-secure-fixture" > "$RUNNER_TEMP/macos-fixture-private.log" 2>&1 &
           fixture_pid=$!
           trap 'touch "$RUNNER_TEMP/macos-secure-fixture/stop"; wait "$fixture_pid" || true; python3 -c "import shutil,sys; shutil.rmtree(sys.argv[1],ignore_errors=True)" "$RUNNER_TEMP/macos-secure-fixture"' EXIT
-          for attempt in {1..100}; do test -s "$RUNNER_TEMP/macos-secure-fixture/fixture.json" && break; kill -0 "$fixture_pid"; sleep 0.1; done
+          for _ in {1..100}; do test -s "$RUNNER_TEMP/macos-secure-fixture/fixture.json" && break; kill -0 "$fixture_pid"; sleep 0.1; done
           test -s "$RUNNER_TEMP/macos-secure-fixture/fixture.json"
           python3 validation/remote-harness/macos_secure_xcuitest.py --app "$RUNNER_TEMP/flutter-probe" --install-hook
           python3 validation/remote-harness/macos_secure_xcuitest.py --app "$RUNNER_TEMP/flutter-probe" --fixture "$RUNNER_TEMP/macos-secure-fixture/fixture.json"
@@ -122,7 +122,7 @@ jobs:
           if test -n "$test_id"; then
             xcrun xcresulttool get test-results test-details --path "$RUNNER_TEMP/macos-secure-private.xcresult" --test-id "$test_id" --format json > "$RUNNER_TEMP/macos-secure-private-details.json" 2>/dev/null || true
           fi
-          for attempt in {1..100}; do
+          for _ in {1..100}; do
             if python3 - "$RUNNER_TEMP/macos-secure-fixture/facts.json" <<'PY'
           import json,sys
           try:
@@ -213,6 +213,17 @@ jobs:
               if any(pattern in diagnostic_text for pattern in patterns): categories.append(name)
           ordinary=re.findall(r'hp_xcui_ordinary=nodes:(\d{1,5}),values:(\d{1,5}),sentinel:([01])',log)
           ordinary=[{'nodes':int(n),'nonemptyValues':int(v),'sentinelObserved':s=='1'} for n,v,s in ordinary[:2]]
+          ordinary_focus=[]
+          focus_pattern=re.compile(r'hp_xcui_focus=phase:(tap|drag),ax:(ok|denied|unavailable),trusted:([01]),role:(textfield|textarea|window|application|other|unknown),match:(yes|no|unknown),exists:([01]),enabled:([01]),hittable:([01]),stable:([01]),retained:(match|different|unavailable)')
+          for line in log.splitlines():
+              match=focus_pattern.fullmatch(line.strip())
+              if not match: continue
+              phase,ax,trusted,role,frame_match,exists,enabled,hittable,stable,retained=match.groups()
+              if ax != 'ok' and (role != 'unknown' or frame_match != 'unknown'): continue
+              if any(row['phase']==phase for row in ordinary_focus): continue
+              ordinary_focus.append({'phase':phase,'ax':ax,'trusted':trusted=='1','role':role,'frameMatch':frame_match,
+                  'exists':exists=='1','enabled':enabled=='1','hittable':hittable=='1','frameStable':stable=='1','retained':retained})
+              if len(ordinary_focus)==2: break
           back_metrics=re.findall(r'hp_xcui_back=buttons:(\d{1,5}),exact:(\d{1,5}),hittable:(\d{1,5})',log)
           back_metrics=[dict(zip(('buttons','exact','hittable'),map(int,row))) for row in back_metrics[:2]]
           secure_metrics=re.findall(r'hp_xcui_secure=phase:(password|passphrase),secure:(\d{1,5}),text:(\d{1,5}),other:(\d{1,5}),id:(\d{1,5}),label:(\d{1,5}),securelabel:(\d{1,5})',log)
@@ -273,7 +284,7 @@ jobs:
                   'failureMethod':failure_method,'failedMethods':failed_methods,'buildDiagnostics':diagnostics,'failureSourceLines':failure_lines,'fixedFailures':fixed_failures,
                   'failureCategories':categories,'xcresultDetailsAvailable':details_available,'homeMetrics':home_metrics,
                   'fallbackHomeMetrics':metrics[1] if len(metrics)>1 else {},
-                  'ordinaryMetrics':ordinary,'backMetrics':back_metrics,'secureMetrics':secure_metrics,'hitMetrics':hit_metrics,'keyInputMetrics':key_input,'formMetrics':form_metrics,'passphraseFieldMetrics':pass_fields,'keyGeometry':key_geometry,'nativePassphraseField':native_field,'confirmationMetrics':confirmations,'fingerprintMetrics':fingerprints,'peerConnectionCounts':peer_connections,
+                  'ordinaryMetrics':ordinary,'ordinaryFocus':ordinary_focus,'backMetrics':back_metrics,'secureMetrics':secure_metrics,'hitMetrics':hit_metrics,'keyInputMetrics':key_input,'formMetrics':form_metrics,'passphraseFieldMetrics':pass_fields,'keyGeometry':key_geometry,'nativePassphraseField':native_field,'confirmationMetrics':confirmations,'fingerprintMetrics':fingerprints,'peerConnectionCounts':peer_connections,
                   'inputMetrics':inputs,'inputDetails':input_details,'targetMetrics':target_metrics,
                   'progress':progress,'rawLogsUploaded':False}
           if not ok:

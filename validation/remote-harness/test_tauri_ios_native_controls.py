@@ -405,6 +405,7 @@ final class XCUIElement {
     var inputs: [String] = []
     var inputValue: String?
     var forcedReadback: String?
+    var staleReadbacks = 0
     var exists = false
     var onTap: (() -> Void)?
     var descendantsByRole: [ElementType: [XCUIElement]] = [:]
@@ -620,6 +621,10 @@ final class Adapter {
         let fallback = formControls[row.snapshot.label] ?? current
         let live = observations?.live(fallback) ?? fallback
         guard let value = live.element.inputValue else { return live }
+        if live.element.staleReadbacks > 0 {
+            live.element.staleReadbacks -= 1
+            return live
+        }
         let snapshot = Snapshot(identifier: live.snapshot.identifier, label: live.snapshot.label,
                                 elementType: live.snapshot.elementType, frame: live.snapshot.frame,
                                 isEnabled: live.snapshot.isEnabled, value: value)
@@ -1810,6 +1815,15 @@ check(writeSucceeded && writeElement.inputs == ["2222"] && writeSnapshots.liveRe
       "the actual fill entry must wait for keyboard geometry to stabilize and type exactly once")
 check(writeSnapshots.checkpoints.compactMap { $0.1["geometryReason"] as? String } == ["field_occluded", "field_outside"],
       "the fill adapter must preserve distinct rejection reasons in sample order before recovering")
+let delayedElement = Element()
+delayedElement.staleReadbacks = 2
+let delayed = Adapter(app: App(frame: screen),
+                      current: LiveControl(snapshot: moved, hittable: true, element: delayedElement),
+                      rows: formRows(moved), blockers: [keyboard])
+var delayedSucceeded = true
+do { try delayed.fillPort("2222") } catch { delayedSucceeded = false }
+check(delayedSucceeded && delayedElement.inputs == ["2222"],
+      "delayed readback must be sampled again on the same field without replaying input")
 let failedReadback = Element()
 failedReadback.forcedReadback = "wrong"
 let unread = Adapter(app: App(frame: screen),

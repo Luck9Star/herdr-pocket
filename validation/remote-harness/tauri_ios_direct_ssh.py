@@ -1229,6 +1229,17 @@ class Checkpoints:
                         and type(payload.get('performed')) is bool and payload.get('outcome') in
                         ('blocked', 'noProgress', 'addChoice', 'sshForm', 'unexpected'),
                         'tauri_ios_navigation_diagnostic_invalid')
+                binding = payload.get('binding')
+                if binding is not None:
+                    def public_frame(frame):
+                        return (frame is None or (type(frame) is list and len(frame) == 4
+                                and all(type(n) is int and abs(n) <= 10000 for n in frame)
+                                and frame[2] >= 0 and frame[3] >= 0))
+                    require(type(binding) is dict and set(binding) == {'witnessFrame', 'liveFrame', 'ownerFrame', 'windowFrame', 'webFrames'}
+                            and all(public_frame(binding[k]) for k in ('witnessFrame', 'liveFrame', 'ownerFrame', 'windowFrame'))
+                            and type(binding['webFrames']) is list and len(binding['webFrames']) <= 8
+                            and all(public_frame(frame) for frame in binding['webFrames']),
+                            'tauri_ios_navigation_diagnostic_invalid')
                 before = public_navigation_state(payload.get('before'))
                 after = public_navigation_state(payload.get('after'))
                 geometry = public_navigation_geometry(payload.get('geometry'))
@@ -1272,7 +1283,7 @@ class Checkpoints:
                     'method': 'elementCenter', 'performed': payload['performed'], 'geometry': geometry,
                     'targetPresentAfter': payload['targetPresentAfter'], 'afterGeometry': after_geometry,
                     'elapsedMs': payload['elapsedMs'],
-                    'before': before, 'after': after, 'outcome': payload['outcome']})
+                    'before': before, 'after': after, 'outcome': payload['outcome'], **({'binding': binding} if binding is not None else {})})
             else:
                 require(payload.get('member') in ('headerAdd', 'emptyAdd', 'ordinaryShortcut')
                         and payload.get('selection') in ('buttonRole', 'uniqueIdentifier', 'uniqueLabel')
@@ -1350,6 +1361,15 @@ class Checkpoints:
                     self.result.setdefault('geometryFailureDetails', {}).setdefault(phase, []).append(
                         {'reason': reason, **detail})
             self.result['nativeCheckpoint'] = phase
+            if 'inputReadback' in payload:
+                readback = payload['inputReadback']
+                require(stage == 'native_progress' and phase.rsplit('_', 1)[-1] in ('host', 'port', 'username')
+                        and set(payload) == {'stage', 'nativeCheckpoint', 'inputReadback'}
+                        and type(readback) is dict and set(readback) == {'state', 'samples'}
+                        and type(readback['state']) is str and readback['state'] in ('match', 'empty', 'different', 'unavailable')
+                        and type(readback['samples']) is int and 1 <= readback['samples'] <= 6,
+                        'tauri_ios_native_diagnostic_invalid')
+                self.result.setdefault('inputReadbacks', {})[phase] = dict(readback)
             if 'nativePortType' in payload:
                 require(phase.endswith('_port') and payload['nativePortType'] in ('textField', 'stepperTextField', 'other'),
                         'tauri_ios_native_diagnostic_invalid')

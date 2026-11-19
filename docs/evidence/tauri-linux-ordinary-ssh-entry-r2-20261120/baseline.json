@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "2e8c3557e2e51ae62b423f9e25a9f1fc5d72cecf",
+  "platform": "Linux Tauri GTK / Xvfb",
+  "authentication": "password",
+  "scope": "native application and isolated loopback SSH",
+  "status": "failed",
+  "stage": "form",
+  "peer": {
+    "authAccepted": false,
+    "ptyRequested": false,
+    "shellRequested": false,
+    "markerReceived": false,
+    "sessionClosed": false,
+    "connections": 0,
+    "connectionsClosed": true,
+    "ptySizes": [],
+    "connectionEvents": []
+  },
+  "errorCode": "webdriver_click_element_not_interactable"
+}

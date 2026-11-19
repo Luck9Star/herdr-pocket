@@ -8,6 +8,7 @@ import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/direct_ssh_page.dart';
 import 'package:herdr_flutter_probe/host_catalog.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
+import 'package:herdr_flutter_probe/network_profiles_page.dart';
 import 'package:terminal_view/terminal_view.dart';
 
 import 'direct_ssh_widget_test.dart' show waitFor;
@@ -77,6 +78,9 @@ void main() {
         );
         await tester.pumpAndSettle();
         Finder key(String id) => find.byKey(ValueKey(id));
+        final networkState = tester.state(
+          find.byType(NetworkProfilesPage, skipOffstage: false),
+        );
         await tester.tap(key('hosts-direct-ssh'));
         await tester.pumpAndSettle();
         await tester.enterText(key('direct-host'), '127.0.0.1');
@@ -174,8 +178,28 @@ void main() {
         ]) {
           expect(key('direct-key-$id').hitTestable(), findsOneWidget);
         }
-        expect(tester.widget<InkWell>(key('direct-tab-board')).onTap, isNull);
-        expect(tester.widget<InkWell>(key('direct-tab-network')).onTap, isNull);
+        expect(key('direct-key-ctrl-d').hitTestable(), findsNothing);
+        expect(key('direct-key-enter').hitTestable(), findsNothing);
+        await tester.ensureVisible(key('direct-key-enter'));
+        await tester.pumpAndSettle();
+        expect(key('direct-key-ctrl-d').hitTestable(), findsOneWidget);
+        expect(key('direct-key-enter').hitTestable(), findsOneWidget);
+        await tester.tap(key('direct-key-ctrl-d'));
+        await tester.tap(key('direct-key-enter'));
+        await tester.pump();
+        await waitForLog(
+          tester,
+          log,
+          (text) => text.contains(r"INPUT b'\x04'"),
+        );
+        final extraRow = find
+            .ancestor(
+              of: key('direct-key-enter'),
+              matching: find.byType(SingleChildScrollView),
+            )
+            .first;
+        await tester.drag(extraRow, const Offset(600, 0));
+        await tester.pumpAndSettle();
         await tester.tap(key('direct-keyboard-toggle'));
         await tester.pump();
         expect(tester.testTextInput.isVisible, isTrue);
@@ -231,6 +255,50 @@ void main() {
         tester.view.resetViewInsets();
         tester.view.padding = inset;
         await tester.pumpAndSettle();
+        for (final destination in ['board', 'network']) {
+          final beforeSwitch = log.readAsStringSync();
+          await tester.tap(key('direct-tab-$destination'));
+          await tester.pumpAndSettle();
+          expect(identical(state.shell, liveShell), isTrue);
+          expect(identical(state.terminal, terminal), isTrue);
+          if (destination == 'board') {
+            expect(key('hosts-direct-ssh'), findsOneWidget);
+          } else {
+            expect(key('networks-add'), findsOneWidget);
+            expect(
+              tester.state(find.byType(NetworkProfilesPage)),
+              same(networkState),
+            );
+          }
+          terminal.textInput('hidden-$destination');
+          await tester.pump();
+          final terminalTab = destination == 'board'
+              ? key('home-tab-1')
+              : find.widgetWithText(NavigationDestination, '终端');
+          await tester.tap(terminalTab);
+          await tester.pumpAndSettle();
+          expect(find.byType(TerminalView), findsOneWidget);
+          final marker = '$destination${width.toInt()}';
+          terminal.textInput(marker);
+          await tester.pump();
+          await waitForLog(tester, log, (text) => text.contains(marker));
+          for (var i = 0; i < 60 && !terminalContains(terminal, marker); i++) {
+            await tester.runAsync(
+              () => Future<void>.delayed(const Duration(milliseconds: 25)),
+            );
+            await tester.pump();
+          }
+          expect(terminalContains(terminal, marker), isTrue);
+          terminal.textInput('\r');
+          await tester.pump();
+          final afterSwitch = log.readAsStringSync().substring(
+            beforeSwitch.length,
+          );
+          expect(afterSwitch, isNot(contains('hidden-$destination')));
+          expect(afterSwitch, isNot(contains('AUTH ')));
+          expect(afterSwitch, isNot(contains('PTY ')));
+          expect(afterSwitch, isNot(contains('PEER_CLOSED $accepted')));
+        }
         await tester.tap(key('direct-tab-settings'));
         await tester.pumpAndSettle();
         expect(key('direct-settings'), findsOneWidget);

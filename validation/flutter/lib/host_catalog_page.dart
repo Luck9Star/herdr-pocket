@@ -36,6 +36,9 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   String? notice;
   bool busy = false;
   bool sshClosedNotice = false;
+  final sshNavigator = GlobalKey<NavigatorState>();
+  final sshVisible = ValueNotifier<bool>(false);
+  bool sshRouteOpen = false;
   int destination = 0;
   bool collapsePending = false;
   bool workspaceWide = false;
@@ -53,7 +56,18 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   void changed() { tabs.reconcile(catalog.ready ? catalog.profiles : const [],catalog.networkProfiles); if (mounted) setState(() {}); }
   void tabChanged() { if (mounted) setState(() { if (destination == 1 && tabs.active == null && tabs.tabs.isEmpty) destination = 0; }); }
   @override
-  void dispose() { hostSearch.dispose(); WidgetsBinding.instance.removeObserver(this); summaries.removeListener(tabChanged); summaries.dispose(); catalog.removeListener(changed); tabs.removeListener(tabChanged); if (widget.tabs == null) tabs.dispose(); if (widget.catalog == null) catalog.dispose(); super.dispose(); }
+  void dispose() {
+    sshVisible.dispose();
+    hostSearch.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    summaries.removeListener(tabChanged);
+    summaries.dispose();
+    catalog.removeListener(changed);
+    tabs.removeListener(tabChanged);
+    if (widget.tabs == null) tabs.dispose();
+    if (widget.catalog == null) catalog.dispose();
+    super.dispose();
+  }
   Future<void> action(Future<void> Function() work) async {
     if (busy) return;
     setState(() { busy = true; notice = null; });
@@ -303,14 +317,36 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
     catalog.profiles.isEmpty && catalog.pendingCreation == null && tabs.tabs.isEmpty && notice == null &&
     (catalog.status == '没有本机主机资料 · 请明确新增配对' || ordinaryCatalogStatus);
 
-  void openDirectSsh() {
+  Future<void> openDirectSsh() async {
     tabs.select(null);
     if (sshClosedNotice) setState(() => sshClosedNotice = false);
-    Navigator.push<void>(
-      context,
-      MaterialPageRoute(builder: (_) => DirectSshPage(
+    if (sshRouteOpen) {
+      setState(() => sshVisible.value = true);
+      return;
+    }
+    final mobile = MediaQuery.sizeOf(context).width < 960;
+    if (mobile) {
+      setState(() {
+        sshRouteOpen = true;
+        sshVisible.value = true;
+      });
+    }
+    final navigator = mobile
+        ? sshNavigator.currentState!
+        : Navigator.of(context);
+    final route = MaterialPageRoute<void>(
+      builder: (_) => DirectSshPage(
         tokens: widget.tokens,
         catalog: catalog,
+        sessionVisible: mobile ? sshVisible : null,
+        onSelectDestination: mobile
+            ? (index) {
+                setState(() {
+                  destination = index;
+                  sshVisible.value = false;
+                });
+              }
+            : null,
         closeCatalogTabs: (ids) {
           for (final id in ids) {
             tabs.closeHost(id);
@@ -319,8 +355,17 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
         onReturnAfterDisconnect: () {
           if (mounted) setState(() => sshClosedNotice = true);
         },
-      )),
+      ),
     );
+    await navigator.push<void>(route);
+    await route.completed;
+    if (mobile && mounted) {
+      setState(() {
+        sshRouteOpen = false;
+        sshVisible.value = false;
+        destination = 0;
+      });
+    }
   }
 
   Future<void> chooseConnection() async {
@@ -378,7 +423,14 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       decoration: BoxDecoration(border: Border(top: BorderSide(color: widget.tokens.color('border')))),
       child: Row(children: [for (var i = 0; i < entries.length; i++) Expanded(child: InkWell(
         key: i == 2 ? const ValueKey('hosts-networks') : ValueKey('home-tab-$i'),
-        onTap: () { setState(() { destination = i; sshClosedNotice = false; }); if (i != 1) tabs.select(null); },
+        onTap: () {
+          if (i == 1 && sshRouteOpen) {
+            setState(() => sshVisible.value = true);
+            return;
+          }
+          setState(() { destination = i; sshClosedNotice = false; });
+          if (i != 1) tabs.select(null);
+        },
         child: Semantics(label: entries[i].$2, button: true, selected: i == 0, child: Stack(alignment: Alignment.topCenter, children: [
           Positioned(top: 4, child: Container(width: 40, height: 28,
             decoration: BoxDecoration(color: i == 0 ? widget.tokens.color('brandSoft') : Colors.transparent,
@@ -941,9 +993,13 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
     ])));
   @override
   Widget build(BuildContext context) => PopScope(
-    canPop: tabs.activeId == null,
+    canPop: !sshVisible.value && tabs.activeId == null,
     onPopInvokedWithResult: (didPop, result) {
       if (didPop) return;
+      if (sshVisible.value) {
+        unawaited(sshNavigator.currentState!.maybePop());
+        return;
+      }
       final navigator = tabs.active?.navigator.currentState;
       if (navigator?.canPop() == true) {
         unawaited(navigator!.maybePop());
@@ -951,13 +1007,25 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
         tabs.select(null);
       }
     },
-    child: Scaffold(
+    child: Stack(
+      children: [
+        IgnorePointer(
+          ignoring: sshVisible.value,
+          child: ExcludeSemantics(
+            excluding: sshVisible.value,
+            child: ExcludeFocus(
+              excluding: sshVisible.value,
+              child: Scaffold(
       bottomNavigationBar: MediaQuery.sizeOf(context).width < 960 ?
         (mobileEmptyBoard && destination == 0 && !largeMobileText ? emptyMobileNavigation() : NavigationBar(
         backgroundColor: widget.tokens.color('card'),
         indicatorColor: widget.tokens.color('brandSoft'),
         selectedIndex: destination,
         onDestinationSelected: (index) {
+          if (index == 1 && sshRouteOpen) {
+            setState(() => sshVisible.value = true);
+            return;
+          }
           setState(() {
             destination = index;
             sshClosedNotice = false;
@@ -1072,6 +1140,23 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
         )),
         ]),
       ),
+              ),
+            ),
+          ),
+        ),
+        Offstage(
+          offstage: !sshVisible.value,
+          child: ExcludeFocus(
+            excluding: !sshVisible.value,
+            child: Navigator(
+              key: sshNavigator,
+              onGenerateRoute: (_) => MaterialPageRoute<void>(
+                builder: (_) => const SizedBox.shrink(),
+              ),
+            ),
+          ),
+        ),
+      ],
     ),
   );
 }

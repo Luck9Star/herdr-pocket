@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/services.dart' show Clipboard;
 import 'package:terminal_view/terminal_view.dart';
@@ -27,11 +28,15 @@ class DirectSshPage extends StatefulWidget {
     this.onReturnAfterDisconnect,
     this.catalog,
     this.closeCatalogTabs,
+    this.sessionVisible,
+    this.onSelectDestination,
   });
   final DesignTokens tokens;
   final VoidCallback? onReturnAfterDisconnect;
   final HostCatalog? catalog;
   final void Function(Set<String>)? closeCatalogTabs;
+  final ValueListenable<bool>? sessionVisible;
+  final ValueChanged<int>? onSelectDestination;
   @override
   State<DirectSshPage> createState() => _DirectSshPageState();
 }
@@ -135,10 +140,10 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     final value = Terminal(maxLines: 2000);
     value.onOutput = (data) {
       final current = shell;
-      if (generation == epoch && identical(value, terminal) && foreground && connected && !settingsActive && current != null) current.write(Uint8List.fromList(utf8.encode(data)));
+      if (generation == epoch && identical(value, terminal) && foreground && connected && !settingsActive && (widget.sessionVisible?.value ?? true) && current != null) current.write(Uint8List.fromList(utf8.encode(data)));
     };
     value.onResize = (cols, rows, px, py) {
-      if (generation == epoch && identical(value, terminal) && foreground && connected) shell?.resizeTerminal(cols, rows, px, py);
+      if (generation == epoch && identical(value, terminal) && foreground && connected && (widget.sessionVisible?.value ?? true)) shell?.resizeTerminal(cols, rows, px, py);
     };
     return value;
   }
@@ -640,10 +645,17 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
                         ? () => selectMobileTerminal(false)
                         : i == 3 && widget.catalog != null
                         ? () => selectMobileTerminal(true)
+                        : (i == 0 || i == 2) && widget.onSelectDestination != null
+                        ? () {
+                            retireMobileInput();
+                            setState(() => settingsActive = false);
+                            widget.onSelectDestination!(i);
+                          }
                         : null,
                     child: Semantics(
                       button: true,
-                      enabled: i == 1 || (i == 3 && widget.catalog != null),
+                      enabled: i == 1 || (i == 3 && widget.catalog != null) ||
+                          ((i == 0 || i == 2) && widget.onSelectDestination != null),
                       selected: settingsActive ? i == 3 : i == 1,
                       child: Stack(
                         alignment: Alignment.topCenter,
@@ -774,6 +786,11 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
         () => current.textInput('\u0003'),
         width: 54,
       ),
+      if (MediaQuery.sizeOf(context).width < 360)
+        SizedBox(
+          width: (MediaQuery.sizeOf(context).width - 2 * mobileMargin - 154)
+              .clamp(0.0, double.infinity),
+        ),
       mobileKey(
         'ctrl-d',
         'Ctrl-D',

@@ -230,11 +230,31 @@ class DualOverlayUiSteps {
   }
 
   Future<void> navigation(int index) async {
-    final bar = find.byType(NavigationBar);
-    expect(bar, findsOneWidget);
-    final destinations = find.descendant(of: bar, matching: find.byType(NavigationDestination));
-    expect(destinations.evaluate().length, 4);
-    await existing.tap(tester, destinations.at(index));
+    const labels = ['看板', '终端', '网络', '设置'];
+    final label = labels[index];
+    final homeKey = ValueKey(index == 2 ? 'hosts-networks' : 'home-tab-$index');
+    // Catalog loading can swap the Material bar for the empty-home tabs.
+    // Resolve the current control by destination throughout the hit test.
+    final control = find.byElementPredicate((element) {
+      final widget = element.widget;
+      final matches = switch (widget) {
+        InkWell() => widget.key == homeKey && widget.onTap != null,
+        NavigationDestination() => widget.label == label && widget.enabled,
+        _ => false,
+      };
+      return matches && ModalRoute.isCurrentOf(element) == true;
+    });
+    await existing.tapStablePointer(tester, control);
+    final destination = switch (index) {
+      0 => find.byKey(const ValueKey('host-catalog-list')),
+      1 => find.widgetWithText(ListView, label),
+      2 => find.descendant(of: find.byType(NetworkProfilesPage), matching: find.text('网络配置')),
+      _ => find.byKey(const ValueKey('hosts-terminal-preferences')),
+    };
+    await existing.until(tester, () {
+      existing.checkPointerError(tester);
+      return destination.hitTestable().evaluate().length == 1;
+    }, seconds: 10);
   }
 
   Future<void> showNetworkControls(String networkId) async {
@@ -502,6 +522,14 @@ class DualOverlayUiSteps {
     return 'host-tab-$tabId';
   }
 
+  Future<void> closeHostTab(String tabKey) async {
+    final tab = find.byKey(ValueKey(tabKey));
+    expect(tab, findsOneWidget);
+    final close = find.byKey(ValueKey(tabKey.replaceFirst('host-tab-', 'host-tab-close-')));
+    await existing.tapStablePointer(tester, close);
+    await existing.until(tester, () => tab.evaluate().isEmpty && close.evaluate().isEmpty);
+  }
+
   Future<void> resumeTab(String role, String tabKey, Terminal previous) async {
     await stage('${role}_resume');
     await existing.tapKey(tester, tabKey);
@@ -655,24 +683,40 @@ class DualOverlayUiSteps {
     }
   }
 
-  Future<String> pairHost(String role, String profileJson) async {
+  Future<void> openPairingFromCatalog({String? routeStage}) async {
+    final chooser = find.byKey(const ValueKey('choose-herdr'));
+    final pairing = find.byType(PairingPage);
+    bool isCurrent(Finder finder) {
+      final matches = finder.evaluate();
+      return matches.length == 1 && ModalRoute.of(matches.single)?.isCurrent == true;
+    }
+
+    await showCatalogAdd();
+    await existing.tapStablePointer(tester, find.byKey(const ValueKey('hosts-add')));
+    if (routeStage != null) await stage(routeStage);
+    await existing.until(tester, () {
+      existing.checkPointerError(tester);
+      return isCurrent(pairing) || isCurrent(chooser);
+    }, seconds: 10);
+    if (!isCurrent(pairing)) await existing.tapStablePointer(tester, chooser);
+    await existing.until(tester, () {
+      existing.checkPointerError(tester);
+      return isCurrent(pairing);
+    }, seconds: 10);
+  }
+
+  Future<String> pairHost(String role, String profileJson, {String? provider}) async {
     if (!{'et', 'ts'}.contains(role)) throw StateError('dual_role_invalid');
     responseReceived = false;
     responseCheck = null;
     await stage('${role}_pair_profile');
-    await showCatalogAdd();
-    await existing.tapStablePointer(tester, find.byKey(const ValueKey('hosts-add')));
-    if (find.byKey(const ValueKey('choose-herdr')).evaluate().isNotEmpty) {
-      await existing.tapStablePointer(tester, find.byKey(const ValueKey('choose-herdr')));
-    }
-    await stage('${role}_pair_page');
-    await existing.until(tester, () => find.byType(PairingPage).evaluate().length == 1);
+    await openPairingFromCatalog(routeStage: '${role}_pair_page');
     final page = tester.widget<PairingPage>(find.byType(PairingPage));
     expect(page.keys, isNull); expect(page.adapter, isNull);
     final before = page.catalog!.profiles.map((profile) => profile.id).toSet();
     final profile = jsonDecode(profileJson) as Map<String, dynamic>;
     final expectedFingerprint = pairingFingerprint(profile['expectedHostKey'] as String);
-    expect(profile['provider'], role == 'et' ? 'easytier' : 'tailscale');
+    expect(profile['provider'], provider ?? (role == 'et' ? 'easytier' : 'tailscale'));
     await stage('${role}_pair_input');
     await enter('profile-input', profileJson);
     await existing.until(tester, () => find.byKey(const ValueKey('profile-preview')).evaluate().length == 1);

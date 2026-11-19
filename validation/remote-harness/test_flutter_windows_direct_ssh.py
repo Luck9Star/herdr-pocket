@@ -9,6 +9,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import time
 from types import SimpleNamespace
 import unittest
 from unittest.mock import MagicMock, Mock, patch
@@ -45,6 +46,52 @@ class FlutterWindowsDirectSshTests(unittest.TestCase):
         self.assertTrue(fixture.local_resources_released())
         self.assertEqual(fixture.password, '')
         self.assertEqual(windows.loopback_connect_outcome(fixture.port), 'refused')
+
+    def test_publickey_fixture_requires_signed_auth_and_one_real_command(self):
+        with windows.windows_fixture(publickey=True) as (fixture, credentials):
+            self.assertEqual(set(credentials), {'privateKey'})
+            with io.StringIO(credentials['privateKey']) as private:
+                identity = paramiko.Ed25519Key(file_obj=private)
+            address = ('127.0.0.1', fixture.port)
+            with paramiko.Transport(socket.create_connection(address, timeout=5)) as probe:
+                probe.start_client(timeout=5)
+            self.assertTrue(fixture.wait_for_connections_closed(1))
+            windows.probe_evidence(fixture.snapshot(), 1)
+            with paramiko.Transport(socket.create_connection(address, timeout=5)) as client:
+                client.start_client(timeout=5)
+                client.auth_publickey(fixture.username, identity)
+                with client.open_session(timeout=5) as channel:
+                    channel.settimeout(5)
+                    channel.get_pty(term='xterm', width=80, height=24)
+                    channel.invoke_shell()
+
+                    def shell_started():
+                        facts = fixture.snapshot()
+                        return facts if facts['connectionEvents'][1]['outputBytes'] > 0 else None
+
+                    facts = windows.wait_for(shell_started, 'test_windows_key_shell_missing', timeout=5)
+                    windows.verify_shell(facts, 2, 'A', sent=False, closed=False, publickey=True)
+                    channel.sendall(b'hp-check\r')
+                    received = b''
+                    deadline = time.monotonic() + 5
+                    while b'POCKET-ANDROID-SSH-OK' not in received and time.monotonic() < deadline:
+                        data = channel.recv(1024)
+                        if not data:
+                            break
+                        received += data
+                    self.assertIn(b'POCKET-ANDROID-SSH-OK', received)
+                self.assertTrue(fixture.wait_for_connections_closed(2))
+            facts = fixture.snapshot()
+            windows.probe_evidence(facts, 2)
+            windows.verify_shell(facts, 2, 'A', sent=True, closed=True, publickey=True)
+        self.assertFalse(bool(credentials))
+        self.assertTrue(fixture.local_resources_released())
+
+    @unittest.skipUnless(sys.platform == 'win32', 'requires Windows native file ACLs')
+    def test_private_fixture_directory_does_not_inherit_other_accounts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            windows.restrict_fixture_directory(Path(directory))
+            self.assertFalse(any(Path(directory).iterdir()))
 
     @unittest.skipUnless(sys.platform == 'win32', 'requires the native Windows TCP owner table')
     def test_native_listener_owner_table_tracks_one_real_loopback_listener(self):
@@ -340,6 +387,39 @@ for start in (lambda: paired_gui.FixtureApproval(None, None, None),
             self.assertTrue((root / 'probe.ok').exists() and (root / 'connected.ok').exists())
             self.assertFalse((root / 'capture.ok').exists())
             capture.assert_not_called()
+
+    def test_publickey_entry_requires_consumed_file_and_zero_auth_before_connect(self):
+        probe = dict(id=1, hostKey='A', closed=True, authAttempts=0, authSuccesses=0, ptyRequests=0,
+                     shellRequests=0, inputBytes=0, outputBytes=0)
+        facts = {'connections': 1, 'connectionsClosed': True, 'connectionEvents': [probe]}
+        job = SimpleNamespace(QueryInformationJobObject=Mock(return_value=(42,)), JobObjectBasicProcessIdList=3)
+        cases = (
+            (True, {'privateKeyExact': True, 'passphraseEmpty': True}, facts, 11, 'target_file_unconsumed'),
+            (False, {'privateKeyExact': True, 'passphraseEmpty': False}, facts, 11, 'entry_unproven'),
+            (False, {'privateKeyExact': True, 'passphraseEmpty': True, 'raw': 'private detail'}, facts, 11, 'entry_unproven'),
+            (False, {'privateKeyExact': True, 'passphraseEmpty': True},
+             facts | {'connectionEvents': [probe | {'authAttempts': 1}]}, 11, 'probe_not_empty'),
+            (False, {'privateKeyExact': True, 'passphraseEmpty': True}, facts, 12, 'publickey_view_changed'),
+        )
+        for retained, receipt, peer, view, code in cases:
+            with self.subTest(code=code), tempfile.TemporaryDirectory() as directory, \
+                    patch.object(windows, 'win32job', job, create=True), \
+                    patch.object(windows, 'win32gui', Mock(), create=True), \
+                    patch.object(windows, 'win32con', Mock(), create=True), \
+                    patch.object(windows, 'find_window', return_value=10), \
+                    patch.object(windows, 'framebuffer', side_effect=[(11, ()), (view, ())]), \
+                    patch.object(windows, 'terminal_capture') as capture:
+                root = Path(directory)
+                if retained:
+                    (root / 'target.json').touch()
+                values = iter(({'processId': 42}, {'algorithm': 'ssh-rsa'}, receipt))
+                with patch.object(windows, 'request', side_effect=values) as request:
+                    fixture = Mock(snapshot=Mock(side_effect=[facts, peer]))
+                    with self.assertRaisesRegex(windows.GuiFailure, code):
+                        windows.exchange(Mock(), object(), root, fixture, {}, {}, publickey=True)
+                self.assertEqual([call.args[2] for call in request.call_args_list], ['window', 'probe', 'key_entry'])
+                self.assertFalse((root / 'key_entry.ok').exists())
+                capture.assert_not_called()
 
     def test_completion_requires_live_launcher_and_attributes_the_publish_exit_race(self):
         with tempfile.TemporaryDirectory() as directory:

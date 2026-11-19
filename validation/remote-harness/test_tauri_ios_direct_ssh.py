@@ -620,6 +620,35 @@ class GeometryReasonTests(unittest.TestCase):
         with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
             self.state.accept(payload | {'nativeCheckpoint': 'ordinary_password'})
 
+    def test_manual_host_diagnostics_accept_exactly_two_ordered_samples_without_text(self):
+        state = ios.Checkpoints(None, None, self.directory.name, {}, encrypted=object())
+        phase = {'stage': 'native_progress', 'nativeCheckpoint': 'encrypted_key_host'}
+        state.accept(phase)
+        first = {'sample': 'afterTap', 'initialKeyboard': 'hidden', 'keyboard': 'visible',
+                 'formUIFocus': 'host', 'liveHostUIFocus': True, 'treeHostReadback': 'empty',
+                 'liveHostReadback': 'empty', 'portReadback': 'notCompared', 'userReadback': 'notCompared'}
+        second = first | {'sample': 'afterInput', 'formUIFocus': 'port',
+                          'portReadback': 'changed', 'userReadback': 'unchanged'}
+        for invalid in (
+            phase | {'manualHostEntry': second},
+            phase | {'manualHostEntry': first | {'input': 'fixture-secret'}},
+            phase | {'manualHostEntry': first | {'formUIFocus': 'fixture-secret'}},
+            phase | {'manualHostEntry': first | {'liveHostUIFocus': 1}},
+            phase | {'manualHostEntry': first, 'nativeCheckpoint': 'encrypted_key_passphrase'},
+            phase | {'manualHostEntry': first, 'stage': 'native_failure'},
+        ):
+            with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                state.accept(invalid)
+            self.assertNotIn('manualHostEntry', state.result)
+        state.accept(phase | {'manualHostEntry': first})
+        for invalid in (first, second | {'initialKeyboard': 'visible'}, second | {'userReadback': 'notCompared'}):
+            with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                state.accept(phase | {'manualHostEntry': invalid})
+        state.accept(phase | {'manualHostEntry': second})
+        with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+            state.accept(phase | {'manualHostEntry': second})
+        self.assertEqual(state.result['manualHostEntry'], [first, second])
+
     def test_secret_exposure_diagnostic_only_accepts_bounded_categories(self):
         state = ios.Checkpoints(None, None, self.directory.name, {}, encrypted=object())
         candidate = {'role': 'textView', 'scope': 'sameWeb', 'relation': 'ancestor',
@@ -629,8 +658,27 @@ class GeometryReasonTests(unittest.TestCase):
         payload = {'stage': 'native_progress', 'nativeCheckpoint': 'encrypted_key_passphrase', 'secretDiagnostic': detail}
         state.accept(payload)
         self.assertEqual(state.result['secretDiagnostic'], detail)
+        reasons = ('content_not_exact', 'editor_unproven', 'outside_editor',
+                   'geometry_mismatch', 'subtree_unproven', 'unsupported_node')
+        for reason in reasons:
+            classified = {'count': 1, 'candidates': [candidate | {'pemReason': reason}]}
+            state.accept(payload | {'secretDiagnostic': classified})
+            self.assertEqual(state.result['secretDiagnostic'], classified)
+        password_only = candidate | {'privateKeyHeader': False, 'passphrase': True, 'pemReason': 'none'}
+        state.accept(payload | {'secretDiagnostic': {'count': 1, 'candidates': [password_only]}})
+        body_only = candidate | {'privateKeyHeader': False, 'privateKeyBody': True, 'pemReason': 'outside_editor'}
+        classified = {'count': 1, 'candidates': [body_only]}
+        state.accept(payload | {'secretDiagnostic': classified})
+        self.assertEqual(state.result['secretDiagnostic'], classified)
         for bad in (detail | {'text': 'fixture-secret'}, {'count': 1, 'candidates': [candidate | {'role': 'secret'}]},
-                    {'count': 1, 'candidates': [candidate | {'value': 'secret'}]}, {'count': 10001, 'candidates': []}):
+                    {'count': 1, 'candidates': [candidate | {'value': 'secret'}]}, {'count': 10001, 'candidates': []},
+                    {'count': 1, 'candidates': [candidate | {'pemReason': 'fixture-secret'}]},
+                    {'count': 1, 'candidates': [candidate | {'pemReason': 'none'}]},
+                    {'count': 1, 'candidates': [body_only | {'privateKeyBody': 'fixture-secret'}]},
+                    {'count': 1, 'candidates': [body_only | {'privateKeyBody': 1}]},
+                    {'count': 1, 'candidates': [body_only | {'pemReason': 'none'}]},
+                    {'count': 1, 'candidates': [body_only | {'excerpt': 'fixture-secret'}]},
+                    {'count': 1, 'candidates': [password_only | {'pemReason': 'geometry_mismatch'}]}):
             with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
                 state.accept(payload | {'secretDiagnostic': bad})
 
@@ -1116,6 +1164,39 @@ class HomeDiagnosticsTests(unittest.TestCase):
             home = {**self.value(), **home_change}
             with self.subTest(home_change=home_change), self.assertRaisesRegex(ios.Failure, 'home_diagnostic_invalid'):
                 ios.public_home_readiness(base, home)
+    def test_manual_compact_add_pending_is_bounded_to_the_encrypted_open_add_phase(self):
+        home = {**self.value(), 'compactEmptyHome': True}
+        for name in ('homeHeading', 'zeroHosts', 'headerAdd'):
+            home['members'][name] = {'count': 0, 'roles': []}
+        home['members']['emptyDescription'] = {'count': 1, 'roles': ['staticText']}
+        home['members']['compactShortcut'] = {'count': 1, 'roles': ['button']}
+        sample = {'state': 'compact_add_pending', 'elapsedMs': 10}
+        pending = {'outcome': 'compact_add_pending', 'elapsedMs': 35010, 'strictSampleMs': 10, 'strictSamples': 10,
+                   'waitCalls': 9, 'samples': [sample]}
+        recovered = pending | {'outcome': 'ready', 'samples': [sample, {'state': 'ready', 'elapsedMs': 35010}]}
+        self.assertEqual(ios.public_home_readiness(pending, home, manual_key=True), pending)
+        self.assertEqual(ios.public_home_readiness(recovered, home, manual_key=True), recovered)
+        with self.assertRaisesRegex(ios.Failure, 'home_diagnostic_invalid'):
+            ios.public_home_readiness(pending, home)
+        with self.assertRaisesRegex(ios.Failure, 'home_diagnostic_invalid'):
+            ios.public_home_readiness(pending, self.value(), manual_key=True)
+        with tempfile.TemporaryDirectory() as directory:
+            class NoPeer:
+                def snapshot(self):
+                    return {'connections': 0}
+            state = ios.Checkpoints(None, None, directory, {}, encrypted=NoPeer())
+            state.index = ios.ENCRYPTED_KEY_STAGES.index('encrypted_key_probe')
+            phase = 'encrypted_key_open_add'
+            state.accept({'stage': 'native_home', 'nativeCheckpoint': phase, 'home': home, 'readiness': pending})
+            navigation = self.navigation('emptyAdd', 'emptyHome', 'addChoice')
+            with self.assertRaisesRegex(ios.Failure, 'home_retry_unsafe'):
+                state.accept(navigation | {'nativeCheckpoint': phase})
+            code = 'native_encrypted_key_empty_add_unproven'
+            with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                state.accept({'stage': 'native_failure', 'nativeCheckpoint': 'encrypted_key_open_ssh', 'nativeFailureCode': code})
+            state.accept({'stage': 'native_failure', 'nativeCheckpoint': phase, 'nativeFailureCode': code})
+            self.assertEqual(state.result['nativeFailureCode'], code)
+            self.assertNotIn('navigationTrace', state.result)
 
     def test_repeated_home_sampling_retains_latest_without_navigation_or_ssh_replay(self):
         with tempfile.TemporaryDirectory() as directory:

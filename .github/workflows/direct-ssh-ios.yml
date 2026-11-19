@@ -129,11 +129,13 @@ jobs:
   tauri-ordinary-ssh-ios:
     if: >-
       startsWith(github.ref, 'refs/heads/codex/acceptance/direct-ssh-ios-') &&
-      !startsWith(github.ref, 'refs/heads/codex/acceptance/direct-ssh-ios-flutter-only-')
+      !startsWith(github.ref, 'refs/heads/codex/acceptance/direct-ssh-ios-flutter-only-') &&
+      (!startsWith(github.ref, 'refs/heads/codex/acceptance/direct-ssh-ios-tauri-only-encrypted-manual-') || github.event_name == 'workflow_dispatch')
     runs-on: macos-15
     timeout-minutes: 90
     env:
       CI: 'true'
+      TAURI_ENCRYPTED_KEY_MANUAL: ${{ startsWith(github.ref, 'refs/heads/codex/acceptance/direct-ssh-ios-tauri-only-encrypted-manual-') }}
       CARGO_TERM_COLOR: never
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
@@ -162,6 +164,7 @@ jobs:
           "$RUNNER_TEMP/direct-ssh-python/bin/pip" install -r validation/pairing/requirements.txt 'paramiko==4.0.0' 'pillow==12.2.0'
           brew install tesseract xcodegen
           HERDR_REQUIRE_PARAMIKO=1 "$RUNNER_TEMP/direct-ssh-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_tauri_ios_direct_ssh.py' -v
+          "$RUNNER_TEMP/direct-ssh-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_tauri_ios_native_controls.py' -v
           HERDR_REQUIRE_PARAMIKO=1 "$RUNNER_TEMP/direct-ssh-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_direct_ssh_rotation_fixture.py' -v
           HERDR_REQUIRE_SCREENSHOT_OCR=1 "$RUNNER_TEMP/direct-ssh-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_terminal_screenshot_gate.py' -v
           "$RUNNER_TEMP/direct-ssh-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_ios_direct_ssh_batch.py' -v
@@ -177,17 +180,21 @@ jobs:
         run: |
           TAURI_IOS_APP=$("$RUNNER_TEMP/direct-ssh-python/bin/python" validation/remote-harness/ios_direct_ssh_batch.py select-app --root validation/tauri/src-tauri/gen/apple)
           echo "TAURI_IOS_APP=$TAURI_IOS_APP" >> "$GITHUB_ENV"
-      - name: Drive the real Tauri application with loopback SSH and key rotation
+      - name: Drive the selected SSH scenarios through the real Tauri application
         run: |
+          options=()
+          if [[ "$TAURI_ENCRYPTED_KEY_MANUAL" == true ]]; then options+=(--encrypted-key-manual-only); fi
           "$RUNNER_TEMP/direct-ssh-python/bin/python" validation/remote-harness/tauri_ios_direct_ssh.py \
             --project validation/tauri/src-tauri/gen/apple \
-            --app "$TAURI_IOS_APP" --output "$RUNNER_TEMP/tauri-direct-ssh-public"
+            --app "$TAURI_IOS_APP" --output "$RUNNER_TEMP/tauri-direct-ssh-public" "${options[@]}"
       - name: Verify source-bound public evidence for this batch
         if: always()
         run: |
+          options=()
+          if [[ "$TAURI_ENCRYPTED_KEY_MANUAL" == true ]]; then options+=(--encrypted-key-manual-only); fi
           "$RUNNER_TEMP/direct-ssh-python/bin/python" validation/remote-harness/ios_direct_ssh_batch.py publish \
             --shell tauri --source-sha "$GITHUB_SHA" \
-            --root "$RUNNER_TEMP/tauri-direct-ssh-public" --destination "$RUNNER_TEMP/tauri-direct-ssh-verified"
+            --root "$RUNNER_TEMP/tauri-direct-ssh-public" --destination "$RUNNER_TEMP/tauri-direct-ssh-verified" "${options[@]}"
       - name: Upload sanitized evidence only
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -200,4 +207,6 @@ jobs:
             ${{ runner.temp }}/tauri-direct-ssh-verified/key-change-review.png
             ${{ runner.temp }}/tauri-direct-ssh-verified/key-change-terminal.png
             ${{ runner.temp }}/tauri-direct-ssh-verified/key-change-terminal-ocr.json
+            ${{ runner.temp }}/tauri-direct-ssh-verified/tauri-manual-key-terminal.png
+            ${{ runner.temp }}/tauri-direct-ssh-verified/tauri-manual-key-terminal-ocr.json
           if-no-files-found: warn

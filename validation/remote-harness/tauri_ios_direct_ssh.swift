@@ -278,6 +278,7 @@ enum NativeActiveContext: String {
 enum NativeHomeReadiness {
     enum State: String {
         case ready, loading, shell, error, alert, unexpected, notForeground = "not_foreground"
+        case compactAddPending = "compact_add_pending"
         case unidentifiedStartup = "unidentified_startup"
     }
 
@@ -307,6 +308,13 @@ enum NativeHomeReadiness {
         if flags["loading"] == true { return .loading }
         if home["knownEmptyHome"] as? Bool == true && permitsNavigation(state, from: "emptyHome") { return .ready }
         return .shell
+    }
+    static func compactAddReady(_ geometry: [String: Any], witnessed: CGRect) -> Bool {
+        // The compact card sets a 48 CSS px minimum with initial-scale=1.
+        guard NativeFramePolicy.valid(witnessed), witnessed.height >= 48,
+              let frame = geometry["frame"] as? [Double], frame.count == 4, frame[3] >= 48 else { return false }
+        return geometry["role"] as? String == "button" &&
+            ["enabled", "hittable", "ownerResolved", "fullyVisible"].allSatisfy { geometry[$0] as? Bool == true }
     }
 
     static func canResampleUnidentifiedStartup(_ state: [String: Any], home: [String: Any]) -> Bool {
@@ -409,6 +417,49 @@ enum NativeControlPolicy {
             case .passphrase: return role == "secureTextField"
             }
         }
+    }
+    enum PEMRepresentation: String {
+        case editorValue, editorText
+        case editorUnproven = "editor_unproven"
+        case outsideEditor = "outside_editor"
+        case geometryMismatch = "geometry_mismatch"
+        case subtreeUnproven = "subtree_unproven"
+        case unsupportedNode = "unsupported_node"
+
+        var rejection: String {
+            switch self {
+            case .editorValue, .editorText: return "content_not_exact"
+            default: return rawValue
+            }
+        }
+    }
+    static let openSSHPrivateKeyHeader = "-----BEGIN OPENSSH PRIVATE KEY-----"
+    static func encryptedPEMBodyLines(_ pem: String) -> [String] {
+        let lines = pem.split(whereSeparator: \.isNewline).map(String.init)
+        guard lines.first == openSSHPrivateKeyHeader, lines.last == "-----END OPENSSH PRIVATE KEY-----" else { return [] }
+        // A complete long line identifies this fixture without matching common short fragments.
+        return lines.dropFirst().dropLast().filter {
+            $0.range(of: #"^[A-Za-z0-9+/]{40,}={0,2}$"#, options: .regularExpression) != nil
+        }
+    }
+    static func encryptedSecretHits(identifier: String, label: String, value: String, pem: String,
+                                    bodyLines: [String], passwords: [String], representation: PEMRepresentation)
+        -> (header: [Bool], body: [Bool], password: [Bool]) {
+        let fields = [identifier, label, value]
+        let passwordHits = fields.map { field in passwords.contains { field.contains($0) } }
+        var headerHits = fields.map { $0.contains(openSSHPrivateKeyHeader) }
+        var bodyHits = fields.map { field in bodyLines.contains { field.contains($0) } }
+        if representation == .editorValue && value == pem {
+            headerHits[2] = false
+            bodyHits[2] = false
+        } else if representation == .editorText && identifier.isEmpty &&
+                    (label == pem || label.isEmpty) && (value == pem || value.isEmpty) {
+            headerHits[1] = false
+            headerHits[2] = false
+            bodyHits[1] = false
+            bodyHits[2] = false
+        }
+        return (headerHits, bodyHits, passwordHits)
     }
 
     static func isMobilePasswordField(identifier: String, label: String) -> Bool {
@@ -703,6 +754,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         let window: Observed
         let web: Observed
         let identified: Bool
+        let adjacentFields: [String: any XCUIElementSnapshot]
     }
     private struct RevealedControl {
         let live: LiveControl
@@ -937,11 +989,18 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func formControl(_ name: String, matching expected: FormControl? = nil) throws -> FormControl {
-        func select(_ rows: [Observed]) -> (owner: Observed, window: Observed, web: Observed, identified: Bool)? {
+        func select(_ rows: [Observed]) -> (owner: Observed, window: Observed, web: Observed, identified: Bool,
+                                          adjacentFields: [String: any XCUIElementSnapshot])? {
             let selection = formSelection(rows)
             guard selection.ownerResolved, let verdict = selection.controls[name], verdict.reason == "matched",
                   let index = verdict.index, let scope = controlScope(rows[index], rows) else { return nil }
-            return (rows[index], scope.window, scope.web, verdict.identified)
+            var adjacentFields: [String: any XCUIElementSnapshot] = [:]
+            if name == "host" && nativePhase == "encrypted_key_host" {
+                for name in ["port", "user"] {
+                    if let index = selection.controls[name]?.index { adjacentFields[name] = rows[index].snapshot }
+                }
+            }
+            return (rows[index], scope.window, scope.web, verdict.identified, adjacentFields)
         }
         guard let original = try select(observedNodes()) else {
             try require(false, "native_form_control_unproven")
@@ -962,7 +1021,8 @@ final class TauriDirectSSHUITests: XCTestCase {
             try require(false, "native_form_control_changed")
             throw NSError(domain: "native_form_control_changed", code: 1)
         }
-        return FormControl(live: current, owner: fresh.owner, window: fresh.window, web: fresh.web, identified: fresh.identified)
+        return FormControl(live: current, owner: fresh.owner, window: fresh.window, web: fresh.web,
+            identified: fresh.identified, adjacentFields: fresh.adjacentFields)
     }
 
     @MainActor
@@ -1075,10 +1135,57 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
+    private func manualHostKeyboard() -> String {
+        let screen = app.frame
+        if keyboardFrames().contains(where: { NativeFramePolicy.valid($0.intersection(screen)) }) { return "visible" }
+        return app.keyboards.firstMatch.exists ? "unproven" : "hidden"
+    }
+
+    private func inputReadback(_ value: Any?, expected: String) -> String {
+        guard let text = NativeControlPolicy.valueText(value) else { return "unavailable" }
+        if text == expected { return "match" }
+        return text.isEmpty ? "empty" : "different"
+    }
+
+    @MainActor
+    private func reportManualHostEntry(_ form: FormControl, expected: String, initialKeyboard: String,
+                                       beforeInput: FormControl? = nil) throws {
+        let fields: [(String, (any XCUIElementSnapshot)?)] = [
+            ("host", form.owner.snapshot), ("port", form.adjacentFields["port"]), ("user", form.adjacentFields["user"]),
+        ]
+        let focus = fields.filter { $0.1?.hasFocus == true }.map { $0.0 }
+        func adjacentReadback(_ name: String) -> String {
+            guard let beforeInput else { return "notCompared" }
+            guard let before = beforeInput.adjacentFields[name], let after = form.adjacentFields[name],
+                  sameIdentity(before, after), let prior = NativeControlPolicy.valueText(before.value),
+                  let latest = NativeControlPolicy.valueText(after.value) else { return "unavailable" }
+            return prior == latest ? "unchanged" : "changed"
+        }
+        // hasFocus describes UI focus. XCTest's element-scoped typeText
+        // separately requires keyboard focus on that element or a descendant.
+        try post("native_progress", ["nativeCheckpoint": nativePhase, "manualHostEntry": [
+            "sample": beforeInput == nil ? "afterTap" : "afterInput",
+            "initialKeyboard": initialKeyboard, "keyboard": manualHostKeyboard(),
+            "formUIFocus": focus.count > 1 ? "multiple" : focus.first ?? "none",
+            "liveHostUIFocus": form.live.snapshot.hasFocus,
+            "treeHostReadback": inputReadback(form.owner.snapshot.value, expected: expected),
+            "liveHostReadback": inputReadback(form.live.snapshot.value, expected: expected),
+            "portReadback": adjacentReadback("port"), "userReadback": adjacentReadback("user"),
+        ]])
+    }
+
+    @MainActor
     private func fillForm(_ name: String, _ text: String) throws {
+        let initialKeyboard = name == "host" && nativePhase == "encrypted_key_host" ? manualHostKeyboard() : nil
         let tapped = try tapForm(name)
-        try require(app.keyboards.firstMatch.waitForExistence(timeout: 10), "native_input_keyboard_missing")
-        let current = try formControl(name, matching: tapped).live
+        let keyboardAppeared = app.keyboards.firstMatch.waitForExistence(timeout: 10)
+        if !keyboardAppeared && initialKeyboard == nil { try require(false, "native_input_keyboard_missing") }
+        let afterTap = try formControl(name, matching: tapped)
+        if let initialKeyboard {
+            try reportManualHostEntry(afterTap, expected: text, initialKeyboard: initialKeyboard)
+        }
+        try require(keyboardAppeared, "native_input_keyboard_missing")
+        let current = afterTap.live
         try require(current.snapshot.isEnabled, "native_control_disabled")
         try post("native_progress", ["nativeCheckpoint": nativePhase, "nativeInputRole": role(current.snapshot.elementType)])
         if name == "port" {
@@ -1102,12 +1209,13 @@ final class TauriDirectSSHUITests: XCTestCase {
             ready.element.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: clearCount) + text)
             // WebKit's accessibility snapshot can lag behind the one input.
             // Re-read only the same proven field; never repeat the input.
-            var readbackState = "unavailable"
             for sample in 0..<6 {
-                let after = try formControl(name, matching: tapped).live
-                let value = NativeControlPolicy.valueText(after.snapshot.value)
-                readbackState = value == text ? "match" : value == nil ? "unavailable" : value!.isEmpty ? "empty" : "different"
+                let after = try formControl(name, matching: tapped)
+                let readbackState = inputReadback(after.live.snapshot.value, expected: text)
                 if readbackState == "match" || sample == 5 {
+                    if let initialKeyboard {
+                        try reportManualHostEntry(after, expected: text, initialKeyboard: initialKeyboard, beforeInput: form)
+                    }
                     try post("native_progress", ["nativeCheckpoint": nativePhase,
                         "inputReadback": ["state": readbackState, "samples": sample + 1]])
                 }
@@ -1691,8 +1799,12 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func assertNoSecret(_ rows: [any XCUIElementSnapshot]) throws {
-        let secrets = ["ordinaryPassword", "rotationPassword", "encryptedWrongPassphrase", "encryptedPassphrase"]
-            .compactMap { config[$0] as? String } + (scenario == "encrypted_key" ? ["-----BEGIN OPENSSH PRIVATE KEY-----"] : [])
+        var secrets = ["ordinaryPassword", "rotationPassword", "encryptedWrongPassphrase", "encryptedPassphrase"]
+            .compactMap { config[$0] as? String }
+        if scenario == "encrypted_key" {
+            secrets.append(NativeControlPolicy.openSSHPrivateKeyHeader)
+            secrets += NativeControlPolicy.encryptedPEMBodyLines(config["encryptedPEM"] as? String ?? "")
+        }
         try require(!rows.contains { node in
             ([node.identifier] + texts(node)).contains { value in secrets.contains { value.contains($0) } }
         }, "native_secret_exposed")
@@ -2407,6 +2519,10 @@ final class TauriDirectSSHUITests: XCTestCase {
             try require(false, "native_control_missing")
             throw NSError(domain: "native_control_missing", code: 1)
         }
+        return try navigationGeometry(current)
+    }
+    @MainActor
+    private func navigationGeometry(_ current: LiveControl) throws -> [String: Any] {
         let snapshot = current.snapshot
         let owner = controlOwner(snapshot, try observedNodes())
         let measured = owner.flatMap { controlVisibleFrame($0, current) }
@@ -2422,6 +2538,11 @@ final class TauriDirectSSHUITests: XCTestCase {
             "hittable": current.hittable, "ownerResolved": owner != nil,
             "centerVisible": measured != nil && visible.contains(center) && visible.contains(selectedCenter),
             "fullyVisible": measured != nil && visible.contains(snapshot.frame) && visible.contains(selectedFrame)]
+    }
+    @MainActor
+    private func currentCompactAddReady() throws -> Bool {
+        guard let witness = pageButtons["emptyAdd"], let live = liveOnPath(witness) else { return false }
+        return NativeHomeReadiness.compactAddReady(try navigationGeometry(live), witnessed: witness.snapshot.frame)
     }
 
     @MainActor
@@ -2475,6 +2596,11 @@ final class TauriDirectSSHUITests: XCTestCase {
                 "webFrames": witness.webs.map { NativeFramePolicy.diagnosticRect($0) }]
         }
         let geometry = try navigationGeometry(item)
+        if compactRoute && nativePhase == "encrypted_key_open_add" && member == "emptyAdd" {
+            let witnessed = pageButtons[member]?.snapshot.frame ?? .null
+            try require(NativeHomeReadiness.compactAddReady(geometry, witnessed: witnessed),
+                        "native_encrypted_key_empty_add_unproven")
+        }
         let allowed = geometry["ownerResolved"] as? Bool == true && geometry["centerVisible"] as? Bool == true &&
             geometry["enabled"] as? Bool == true && geometry["hittable"] as? Bool == true
         let started = ProcessInfo.processInfo.systemUptime
@@ -2521,22 +2647,27 @@ final class TauriDirectSSHUITests: XCTestCase {
         repeat {
             let sampledAt = clock()
             let state = try navigationState(publish: false)
-            let checkedAt = clock()
-            sampleSeconds += checkedAt - sampledAt
             strictSamples += 1
             // The first snapshot may be slow and represent an earlier layout.
             // Give an unfinished app time to advance and take a fresh sample.
-            if strictSamples == 1 { deadline = checkedAt + 35 }
+            if strictSamples == 1 { deadline = clock() + 35 }
             outcome = NativeHomeReadiness.classify(state, home: lastHomeSample!)
+            if nativePhase == "encrypted_key_open_add", outcome == .ready, state["compactEmptyHome"] as? Bool == true,
+               try !currentCompactAddReady() {
+                outcome = .compactAddPending
+            }
             if strictSamples == 1 && outcome == .unexpected &&
                 NativeHomeReadiness.canResampleUnidentifiedStartup(state, home: lastHomeSample!) {
                 outcome = .unidentifiedStartup
             }
+            let checkedAt = clock()
+            sampleSeconds += checkedAt - sampledAt
             if transitions.last?["state"] as? String != outcome.rawValue {
                 transitions.append(["state": outcome.rawValue, "elapsedMs": milliseconds(checkedAt - start)])
             }
             // The unidentified first observation gets only one passive resample.
-            guard outcome == .loading || outcome == .shell || outcome == .unidentifiedStartup else { break }
+            guard outcome == .loading || outcome == .shell || outcome == .compactAddPending ||
+                  outcome == .unidentifiedStartup else { break }
             let slice = min(4, deadline - clock())
             if slice <= 0 { break }
             if markerSeen { Thread.sleep(forTimeInterval: slice) }
@@ -2553,6 +2684,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         try post("native_home", ["nativeCheckpoint": nativePhase, "home": lastHomeSample!, "readiness": readiness])
         switch outcome {
         case .ready: return
+        case .compactAddPending: try require(false, "native_encrypted_key_empty_add_unproven")
         case .error: try require(false, "native_home_known_loading_error")
         case .alert: try require(false, "native_home_alert_present")
         case .notForeground: try require(false, "native_home_not_foreground")
@@ -2690,22 +2822,76 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func encryptedField(_ field: NativeControlPolicy.KeyField, rows: [Observed], owner: RevealedControl) throws -> RevealedControl {
+    private func encryptedFieldAnchor(_ field: NativeControlPolicy.KeyField, _ rows: [Observed]) -> Observed? {
         let fields = rows.filter { row in
             let snapshot = row.snapshot
             return [.textField, .secureTextField, .textView, .searchField].contains(snapshot.elementType) &&
                 field.matches(identifier: snapshot.identifier, label: snapshot.label)
         }
-        let failure = "native_encrypted_key_owner_unproven"
         guard fields.count == 1, let row = fields.first,
               field.accepts(role: row.snapshot.elementType == .textView ? "textView" : role(row.snapshot.elementType)),
-              row.snapshot.isEnabled else {
+              row.snapshot.isEnabled else { return nil }
+        return row
+    }
+
+    @MainActor
+    private func encryptedField(_ field: NativeControlPolicy.KeyField, rows: [Observed], owner: RevealedControl) throws -> RevealedControl {
+        let failure = "native_encrypted_key_owner_unproven"
+        guard let row = encryptedFieldAnchor(field, rows) else {
             try require(false, failure)
             throw NSError(domain: failure, code: 1)
         }
         let control = try mobileControl(row, rows, failure)
         try require(sameControlScope(control, owner) && control.live.snapshot.isEnabled, failure)
         return control
+    }
+
+    @MainActor
+    private func confirmedPEMEditor(_ rows: [Observed], previous: RevealedControl, pem: String) -> RevealedControl? {
+        guard let anchor = encryptedFieldAnchor(.pem, rows),
+              case .success(let editor) = mobileBinding(anchor, rows),
+              sameControlScope(editor, previous), sameIdentity(editor.owner.snapshot, previous.owner.snapshot),
+              editor.live.snapshot.isEnabled, editor.owner.snapshot.value as? String == pem,
+              editor.live.snapshot.value as? String == pem else { return nil }
+        return editor
+    }
+
+    @MainActor
+    private func pemRepresentation(_ row: Observed, editor: RevealedControl?) -> NativeControlPolicy.PEMRepresentation {
+        guard let editor else { return .editorUnproven }
+        guard row.windowPath == editor.owner.windowPath, row.webPath == editor.owner.webPath,
+              row.path.starts(with: editor.owner.path) else { return .outsideEditor }
+        let snapshot = row.snapshot
+        if row.path == editor.owner.path {
+            guard sameIdentity(snapshot, editor.owner.snapshot) else { return .subtreeUnproven }
+            return snapshot.frame == editor.owner.snapshot.frame ? .editorValue : .geometryMismatch
+        }
+        guard snapshot.elementType == .staticText, snapshot.children.isEmpty,
+              snapshot.value == nil || snapshot.value is String else { return .unsupportedNode }
+        guard NativeFramePolicy.valid(snapshot.frame),
+              editor.owner.snapshot.frame.contains(snapshot.frame) else { return .geometryMismatch }
+        // Resolve the same relative path in the editor's independently scoped live
+        // snapshot. A matching path in the application tree alone is insufficient.
+        let relative = row.path.dropFirst(editor.owner.path.count)
+        var raw: any XCUIElementSnapshot = editor.owner.snapshot
+        var live: any XCUIElementSnapshot = editor.live.snapshot
+        for (offset, index) in relative.enumerated() {
+            guard raw.children.indices.contains(index), live.children.indices.contains(index) else { return .subtreeUnproven }
+            raw = raw.children[index]
+            live = live.children[index]
+            guard sameIdentity(raw, live),
+                  NativeControlPolicy.valueText(raw.value) == NativeControlPolicy.valueText(live.value) else { return .subtreeUnproven }
+            guard raw.frame == live.frame else { return .geometryMismatch }
+            if offset < relative.count - 1 {
+                guard [.other, .group].contains(live.elementType), live.identifier.isEmpty, live.label.isEmpty,
+                      NativeControlPolicy.valueText(live.value) == "" else { return .unsupportedNode }
+            }
+        }
+        guard raw.children.isEmpty, live.children.isEmpty, sameIdentity(snapshot, raw),
+              NativeControlPolicy.valueText(raw.value) == NativeControlPolicy.valueText(snapshot.value) else {
+            return .subtreeUnproven
+        }
+        return raw.frame == snapshot.frame ? .editorText : .geometryMismatch
     }
 
     @MainActor
@@ -2778,32 +2964,37 @@ final class TauriDirectSSHUITests: XCTestCase {
         try require(filled.pem.live.snapshot.value as? String == pem &&
                     NativeControlPolicy.credentialMasked(filled.passphrase.live.snapshot.value) &&
                     filled.submit.owner.snapshot.isEnabled && filled.submit.live.snapshot.isEnabled, failure)
-        let observed = try observedNodes().filter { node in
-            !NativeControlPolicy.KeyField.pem.matches(identifier: node.snapshot.identifier, label: node.snapshot.label)
-        }
+        let observed = try observedNodes()
+        let editor = confirmedPEMEditor(observed, previous: filled.pem, pem: pem)
         let passphrases = ["ordinaryPassword", "rotationPassword", "encryptedWrongPassphrase", "encryptedPassphrase"]
             .compactMap { config[$0] as? String }
-        let header = "-----BEGIN OPENSSH PRIVATE KEY-----"
+        let bodyLines = NativeControlPolicy.encryptedPEMBodyLines(pem)
         let suspicious = observed.compactMap { node -> [String: Any]? in
-            let values = [node.snapshot.identifier, node.snapshot.label, node.snapshot.value as? String ?? ""]
-            let headerHits = values.map { $0.contains(header) }
-            let passwordHits = values.map { value in passphrases.contains { value.contains($0) } }
-            guard headerHits.contains(true) || passwordHits.contains(true) else { return nil }
-            let path = node.path, pemPath = filled.pem.owner.path
+            let snapshot = node.snapshot
+            let representation = pemRepresentation(node, editor: editor)
+            let (headerHits, bodyHits, passwordHits) = NativeControlPolicy.encryptedSecretHits(
+                identifier: snapshot.identifier, label: snapshot.label, value: snapshot.value as? String ?? "",
+                pem: pem, bodyLines: bodyLines, passwords: passphrases, representation: representation)
+            let headerHit = headerHits.contains(true), bodyHit = bodyHits.contains(true), passwordHit = passwordHits.contains(true)
+            guard headerHit || bodyHit || passwordHit else { return nil }
+            let pemOwner = editor?.owner ?? filled.pem.owner
+            let path = node.path, pemPath = pemOwner.path
             let relation = path == pemPath ? "same" : pemPath.starts(with: path) ? "ancestor" :
                 path.starts(with: pemPath) ? "descendant" : "other"
-            let scope = node.windowPath == filled.pem.owner.windowPath && node.webPath == filled.pem.owner.webPath ?
+            let scope = node.windowPath == pemOwner.windowPath && node.webPath == pemOwner.webPath ?
                 "sameWeb" : "other"
             return ["role": node.snapshot.elementType == .textView ? "textView" : role(node.snapshot.elementType),
-                "scope": scope, "relation": relation, "identifier": headerHits[0] || passwordHits[0],
-                "label": headerHits[1] || passwordHits[1], "value": headerHits[2] || passwordHits[2],
-                "privateKeyHeader": headerHits.contains(true), "passphrase": passwordHits.contains(true)]
+                "scope": scope, "relation": relation, "identifier": headerHits[0] || bodyHits[0] || passwordHits[0],
+                "label": headerHits[1] || bodyHits[1] || passwordHits[1], "value": headerHits[2] || bodyHits[2] || passwordHits[2],
+                "privateKeyHeader": headerHit, "privateKeyBody": bodyHit, "passphrase": passwordHit,
+                "pemReason": headerHit || bodyHit ? representation.rejection : "none"]
         }
         if !suspicious.isEmpty {
             try post("native_progress", ["nativeCheckpoint": nativePhase,
                 "secretDiagnostic": ["count": min(suspicious.count, 10000), "candidates": Array(suspicious.prefix(12))]])
         }
-        try assertNoSecret(observed.map { $0.snapshot })
+        try require(suspicious.isEmpty, "native_secret_exposed")
+        try require(editor != nil, failure)
         try post(prefix + "_ready")
         return filled.submit
     }

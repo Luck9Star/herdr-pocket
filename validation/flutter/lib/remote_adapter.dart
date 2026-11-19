@@ -531,6 +531,7 @@ class RemoteReadOnlyAdapter {
     _observerTerminator.stop(session);
   }
   RemoteInputJournalReview? Function(RemoteInputTarget target)? captureInputJournalReview;
+  bool Function()? canDispatchDial;
   int generation = 0, _connectionCount = 0;
   _Attempt? _attempt;
   bool _activeRead = false, _dialPending = false;
@@ -1018,6 +1019,7 @@ class RemoteReadOnlyAdapter {
   Future<RemoteSnapshot> _read(RemoteConfig config, {RemoteProgress? onProgress,
       DashboardConsumer? onDashboard, FrameConsumer? onFrame,
       required void Function(_Attempt) onAttempt}) async {
+    final allowDial = canDispatchDial;
     if (_activeRead || _dialPending) throw const RemoteFailure('connection_busy');
     if (!_budget.acquire()) throw const RemoteFailure('connection_capacity');
     _activeRead = true;
@@ -1054,6 +1056,7 @@ class RemoteReadOnlyAdapter {
           })] : SSHKeyPair.fromPem(config.privateKeyPem);
         if (identities.length != 1 || identities.single.type != 'ssh-ed25519') throw const RemoteFailure('invalid_private_key');
       } catch (_) { throw const RemoteFailure('invalid_private_key'); }
+      if (allowDial?.call() == false) throw const RemoteFailure('catalog_unavailable');
       _dialPending = true;
       final pending = Future<SSHSocket>.sync(() => _connector(config.host,config.port))
         .whenComplete(() { _dialPending = false; });

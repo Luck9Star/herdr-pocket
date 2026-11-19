@@ -57,6 +57,17 @@ class FakeObserverSession implements SSHSession {
 }
 
 void main() {
+  test('dial admission is checked immediately before calling the connector', () async {
+    var allowed = true, dials = 0;
+    final adapter = RemoteReadOnlyAdapter(connector:(_,_) async { dials++; return FakeSocket(); });
+    adapter.canDispatchDial = () => allowed;
+    await expectLater(adapter.read(RemoteConfig.fromJson(fixtureConfig()),onProgress:(_,phase) {
+      if (phase == 'connecting') allowed = false;
+    }),throwsA(failure('catalog_unavailable')));
+    expect(dials,0);
+    expect(adapter.evidence.authStarted,isFalse);
+    expect(await adapter.transportRetirement,isTrue);
+  });
   test('observer termination requests TERM before destroy only once, even if unsupported', () {
     for (final reject in [false,true]) {
       final calls=<String>[],session=FakeObserverSession(calls,rejectSignal:reject),stopper=ObserverSessionTerminator();

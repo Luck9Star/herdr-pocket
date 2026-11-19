@@ -36,7 +36,48 @@ class ImportSaveFixture extends MemoryCatalogStorage {
     return revision;
   }
 }
+class DelayedImportDeviceKeys extends TestDeviceKeys {
+  DelayedImportDeviceKeys(super.pem);
+  Completer<String>? pendingPublicKey;
+  @override
+  Future<String> public(String handle) => pendingPublicKey?.future ?? super.public(handle);
+}
 void main() {
+  testWidgets('import recovery prevents a new dial after device key lookup was already started', (tester) async {
+    final disk = ImportSaveFixture(), catalog = HostCatalog(storage:disk,clock:() => 1000);
+    await catalog.load();
+    final old = tabProfile('Import A','probeA','127.0.0.1','unspecified','opaque-delay-old');
+    final peer = tabProfile('Pending B','probeB','127.0.0.2','unspecified','opaque-delay-peer');
+    await catalog.add(old); await catalog.add(peer);
+    final keys = DelayedImportDeviceKeys(fixtureConfig()['privateKeyPem'] as String);
+    final adapter = TabFixtureAdapter(), tabs = HostTabs(), tokens = (await tester.runAsync(DesignTokens.load))!;
+    await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:HostCatalogPage(tokens:tokens,catalog:catalog,tabs:tabs,
+      keys:keys,adapterFactory:(_) => adapter,offlineBuilder:(_) => const SizedBox())));
+    await tester.pumpAndSettle();
+    await tapVisible(tester,'host-open-${peer.id}'); await tester.pumpAndSettle();
+    await tapVisible(tester,'pair-connect'); await tester.pumpAndSettle();
+    final pending = Completer<String>(), publicKey = await keys.public('fixture');
+    keys.pendingPublicKey = pending;
+    await tapVisible(tester,'remote-review'); await tapVisible(tester,'remote-connect');
+    expect(adapter.calls,0);
+    disk.failure = 'catalog_write_unknown';
+    final plan = catalog.previewConfigImport(catalog.exportConfig({old.id},{}));
+    await expectLater(catalog.applyConfigImport(plan,[const ConfigImportChoice(ConfigImportAction.replace)],beforeCommit:tabs.retireReplacedHosts),
+      throwsA(isA<RemoteFailure>().having((error) => error.code,'code','catalog_write_unknown')));
+    pending.complete(publicKey);
+    keys.pendingPublicKey = null;
+    await tester.pumpAndSettle();
+    expect(adapter.calls,0);
+    expect(keys.signCalls,0);
+    expect(catalog.ready,isFalse);
+    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('remote-connect'))).onPressed,isNull);
+    await catalog.load(); await tester.pumpAndSettle();
+    expect(catalog.ready,isTrue);
+    expect(adapter.calls,0);
+    await tapVisible(tester,'remote-review'); await tapVisible(tester,'remote-connect');
+    expect(adapter.calls,1);
+    await tester.pumpWidget(const SizedBox()); tabs.dispose(); catalog.dispose();
+  });
   testWidgets('390px settings import keeps the old screen readable and closes only its historical tab', (tester) async {
     tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(390,844);
     addTearDown(tester.view.reset);

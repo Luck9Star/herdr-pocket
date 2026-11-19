@@ -153,6 +153,7 @@ class NetworkConnectionBinding {
   String get label => profile == null ? '系统直连（沿用系统路由）' : '${profile!.label} · ${profile!.provider}';
   void requireTransport({bool overlayReady=false}) {
     if (!stillCurrent()) throw const RemoteFailure('network_binding_changed');
+    if (!canUseCommands) throw const RemoteFailure('catalog_unavailable');
     if (profile != null && (!overlayReady || !profile!.enabled || !{'easytier','tailscale'}.contains(profile!.provider))) throw const RemoteFailure('provider_unavailable');
   }
 }

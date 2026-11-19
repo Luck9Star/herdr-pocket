@@ -232,10 +232,7 @@ Future<void> tapControlAtStablePoint(
             enabledAction == null ||
             point == null ||
             !hits(element, point)) {
-          onObservation?.call(
-            enabledAction == null ? 'disabled' : 'not_hit',
-            false,
-          );
+          onObservation?.call(enabledAction == null ? 'disabled' : 'not_hit', false);
           fail('direct_ssh_control_not_ready_$name');
         }
         stable = true;
@@ -1172,14 +1169,7 @@ Future<void> reviewDirectSshRotation(
         .data,
     contains(config['rotatedFingerprint']),
   );
-  expect(
-    tester
-        .widget<SelectableText>(
-          find.byKey(const ValueKey('direct-target-value')),
-        )
-        .data,
-    'fixture@127.0.0.1:${config['port']}',
-  );
+  expect(tester.widget<SelectableText>(find.byKey(const ValueKey('direct-target-value'))).data, 'fixture@127.0.0.1:${config['port']}');
   expect(state.fingerprint, config['fingerprint']);
   expect(state.hostKeyReviewRequired, isTrue);
   expect(state.secret.text, isEmpty);
@@ -1200,8 +1190,7 @@ Future<void> reviewDirectSshRotation(
   expect(find.byKey(const ValueKey('direct-form')), findsOneWidget);
   expect(state.fingerprint, config['fingerprint']);
   expect(state.hostKeyReviewRequired, isTrue);
-  expect(state.secret.text, isEmpty);
-  expect(state.passphrase.text, isEmpty);
+  expect(state.secret.text, isEmpty); expect(state.passphrase.text, isEmpty);
   expect(secret, findsNothing);
   expect(find.byKey(const ValueKey('direct-auth-key')), findsNothing);
   expect(find.byKey(const ValueKey('direct-connect')), findsNothing);

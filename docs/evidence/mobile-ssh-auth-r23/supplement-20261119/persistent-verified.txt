@@ -1,0 +1,22 @@
+00:00 +0: loading /private/tmp/herdr-r23-auth-anchor-20261119/flutter/test/direct_ssh_auth_anchors_test.dart
+00:00 +0: mobile SSH trust and rotation anchors at 320.0 (variant: TargetPlatform.iOS)
+AUTH_ANCHOR {"state":"trust","width":320.0,"anchor":"independent-verification","raw":[16.0,302.0,288.0,52.0],"actual":[16.0,302.0,288.0,52.0],"expected":[16.0,302.0,288.0,52.0],"centerHit":true}
+AUTH_ANCHOR {"state":"password","width":320.0,"anchor":"trust-approved","raw":[16.0,162.0,288.0,44.0],"actual":[16.0,162.0,288.0,44.0],"expected":[16.0,162.0,288.0,44.0],"centerHit":true}
+AUTH_ANCHOR {"state":"private-key","width":320.0,"anchor":"trust-approved","raw":[16.0,162.0,288.0,44.0],"actual":[16.0,162.0,288.0,44.0],"expected":[16.0,162.0,288.0,44.0],"centerHit":true}
+AUTH_ANCHOR {"state":"key-changed","width":320.0,"anchor":"app-header","raw":[0.0,0.0,320.0,80.0],"actual":[0.0,24.0,320.0,56.0],"expected":[0.0,24.0,320.0,56.0],"centerHit":true}
+AUTH_ANCHOR {"state":"previous-trust","width":320.0,"anchor":"app-header","raw":[0.0,0.0,320.0,80.0],"actual":[0.0,24.0,320.0,56.0],"expected":[0.0,24.0,320.0,56.0],"centerHit":true}
+AUTH_ANCHOR {"state":"previous-trust","width":320.0,"anchor":"back","raw":[8.0,30.0,44.0,44.0],"actual":[8.0,30.0,44.0,44.0],"expected":[8.0,30.0,44.0,44.0],"centerHit":true}
+AUTH_ANCHOR {"state":"recheck-trust","width":320.0,"anchor":"app-header","raw":[0.0,0.0,320.0,80.0],"actual":[0.0,24.0,320.0,56.0],"expected":[0.0,24.0,320.0,56.0],"centerHit":true}
+AUTH_ANCHOR {"state":"recheck-trust","width":320.0,"anchor":"back","raw":[8.0,30.0,44.0,44.0],"actual":[8.0,30.0,44.0,44.0],"expected":[8.0,30.0,44.0,44.0],"centerHit":true}
+AUTH_ANCHOR {"state":"recheck-trust","width":320.0,"anchor":"independent-verification","raw":[16.0,302.0,288.0,52.0],"actual":[16.0,302.0,288.0,52.0],"expected":[16.0,302.0,288.0,52.0],"centerHit":true}
+00:01 +1: mobile SSH trust and rotation anchors at 390.0 (variant: TargetPlatform.iOS)
+AUTH_ANCHOR {"state":"trust","width":390.0,"anchor":"independent-verification","raw":[24.0,325.0,342.0,52.0],"actual":[24.0,325.0,342.0,52.0],"expected":[24.0,325.0,342.0,52.0],"centerHit":true}
+AUTH_ANCHOR {"state":"password","width":390.0,"anchor":"trust-approved","raw":[24.0,185.0,342.0,44.0],"actual":[24.0,185.0,342.0,44.0],"expected":[24.0,185.0,342.0,44.0],"centerHit":true}
+AUTH_ANCHOR {"state":"private-key","width":390.0,"anchor":"trust-approved","raw":[24.0,185.0,342.0,44.0],"actual":[24.0,185.0,342.0,44.0],"expected":[24.0,185.0,342.0,44.0],"centerHit":true}
+AUTH_ANCHOR {"state":"key-changed","width":390.0,"anchor":"app-header","raw":[0.0,0.0,390.0,103.0],"actual":[0.0,47.0,390.0,56.0],"expected":[0.0,47.0,390.0,56.0],"centerHit":true}
+AUTH_ANCHOR {"state":"previous-trust","width":390.0,"anchor":"app-header","raw":[0.0,0.0,390.0,103.0],"actual":[0.0,47.0,390.0,56.0],"expected":[0.0,47.0,390.0,56.0],"centerHit":true}
+AUTH_ANCHOR {"state":"previous-trust","width":390.0,"anchor":"back","raw":[16.0,53.0,44.0,44.0],"actual":[16.0,53.0,44.0,44.0],"expected":[16.0,53.0,44.0,44.0],"centerHit":true}
+AUTH_ANCHOR {"state":"recheck-trust","width":390.0,"anchor":"app-header","raw":[0.0,0.0,390.0,103.0],"actual":[0.0,47.0,390.0,56.0],"expected":[0.0,47.0,390.0,56.0],"centerHit":true}
+AUTH_ANCHOR {"state":"recheck-trust","width":390.0,"anchor":"back","raw":[16.0,53.0,44.0,44.0],"actual":[16.0,53.0,44.0,44.0],"expected":[16.0,53.0,44.0,44.0],"centerHit":true}
+AUTH_ANCHOR {"state":"recheck-trust","width":390.0,"anchor":"independent-verification","raw":[24.0,325.0,342.0,52.0],"actual":[24.0,325.0,342.0,52.0],"expected":[24.0,325.0,342.0,52.0],"centerHit":true}
+00:02 +2: All tests passed!

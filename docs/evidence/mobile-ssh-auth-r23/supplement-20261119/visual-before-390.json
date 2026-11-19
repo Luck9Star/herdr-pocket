@@ -1,0 +1,442 @@
+{
+  "before-390-target-initial": {
+    "title": [
+      68.0,
+      62.5,
+      77.361328125,
+      25.0
+    ],
+    "host": [
+      24.0,
+      181.0,
+      342.0,
+      48.0
+    ],
+    "port": [
+      282.0,
+      265.0,
+      84.0,
+      48.0
+    ],
+    "user": [
+      24.0,
+      265.0,
+      246.0,
+      48.0
+    ],
+    "probe": [
+      24.0,
+      333.0,
+      342.0,
+      48.0
+    ],
+    "appBar": [
+      0.0,
+      0.0,
+      390.0,
+      103.0
+    ],
+    "back": [
+      16.0,
+      53.0,
+      44.0,
+      44.0
+    ],
+    "formSurface": [
+      0.0,
+      103.0,
+      390.0,
+      707.0
+    ],
+    "safeArea": [
+      47.0,
+      34.0
+    ],
+    "hitAtCenter": {
+      "title": true,
+      "host": true,
+      "port": true,
+      "user": true,
+      "probe": true,
+      "appBar": true,
+      "back": true,
+      "formSurface": true
+    }
+  },
+  "before-390-target": {
+    "title": [
+      68.0,
+      62.5,
+      77.361328125,
+      25.0
+    ],
+    "host": [
+      24.0,
+      181.0,
+      342.0,
+      48.0
+    ],
+    "port": [
+      282.0,
+      265.0,
+      84.0,
+      48.0
+    ],
+    "user": [
+      24.0,
+      265.0,
+      246.0,
+      48.0
+    ],
+    "probe": [
+      24.0,
+      333.0,
+      342.0,
+      48.0
+    ],
+    "appBar": [
+      0.0,
+      0.0,
+      390.0,
+      103.0
+    ],
+    "back": [
+      16.0,
+      53.0,
+      44.0,
+      44.0
+    ],
+    "formSurface": [
+      0.0,
+      103.0,
+      390.0,
+      707.0
+    ],
+    "hostText": [
+      36.0,
+      193.0,
+      318.0,
+      24.0
+    ],
+    "userText": [
+      36.0,
+      277.0,
+      222.0,
+      24.0
+    ],
+    "portText": [
+      294.0,
+      277.0,
+      60.0,
+      24.0
+    ],
+    "safeArea": [
+      47.0,
+      34.0
+    ],
+    "hitAtCenter": {
+      "title": true,
+      "host": true,
+      "port": true,
+      "user": true,
+      "probe": true,
+      "appBar": true,
+      "back": true,
+      "formSurface": true,
+      "hostText": true,
+      "userText": true,
+      "portText": true
+    }
+  },
+  "before-390-target-focused": {
+    "title": [
+      68.0,
+      62.5,
+      77.361328125,
+      25.0
+    ],
+    "host": [
+      24.0,
+      181.0,
+      342.0,
+      48.0
+    ],
+    "port": [
+      282.0,
+      265.0,
+      84.0,
+      48.0
+    ],
+    "user": [
+      24.0,
+      265.0,
+      246.0,
+      48.0
+    ],
+    "probe": [
+      24.0,
+      333.0,
+      342.0,
+      48.0
+    ],
+    "appBar": [
+      0.0,
+      0.0,
+      390.0,
+      103.0
+    ],
+    "back": [
+      16.0,
+      53.0,
+      44.0,
+      44.0
+    ],
+    "formSurface": [
+      0.0,
+      103.0,
+      390.0,
+      416.0
+    ],
+    "safeArea": [
+      47.0,
+      34.0
+    ],
+    "hitAtCenter": {
+      "title": true,
+      "host": true,
+      "port": true,
+      "user": true,
+      "probe": true,
+      "appBar": true,
+      "back": true,
+      "formSurface": true
+    }
+  },
+  "before-390-trust": {
+    "review": [
+      24.0,
+      383.0,
+      342.0,
+      48.0
+    ],
+    "cancelReview": [
+      24.0,
+      443.0,
+      342.0,
+      48.0
+    ],
+    "appBar": [
+      0.0,
+      0.0,
+      390.0,
+      103.0
+    ],
+    "back": [
+      16.0,
+      53.0,
+      44.0,
+      44.0
+    ],
+    "reviewDisplayTitle": [
+      68.0,
+      62.5,
+      108.0,
+      25.0
+    ],
+    "independentVerification": [
+      24.0,
+      325.0,
+      342.0,
+      52.0
+    ],
+    "targetCard": [
+      24.0,
+      123.0,
+      342.0,
+      52.0
+    ],
+    "keyEvidence": [
+      24.0,
+      187.0,
+      342.0,
+      122.0
+    ],
+    "fingerprint": [
+      37.0,
+      264.0,
+      316.0,
+      34.0
+    ],
+    "safeArea": [
+      47.0,
+      34.0
+    ],
+    "hitAtCenter": {
+      "review": true,
+      "cancelReview": true,
+      "appBar": true,
+      "back": true,
+      "reviewDisplayTitle": true,
+      "independentVerification": true,
+      "targetCard": true,
+      "keyEvidence": true,
+      "fingerprint": true
+    }
+  },
+  "before-390-password": {
+    "password": [
+      24.0,
+      352.0,
+      342.0,
+      48.0
+    ],
+    "connect": [
+      24.0,
+      414.0,
+      342.0,
+      48.0
+    ],
+    "appBar": [
+      0.0,
+      0.0,
+      390.0,
+      103.0
+    ],
+    "back": [
+      16.0,
+      53.0,
+      44.0,
+      44.0
+    ],
+    "formSurface": [
+      0.0,
+      103.0,
+      390.0,
+      707.0
+    ],
+    "trustApproved": [
+      24.0,
+      185.0,
+      342.0,
+      44.0
+    ],
+    "targetCard": [
+      24.0,
+      123.0,
+      342.0,
+      52.0
+    ],
+    "passwordChoice": [
+      24.0,
+      272.0,
+      167.0,
+      44.0
+    ],
+    "keyChoice": [
+      199.0,
+      272.0,
+      167.0,
+      44.0
+    ],
+    "safeArea": [
+      47.0,
+      34.0
+    ],
+    "hitAtCenter": {
+      "password": true,
+      "connect": true,
+      "appBar": true,
+      "back": true,
+      "formSurface": true,
+      "trustApproved": true,
+      "targetCard": true,
+      "passwordChoice": true,
+      "keyChoice": true
+    }
+  },
+  "before-390-private-key": {
+    "password": [
+      24.0,
+      352.0,
+      342.0,
+      84.0
+    ],
+    "connect": [
+      24.0,
+      590.0,
+      342.0,
+      48.0
+    ],
+    "appBar": [
+      0.0,
+      0.0,
+      390.0,
+      103.0
+    ],
+    "back": [
+      16.0,
+      53.0,
+      44.0,
+      44.0
+    ],
+    "formSurface": [
+      0.0,
+      103.0,
+      390.0,
+      707.0
+    ],
+    "trustApproved": [
+      24.0,
+      185.0,
+      342.0,
+      44.0
+    ],
+    "targetCard": [
+      24.0,
+      123.0,
+      342.0,
+      52.0
+    ],
+    "passwordChoice": [
+      24.0,
+      272.0,
+      167.0,
+      44.0
+    ],
+    "keyChoice": [
+      199.0,
+      272.0,
+      167.0,
+      44.0
+    ],
+    "paste": [
+      24.0,
+      446.0,
+      342.0,
+      48.0
+    ],
+    "passphrase": [
+      24.0,
+      528.0,
+      342.0,
+      48.0
+    ],
+    "safeArea": [
+      47.0,
+      34.0
+    ],
+    "hitAtCenter": {
+      "password": true,
+      "connect": true,
+      "appBar": true,
+      "back": true,
+      "formSurface": true,
+      "trustApproved": true,
+      "targetCard": true,
+      "passwordChoice": true,
+      "keyChoice": true,
+      "paste": true,
+      "passphrase": true
+    }
+  }
+}

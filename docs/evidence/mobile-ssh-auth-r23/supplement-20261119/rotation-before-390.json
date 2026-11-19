@@ -1,0 +1,187 @@
+{
+  "before-390-key-changed": {
+    "appBar": [
+      0.0,
+      0.0,
+      390.0,
+      103.0
+    ],
+    "warning": [
+      24.0,
+      123.0,
+      342.0,
+      84.0
+    ],
+    "targetCard": [
+      24.0,
+      219.0,
+      342.0,
+      52.0
+    ],
+    "keys": [
+      24.0,
+      283.0,
+      342.0,
+      167.0
+    ],
+    "old": [
+      37.0,
+      336.0,
+      316.0,
+      34.0
+    ],
+    "new": [
+      37.0,
+      408.0,
+      316.0,
+      34.0
+    ],
+    "recheck": [
+      24.0,
+      466.0,
+      342.0,
+      48.0
+    ],
+    "cancel": [
+      24.0,
+      526.0,
+      342.0,
+      48.0
+    ],
+    "safeArea": [
+      47.0,
+      34.0
+    ],
+    "hitAtCenter": {
+      "appBar": true,
+      "warning": true,
+      "targetCard": true,
+      "keys": true,
+      "old": true,
+      "new": true,
+      "recheck": true,
+      "cancel": true
+    }
+  },
+  "before-390-previous-trust": {
+    "appBar": [
+      0.0,
+      0.0,
+      390.0,
+      103.0
+    ],
+    "back": [
+      16.0,
+      53.0,
+      44.0,
+      44.0
+    ],
+    "notice": [
+      24.0,
+      123.0,
+      342.0,
+      66.0
+    ],
+    "host": [
+      24.0,
+      263.0,
+      342.0,
+      48.0
+    ],
+    "port": [
+      282.0,
+      347.0,
+      84.0,
+      48.0
+    ],
+    "user": [
+      24.0,
+      347.0,
+      246.0,
+      48.0
+    ],
+    "probe": [
+      24.0,
+      415.0,
+      342.0,
+      48.0
+    ],
+    "safeArea": [
+      47.0,
+      34.0
+    ],
+    "hitAtCenter": {
+      "appBar": true,
+      "back": true,
+      "notice": true,
+      "host": true,
+      "port": true,
+      "user": true,
+      "probe": true
+    }
+  },
+  "before-390-recheck": {
+    "appBar": [
+      0.0,
+      0.0,
+      390.0,
+      103.0
+    ],
+    "back": [
+      16.0,
+      53.0,
+      44.0,
+      44.0
+    ],
+    "independentVerification": [
+      24.0,
+      325.0,
+      342.0,
+      52.0
+    ],
+    "targetCard": [
+      24.0,
+      123.0,
+      342.0,
+      52.0
+    ],
+    "keys": [
+      24.0,
+      187.0,
+      342.0,
+      122.0
+    ],
+    "fingerprint": [
+      37.0,
+      264.0,
+      316.0,
+      34.0
+    ],
+    "confirm": [
+      24.0,
+      383.0,
+      342.0,
+      48.0
+    ],
+    "cancel": [
+      24.0,
+      443.0,
+      342.0,
+      48.0
+    ],
+    "safeArea": [
+      47.0,
+      34.0
+    ],
+    "hitAtCenter": {
+      "appBar": true,
+      "back": true,
+      "independentVerification": true,
+      "targetCard": true,
+      "keys": true,
+      "fingerprint": true,
+      "confirm": true,
+      "cancel": true
+    }
+  }
+}

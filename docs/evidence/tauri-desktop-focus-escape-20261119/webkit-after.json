@@ -1,0 +1,1006 @@
+{
+  "sourceSHA": "44d7838e53020cc306ffbef9030c08c740a89381",
+  "routerSha256": "e874b4f5d620ddff24ead0b360bbe3ee4b4122ebf55092e267f0241d5adee07b",
+  "engine": "webkit",
+  "browser": "26.4",
+  "scope": "Tauri production frontend and xterm, Playwright native browser keys, simulated IPC, no SSH",
+  "keyboard": {
+    "working": {
+      "viewport": 1440,
+      "focused": {
+        "kind": "TEXTAREA",
+        "role": null,
+        "css": "xterm",
+        "target": [
+          "w1:p2",
+          "term_b002"
+        ],
+        "frame": "active",
+        "name": "Terminal input",
+        "enabled": true,
+        "readOnly": false,
+        "visible": true,
+        "sameEditor": true
+      },
+      "views": [
+        {
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "focused": true,
+          "phase": "active",
+          "mode": "direct"
+        },
+        {
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "focused": false,
+          "phase": "active",
+          "mode": "observe"
+        }
+      ],
+      "input": [],
+      "sendCalls": 0
+    },
+    "marker": {
+      "viewport": 1440,
+      "focused": {
+        "kind": "TEXTAREA",
+        "role": null,
+        "css": "xterm",
+        "target": [
+          "w1:p2",
+          "term_b002"
+        ],
+        "frame": "active",
+        "name": "Terminal input",
+        "enabled": true,
+        "readOnly": false,
+        "visible": true,
+        "sameEditor": true
+      },
+      "views": [
+        {
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "focused": true,
+          "phase": "active",
+          "mode": "direct"
+        },
+        {
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "focused": false,
+          "phase": "active",
+          "mode": "observe"
+        }
+      ],
+      "input": [
+        {
+          "side": "beta",
+          "bytes": [
+            120
+          ]
+        }
+      ],
+      "sendCalls": 1
+    },
+    "directWide": {
+      "viewport": 1440,
+      "focused": {
+        "kind": "TEXTAREA",
+        "role": null,
+        "css": "xterm",
+        "target": [
+          "w1:p2",
+          "term_b002"
+        ],
+        "frame": "active",
+        "name": "Terminal input",
+        "enabled": true,
+        "readOnly": false,
+        "visible": true,
+        "sameEditor": true
+      },
+      "views": [
+        {
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "focused": true,
+          "phase": "active",
+          "mode": "direct"
+        },
+        {
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "focused": false,
+          "phase": "active",
+          "mode": "observe"
+        }
+      ],
+      "input": [
+        {
+          "side": "beta",
+          "bytes": [
+            120
+          ]
+        }
+      ],
+      "sendCalls": 1
+    },
+    "resizeControl": [
+      [
+        "A",
+        "pause"
+      ],
+      [
+        "A",
+        "resume"
+      ]
+    ],
+    "escape": {
+      "viewport": 1440,
+      "focused": {
+        "kind": "BUTTON",
+        "role": "panel-focus",
+        "css": null,
+        "target": [
+          "w1:p1",
+          "term_a001"
+        ],
+        "frame": "active",
+        "name": "设为输入焦点",
+        "enabled": true,
+        "readOnly": false,
+        "visible": true,
+        "sameEditor": false
+      },
+      "views": [
+        {
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "focused": true,
+          "phase": "active",
+          "mode": "observe"
+        },
+        {
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "focused": false,
+          "phase": "active",
+          "mode": "observe"
+        }
+      ],
+      "input": [
+        {
+          "side": "beta",
+          "bytes": [
+            120
+          ]
+        }
+      ],
+      "sendCalls": 1
+    },
+    "escapeControl": [
+      [
+        "B",
+        "observe"
+      ]
+    ],
+    "tab": {
+      "viewport": 1440,
+      "focused": {
+        "kind": "SUMMARY",
+        "role": null,
+        "css": null,
+        "target": [
+          "w1:p1",
+          "term_a001"
+        ],
+        "frame": "active",
+        "name": "连接资料与诊断",
+        "enabled": true,
+        "readOnly": false,
+        "visible": true,
+        "sameEditor": false
+      },
+      "views": [
+        {
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "focused": true,
+          "phase": "active",
+          "mode": "observe"
+        },
+        {
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "focused": false,
+          "phase": "active",
+          "mode": "observe"
+        }
+      ],
+      "input": [
+        {
+          "side": "beta",
+          "bytes": [
+            120
+          ]
+        }
+      ],
+      "sendCalls": 1
+    },
+    "shiftTab": {
+      "viewport": 1440,
+      "focused": {
+        "kind": "TEXTAREA",
+        "role": null,
+        "css": null,
+        "target": [
+          "w1:p2",
+          "term_b002"
+        ],
+        "frame": "active",
+        "name": "当前标签草稿",
+        "enabled": true,
+        "readOnly": false,
+        "visible": true,
+        "sameEditor": false
+      },
+      "views": [
+        {
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "focused": true,
+          "phase": "active",
+          "mode": "observe"
+        },
+        {
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "focused": false,
+          "phase": "active",
+          "mode": "observe"
+        }
+      ],
+      "input": [
+        {
+          "side": "beta",
+          "bytes": [
+            120
+          ]
+        }
+      ],
+      "sendCalls": 1
+    },
+    "optionTab": [
+      {
+        "kind": "BUTTON",
+        "role": null,
+        "css": null,
+        "target": [
+          "w1:p2",
+          "term_b002"
+        ],
+        "frame": "active",
+        "name": "选择终端文本",
+        "enabled": true,
+        "readOnly": false,
+        "visible": true,
+        "sameEditor": false
+      },
+      {
+        "kind": "BUTTON",
+        "role": null,
+        "css": null,
+        "target": [
+          "w1:p2",
+          "term_b002"
+        ],
+        "frame": "active",
+        "name": "字体与字符诊断",
+        "enabled": true,
+        "readOnly": false,
+        "visible": true,
+        "sameEditor": false
+      },
+      {
+        "kind": "BUTTON",
+        "role": "panel-focus",
+        "css": null,
+        "target": [
+          "w1:p1",
+          "term_a001"
+        ],
+        "frame": "active",
+        "name": "设为输入焦点",
+        "enabled": true,
+        "readOnly": false,
+        "visible": true,
+        "sameEditor": false
+      }
+    ],
+    "enter": {
+      "viewport": 1440,
+      "focused": {
+        "kind": "BODY",
+        "role": null,
+        "css": null,
+        "target": null,
+        "frame": null,
+        "name": null,
+        "enabled": true,
+        "readOnly": false,
+        "visible": true,
+        "sameEditor": false
+      },
+      "views": [
+        {
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "focused": true,
+          "phase": "active",
+          "mode": "observe"
+        },
+        {
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "focused": false,
+          "phase": "active",
+          "mode": "observe"
+        }
+      ],
+      "input": [
+        {
+          "side": "beta",
+          "bytes": [
+            120
+          ]
+        }
+      ],
+      "sendCalls": 1
+    },
+    "events": [
+      {
+        "key": "x",
+        "ctrl": false,
+        "shift": false,
+        "alt": false,
+        "trusted": true,
+        "before": {
+          "kind": "TEXTAREA",
+          "role": null,
+          "css": "xterm",
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "Terminal input",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": true
+        },
+        "consumed": false,
+        "after": {
+          "kind": "TEXTAREA",
+          "role": null,
+          "css": "xterm",
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "Terminal input",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": true
+        }
+      },
+      {
+        "key": "Control",
+        "ctrl": true,
+        "shift": false,
+        "alt": false,
+        "trusted": true,
+        "before": {
+          "kind": "TEXTAREA",
+          "role": null,
+          "css": "xterm",
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "Terminal input",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": true
+        },
+        "consumed": false,
+        "after": {
+          "kind": "TEXTAREA",
+          "role": null,
+          "css": "xterm",
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "Terminal input",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": true
+        }
+      },
+      {
+        "key": "Shift",
+        "ctrl": true,
+        "shift": true,
+        "alt": false,
+        "trusted": true,
+        "before": {
+          "kind": "TEXTAREA",
+          "role": null,
+          "css": "xterm",
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "Terminal input",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": true
+        },
+        "consumed": false,
+        "after": {
+          "kind": "TEXTAREA",
+          "role": null,
+          "css": "xterm",
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "Terminal input",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": true
+        }
+      },
+      {
+        "key": "F6",
+        "ctrl": true,
+        "shift": true,
+        "alt": false,
+        "trusted": true,
+        "before": {
+          "kind": "TEXTAREA",
+          "role": null,
+          "css": "xterm",
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "Terminal input",
+          "enabled": true,
+          "readOnly": true,
+          "visible": true,
+          "sameEditor": true
+        },
+        "consumed": true,
+        "after": {
+          "kind": "BUTTON",
+          "role": "panel-focus",
+          "css": null,
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "frame": "active",
+          "name": "设为输入焦点",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": false
+        }
+      },
+      {
+        "key": "Tab",
+        "ctrl": false,
+        "shift": false,
+        "alt": false,
+        "trusted": true,
+        "before": {
+          "kind": "BUTTON",
+          "role": "panel-focus",
+          "css": null,
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "frame": "active",
+          "name": "设为输入焦点",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": false
+        },
+        "consumed": false,
+        "after": {
+          "kind": "BUTTON",
+          "role": "panel-focus",
+          "css": null,
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "frame": "active",
+          "name": "设为输入焦点",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": false
+        }
+      },
+      {
+        "key": "Shift",
+        "ctrl": false,
+        "shift": true,
+        "alt": false,
+        "trusted": true,
+        "before": {
+          "kind": "SUMMARY",
+          "role": null,
+          "css": null,
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "frame": "active",
+          "name": "连接资料与诊断",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": false
+        },
+        "consumed": false,
+        "after": {
+          "kind": "SUMMARY",
+          "role": null,
+          "css": null,
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "frame": "active",
+          "name": "连接资料与诊断",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": false
+        }
+      },
+      {
+        "key": "Tab",
+        "ctrl": false,
+        "shift": true,
+        "alt": false,
+        "trusted": true,
+        "before": {
+          "kind": "SUMMARY",
+          "role": null,
+          "css": null,
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "frame": "active",
+          "name": "连接资料与诊断",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": false
+        },
+        "consumed": false,
+        "after": {
+          "kind": "SUMMARY",
+          "role": null,
+          "css": null,
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "frame": "active",
+          "name": "连接资料与诊断",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": false
+        }
+      },
+      {
+        "key": "Alt",
+        "ctrl": false,
+        "shift": false,
+        "alt": true,
+        "trusted": true,
+        "before": {
+          "kind": "TEXTAREA",
+          "role": null,
+          "css": null,
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "当前标签草稿",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": false
+        },
+        "consumed": false,
+        "after": {
+          "kind": "TEXTAREA",
+          "role": null,
+          "css": null,
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "当前标签草稿",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": false
+        }
+      },
+      {
+        "key": "Tab",
+        "ctrl": false,
+        "shift": false,
+        "alt": true,
+        "trusted": true,
+        "before": {
+          "kind": "TEXTAREA",
+          "role": null,
+          "css": null,
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "当前标签草稿",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": false
+        },
+        "consumed": false,
+        "after": {
+          "kind": "TEXTAREA",
+          "role": null,
+          "css": null,
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "当前标签草稿",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": false
+        }
+      },
+      {
+        "key": "Alt",
+        "ctrl": false,
+        "shift": false,
+        "alt": true,
+        "trusted": true,
+        "before": {
+          "kind": "BUTTON",
+          "role": null,
+          "css": null,
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "选择终端文本",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": false
+        },
+        "consumed": false,
+        "after": {
+          "kind": "BUTTON",
+          "role": null,
+          "css": null,
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "选择终端文本",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": false
+        }
+      },
+      {
+        "key": "Tab",
+        "ctrl": false,
+        "shift": false,
+        "alt": true,
+        "trusted": true,
+        "before": {
+          "kind": "BUTTON",
+          "role": null,
+          "css": null,
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "选择终端文本",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": false
+        },
+        "consumed": false,
+        "after": {
+          "kind": "BUTTON",
+          "role": null,
+          "css": null,
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "选择终端文本",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": false
+        }
+      },
+      {
+        "key": "Alt",
+        "ctrl": false,
+        "shift": false,
+        "alt": true,
+        "trusted": true,
+        "before": {
+          "kind": "BUTTON",
+          "role": null,
+          "css": null,
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "字体与字符诊断",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": false
+        },
+        "consumed": false,
+        "after": {
+          "kind": "BUTTON",
+          "role": null,
+          "css": null,
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "字体与字符诊断",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": false
+        }
+      },
+      {
+        "key": "Tab",
+        "ctrl": false,
+        "shift": false,
+        "alt": true,
+        "trusted": true,
+        "before": {
+          "kind": "BUTTON",
+          "role": null,
+          "css": null,
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "字体与字符诊断",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": false
+        },
+        "consumed": false,
+        "after": {
+          "kind": "BUTTON",
+          "role": null,
+          "css": null,
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "字体与字符诊断",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": false
+        }
+      },
+      {
+        "key": "Enter",
+        "ctrl": false,
+        "shift": false,
+        "alt": false,
+        "trusted": true,
+        "before": {
+          "kind": "BUTTON",
+          "role": "panel-focus",
+          "css": null,
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "frame": "active",
+          "name": "设为输入焦点",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": false
+        },
+        "consumed": false,
+        "after": {
+          "kind": "BUTTON",
+          "role": "panel-focus",
+          "css": null,
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "frame": "active",
+          "name": "设为输入焦点",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": false
+        }
+      }
+    ],
+    "after": {
+      "viewport": 1440,
+      "focused": {
+        "kind": "BODY",
+        "role": null,
+        "css": null,
+        "target": null,
+        "frame": null,
+        "name": null,
+        "enabled": true,
+        "readOnly": false,
+        "visible": true,
+        "sameEditor": false
+      },
+      "views": [
+        {
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "focused": true,
+          "phase": "active",
+          "mode": "observe"
+        },
+        {
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "focused": false,
+          "phase": "active",
+          "mode": "observe"
+        }
+      ],
+      "input": [
+        {
+          "side": "beta",
+          "bytes": [
+            120
+          ]
+        }
+      ],
+      "sendCalls": 1
+    },
+    "transport": [
+      {
+        "cmd": "remote_tab_reserve",
+        "side": "A"
+      },
+      {
+        "cmd": "remote_tab_observe",
+        "side": "A"
+      },
+      {
+        "cmd": "remote_tab_reserve",
+        "side": "B"
+      },
+      {
+        "cmd": "remote_tab_observe",
+        "side": "B"
+      },
+      {
+        "cmd": "remote_tab_input_mode",
+        "side": "B",
+        "mode": "direct",
+        "epoch": 1
+      },
+      {
+        "cmd": "remote_tab_input_send",
+        "side": "B",
+        "epoch": 1
+      },
+      {
+        "cmd": "remote_tab_input_mode",
+        "side": "B",
+        "mode": "observe",
+        "epoch": 1
+      }
+    ]
+  },
+  "passed": true,
+  "browserErrors": []
+}

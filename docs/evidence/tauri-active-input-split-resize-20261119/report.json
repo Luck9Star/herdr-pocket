@@ -1,0 +1,869 @@
+{
+  "schemaVersion": 1,
+  "checkedOn": "2026-11-19",
+  "scope": "本机浏览器中的 Tauri 生产前端，模拟原生 IPC。浏览器事件和 PNG 为实际运行。未验证原生窗口、系统输入法、SSH 和跨网。",
+  "source": {
+    "before": "44d7838e53020cc306ffbef9030c08c740a89381",
+    "after": "a065fc0a689ec3784d10e7266abfc1f0dc45b2c0",
+    "afterTree": "05400c80f4e575dc0f03206ff1ecffdffbca0510",
+    "tabWorkspaceBeforeSha256": "2d137afd26f2ae51907d18613e891da80fb84b6846435ef3b7f1dea6f2d742c2",
+    "tabWorkspaceAfterSha256": "f19158ccec92e1cbd9f9cd321c9cab62bc99db052776e284960718242c85fcff",
+    "matchedBuildPaths": {
+      "exact": 216,
+      "candidate": 216
+    }
+  },
+  "toolchain": {
+    "node": "24.22.2",
+    "npm": "12.2.1",
+    "playwright": "1.62.1",
+    "xterm": "6.0.0"
+  },
+  "nodeTests": {
+    "newTestBefore": "failed as expected: narrow still had two panels",
+    "fullAfterPassed": 687,
+    "fullAfterFailed": 0
+  },
+  "runs": [
+    {
+      "engine": "webkit",
+      "browserVersion": "26.5",
+      "before": {
+        "directNarrow": {
+          "width": 700,
+          "split": 2,
+          "splitControlVisible": true,
+          "stash": false,
+          "panelCount": 2,
+          "bEditor": {
+            "sameEditor": true,
+            "kind": "TEXTAREA",
+            "visible": true,
+            "readOnly": false
+          },
+          "panes": [
+            {
+              "side": "B",
+              "target": [
+                "w1:p2",
+                "term_b002"
+              ],
+              "width": 626,
+              "phase": "active",
+              "mode": "direct",
+              "editable": true,
+              "visible": true
+            },
+            {
+              "side": "A",
+              "target": [
+                "w1:p1",
+                "term_a001"
+              ],
+              "width": 626,
+              "phase": "active",
+              "mode": "observe",
+              "editable": false,
+              "visible": true
+            }
+          ]
+        },
+        "pauseResume": [
+          [
+            "A",
+            "pause"
+          ],
+          [
+            "A",
+            "resume"
+          ]
+        ]
+      },
+      "withoutFocusGuard": {
+        "scope": "同一基线临时移除逐键焦点守卫，源码实验未提交",
+        "directNarrow": {
+          "width": 700,
+          "split": 1,
+          "splitControlVisible": false,
+          "stash": true,
+          "panelCount": 1,
+          "bEditor": {
+            "sameEditor": false,
+            "kind": "BODY",
+            "visible": true,
+            "readOnly": false
+          },
+          "panes": [
+            {
+              "side": "B",
+              "target": [
+                "w1:p2",
+                "term_b002"
+              ],
+              "width": 658,
+              "phase": "active",
+              "mode": "direct",
+              "editable": true,
+              "visible": true
+            }
+          ]
+        },
+        "blurCount": 0,
+        "acceptedKeys": 1
+      },
+      "after": {
+        "directNarrow": {
+          "width": 700,
+          "split": 1,
+          "splitControlVisible": false,
+          "stash": true,
+          "panelCount": 1,
+          "bEditor": {
+            "sameEditor": true,
+            "kind": "TEXTAREA",
+            "visible": true,
+            "readOnly": false
+          },
+          "panes": [
+            {
+              "side": "B",
+              "target": [
+                "w1:p2",
+                "term_b002"
+              ],
+              "width": 626,
+              "phase": "active",
+              "mode": "direct",
+              "editable": true,
+              "visible": true
+            }
+          ]
+        },
+        "waitingForFull": {
+          "width": 1440,
+          "split": 2,
+          "splitControlVisible": true,
+          "stash": false,
+          "panelCount": 2,
+          "bEditor": {
+            "sameEditor": true,
+            "kind": "TEXTAREA",
+            "visible": true,
+            "readOnly": false
+          },
+          "panes": [
+            {
+              "side": "B",
+              "target": [
+                "w1:p2",
+                "term_b002"
+              ],
+              "width": 560,
+              "phase": "active",
+              "mode": "direct",
+              "editable": true,
+              "visible": true
+            },
+            {
+              "side": "A",
+              "target": [
+                "w1:p1",
+                "term_a001"
+              ],
+              "width": 560,
+              "phase": "resuming",
+              "mode": null,
+              "editable": false,
+              "visible": true
+            }
+          ]
+        },
+        "directWide": {
+          "width": 1440,
+          "split": 2,
+          "splitControlVisible": true,
+          "stash": false,
+          "panelCount": 2,
+          "bEditor": {
+            "sameEditor": true,
+            "kind": "TEXTAREA",
+            "visible": true,
+            "readOnly": false
+          },
+          "panes": [
+            {
+              "side": "B",
+              "target": [
+                "w1:p2",
+                "term_b002"
+              ],
+              "width": 560,
+              "phase": "active",
+              "mode": "direct",
+              "editable": true,
+              "visible": true
+            },
+            {
+              "side": "A",
+              "target": [
+                "w1:p1",
+                "term_a001"
+              ],
+              "width": 560,
+              "phase": "active",
+              "mode": "observe",
+              "editable": false,
+              "visible": true
+            }
+          ]
+        },
+        "columnsBefore": [
+          {
+            "side": "B",
+            "leftPx": 265,
+            "widthPx": 560
+          },
+          {
+            "side": "A",
+            "leftPx": 839,
+            "widthPx": 560
+          }
+        ],
+        "columnsAfter": [
+          {
+            "side": "B",
+            "leftPx": 265,
+            "widthPx": 560
+          },
+          {
+            "side": "A",
+            "leftPx": 839,
+            "widthPx": 560
+          }
+        ],
+        "pauseResume": [
+          [
+            "A",
+            "pause",
+            1
+          ],
+          [
+            "A",
+            "resume",
+            1
+          ]
+        ],
+        "newFull": {
+          "epoch": 7,
+          "seq": 4,
+          "full": true,
+          "paneId": "w1:p1",
+          "terminalId": "term_a001",
+          "label": "RESUME-3"
+        },
+        "frameAcknowledged": true,
+        "aReserveCount": 1,
+        "bLease": {
+          "clientGeneration": 2,
+          "generation": 2,
+          "epoch": 1,
+          "inputEpoch": 1,
+          "paneId": "w1:p2",
+          "terminalId": "term_b002"
+        },
+        "bBlurCount": 0,
+        "inputModeChangesDuringResize": 0,
+        "reconnectOrResizeCommands": 0,
+        "typedBytes": [
+          {
+            "side": "beta",
+            "bytes": [
+              120
+            ]
+          },
+          {
+            "side": "beta",
+            "bytes": [
+              121
+            ]
+          },
+          {
+            "side": "beta",
+            "bytes": [
+              122
+            ]
+          }
+        ],
+        "aInputCount": 0,
+        "keysGeneratedByResize": 0,
+        "manualPause": {
+          "directNarrow": {
+            "width": 700,
+            "split": 1,
+            "splitControlVisible": false,
+            "stash": true,
+            "panelCount": 1,
+            "bEditor": {
+              "sameEditor": true,
+              "kind": "TEXTAREA",
+              "visible": true,
+              "readOnly": false
+            },
+            "panes": [
+              {
+                "side": "B",
+                "target": [
+                  "w1:p2",
+                  "term_b002"
+                ],
+                "width": 626,
+                "phase": "active",
+                "mode": "direct",
+                "editable": true,
+                "visible": true
+              }
+            ]
+          },
+          "directWide": {
+            "width": 1440,
+            "split": 2,
+            "splitControlVisible": true,
+            "stash": false,
+            "panelCount": 2,
+            "bEditor": {
+              "sameEditor": true,
+              "kind": "TEXTAREA",
+              "visible": true,
+              "readOnly": false
+            },
+            "panes": [
+              {
+                "side": "B",
+                "target": [
+                  "w1:p2",
+                  "term_b002"
+                ],
+                "width": 560,
+                "phase": "active",
+                "mode": "direct",
+                "editable": true,
+                "visible": true
+              },
+              {
+                "side": "A",
+                "target": [
+                  "w1:p1",
+                  "term_a001"
+                ],
+                "width": 560,
+                "phase": "paused",
+                "mode": null,
+                "editable": false,
+                "visible": true
+              }
+            ]
+          },
+          "controlCalls": [],
+          "aFullFrameCount": 4
+        },
+        "directEnabledWhileNarrow": {
+          "ordinarySingle": true,
+          "directWide": {
+            "width": 1440,
+            "split": 2,
+            "splitControlVisible": true,
+            "stash": false,
+            "panelCount": 2,
+            "bEditor": {
+              "sameEditor": true,
+              "kind": "TEXTAREA",
+              "visible": true,
+              "readOnly": false
+            },
+            "panes": [
+              {
+                "side": "B",
+                "target": [
+                  "w1:p2",
+                  "term_b002"
+                ],
+                "width": 560,
+                "phase": "active",
+                "mode": "direct",
+                "editable": true,
+                "visible": true
+              },
+              {
+                "side": "A",
+                "target": [
+                  "w1:p1",
+                  "term_a001"
+                ],
+                "width": 560,
+                "phase": "paused",
+                "mode": null,
+                "editable": false,
+                "visible": true
+              }
+            ]
+          },
+          "controlCalls": []
+        },
+        "pageErrorCount": 0
+      }
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "151.0.7922.34",
+      "before": {
+        "directNarrow": {
+          "width": 700,
+          "split": 2,
+          "splitControlVisible": true,
+          "stash": false,
+          "panelCount": 2,
+          "bEditor": {
+            "sameEditor": true,
+            "kind": "TEXTAREA",
+            "visible": true,
+            "readOnly": false
+          },
+          "panes": [
+            {
+              "side": "B",
+              "target": [
+                "w1:p2",
+                "term_b002"
+              ],
+              "width": 626,
+              "phase": "active",
+              "mode": "direct",
+              "editable": true,
+              "visible": true
+            },
+            {
+              "side": "A",
+              "target": [
+                "w1:p1",
+                "term_a001"
+              ],
+              "width": 626,
+              "phase": "active",
+              "mode": "observe",
+              "editable": false,
+              "visible": true
+            }
+          ]
+        },
+        "pauseResume": [
+          [
+            "A",
+            "pause"
+          ],
+          [
+            "A",
+            "resume"
+          ]
+        ]
+      },
+      "withoutFocusGuard": {
+        "scope": "同一基线临时移除逐键焦点守卫，源码实验未提交",
+        "directNarrow": {
+          "width": 700,
+          "split": 1,
+          "splitControlVisible": false,
+          "stash": true,
+          "panelCount": 1,
+          "bEditor": {
+            "sameEditor": false,
+            "kind": "BODY",
+            "visible": true,
+            "readOnly": false
+          },
+          "panes": [
+            {
+              "side": "B",
+              "target": [
+                "w1:p2",
+                "term_b002"
+              ],
+              "width": 658,
+              "phase": "active",
+              "mode": "observe",
+              "editable": false,
+              "visible": true
+            }
+          ]
+        },
+        "blurCount": 1,
+        "acceptedKeys": 1
+      },
+      "after": {
+        "directNarrow": {
+          "width": 700,
+          "split": 1,
+          "splitControlVisible": false,
+          "stash": true,
+          "panelCount": 1,
+          "bEditor": {
+            "sameEditor": true,
+            "kind": "TEXTAREA",
+            "visible": true,
+            "readOnly": false
+          },
+          "panes": [
+            {
+              "side": "B",
+              "target": [
+                "w1:p2",
+                "term_b002"
+              ],
+              "width": 626,
+              "phase": "active",
+              "mode": "direct",
+              "editable": true,
+              "visible": true
+            }
+          ]
+        },
+        "waitingForFull": {
+          "width": 1440,
+          "split": 2,
+          "splitControlVisible": true,
+          "stash": false,
+          "panelCount": 2,
+          "bEditor": {
+            "sameEditor": true,
+            "kind": "TEXTAREA",
+            "visible": true,
+            "readOnly": false
+          },
+          "panes": [
+            {
+              "side": "B",
+              "target": [
+                "w1:p2",
+                "term_b002"
+              ],
+              "width": 560,
+              "phase": "active",
+              "mode": "direct",
+              "editable": true,
+              "visible": true
+            },
+            {
+              "side": "A",
+              "target": [
+                "w1:p1",
+                "term_a001"
+              ],
+              "width": 560,
+              "phase": "resuming",
+              "mode": null,
+              "editable": false,
+              "visible": true
+            }
+          ]
+        },
+        "directWide": {
+          "width": 1440,
+          "split": 2,
+          "splitControlVisible": true,
+          "stash": false,
+          "panelCount": 2,
+          "bEditor": {
+            "sameEditor": true,
+            "kind": "TEXTAREA",
+            "visible": true,
+            "readOnly": false
+          },
+          "panes": [
+            {
+              "side": "B",
+              "target": [
+                "w1:p2",
+                "term_b002"
+              ],
+              "width": 560,
+              "phase": "active",
+              "mode": "direct",
+              "editable": true,
+              "visible": true
+            },
+            {
+              "side": "A",
+              "target": [
+                "w1:p1",
+                "term_a001"
+              ],
+              "width": 560,
+              "phase": "active",
+              "mode": "observe",
+              "editable": false,
+              "visible": true
+            }
+          ]
+        },
+        "columnsBefore": [
+          {
+            "side": "B",
+            "leftPx": 265,
+            "widthPx": 560
+          },
+          {
+            "side": "A",
+            "leftPx": 839,
+            "widthPx": 560
+          }
+        ],
+        "columnsAfter": [
+          {
+            "side": "B",
+            "leftPx": 265,
+            "widthPx": 560
+          },
+          {
+            "side": "A",
+            "leftPx": 839,
+            "widthPx": 560
+          }
+        ],
+        "pauseResume": [
+          [
+            "A",
+            "pause",
+            1
+          ],
+          [
+            "A",
+            "resume",
+            1
+          ]
+        ],
+        "newFull": {
+          "epoch": 7,
+          "seq": 4,
+          "full": true,
+          "paneId": "w1:p1",
+          "terminalId": "term_a001",
+          "label": "RESUME-3"
+        },
+        "frameAcknowledged": true,
+        "aReserveCount": 1,
+        "bLease": {
+          "clientGeneration": 2,
+          "generation": 2,
+          "epoch": 1,
+          "inputEpoch": 1,
+          "paneId": "w1:p2",
+          "terminalId": "term_b002"
+        },
+        "bBlurCount": 0,
+        "inputModeChangesDuringResize": 0,
+        "reconnectOrResizeCommands": 0,
+        "typedBytes": [
+          {
+            "side": "beta",
+            "bytes": [
+              120
+            ]
+          },
+          {
+            "side": "beta",
+            "bytes": [
+              121
+            ]
+          },
+          {
+            "side": "beta",
+            "bytes": [
+              122
+            ]
+          }
+        ],
+        "aInputCount": 0,
+        "keysGeneratedByResize": 0,
+        "manualPause": {
+          "directNarrow": {
+            "width": 700,
+            "split": 1,
+            "splitControlVisible": false,
+            "stash": true,
+            "panelCount": 1,
+            "bEditor": {
+              "sameEditor": true,
+              "kind": "TEXTAREA",
+              "visible": true,
+              "readOnly": false
+            },
+            "panes": [
+              {
+                "side": "B",
+                "target": [
+                  "w1:p2",
+                  "term_b002"
+                ],
+                "width": 626,
+                "phase": "active",
+                "mode": "direct",
+                "editable": true,
+                "visible": true
+              }
+            ]
+          },
+          "directWide": {
+            "width": 1440,
+            "split": 2,
+            "splitControlVisible": true,
+            "stash": false,
+            "panelCount": 2,
+            "bEditor": {
+              "sameEditor": true,
+              "kind": "TEXTAREA",
+              "visible": true,
+              "readOnly": false
+            },
+            "panes": [
+              {
+                "side": "B",
+                "target": [
+                  "w1:p2",
+                  "term_b002"
+                ],
+                "width": 560,
+                "phase": "active",
+                "mode": "direct",
+                "editable": true,
+                "visible": true
+              },
+              {
+                "side": "A",
+                "target": [
+                  "w1:p1",
+                  "term_a001"
+                ],
+                "width": 560,
+                "phase": "paused",
+                "mode": null,
+                "editable": false,
+                "visible": true
+              }
+            ]
+          },
+          "controlCalls": [],
+          "aFullFrameCount": 4
+        },
+        "directEnabledWhileNarrow": {
+          "ordinarySingle": true,
+          "directWide": {
+            "width": 1440,
+            "split": 2,
+            "splitControlVisible": true,
+            "stash": false,
+            "panelCount": 2,
+            "bEditor": {
+              "sameEditor": true,
+              "kind": "TEXTAREA",
+              "visible": true,
+              "readOnly": false
+            },
+            "panes": [
+              {
+                "side": "B",
+                "target": [
+                  "w1:p2",
+                  "term_b002"
+                ],
+                "width": 560,
+                "phase": "active",
+                "mode": "direct",
+                "editable": true,
+                "visible": true
+              },
+              {
+                "side": "A",
+                "target": [
+                  "w1:p1",
+                  "term_a001"
+                ],
+                "width": 560,
+                "phase": "paused",
+                "mode": null,
+                "editable": false,
+                "visible": true
+              }
+            ]
+          },
+          "controlCalls": []
+        },
+        "pageErrorCount": 0
+      }
+    }
+  ],
+  "images": [
+    {
+      "file": "webkit-before-narrow.png",
+      "sha256": "aa5de78b5fbf4502a95d0a0f3ae8a9eeca0eb5b5db22e7faa9d66c03603264bf",
+      "sizePx": [
+        700,
+        1200
+      ]
+    },
+    {
+      "file": "webkit-after-narrow.png",
+      "sha256": "e50fc00f2de6d73425231ef5f995d8fb170ca71f5c102c3b41a85f38aa98c0c3",
+      "sizePx": [
+        700,
+        1200
+      ]
+    },
+    {
+      "file": "webkit-after-wide-new-full.png",
+      "sha256": "2bb167d4177e8c96a7e86bbb138c707c198b90ca402a8255f104b7b6503a43ed",
+      "sizePx": [
+        1440,
+        1200
+      ]
+    },
+    {
+      "file": "webkit-after-wide-manual-pause.png",
+      "sha256": "1c45a76b5eeb59fb23094d09d42328ff311473cc2c20ce561e82350653a75c55",
+      "sizePx": [
+        1440,
+        1200
+      ]
+    },
+    {
+      "file": "chromium-before-narrow.png",
+      "sha256": "0d9db33e6b6af9e1f3403edc1469801780069047ce5674f6e6356c6abdaa0329",
+      "sizePx": [
+        700,
+        1200
+      ]
+    },
+    {
+      "file": "chromium-after-narrow.png",
+      "sha256": "604336c0cd1688384e3fdc475bfb10d302063a0a5e6dda768ff35751507d470c",
+      "sizePx": [
+        700,
+        1200
+      ]
+    },
+    {
+      "file": "chromium-after-wide-new-full.png",
+      "sha256": "9c21fb2511d067e810e097441b6ce47174c51421adc6e94b878b8f5d4772f289",
+      "sizePx": [
+        1440,
+        1200
+      ]
+    },
+    {
+      "file": "chromium-after-wide-manual-pause.png",
+      "sha256": "abef6e71c3e7b3bba6018bd222ae7c88cf340f4f7e82942d78aec47d988cbb2c",
+      "sizePx": [
+        1440,
+        1200
+      ]
+    }
+  ]
+}

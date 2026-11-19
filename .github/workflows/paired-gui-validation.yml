@@ -54,7 +54,7 @@ jobs:
       matrix:
         route: ${{ fromJSON(inputs.linux_direct_ssh == 'flutter-password' && '["flutter"]' || inputs.linux_direct_ssh == 'password' && '["tauri"]' || inputs.s06_split && (inputs.s06_route == 'tauri' && '["tauri"]' || inputs.s06_route == 'both' && '["flutter","tauri"]' || '["flutter"]') || inputs.flutter_only && '["flutter"]' || '["flutter","tauri"]') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: ${{ matrix.route == 'tauri' && inputs.s06_split && 65 || 45 }}
     env:
       CARGO_TERM_COLOR: never
     steps:

@@ -73,6 +73,19 @@ def require(condition, code):
 
 
 class DesktopDriver(WebDriver):
+    def start(self, binary):
+        def ready():
+            try:
+                return self.call('GET', '/status').get('ready') is True
+            except (OSError, ValueError):
+                return False
+
+        wait_for(ready, 'webdriver_unavailable')
+        reply = self.call('POST', '/session', {'capabilities': {'alwaysMatch': {
+            'webkitgtk:browserOptions': {'binary': str(binary.resolve()), 'args': []},
+        }}})
+        self.session = '/session/' + reply['sessionId']
+
     def observe(self, script, *args):
         helpers = '''const node = selector => document.querySelector(selector);
             const visible = el => !!el && el.getClientRects().length > 0 &&
@@ -303,11 +316,10 @@ def execute(driver, fixture, report):
 
 
 
-def driver_ports():
-    with socket.socket() as webdriver, socket.socket() as native:
-        for listener in (webdriver, native):
-            listener.bind(('127.0.0.1', 0))
-        return webdriver.getsockname()[1], native.getsockname()[1]
+def driver_port():
+    with socket.socket() as listener:
+        listener.bind(('127.0.0.1', 0))
+        return listener.getsockname()[1]
 
 
 def port_is_released(port):
@@ -319,19 +331,21 @@ def port_is_released(port):
 def native_run(app, report):
     report['stage'] = 'launch'
     driver = DesktopDriver()
-    port, native_port = driver_ports()
+    port = driver_port()
     driver.base = f'http://127.0.0.1:{port}'
     with tempfile.TemporaryDirectory(prefix='hp-tauri-linux-direct-') as temporary:
         root = Path(temporary)
         env = {key: os.environ[key] for key in ('PATH', 'DISPLAY', 'XAUTHORITY', 'DBUS_SESSION_BUS_ADDRESS',
                                                'LANG', 'LC_ALL', 'WEBKIT_DISABLE_COMPOSITING_MODE',
                                                'LIBGL_ALWAYS_SOFTWARE', 'GDK_SCALE', 'GDK_DPI_SCALE') if key in os.environ}
-        env.update(HOME=str(root), SHELL='/bin/sh')
+        env.update(HOME=str(root), SHELL='/bin/sh', TAURI_AUTOMATION='true', TAURI_WEBVIEW_AUTOMATION='true')
         for item in ('CONFIG', 'STATE', 'DATA', 'CACHE', 'RUNTIME'):
             path = root / item.lower()
             path.mkdir(mode=0o700)
             env[f'XDG_{item}_{"DIR" if item == "RUNTIME" else "HOME"}'] = str(path)
-        with owned_process(['tauri-driver', '--port', str(port), '--native-port', str(native_port)],
+        # The GTK driver already serves W3C. Use its owned loopback listener
+        # directly so an intermediary cannot drop an action's HTTP response.
+        with owned_process(['WebKitWebDriver', '--host=127.0.0.1', f'--port={port}'],
                            cwd=root, env=env, log=root / 'driver.log') as process:
             try:
                 driver.start(app)
@@ -358,8 +372,7 @@ def native_run(app, report):
                 except (GuiFailure, OSError, ValueError):
                     raise GuiFailure('direct_ssh_webdriver_session_cleanup_unconfirmed') from None
         require(process.poll() is not None, 'direct_ssh_driver_process_still_running')
-        wait_for(lambda: port_is_released(port) and port_is_released(native_port),
-                 'direct_ssh_driver_ports_not_released', timeout=5)
+        wait_for(lambda: port_is_released(port), 'direct_ssh_driver_ports_not_released', timeout=5)
     require(not root.exists(), 'direct_ssh_temporary_resources_remain')
     report['cleanup'] = {'peerListenerReleased': True, 'fixturePasswordCleared': True,
                          'webdriverProcessStopped': True, 'webdriverPortsReleased': True, 'privateDirectoryRemoved': True}

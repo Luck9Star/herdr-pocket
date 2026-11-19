@@ -514,9 +514,10 @@ class ObserverSessionTerminator {
 /// stock herdr 0.9.5 never gains input through a pane-ID-only fallback.
 class RemoteReadOnlyAdapter {
   RemoteReadOnlyAdapter({SocketConnector? connector, this.inputJournal,RemoteConnectionBudget? connectionBudget,DateTime Function()? clock}) : _clock = clock ?? DateTime.now,
-    _budget = connectionBudget ?? _sharedConnectionBudget, _connector = connector ??
+    _budget = connectionBudget ?? _sharedConnectionBudget, _usesNativeConnector = connector == null, _connector = connector ??
     ((host,port) => SSHSocket.connect(host,port,timeout:const Duration(seconds:8)));
   final SocketConnector _connector;
+  final bool _usesNativeConnector;
   final DateTime Function() _clock;
   final RemoteConnectionBudget _budget;
   final RemoteInputJournal? inputJournal;
@@ -717,6 +718,16 @@ class RemoteReadOnlyAdapter {
       // SSHTransport.close cancels its read subscription first. Half-close while
       // that original reader still exists, before the library can force destroy.
       a.gracefulPeerClosed = await (managed as GracefulSSHSocket).finishGracefully();
+    } else if (_usesNativeConnector && a.cancelled.isCompleted && a.failure == null &&
+        a.evidence.snapshotReceived && managed != null && a.client != null) {
+      // Dart's native SSHSocket.close only finishes writes. Keep the original
+      // SSH reader through peer EOF before destroying the descriptor.
+      try {
+        await (() async {
+          await managed.close();
+          await a.client!.done;
+        })().timeout(const Duration(seconds:2));
+      } catch (_) { a.gracefulPeerClosed = false; }
     }
     try { await a.stderr?.cancel().timeout(const Duration(seconds:2)); } catch (_) { /* discarded remote stream */ }
     try {

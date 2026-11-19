@@ -9,8 +9,8 @@ import unittest
 from unittest.mock import patch
 
 try:
-    from s06_split_gui import (REQUIRED, STOCK_CLOSE_CHECK, acknowledge_stock_close,
-                               checked_widget_result, failure_diagnostics, stock_peers_match, widget_failure, GuiFailure)
+    from s06_split_gui import (REQUIRED, STOCK_CLOSE_CHECK, STOCK_FINAL_CLOSE_CHECK, acknowledge_stock_close,
+                               checked_widget_result, failure_diagnostics, stock_peer_states, widget_failure, GuiFailure)
 except ModuleNotFoundError as missing:
     if missing.name != 'cryptography':
         raise
@@ -20,9 +20,10 @@ except ModuleNotFoundError as missing:
 @unittest.skipIf(checked_widget_result is None, 'pairing requirements are installed in the GUI workflow')
 class S06EvidenceTests(unittest.TestCase):
     def evidence(self, guarded=False):
-        return {**{key: True for key in REQUIRED}, 'sides': [
+        required = REQUIRED if guarded else (*REQUIRED, STOCK_CLOSE_CHECK, STOCK_FINAL_CLOSE_CHECK)
+        return {**{key: True for key in required}, 'sides': [
             {'connectionCount': 1, 'frameCount': 8, 'deltaFrames': 5, 'inputAccepted': guarded}
-            for _ in range(2)], **({STOCK_CLOSE_CHECK: True} if not guarded else {})}
+            for _ in range(2)]}
 
     def test_both_sides_must_independently_receive_real_full_and_delta_frames(self):
         for guarded in (False, True):
@@ -39,7 +40,7 @@ class S06EvidenceTests(unittest.TestCase):
                             checked_widget_result(value, guarded)
 
     def test_every_named_safety_checkpoint_is_mandatory_and_not_truthy(self):
-        for key in (*REQUIRED, STOCK_CLOSE_CHECK):
+        for key in (*REQUIRED, STOCK_CLOSE_CHECK, STOCK_FINAL_CLOSE_CHECK):
             for bad in (None, False, 1, 'true'):
                 value = self.evidence()
                 value[key] = bad
@@ -48,15 +49,15 @@ class S06EvidenceTests(unittest.TestCase):
                         checked_widget_result(value, False)
 
     def test_focused_close_is_required_and_published_only_for_flutter_stock(self):
-        stock = self.evidence()
-        self.assertIs(checked_widget_result(stock, False)[STOCK_CLOSE_CHECK], True)
-        stock.pop(STOCK_CLOSE_CHECK)
-        with self.assertRaisesRegex(GuiFailure, 's06_widget_checks_incomplete'):
-            checked_widget_result(stock, False)
         guarded = self.evidence(guarded=True)
-        self.assertNotIn(STOCK_CLOSE_CHECK, checked_widget_result(guarded, True))
-        guarded[STOCK_CLOSE_CHECK] = True
-        self.assertNotIn(STOCK_CLOSE_CHECK, checked_widget_result(guarded, True))
+        for key in (STOCK_CLOSE_CHECK, STOCK_FINAL_CLOSE_CHECK):
+            stock = self.evidence()
+            self.assertIs(checked_widget_result(stock, False)[key], True)
+            stock.pop(key)
+            with self.assertRaisesRegex(GuiFailure, 's06_widget_checks_incomplete'):
+                checked_widget_result(stock, False)
+            guarded[key] = True
+            self.assertNotIn(key, checked_widget_result(guarded, True))
 
     def test_acknowledgement_requires_original_a_closed_and_original_b_still_open(self):
         def probe_once(probe, code, *, timeout):
@@ -79,24 +80,45 @@ class S06EvidenceTests(unittest.TestCase):
             ack = root / 'focused-close-ack'
             proc = SimpleNamespace(poll=lambda: None)
             deadline = time.monotonic() + 30
+            result = {}
             with self.assertRaisesRegex(GuiFailure, 's06_focused_close_request_timeout'):
-                acknowledge_stock_close(root, peers, proc, deadline)
+                acknowledge_stock_close(root, peers, proc, deadline, result, final=False)
             (root / 'focused-close-request').touch()
             closed_a = connected + disconnect(2201)
             for contents in (connected + disconnect(2210), closed_a + disconnect(2202),
                              closed_a + accept(2203, peers[1].fingerprint)):
                 log.write_text(contents)
                 with self.assertRaisesRegex(GuiFailure, 's06_focused_peer_close_unconfirmed'):
-                    acknowledge_stock_close(root, peers, proc, deadline)
+                    acknowledge_stock_close(root, peers, proc, deadline, result, final=False)
                 self.assertFalse(ack.exists())
             log.write_text(closed_a)
-            acknowledge_stock_close(root, peers, proc, deadline)
+            acknowledge_stock_close(root, peers, proc, deadline, result, final=False)
             self.assertTrue(ack.is_file())
-            self.assertFalse(stock_peers_match(peers, both_closed=True))
-            log.write_text(closed_a + disconnect(2202))
-            self.assertTrue(stock_peers_match(peers, both_closed=True))
-            log.write_text(closed_a + disconnect(2202) + accept(2203, peers[1].fingerprint) + disconnect(2203))
-            self.assertFalse(stock_peers_match(peers, both_closed=True))
+            self.assertEqual(stock_peer_states(peers), ['closed', 'close_unconfirmed'])
+
+            (root / 'final-close-request').touch()
+            final_ack = root / 'final-close-ack'
+            both_closed = closed_a + disconnect(2202)
+            early_exit = SimpleNamespace(poll=lambda: 0)
+            with self.assertRaisesRegex(GuiFailure, 's06_widget_exited_before_final_close'):
+                acknowledge_stock_close(root, peers, early_exit, deadline, result, final=True)
+            self.assertFalse(final_ack.exists())
+            for contents, expected in ((closed_a, 'close_unconfirmed'),
+                                       (closed_a + 'Read error from remote host 127.0.0.1 port 2202: Connection reset by peer\n',
+                                        'close_unconfirmed'),
+                                       (both_closed + accept(2203, peers[1].fingerprint)
+                                        + disconnect(2203), 'multiple_authentications')):
+                log.write_text(contents)
+                with self.assertRaisesRegex(GuiFailure, 's06_stock_final_peer_close_unconfirmed'):
+                    acknowledge_stock_close(root, peers, proc, deadline, result, final=True)
+                self.assertFalse(final_ack.exists())
+                self.assertTrue(result[STOCK_CLOSE_CHECK])
+                self.assertNotIn(STOCK_FINAL_CLOSE_CHECK, result)
+                self.assertEqual(result['stockStopEvidence']['finalPeerStates'], ['closed', expected])
+            log.write_text(both_closed)
+            acknowledge_stock_close(root, peers, proc, deadline, result, final=True)
+            self.assertTrue(final_ack.is_file())
+            self.assertTrue(result[STOCK_FINAL_CLOSE_CHECK])
 
     def test_only_public_boolean_and_numeric_fields_can_be_published(self):
         value = self.evidence()

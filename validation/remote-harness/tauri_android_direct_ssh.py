@@ -1303,6 +1303,81 @@ def _connect_ready(port):
             except GuiFailure: pass
 
 
+def _app_process_present():
+    lines = adb('shell', 'ps', '-A', '-o', 'PID,NAME').splitlines()
+    if not lines or lines[0].split() != ['PID', 'NAME']:
+        return None
+    rows = [line.split(maxsplit=1) for line in lines[1:]]
+    if not all(len(row) == 2 and row[0].isdigit() for row in rows) or not any(pid == '1' for pid, _ in rows):
+        return None
+    return any(name.split(':', 1)[0] == PACKAGE for _, name in rows)
+
+
+def _app_package_present():
+    packages = adb('shell', 'pm', 'list', 'packages', '--user', '0').splitlines()
+    if 'package:android' not in packages or not all(re.fullmatch(r'package:[\w.]+', line, re.ASCII) for line in packages):
+        return None
+    return 'package:' + PACKAGE in packages
+
+
+def _mapping_present(direction, local, remote=None):
+    rows = [row.split() for row in adb(direction, '--list').splitlines()]
+    if not all(len(row) == 3 and all(re.fullmatch(r'[a-z][a-z0-9-]*:\S+', item) for item in row[1:]) for row in rows):
+        return None
+    # Forward lists are host-wide. Reverse lists belong to the selected device.
+    return any((direction == 'reverse' or owner == SERIAL) and
+               (source == local if local is not None else target == remote) for owner, source, target in rows)
+
+
+def _browser_socket_present(browser):
+    if browser.ws.connected is True:
+        return True
+    if browser.ws.connected is False and browser.ws.sock is None:
+        return False
+    return None
+
+
+def _device_cleanup(browser, install_attempted, forwarded, socket_target, reverse, reverse_added):
+    steps = {}
+
+    def record(stage, action, *, readback=False):
+        try:
+            value = action()
+        except Exception as error:
+            steps[stage] = public_driver_error(error) if isinstance(error, GuiFailure) else 'direct_driver_failed'
+        else:
+            if not readback:
+                steps[stage] = 'returned'
+            elif value is True:
+                steps[stage] = 'present'
+            elif value is False:
+                steps[stage] = 'absent'
+            else:
+                steps[stage] = 'unverified'
+
+    if browser is not None:
+        record('browserClose', lambda: browser.close())
+        record('browserSocket', lambda: _browser_socket_present(browser), readback=True)
+    if install_attempted:
+        record('forceStop', lambda: adb('shell', 'am', 'force-stop', PACKAGE))
+        record('uninstall', lambda: adb('uninstall', PACKAGE, timeout=60))
+        record('appProcess', _app_process_present, readback=True)
+        record('appPackage', _app_package_present, readback=True)
+    if socket_target is not None:
+        if forwarded is not None:
+            record('forwardRemove', lambda: adb('forward', '--remove', forwarded))
+        record('forwardList', lambda: _mapping_present('forward', forwarded, socket_target), readback=True)
+    if reverse is not None:
+        if reverse_added:
+            record('reverseRemove', lambda: adb('reverse', '--remove', reverse))
+        record('reverseList', lambda: _mapping_present('reverse', reverse), readback=True)
+
+    probes = ('browserSocket', 'appProcess', 'appPackage', 'forwardList', 'reverseList')
+    if any(steps[key] != 'absent' for key in probes if key in steps):
+        return {'status':'failed', 'failureStage':'cleanup', 'errorCode':'direct_cleanup_failed', 'steps':steps}
+    return {'status':'passed', 'steps':steps}
+
+
 def run_device(apk, fixture, *, encrypted_key=False, key_change=False, evidence_dir=None, progress=None):
     if progress is not None: progress['stage']='device_preflight'
     if (os.environ.get('GITHUB_ACTIONS') != 'true' or os.environ.get('ANDROID_SERIAL') != SERIAL or
@@ -1314,13 +1389,15 @@ def run_device(apk, fixture, *, encrypted_key=False, key_change=False, evidence_
             adb('shell','am','get-current-user') != '0' or
             'package:' + PACKAGE in adb('shell','pm','list','packages',PACKAGE)):
         raise GuiFailure('direct_unowned_or_invalid_device')
-    reverse=f'tcp:{fixture.port}'
-    installed=False; forwarded=None; browser=None; reverse_added=False; cleanup=[]
+    reverse = forwarded = socket_target = browser = None
+    reverse_added = install_attempted = False
     try:
         if progress is not None: progress['stage']='reverse_setup'
+        reverse=f'tcp:{fixture.port}'
         adb('reverse',reverse,reverse);reverse_added=True
         if progress is not None: progress['stage']='install_app'
-        adb('install',str(apk),timeout=90);installed=True
+        install_attempted=True  # the owned device preflight established the package was absent
+        adb('install',str(apk),timeout=90)
         if progress is not None: progress['stage']='launch_app'
         adb('shell','monkey','-p',PACKAGE,'-c','android.intent.category.LAUNCHER','1')
         pid=wait_for(lambda:adb('shell','pidof',PACKAGE,check=False),'direct_app_missing',timeout=60)
@@ -1330,7 +1407,8 @@ def run_device(apk, fixture, *, encrypted_key=False, key_change=False, evidence_
         wait_for(lambda:'@'+socket_name in adb('shell','cat','/proc/net/unix',check=False),
                  'direct_webview_socket_missing',timeout=60)
         if progress is not None: progress['stage']='webview_forward'
-        port=adb('forward','tcp:0','localabstract:'+socket_name)
+        socket_target='localabstract:'+socket_name
+        port=adb('forward','tcp:0',socket_target)
         if not port.isdigit() or not 1 <= int(port) <= 65535:raise GuiFailure('direct_forward_invalid')
         forwarded='tcp:'+port
         if progress is not None: progress['stage']='webview_ready'
@@ -1340,28 +1418,15 @@ def run_device(apk, fixture, *, encrypted_key=False, key_change=False, evidence_
         result=(exercise_key_change_ui(browser,fixture,evidence_dir=evidence_dir) if key_change
                 else exercise_ui(browser,fixture,encrypted_key=encrypted_key,evidence_dir=evidence_dir,progress=progress))
     finally:
-        if browser:
-            try: browser.close()
-            except Exception: cleanup.append('browser')
-        if installed:
-            try:
-                adb('shell','am','force-stop',PACKAGE);adb('uninstall',PACKAGE,timeout=60)
-                if adb('shell','pidof',PACKAGE,check=False) or 'package:'+PACKAGE in adb('shell','pm','list','packages',PACKAGE):
-                    cleanup.append('application')
-            except GuiFailure: cleanup.append('application')
-        if forwarded:
-            try:
-                adb('forward','--remove',forwarded)
-                if any(forwarded in row.split() for row in adb('forward','--list').splitlines()): cleanup.append('forward')
-            except GuiFailure: cleanup.append('forward')
-        if reverse_added:
-            try:
-                adb('reverse','--remove',reverse)
-                if any(reverse in row.split() for row in adb('reverse','--list').splitlines()): cleanup.append('reverse')
-            except GuiFailure: cleanup.append('reverse')
-        if cleanup:
-            if progress is not None: progress['stage']='cleanup'
-            raise GuiFailure('direct_cleanup_failed')
+        cleanup = _device_cleanup(browser, install_attempted, forwarded, socket_target, reverse, reverse_added)
+        if progress is not None:
+            progress['cleanupDiagnostic'] = cleanup
+    # An exception from the primary path propagates directly through the finally block.
+    if progress is not None:
+        progress['stage'] = 'cleanup'
+    if cleanup['status'] == 'failed':
+        raise GuiFailure('direct_cleanup_failed')
+    result['cleanupDiagnostic'] = cleanup
     result['cleanup']={'browser':True,'application':True,'forward':True,'reverse':True}
     return result
 
@@ -1391,7 +1456,6 @@ def main():
         with DirectSshFixture(observe_helper_keys=True,screen_proof=True) as fixture:
             try:
                 report.update(run_device(args.apk,fixture,evidence_dir=output,progress=progress))
-                progress.clear()
             except GuiFailure:
                 report['probeEvidence'] = probe_evidence(fixture)
                 raise
@@ -1403,7 +1467,6 @@ def main():
             report['phase']='host_key_rotation'
             try:
                 rotation_result=run_device(args.apk,rotation,key_change=True,evidence_dir=output,progress=progress)
-                progress.clear()
                 rotation_result['s10Screenshot']=(output/'s10-host-key-change-android.png').exists()
             except GuiFailure:
                 report['probeEvidence'] = probe_evidence(rotation)
@@ -1418,7 +1481,6 @@ def main():
         with EncryptedKeyFixture() as key_fixture:
             try:
                 key_result=run_device(args.apk,key_fixture,encrypted_key=True,progress=progress)
-                progress.clear()
             except GuiFailure:
                 report['probeEvidence'] = probe_evidence(key_fixture)
                 raise
@@ -1453,6 +1515,10 @@ def main():
         if isinstance(stored_facts,list) and 1<=len(stored_facts)<=3:
             report['secondOpenFacts']=stored_facts
         if progress.get('stage') in DRIVER_STAGES: report['failureStage']=progress['stage']
+    if report['status'] == 'failed':
+        report.pop('cleanupDiagnostic', None)  # a completed earlier scenario has its own cleanup
+        if 'cleanupDiagnostic' in progress:
+            report['cleanupDiagnostic'] = progress['cleanupDiagnostic']
     (output/'manifest.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
     if report['status']!='passed': raise SystemExit(1)
 

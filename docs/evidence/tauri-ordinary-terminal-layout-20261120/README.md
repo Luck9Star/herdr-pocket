@@ -40,3 +40,5 @@ FEEDBACK_PRODUCT_DIST="$PRODUCT_DIST" FEEDBACK_EVIDENCE=output node replay.mjs
 ```
 
 脚本运行三个桌面、两个移动、长目标、合成已存主机以及网络已有配置/读取失败共九个场景。它不访问真实 SSH 授权文件、网络身份或私钥。
+
+网络目录重开竞态的原图与复验入口见 [network-reload](network-reload/README.md)。

@@ -1,0 +1,20 @@
+{
+  "viewport": [
+    980,
+    780
+  ],
+  "engine": "Playwright WebKit 26.5",
+  "fixture": "loopback HTTP and synthetic IPC; no real SSH or network catalog",
+  "states": {
+    "pending-resize": {
+      "sha256": "172e9631e7092f21aa7fc28a4cb558402164325971850f133e92c8adf2dfe613",
+      "cardCount": 1,
+      "panelText": "还没有网络配置\n\n配置 ZeroTier、Tailscale 或 EasyTier 后，在这里管理网络。\n\n添加网络配置\n管理网络与共享设备"
+    }
+  },
+  "checks": {
+    "baselineReproduced": true
+  },
+  "errors": [],
+  "passed": true
+}

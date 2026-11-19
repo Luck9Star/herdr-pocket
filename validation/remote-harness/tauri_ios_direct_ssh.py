@@ -106,7 +106,7 @@ NATIVE_FAILURES = frozenset((
     'native_mobile_submit_owner_unproven', 'native_mobile_return_owner_unproven',
     'native_encrypted_key_owner_unproven', 'native_encrypted_key_method_unproven',
     'native_encrypted_key_entry_unproven', 'native_encrypted_key_rejection_unproven',
-    'native_encrypted_key_credentials_retained')) | MOBILE_PASSWORD_FAILURES | ENCRYPTED_AUTH_FAILURES
+    'native_encrypted_key_credentials_retained', 'native_encrypted_key_empty_add_unproven')) | MOBILE_PASSWORD_FAILURES | ENCRYPTED_AUTH_FAILURES
 HOME_MEMBERS = frozenset(('brand', 'headerAdd', 'emptyAdd', 'homeHeading', 'emptyHeading',
                          'zeroHosts', 'ordinaryShortcut', 'addHeading', 'sshOption'))
 COMPACT_HOME_MEMBERS = {'emptyDescription', 'compactShortcut'}
@@ -273,8 +273,10 @@ def compact_home_identity(home):
             and all(members[key]['count'] == 0 for key in ('homeHeading', 'zeroHosts', 'headerAdd')))
 
 
-def public_home_readiness(value, home):
+def public_home_readiness(value, home, *, manual_key=False):
     states = ('ready', 'loading', 'shell', 'error', 'alert', 'unexpected', 'not_foreground')
+    pending = ('compact_add_pending',) if manual_key else ()
+    states += pending
     keys = {'outcome', 'elapsedMs', 'strictSampleMs', 'strictSamples', 'waitCalls', 'samples'}
     code = 'tauri_ios_home_diagnostic_invalid'
     require(isinstance(value, dict) and set(value) == keys and value['outcome'] in states, code)
@@ -288,7 +290,7 @@ def public_home_readiness(value, home):
         require(isinstance(sample, dict) and set(sample) == {'state', 'elapsedMs'}, code)
         state = sample['state']
         require((state in states or (state == 'unidentified_startup' and previous is None))
-                and state != previous and previous in (None, 'loading', 'shell', 'unidentified_startup')
+                and state != previous and previous in (None, 'loading', 'shell', 'unidentified_startup') + pending
                 and type(sample['elapsedMs']) is int
                 and elapsed <= sample['elapsedMs'] <= value['elapsedMs'], code)
         previous, elapsed = state, sample['elapsedMs']
@@ -303,6 +305,7 @@ def public_home_readiness(value, home):
     empty = home['knownEmptyHome'] and home['windowCount'] > 0 and home['webViewCount'] > 0 and identity
     expected = {'ready': safe and not flags['loading'] and empty, 'loading': safe and flags['loading'],
                 'shell': safe and not flags['loading'] and not empty,
+                'compact_add_pending': safe and not flags['loading'] and empty and home.get('compactEmptyHome') is True,
                 'error': foreground and not alert and error, 'alert': foreground and alert,
                 'unexpected': foreground and not (alert or error), 'not_foreground': not foreground}
     require(expected.get(previous, True), code)
@@ -1204,7 +1207,8 @@ class Checkpoints:
                 if 'readiness' in payload:
                     require(phase.endswith('_open_add') and key not in readiness
                             and not self.result.get('navigationTrace', {}).get(key), 'tauri_ios_home_diagnostic_phase_invalid')
-                    self.result.setdefault('homeReadiness', {})[key] = public_home_readiness(payload['readiness'], home)
+                    detail = public_home_readiness(payload['readiness'], home, manual_key=scenario == 'encrypted_key')
+                    self.result.setdefault('homeReadiness', {})[key] = detail
                 self.result.setdefault('homeDiagnostics', {})[key] = home
             elif stage == 'native_navigation_arrival':
                 current = public_navigation_state(payload.get('state'))
@@ -1429,6 +1433,8 @@ class Checkpoints:
                 if code.startswith('native_encrypted_'):
                     require(self.encrypted is not None and set(payload) == {'stage', 'nativeCheckpoint', 'nativeFailureCode'},
                             'tauri_ios_native_diagnostic_invalid')
+                if code == 'native_encrypted_key_empty_add_unproven':
+                    require(phase == 'encrypted_key_open_add', 'tauri_ios_native_diagnostic_invalid')
                 if observation or code in MOBILE_PASSWORD_FAILURES:
                     keys = {'stage', 'nativeCheckpoint', 'nativeFailureCode'}
                     if observation:

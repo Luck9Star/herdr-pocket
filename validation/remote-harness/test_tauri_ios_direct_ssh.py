@@ -1145,6 +1145,39 @@ class HomeDiagnosticsTests(unittest.TestCase):
             home = {**self.value(), **home_change}
             with self.subTest(home_change=home_change), self.assertRaisesRegex(ios.Failure, 'home_diagnostic_invalid'):
                 ios.public_home_readiness(base, home)
+    def test_manual_compact_add_pending_is_bounded_to_the_encrypted_open_add_phase(self):
+        home = {**self.value(), 'compactEmptyHome': True}
+        for name in ('homeHeading', 'zeroHosts', 'headerAdd'):
+            home['members'][name] = {'count': 0, 'roles': []}
+        home['members']['emptyDescription'] = {'count': 1, 'roles': ['staticText']}
+        home['members']['compactShortcut'] = {'count': 1, 'roles': ['button']}
+        sample = {'state': 'compact_add_pending', 'elapsedMs': 10}
+        pending = {'outcome': 'compact_add_pending', 'elapsedMs': 35010, 'strictSampleMs': 10, 'strictSamples': 10,
+                   'waitCalls': 9, 'samples': [sample]}
+        recovered = pending | {'outcome': 'ready', 'samples': [sample, {'state': 'ready', 'elapsedMs': 35010}]}
+        self.assertEqual(ios.public_home_readiness(pending, home, manual_key=True), pending)
+        self.assertEqual(ios.public_home_readiness(recovered, home, manual_key=True), recovered)
+        with self.assertRaisesRegex(ios.Failure, 'home_diagnostic_invalid'):
+            ios.public_home_readiness(pending, home)
+        with self.assertRaisesRegex(ios.Failure, 'home_diagnostic_invalid'):
+            ios.public_home_readiness(pending, self.value(), manual_key=True)
+        with tempfile.TemporaryDirectory() as directory:
+            class NoPeer:
+                def snapshot(self):
+                    return {'connections': 0}
+            state = ios.Checkpoints(None, None, directory, {}, encrypted=NoPeer())
+            state.index = ios.ENCRYPTED_KEY_STAGES.index('encrypted_key_probe')
+            phase = 'encrypted_key_open_add'
+            state.accept({'stage': 'native_home', 'nativeCheckpoint': phase, 'home': home, 'readiness': pending})
+            navigation = self.navigation('emptyAdd', 'emptyHome', 'addChoice')
+            with self.assertRaisesRegex(ios.Failure, 'home_retry_unsafe'):
+                state.accept(navigation | {'nativeCheckpoint': phase})
+            code = 'native_encrypted_key_empty_add_unproven'
+            with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                state.accept({'stage': 'native_failure', 'nativeCheckpoint': 'encrypted_key_open_ssh', 'nativeFailureCode': code})
+            state.accept({'stage': 'native_failure', 'nativeCheckpoint': phase, 'nativeFailureCode': code})
+            self.assertEqual(state.result['nativeFailureCode'], code)
+            self.assertNotIn('navigationTrace', state.result)
 
     def test_repeated_home_sampling_retains_latest_without_navigation_or_ssh_replay(self):
         with tempfile.TemporaryDirectory() as directory:

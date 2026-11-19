@@ -63,6 +63,8 @@ final class Launch {
     var wakes: [(Bool, TimeInterval)]
     var unidentifiedOverrides: [String: Any] = [:]
     var compact = false
+    var compactAddHeights: [(witnessed: Double, live: Double)] = []
+    var compactAddArrival = "addChoice"
     var waits: [TimeInterval] = []
     var clicks: [String] = []
     var posts: [(String, [String: Any])] = []
@@ -117,7 +119,15 @@ final class Adapter {
         return ["page": state == .ready ? "emptyHome" : state == .unexpected ? "addChoice" : "unexpected",
                 "appForeground": state != .notForeground, "noAlerts": state != .alert,
                 "noKnownErrors": state != .loading && state != .error, "credentialsEmpty": true,
-                "windowCount": 1, "webViewCount": 3, "inputCount": 0]
+                "windowCount": 1, "webViewCount": 3, "inputCount": 0, "compactEmptyHome": launch.compact && state == .ready]
+    }
+    func currentCompactAddReady() throws -> Bool {
+        precondition(launch.clicks.isEmpty)
+        let heights = launch.compactAddHeights.count == 1 ? launch.compactAddHeights[0] : launch.compactAddHeights.removeFirst()
+        let frame = CGRect(x: 12, y: 165, width: 310, height: heights.witnessed)
+        let geometry: [String: Any] = ["role": "button", "enabled": true, "hittable": true, "ownerResolved": true,
+            "fullyVisible": true, "frame": [8.0, 217.0, 300.0, heights.live]]
+        return NativeHomeReadiness.compactAddReady(geometry, witnessed: frame)
     }
     func require(_ condition: Bool, _ code: String) throws {
         if !condition { throw Rejected(code: code) }
@@ -127,7 +137,7 @@ final class Adapter {
         precondition(lastHomeSample?["knownEmptyHome"] as? Bool == true)
         precondition(compactRoute == launch.compact)
         launch.clicks.append(member)
-        if compactRoute && member == "emptyAdd" { return ("addChoice", "buttonRole", "button") }
+        if compactRoute && member == "emptyAdd" { return (launch.compactAddArrival, "buttonRole", "button") }
         return ("sshForm", "buttonRole", "button")
     }
     func phase(_ name: String) throws { nativePhase = "ordinary_" + name }
@@ -135,10 +145,13 @@ final class Adapter {
 ''' + "\n".join(self.production_method(signature) for signature in (
             "func awaitEmptyHome()", "func openHomeSSH()")) + r'''
 }
-func verify(_ launch: Launch, _ outcome: String, _ failure: String? = nil, states: [String]) -> [String: Any] {
+func verify(_ launch: Launch, _ outcome: String, _ failure: String? = nil, states: [String],
+            manualKey: Bool = false) -> [String: Any] {
     Clock.time = 0
     var caught: String?
-    do { try Adapter(launch).run() } catch let rejection as Rejected { caught = rejection.code } catch { fatalError() }
+    let adapter = Adapter(launch)
+    if manualKey { adapter.nativePhase = "encrypted_key_open_add" }
+    do { try adapter.run() } catch let rejection as Rejected { caught = rejection.code } catch { fatalError() }
     precondition(caught == failure)
     precondition(launch.clicks == (failure == nil ? (launch.compact ? ["emptyAdd", "sshChoice"] : ["headerAdd"]) : []))
     precondition(launch.posts.map { $0.0 } == (failure == nil ? ["native_home", "native_home_entry"] : ["native_home"]))
@@ -172,6 +185,28 @@ precondition(recovers.sampled == 2 && recovers.waits == [4] && (recovered["elaps
 let compact = Launch([(.ready, 0.25)])
 compact.compact = true
 _ = verify(compact, "ready", states: ["ready"])
+let compactPendingThenReady = Launch([(.ready, 0)], wakes: [(true, 0.3)])
+compactPendingThenReady.compact = true
+compactPendingThenReady.compactAddHeights = [(22, 22), (48, 48)]
+_ = verify(compactPendingThenReady, "ready", states: ["compact_add_pending", "ready"], manualKey: true)
+precondition(compactPendingThenReady.sampled == 2 && compactPendingThenReady.clicks.filter { $0 == "emptyAdd" }.count == 1)
+for heights: (Double, Double) in [(22, 22), (48, 22), (22, 48)] {
+    let undersized = Launch([(.ready, 0)])
+    undersized.compact = true
+    undersized.compactAddHeights = [heights]
+    let result = verify(undersized, "compact_add_pending", "native_encrypted_key_empty_add_unproven",
+                        states: ["compact_add_pending"], manualKey: true)
+    precondition(result["elapsedMs"] as? Int == 35000 && undersized.clicks.isEmpty)
+}
+let missedTap = Launch([(.ready, 0)])
+missedTap.compact = true
+missedTap.compactAddHeights = [(48, 48)]
+missedTap.compactAddArrival = "emptyHome"
+let manual = Adapter(missedTap)
+manual.nativePhase = "encrypted_key_open_add"
+do { try manual.run(); fatalError("no progress must fail") }
+catch let error as Rejected { precondition(error.code == "native_home_navigation_failed") }
+precondition(missedTap.clicks == ["emptyAdd"])
 let persistent = Launch([(.unidentifiedStartup, 0.317)])
 _ = verify(persistent, "unexpected", "native_home_identity_unproven", states: ["unidentified_startup", "unexpected"])
 precondition(persistent.sampled == 2 && persistent.waits == [4])

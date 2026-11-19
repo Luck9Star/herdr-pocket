@@ -87,6 +87,7 @@ export function observeAndroidSshIme(view, doc, readInsets, options = {}) {
     try { value = await readInsets(); } catch { /* Without a system sample use the existing web viewport. */ }
     if (scope !== current) return;
     if (!active()) { reset(); return; }
+    current.pending = false;
     current.sample = value; paint();
     if (value?.imeVisible === true) current.awaitingOpen = false;
     // terminal editor still owns focus, keep a slow watch after the wake window

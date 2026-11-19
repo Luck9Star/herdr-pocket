@@ -279,6 +279,58 @@ test('wake treats DOM Event objects and inactive pages as plain wakes', async t=
   assert.equal(f.classes.has('ssh-ime-known'),false);
 });
 
+test('a settled watch still answers later real DOM focus and resize wakes', async t=>{
+  // Regression for the dropped `current.pending = false`: after a cycle ends
+  // naturally, a plain wake() (focus/resize/pageshow) must sample again.
+  const f = fixture(), timers = new Map(), nodes = ['host-home', 'home-ssh', 'ssh-live'].map(()=>({hidden:false}));
+  const ids = Object.fromEntries(['host-home', 'home-ssh', 'ssh-live'].map((id,index)=>[id,nodes[index]]));
+  let now = 0, focused = true, nextTimer = 0, reads = 0;
+  let next = {imeVisible:false};
+  const old = globalThis.MutationObserver;
+  globalThis.MutationObserver = class {observe() {} disconnect() {}};
+  t.after(()=> {globalThis.MutationObserver=old;});
+  const editor = {isConnected:true};
+  const doc = {documentElement:f.root, body:f.body, hidden:false, hasFocus:()=>focused, activeElement:editor,
+    getElementById:id=>ids[id], addEventListener:(name,fn)=>f.callbacks.set('d:'+name,fn),
+    removeEventListener:name=>f.callbacks.delete('d:'+name)};
+  Object.assign(f.view, {innerWidth:393,innerHeight:851,devicePixelRatio:2,performance:{now:()=>now},
+    setTimeout:fn=>{timers.set(++nextTimer,fn);return nextTimer;},clearTimeout:id=>timers.delete(id)});
+  Object.assign(f.viewport, {height:851,offsetTop:0,scale:1});
+  const settle = async()=>{await Promise.resolve(); await Promise.resolve();};
+  const tick = async(delta=160)=>{
+    now+=delta; const entry = timers.entries().next();
+    if (entry.done) return;
+    const [id,fn] = entry.value;
+    timers.delete(id); fn(); await settle();
+  };
+  const stop = observeAndroidSshIme(f.view,doc,()=>{reads++;return next;},{getEditor:()=>editor});
+  t.after(stop);
+  await settle();
+  // open intent; window expires closed; slow watch holds until answered
+  f.callbacks.get('d:pointerdown')({target:{closest:sel=>sel.includes('#ssh-focus')?{}:null}});
+  await settle();
+  await tick(2200);
+  assert.equal(timers.size,1,'slow watch scheduled');
+  // answer this intent: IME becomes visible, then closes — watch settles
+  next = {imeVisible:true,viewHeightPx:1702,imeOverlapPx:600};
+  await tick(600);
+  assert.equal(f.classes.has('ssh-ime-visible'),true);
+  next = {imeVisible:false};
+  await tick(200);
+  assert.equal(timers.size,0,'answered intent settles into quiet');
+  // plain wake via real-DOM-shaped Event must sample again
+  const readsBefore = reads;
+  f.callbacks.get('w:focus')({type:'focus'});
+  await settle();
+  assert.equal(reads,readsBefore+1,'focus wake re-samples after settle');
+  await tick(2200);
+  assert.equal(timers.size,0,'window expired into quiet');
+  const secondReads = reads;
+  f.callbacks.get('w:resize')({type:'resize'});
+  await settle();
+  assert.equal(reads,secondReads+1,'resize wake re-samples too');
+});
+
 test('Android SSH header scroll tracking stops during review and outside the route',()=>{
   const f=fixture(), nodes={'host-home':{hidden:false},'home-ssh':{hidden:false},'ssh-key-change':{hidden:true}};
   const previous={ResizeObserver:globalThis.ResizeObserver,MutationObserver:globalThis.MutationObserver};

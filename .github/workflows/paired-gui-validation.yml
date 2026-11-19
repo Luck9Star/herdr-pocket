@@ -17,6 +17,9 @@ on:
       s06_route:
         type: string
         default: flutter
+      s06_import_replace:
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       linux_direct_ssh:
@@ -32,6 +35,10 @@ on:
         description: Build the reviewed input fixture and verify both S06 input targets
         type: boolean
         default: false
+      s06_import_replace:
+        description: Run Tauri stock S06 with real config replacement
+        type: boolean
+        default: false
       s06_route:
         description: Desktop candidate for the opt-in S06 acceptance
         type: choice
@@ -40,7 +47,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: paired-gui-${{ github.ref }}-${{ inputs.input_fixture }}-${{ inputs.s06_split }}-${{ inputs.s06_guarded }}-${{ inputs.s06_route }}${{ contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) && format('-linux-direct-{0}', inputs.linux_direct_ssh) || '' }}
+  group: paired-gui-${{ github.ref }}-${{ inputs.input_fixture }}-${{ inputs.s06_split }}-${{ inputs.s06_guarded }}-${{ inputs.s06_route }}-${{ inputs.s06_import_replace }}${{ contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) && format('-linux-direct-{0}', inputs.linux_direct_ssh) || '' }}
   cancel-in-progress: true
 jobs:
   s06-input-fixture:
@@ -66,6 +73,7 @@ jobs:
           S06_SPLIT: ${{ inputs.s06_split }}
           S06_GUARDED: ${{ inputs.s06_guarded }}
           S06_ROUTE: ${{ inputs.s06_route }}
+          S06_IMPORT_REPLACE: ${{ inputs.s06_import_replace }}
           LINUX_DIRECT_SSH: ${{ inputs.linux_direct_ssh }}
         run: |
           if { [ "$LINUX_DIRECT_SSH" = password ] || [ "$LINUX_DIRECT_SSH" = tauri-key ] || [ "$LINUX_DIRECT_SSH" = tauri-key-rotation ] || [ "$LINUX_DIRECT_SSH" = flutter-password ] || [ "$LINUX_DIRECT_SSH" = flutter-key ] || [ "$LINUX_DIRECT_SSH" = flutter-key-rotation ]; } && { [ "$S06_SPLIT" = true ] || [ "$S06_GUARDED" = true ]; }; then
@@ -77,6 +85,9 @@ jobs:
             exit 1
           fi
           case "$S06_ROUTE" in flutter|tauri|both|'') ;; *) echo 'invalid s06_route' >&2; exit 1 ;; esac
+          if [ "$S06_IMPORT_REPLACE" = true ] && { [ "$S06_SPLIT" != true ] || [ "$S06_ROUTE" != tauri ] || [ "$S06_GUARDED" = true ] || [ "${{ inputs.input_fixture }}" = true ] || [ "$LINUX_DIRECT_SSH" != off ] && [ -n "$LINUX_DIRECT_SSH" ]; }; then
+            echo 's06_import_replace requires stock tauri s06_split' >&2; exit 1
+          fi
       - name: Install isolated helper and loopback sshd dependencies
         if: ${{ !contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) }}
         run: |
@@ -208,6 +219,7 @@ jobs:
           GUI_ROUTE: ${{ matrix.route }}
           INPUT_FIXTURE: ${{ inputs.input_fixture || inputs.s06_guarded }}
           S06_SPLIT: ${{ inputs.s06_split }}
+          HERDR_S06_IMPORT_REPLACE: ${{ inputs.s06_import_replace && '1' || '0' }}
           WEBKIT_DISABLE_COMPOSITING_MODE: '1'
           LIBGL_ALWAYS_SOFTWARE: '1'
         run: |

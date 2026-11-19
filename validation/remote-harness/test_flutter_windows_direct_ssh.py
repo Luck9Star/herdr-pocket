@@ -5,7 +5,7 @@ import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from PIL import Image
 import flutter_windows_direct_ssh as windows
@@ -74,6 +74,92 @@ for start in (lambda: paired_gui.FixtureApproval(None, None, None),
             with self.assertRaisesRegex(windows.GuiFailure, 'desktop_unavailable'):
                 windows.check_desktop()
         service.GetProcessWindowStation.assert_not_called()
+
+    def test_owned_launcher_uses_base_python_and_releases_only_after_membership(self):
+        gate = MagicMock()
+        gate.__enter__.return_value = gate
+        process = Mock(pid=42, stdin=gate)
+        limits = {'BasicLimitInformation': {'LimitFlags': 0}}
+        job_api = Mock(JobObjectExtendedLimitInformation=9, JobObjectBasicProcessIdList=3,
+                       JobObjectBasicAccountingInformation=1, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE=8192)
+        def create_job(attributes, name):
+            self.assertIsNone(attributes)
+            self.assertRegex(name, r'^herdr-pocket-direct-[a-f0-9]{32}$')
+            return Mock()
+        job_api.CreateJobObject.side_effect = create_job
+        native = Mock()
+        job_api.QueryInformationJobObject.side_effect = [limits, (42,), {'ActiveProcesses': 0}, {'ActiveProcesses': 0}]
+        # Track both sides of the gate in the same call sequence.
+        native.attach_mock(job_api, 'job')
+        native.attach_mock(gate.write, 'release')
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(windows, 'win32job', job_api, create=True), \
+                patch.object(windows, 'win32api', Mock(), create=True), \
+                patch.object(windows, 'win32con', SimpleNamespace(PROCESS_SET_QUOTA=256, PROCESS_TERMINATE=1),
+                             create=True), \
+                patch.object(windows.subprocess, 'Popen', return_value=process) as spawn:
+            root = Path(directory)
+            report = {}
+            with windows.owned_job(['flutter.bat', 'test'], cwd=root, env={}, log=root / 'private.log',
+                                   report=report) as (launched, job):
+                self.assertIs(launched, process)
+                self.assertEqual(report['checkpoint'], 'job_release_gate')
+                self.assertEqual(spawn.call_args.args[0][:4], [sys._base_executable, '-I', '-S', '-c'])
+                membership = job_api.QueryInformationJobObject.call_args_list[1]
+                self.assertEqual(membership.args, (job, 3))
+                operations = [call[0] for call in native.mock_calls]
+                self.assertEqual(operations[:6], ['job.CreateJobObject', 'job.QueryInformationJobObject',
+                                                 'job.SetInformationJobObject', 'job.AssignProcessToJobObject',
+                                                 'job.QueryInformationJobObject', 'release'])
+                gate.write.assert_called_once_with(b'run')
+                self.assertEqual(limits['BasicLimitInformation']['LimitFlags'], 8192)
+            job.Close.assert_called_once_with()
+
+    def test_assignment_failure_keeps_gate_closed_and_preserves_sanitized_cleanup_diagnostic(self):
+        gate = MagicMock()
+        gate.__enter__.return_value = gate
+        process = Mock(pid=42, stdin=gate)
+        process.poll.return_value = None
+        error = PermissionError('private fixture path and command')
+        error.winerror = 5
+        job_api = Mock(JobObjectExtendedLimitInformation=9, JobObjectBasicAccountingInformation=1,
+                       JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE=8192)
+        job_api.AssignProcessToJobObject.side_effect = error
+        job_api.QueryInformationJobObject.side_effect = [{'BasicLimitInformation': {'LimitFlags': 0}},
+                                                         ValueError('private cleanup detail')]
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(windows, 'win32job', job_api, create=True), \
+                patch.object(windows, 'win32api', Mock(), create=True), \
+                patch.object(windows, 'win32con', SimpleNamespace(PROCESS_SET_QUOTA=256, PROCESS_TERMINATE=1),
+                             create=True), patch.object(windows.subprocess, 'Popen', return_value=process):
+            root = Path(directory)
+            report = {}
+            with self.assertRaises(PermissionError) as observed:
+                with windows.owned_job(['flutter.bat', 'test'], cwd=root, env={}, log=root / 'private.log',
+                                       report=report):
+                    self.fail('unassigned launcher must not run')
+            self.assertIs(observed.exception, error)
+            self.assertEqual(report, {'checkpoint': 'job_assign_process',
+                                      'jobCleanupFailure': {'exceptionClass': 'ValueError'}})
+            self.assertEqual(windows.runner_failure(error), {'exceptionClass': 'PermissionError', 'winError': 5})
+            gate.write.assert_not_called()
+            process.kill.assert_called_once_with()
+            job_api.CreateJobObject.return_value.Close.assert_called_once_with()
+
+    def test_failure_details_exclude_native_function_and_message(self):
+        class TestWinError(Exception):
+            def __init__(self, code, function, message):
+                super().__init__(code, function, message)
+                self.winerror = code
+
+        native_error = windows.pywintypes.error if sys.platform == 'win32' else TestWinError
+        with patch.object(windows, 'pywintypes', SimpleNamespace(error=native_error), create=True), \
+                patch.object(windows.sys, 'platform', 'win32'):
+            self.assertEqual(windows.runner_failure(native_error(87, 'private function', 'secret message')),
+                             {'exceptionClass': 'PyWinTypesError', 'winError': 87})
+            self.assertEqual(windows.runner_failure(native_error(90210, 'private function', 'secret message')),
+                             {'exceptionClass': 'PyWinTypesError'})
+            self.assertEqual(windows.runner_failure(RuntimeError('private command')), {'exceptionClass': 'OtherError'})
 
     def test_illegal_terminal_bounds(self):
         for invalid in ([False, 5, 300, 160], [-1, 0, 300, 160], [0, 0, 299, 160],

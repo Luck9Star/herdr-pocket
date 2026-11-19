@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import shutil
 import socket
 import subprocess
@@ -42,6 +43,23 @@ PHASES = ('probe', 'connected', 'capture', 'disconnect', 'complete')
 WINDOW_TITLE = 'herdr_flutter_probe'
 WINDOW_CLASS = 'FLUTTER_RUNNER_WIN32_WINDOW'
 CAPTURE = 'Win32 visible desktop framebuffer, clipped to FLUTTERVIEW client pixels'
+WIN_ERRORS = {2, 3, 5, 6, 8, 13, 32, 50, 87, 109, 122, 123, 126, 127,
+              193, 216, 233, 267, 740, 995, 1114, 1314, 1450, 1453, 1460, 1816}
+RUNNER_ERRORS = (AttributeError, BrokenPipeError, FileNotFoundError, KeyError, OSError, PermissionError,
+                 subprocess.CalledProcessError, subprocess.TimeoutExpired, TypeError, ValueError)
+
+
+def runner_failure(error):
+    # pywintypes.error carries (winerror, funcname, strerror). Only the fixed
+    # class and allowlisted numeric value are public, never those strings.
+    native = sys.platform == 'win32' and isinstance(error, pywintypes.error)
+    category = error.__class__.__name__ if type(error) in RUNNER_ERRORS else 'OtherError'
+    detail = {'exceptionClass': 'PyWinTypesError' if native else category}
+    if native or isinstance(error, OSError):
+        code = getattr(error, 'winerror', None)
+        if type(code) is int and code in WIN_ERRORS:
+            detail['winError'] = code
+    return detail
 
 
 def prepare(app, source, flutter, log, env):
@@ -116,46 +134,70 @@ def check_desktop():
 
 
 @contextmanager
-def owned_job(command, *, cwd, env, log):
+def owned_job(command, *, cwd, env, log, report):
     # Gate the launcher on stdin until Win32 has assigned it to the job.
     # Every descendant (including the app) then inherits job membership.
+    # On Windows a venv's python.exe creates the interpreter as a child before
+    # this gate is read. Start the actual interpreter to close that race.
     launcher = 'import subprocess, sys; sys.exit(subprocess.call(sys.argv[1:]) if sys.stdin.read() == "run" else 1)'
-    job = win32job.CreateJobObject(None, None)
-    limit_class = win32job.JobObjectExtendedLimitInformation
+    report['checkpoint'] = 'job_create'
+    # pywin32's WCHAR* typemap requires a string for the name.
+    job = win32job.CreateJobObject(None, f'herdr-pocket-direct-{secrets.token_hex(16)}')
     process = None
     assigned = False
+    failed = False
     try:
+        report['checkpoint'] = 'job_read_limits'
+        limit_class = win32job.JobObjectExtendedLimitInformation
         limits = win32job.QueryInformationJobObject(job, limit_class)
         limits['BasicLimitInformation']['LimitFlags'] = win32job.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        report['checkpoint'] = 'job_set_limits'
         win32job.SetInformationJobObject(job, limit_class, limits)
+        report['checkpoint'] = 'job_open_log'
         with log.open('wb') as stream:
-            process = subprocess.Popen([sys.executable, '-c', launcher, *command], cwd=cwd, env=env,
+            report['checkpoint'] = 'job_spawn'
+            process = subprocess.Popen([sys._base_executable, '-I', '-S', '-c', launcher, *command], cwd=cwd, env=env,
                                        stdin=subprocess.PIPE, stdout=stream, stderr=subprocess.STDOUT)
             with process.stdin as launch_gate:
+                report['checkpoint'] = 'job_open_process'
                 handle = win32api.OpenProcess(win32con.PROCESS_SET_QUOTA | win32con.PROCESS_TERMINATE,
                                               False, process.pid)
                 try:
+                    report['checkpoint'] = 'job_assign_process'
                     win32job.AssignProcessToJobObject(job, handle)
                     assigned = True
                 finally:
                     handle.Close()
+                report['checkpoint'] = 'job_check_membership'
+                processes = win32job.QueryInformationJobObject(job, win32job.JobObjectBasicProcessIdList)
+                require(process.pid in processes, 'windows_direct_launcher_unowned')
+                report['checkpoint'] = 'job_release_gate'
                 launch_gate.write(b'run')
             yield process, job
+    except BaseException:
+        failed = True
+        raise
     finally:
         try:
-            def empty():
-                info = win32job.QueryInformationJobObject(job, win32job.JobObjectBasicAccountingInformation)
-                return info['ActiveProcesses'] == 0
+            try:
+                def empty():
+                    info = win32job.QueryInformationJobObject(job, win32job.JobObjectBasicAccountingInformation)
+                    return info['ActiveProcesses'] == 0
 
-            if process is not None:
-                if assigned and not empty():
-                    win32job.TerminateJobObject(job, 1)
-                if not assigned and process.poll() is None:
-                    process.kill()
-                process.wait(timeout=12)
-                wait_for(empty, 'windows_direct_process_cleanup_unconfirmed', timeout=12)
-        finally:
-            job.Close()
+                if process is not None:
+                    if assigned and not empty():
+                        win32job.TerminateJobObject(job, 1)
+                    if not assigned and process.poll() is None:
+                        process.kill()
+                    process.wait(timeout=12)
+                    wait_for(empty, 'windows_direct_process_cleanup_unconfirmed', timeout=12)
+            finally:
+                job.Close()
+        except Exception as error:
+            report['jobCleanupFailure'] = runner_failure(error)
+            if not failed:
+                report['checkpoint'] = 'job_cleanup'
+                raise
 
 
 def find_window(process_id):
@@ -318,6 +360,7 @@ def run(app, source, report, base):
                k not in ('SSH_AUTH_SOCK', 'SSH_AGENT_PID')}
         report['checkpoint'] = 'prepare'
         report['sourceVerification'] = prepare(app, source, flutter, root / 'pub.log', env)
+        report['checkpoint'] = 'fixture'
         with DirectSshFixture(screen_proof=True, channel_deadline=time.monotonic() + 1250) as fixture:
             with (root / 'target.json').open('x', encoding='utf-8') as stream:
                 json.dump({'port': fixture.port, 'fingerprint': fixture.fingerprint, 'password': fixture.password}, stream)
@@ -325,14 +368,18 @@ def run(app, source, report, base):
                                 'fingerprint': fixture.fingerprint}
             command = [flutter, 'test', '--no-pub', '--reporter', 'expanded', '-d', 'windows',
                        f'--dart-define=HERDR_FLUTTER_WINDOWS_DIRECT_DIR={root}', f'integration_test/{TEST}']
-            with owned_job(command, cwd=app, env=env, log=root / 'flutter.log') as (process, job):
-                try:
-                    images = exchange(process, job, root, fixture, report)
-                finally:
-                    report['peer'] = fixture.snapshot()  # Before any forced teardown.
-                    stage = read_ui_stage(root)
-                    if stage is not None:
-                        report['uiStage'] = stage
+            try:
+                with owned_job(command, cwd=app, env=env, log=root / 'flutter.log', report=report) as (process, job):
+                    try:
+                        images = exchange(process, job, root, fixture, report)
+                    finally:
+                        report['peer'] = fixture.snapshot()  # Before any forced process teardown.
+                        stage = read_ui_stage(root)
+                        if stage is not None:
+                            report['uiStage'] = stage
+            finally:
+                if 'peer' not in report:
+                    report['peerAfterFailedLaunch'] = fixture.snapshot()
             require(not (root / 'target.json').exists(), 'windows_direct_target_file_unconsumed')
         report['checkpoint'] = 'cleanup'
         with socket.socket() as client:
@@ -371,8 +418,9 @@ def main():
         report.update(errorCode=str(error), terminalFailure=error.evidence)
     except GuiFailure as error:
         report['errorCode'] = str(error)
-    except Exception:  # Tool logs may contain fixture data; do not publish them.
+    except Exception as error:  # Tool logs may contain fixture data; do not publish them.
         report['errorCode'] = 'windows_direct_runner_failed'
+        report['runnerFailure'] = runner_failure(error)
     (output / 'result.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
     if report['status'] == 'failed':
         print(f"Windows ordinary SSH failed at {report['checkpoint']}: {report['errorCode']}", flush=True)

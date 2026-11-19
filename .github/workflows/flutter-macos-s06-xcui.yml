@@ -23,7 +23,7 @@ jobs:
           test "$(uname -m)" = arm64
           xcodebuild -version
           python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/flutter-sdk"
-      - name: Prepare the normal Flutter macOS app and stock herdr
+      - name: Prepare the Flutter macOS candidate and stock herdr
         run: |
           python3 -m venv "$RUNNER_TEMP/macos-s06-venv"
           "$RUNNER_TEMP/macos-s06-venv/bin/pip" install -r validation/pairing/requirements.txt
@@ -34,8 +34,10 @@ jobs:
             "$RUNNER_TEMP/macos-s06-herdr" | shasum -a 256 -c
           chmod 700 "$RUNNER_TEMP/macos-s06-herdr"
           python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/macos-s06-flutter"
+          python3 validation/flutter/tool/candidate.py apply --destination "$RUNNER_TEMP/macos-s06-flutter"
           cd "$RUNNER_TEMP/macos-s06-flutter"
-          flutter pub get --enforce-lockfile
+          flutter pub get
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/macos-s06-flutter"
           flutter build macos --debug --config-only --no-pub
       - name: Exercise two paired targets in the actual window
         run: |

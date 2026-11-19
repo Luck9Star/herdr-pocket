@@ -22,7 +22,7 @@ SESSIONS = {'et': 's06-a', 'ts': 's06-b'}
 MARKERS = {'et': 'HPS06A', 'ts': 'HPS06B'}
 CHECKS = ('homepage', 'reviewedPairings', 'twoVisibleTargets', 'bothTicksAdvanced', 'stockControlsDisabled',
           'keyboardFocus', 'narrowStowed', 'originalSidesRestored', 'explicitResume', 'stoppedBoth',
-          'localIdentitiesRemoved')
+          'localProfilesAbsentFromBoard')
 STAGES = ('display', 'homepage', 'pairA', 'pairB', 'keyA', 'keyB', 'connectA', 'connectB',
           'split', 'frames', 'keyboard', 'resize', 'resume', 'stop', 'remove')
 
@@ -43,6 +43,19 @@ def stock_binary(binary):
     size = binary.stat().st_size
     if not 0 < size <= 100 * 1024 * 1024 or hashlib.sha256(binary.read_bytes()).hexdigest() != HERDR_SHA256:
         raise GuiFailure('s06_stock_binary_digest_mismatch')
+
+
+def checked_candidate(app, source):
+    try:
+        manifest = json.loads(bounded_wire(app / 'candidate-manifest.json', 16384))
+        lock_sha = hashlib.sha256(bounded_wire(app / 'pubspec.lock', 65536)).hexdigest()
+    except (GuiFailure, OSError, ValueError):
+        raise GuiFailure('s06_native_candidate_lock_not_verified') from None
+    if (not isinstance(manifest, dict) or manifest.get('sourceCommit') != source
+            or manifest.get('variant') != 'experimental-patched'
+            or manifest.get('candidateLockSha256') != lock_sha):
+        raise GuiFailure('s06_native_candidate_lock_not_verified')
+    return {'variant': manifest['variant'], 'candidateLockSha256': lock_sha}
 
 
 @contextmanager
@@ -174,6 +187,7 @@ def run(app, binary, output):
               'scope': 'native macOS Flutter window with real paired loopback OpenSSH/herdr'}
     stage = 'build'
     try:
+        result['flutterCandidate'] = checked_candidate(app, source)
         stock_binary(binary)
         with tempfile.TemporaryDirectory(prefix='hpns06-', dir='/tmp') as temporary:
             root = Path(temporary).resolve()

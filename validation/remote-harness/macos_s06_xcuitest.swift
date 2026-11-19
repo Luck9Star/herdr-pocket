@@ -277,7 +277,7 @@ final class MacosS06UITests: XCTestCase {
         try click("删除本机资料与身份", in: .main)
         _ = try reveal("将删除“\(peer.title)”", prefix: true)
         try click("仅删除本机")
-        _ = try until("deleted_temporary_identity_still_listed") {
+        _ = try until("deleted_temporary_profile_still_listed") {
             self.query(peer.title).count == 0 ? true : nil
         }
     }
@@ -368,7 +368,7 @@ final class MacosS06UITests: XCTestCase {
         try remove(b, other: a)
         let checks = ["homepage", "reviewedPairings", "twoVisibleTargets", "bothTicksAdvanced",
                       "stockControlsDisabled", "keyboardFocus", "narrowStowed", "originalSidesRestored",
-                      "explicitResume", "stoppedBoth", "localIdentitiesRemoved"]
+                      "explicitResume", "stoppedBoth", "localProfilesAbsentFromBoard"]
         let evidence: [String: Any] = ["widths": [start, narrow, returned],
                                        "checks": Dictionary(uniqueKeysWithValues: checks.map { ($0, true) })]
         try JSONSerialization.data(withJSONObject: evidence).write(to: exchange.appendingPathComponent("ui.json"),

@@ -2,6 +2,7 @@
 import base64
 from contextlib import ExitStack
 import copy
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -26,6 +27,7 @@ except ModuleNotFoundError as missing:
     runner = None
 
 BINARY = os.environ.get('HERDR_MACOS_S06_BINARY')
+WORKFLOW = Path(__file__).resolve().parents[2] / '.github/workflows/flutter-macos-s06-xcui.yml'
 
 
 @unittest.skipIf(runner is None, 'requires validation/pairing/requirements.txt')
@@ -56,6 +58,46 @@ class MacosS06Checks(unittest.TestCase):
         for widths in ([1440, 1440, 1440], [1440, 700], [1440, 700.0, 1440]):
             with self.assertRaisesRegex(GuiFailure, 'widths_invalid'):
                 runner.checked_ui_result({**report, 'widths': widths})
+        self.assertIn('localProfilesAbsentFromBoard', report['checks'])
+        self.assertNotIn('localIdentitiesRemoved', report['checks'])
+
+    def test_workflow_installs_and_verifies_candidate_before_build_and_native_run(self):
+        lines = [line.strip() for line in WORKFLOW.read_text().splitlines()]
+        app = '"$RUNNER_TEMP/macos-s06-flutter"'
+        expected = [
+            f'python3 validation/flutter/tool/ci.py prepare --destination {app}',
+            f'python3 validation/flutter/tool/candidate.py apply --destination {app}',
+            f'cd {app}',
+            'flutter pub get',
+            f'python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination {app}',
+            'flutter build macos --debug --config-only --no-pub',
+        ]
+        positions = [lines.index(line) for line in expected]
+        self.assertEqual(positions, sorted(positions))
+        native_run = '"$RUNNER_TEMP/macos-s06-venv/bin/python" validation/remote-harness/macos_s06.py '
+        self.assertLess(positions[-1], next(i for i, line in enumerate(lines) if line.startswith(native_run)))
+
+    def test_runner_rejects_reference_unverified_wrong_source_and_changed_candidate_lock(self):
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            source = '1' * 40
+            lock = root / 'pubspec.lock'
+            lock.write_bytes(b'verified lock\n')
+            manifest = root / 'candidate-manifest.json'
+            metadata = {'variant': 'experimental-patched', 'sourceCommit': source,
+                        'candidateLockSha256': hashlib.sha256(lock.read_bytes()).hexdigest()}
+            with self.assertRaisesRegex(GuiFailure, 'candidate_lock_not_verified'):
+                runner.checked_candidate(root, source)
+            for change in ({'variant': 'reference'}, {'candidateLockSha256': None}, {'sourceCommit': '2' * 40}):
+                manifest.write_text(json.dumps({**metadata, **change}))
+                with self.assertRaisesRegex(GuiFailure, 'candidate_lock_not_verified'):
+                    runner.checked_candidate(root, source)
+            manifest.write_text(json.dumps(metadata))
+            self.assertEqual(runner.checked_candidate(root, source)['candidateLockSha256'],
+                             metadata['candidateLockSha256'])
+            lock.write_bytes(b'changed after verification\n')
+            with self.assertRaisesRegex(GuiFailure, 'candidate_lock_not_verified'):
+                runner.checked_candidate(root, source)
 
     def test_progress_does_not_export_arbitrary_text(self):
         with tempfile.TemporaryDirectory() as work:

@@ -726,6 +726,44 @@ class ActiveNavigationTests(unittest.TestCase):
             with self.assertRaises(driver.GuiFailure) as caught: driver.active_view(browser,fixture,'ssh')
             self.assertEqual(caught.exception.active_diagnostic,{})
 
+    @unittest.skipUnless(shutil.which('node'), 'Node is needed to evaluate the device DOM predicate')
+    def test_active_settings_checks_visible_status_and_target_owned_by_route(self):
+        browser=Mock()
+        with patch.object(driver,'wait_for',side_effect=lambda probe,code,timeout: probe()):
+            driver.active_view(browser,Fixture(),'settings')
+        test_dom=r"""
+          const source=require('node:fs').readFileSync(0,'utf8');
+          const target='fixture@127.0.0.1:2222',label='普通 SSH 会话保持连接';
+          const element=(textContent='',children={},visible=true)=>({
+            textContent,checkVisibility:()=>visible,querySelector:s=>children[s],hidden:false,
+          });
+          global.getComputedStyle=()=>({paddingBottom:'0px'});
+          function read({active=true,heading=true,endpoint=target,card=true,own=true}={}){
+            const headline=element(label,{},heading);
+            const status=element(label+'切到看板、网络或设置不会断开；显式断开后才结束。',
+              {':scope > strong':headline},active);
+            const address=element(endpoint),targetCard=element('',{':scope > #ssh-settings-endpoint':address},card);
+            const settings=element('设置',own?{
+              ':scope > #ssh-settings-active[role="status"]':status,
+              ':scope > #ssh-settings-target':targetCard,
+            }:{});
+            const byId={'home-settings':settings,'ssh-settings-active':status,'ssh-settings-endpoint':address,
+              'ssh-live':element(),'nav-settings':{getAttribute:()=>'true'}};
+            global.document={getElementById:id=>byId[id],querySelector:()=>null};
+            return eval(source).sectionContent;
+          }
+          process.stdout.write(JSON.stringify({
+            mobile:read(),hiddenStatus:read({active:false}),hiddenHeading:read({heading:false}),
+            hiddenTarget:read({card:false}),wrongTarget:read({endpoint:'other'}),outsideRoute:read({own:false}),
+          }));
+        """
+        evaluated=subprocess.run(['node','-e',test_dom],input=browser.evaluate.call_args.args[0],
+                                 check=True,capture_output=True,text=True)
+        self.assertEqual(json.loads(evaluated.stdout),{
+            'mobile':True,'hiddenStatus':False,'hiddenHeading':False,
+            'hiddenTarget':False,'wrongTarget':False,'outsideRoute':False,
+        })
+
     def test_diagnostic_keeps_only_bounded_geometry_and_peer_counts(self):
         fixture=Mock();fixture.snapshot.return_value=self.peer();browser=Mock()
         geometry={key:[1,2,3,4] for key in ('viewport','title','badge','focus','hide','disconnect')}

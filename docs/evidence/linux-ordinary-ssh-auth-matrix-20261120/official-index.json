@@ -1,0 +1,428 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-20",
+  "scope": "Linux native GTK/Xvfb and isolated SSH loopback",
+  "counts": {
+    "archives": 4,
+    "pngs": 14,
+    "officialOcrBindings": 4,
+    "independentOcrPassed": 4
+  },
+  "runs": [
+    {
+      "runId": 44591418208,
+      "jobId": 135798125572,
+      "artifactId": 14563498302,
+      "sourceSHA": "0c94bdd35e368ce8f33733df729e673a0a6143ec",
+      "zipSizeBytes": 96731,
+      "zipSha256": "6966b745ee4dfe6426b54bab753381a13d6896fb5f772f880d606f90094eefa1",
+      "runAttempt": 1,
+      "client": "flutter",
+      "case": "key",
+      "archive": "44591418208-14563498302.zip",
+      "hostKeyOrder": [
+        "A",
+        "A"
+      ],
+      "actualSession": {
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 9,
+        "outputBytes": 102,
+        "closeReason": "peer_eof"
+      },
+      "reportedCleanup": {
+        "ownedFlutterProcessStopped": true,
+        "peerListenerReleased": true,
+        "fixturePasswordCleared": true,
+        "fixtureDirectoryRemoved": true,
+        "fixtureKeyAndPassphrasesCleared": true
+      },
+      "wrongPassphrase": {
+        "rejectedLocally": true,
+        "connections": 1,
+        "authenticationAttempts": 0
+      },
+      "members": [
+        {
+          "name": "ordinary-disconnect.png",
+          "sha256": "060c6e0b5d70e0af3164e6f67bfeaae7f613a6954f35b0673f3ad4ec05be27fc",
+          "sizeBytes": 33651,
+          "imageSize": [
+            1920,
+            1080
+          ],
+          "capture": "unscaled X11 Xvfb framebuffer PNG",
+          "bounds": [
+            264,
+            76,
+            560,
+            66
+          ]
+        },
+        {
+          "name": "ordinary-home.png",
+          "sha256": "c776f2616015b5d1433f57a8a7711a7e352c1cca86c51f45166a3b7667e0fddf",
+          "sizeBytes": 40788,
+          "imageSize": [
+            1920,
+            1080
+          ],
+          "capture": "unscaled X11 Xvfb framebuffer PNG",
+          "bounds": [
+            240,
+            101,
+            1024,
+            44
+          ]
+        },
+        {
+          "name": "ordinary-terminal.png",
+          "sha256": "176e554fdd3d966c15572527128ccc8efc43db02b097fbeadff18146eea19c7e",
+          "sizeBytes": 42355,
+          "imageSize": [
+            1920,
+            1080
+          ],
+          "capture": "unscaled X11 Xvfb framebuffer PNG",
+          "bounds": [
+            264,
+            120,
+            976,
+            584
+          ],
+          "officialOcrSequencePassed": true,
+          "independentAppleVisionSequencePassed": true
+        },
+        {
+          "name": "result.json",
+          "sha256": "a64966ad2d0ed89081b6580bc67bd063f20ec1e1edfade0c1f6c2ba82c8cfb88",
+          "sizeBytes": 5288
+        }
+      ]
+    },
+    {
+      "runId": 44591417302,
+      "jobId": 135798125521,
+      "artifactId": 14561864988,
+      "sourceSHA": "0c94bdd35e368ce8f33733df729e673a0a6143ec",
+      "zipSizeBytes": 165753,
+      "zipSha256": "5c6a19e69ebfd8c0040c023a33da676fd938b9bbb5040ae4211b80425ab6eb94",
+      "runAttempt": 1,
+      "client": "flutter",
+      "case": "key-rotation",
+      "archive": "44591417302-14561864988.zip",
+      "hostKeyOrder": [
+        "A",
+        "B",
+        "B",
+        "B"
+      ],
+      "actualSession": {
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 9,
+        "outputBytes": 102,
+        "closeReason": "peer_eof"
+      },
+      "reportedCleanup": {
+        "ownedFlutterProcessStopped": true,
+        "peerListenerReleased": true,
+        "fixturePasswordCleared": true,
+        "fixtureDirectoryRemoved": true,
+        "fixtureKeyAndPassphrasesCleared": true
+      },
+      "wrongPassphrase": {
+        "rejectedLocally": true,
+        "connections": 1,
+        "authenticationAttempts": 0
+      },
+      "members": [
+        {
+          "name": "ordinary-disconnect.png",
+          "sha256": "b9d65250a8110b54a32d8a4cc9b086f1accb78940705a3f1b991a72f33a63b7b",
+          "sizeBytes": 33835,
+          "imageSize": [
+            1920,
+            1080
+          ],
+          "capture": "unscaled X11 Xvfb framebuffer PNG",
+          "bounds": [
+            264,
+            76,
+            560,
+            66
+          ]
+        },
+        {
+          "name": "ordinary-home.png",
+          "sha256": "c776f2616015b5d1433f57a8a7711a7e352c1cca86c51f45166a3b7667e0fddf",
+          "sizeBytes": 40788,
+          "imageSize": [
+            1920,
+            1080
+          ],
+          "capture": "unscaled X11 Xvfb framebuffer PNG",
+          "bounds": [
+            240,
+            101,
+            1024,
+            44
+          ]
+        },
+        {
+          "name": "ordinary-terminal.png",
+          "sha256": "3fc847171bea09c08a3756854b96ac1118dd5b5b469e131a19a02beb40345fe5",
+          "sizeBytes": 42441,
+          "imageSize": [
+            1920,
+            1080
+          ],
+          "capture": "unscaled X11 Xvfb framebuffer PNG",
+          "bounds": [
+            264,
+            120,
+            976,
+            584
+          ],
+          "officialOcrSequencePassed": true,
+          "independentAppleVisionSequencePassed": true
+        },
+        {
+          "name": "result.json",
+          "sha256": "1d97d046dace01b89b0757be7d4003e34e5e9f62d442b813d344a361f6bea3d4",
+          "sizeBytes": 10967
+        },
+        {
+          "name": "rotation-rejected.png",
+          "sha256": "f86d10a49e3aabcfbd385dd9a30037233336627a5bb71257b8bbd6cecbdd0386",
+          "sizeBytes": 75726,
+          "imageSize": [
+            1920,
+            1080
+          ],
+          "capture": "unscaled X11 Xvfb framebuffer PNG",
+          "bounds": [
+            264,
+            236,
+            560,
+            167
+          ]
+        }
+      ]
+    },
+    {
+      "runId": 44597006620,
+      "jobId": 135817905294,
+      "artifactId": 14565129801,
+      "sourceSHA": "ead84ec9bb6594e28b08a6c5205438b0383317ec",
+      "zipSizeBytes": 87635,
+      "zipSha256": "80851dfea0209c48e14c3709d78adcbcbade8a9fbb4af819293a5e1541c34b54",
+      "runAttempt": 1,
+      "client": "tauri",
+      "case": "key",
+      "archive": "44597006620-14565129801.zip",
+      "hostKeyOrder": [
+        "A",
+        "A",
+        "A"
+      ],
+      "actualSession": {
+        "authAttempts": 2,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 9,
+        "outputBytes": 102,
+        "closeReason": "peer_eof"
+      },
+      "reportedCleanup": {
+        "peerListenerReleased": true,
+        "fixturePasswordCleared": true,
+        "webdriverProcessStopped": true,
+        "webdriverPortsReleased": true,
+        "privateDirectoryRemoved": true,
+        "fixtureKeyAndPassphrasesCleared": true
+      },
+      "wrongPassphrase": {
+        "localRejectionObserved": true,
+        "handshakeCompleted": true,
+        "authenticationAttempts": 0,
+        "ptyRequests": 0,
+        "inputBytes": 0,
+        "transportClosed": true,
+        "credentialsCleared": true
+      },
+      "members": [
+        {
+          "name": "ordinary-disconnect.png",
+          "sha256": "4e58999dd25df4d9988c2c36b51949e56ae157838cbb57ac33f4f86d3e1dad71",
+          "sizeBytes": 44108,
+          "imageSize": [
+            1440,
+            1200
+          ],
+          "capture": "native WebKitGTK WebDriver viewport",
+          "bounds": [
+            264,
+            76,
+            560,
+            66
+          ]
+        },
+        {
+          "name": "ordinary-home.png",
+          "sha256": "d0fbc04b60a63c9d787da5d8e3b3f3a9115923a79aaea106b6ee79bf19e1da85",
+          "sizeBytes": 32912,
+          "imageSize": [
+            1440,
+            1200
+          ],
+          "capture": "native WebKitGTK WebDriver viewport",
+          "bounds": [
+            264,
+            62,
+            560,
+            44
+          ]
+        },
+        {
+          "name": "ordinary-terminal.png",
+          "sha256": "a4615df86133c7278913b572da7d0dc9ea7c5fce3769564d7ec3b9c905897530",
+          "sizeBytes": 29204,
+          "imageSize": [
+            1440,
+            1200
+          ],
+          "capture": "native WebKitGTK WebDriver viewport",
+          "bounds": [
+            276,
+            132,
+            1112,
+            1040
+          ],
+          "officialOcrSequencePassed": true,
+          "independentAppleVisionSequencePassed": true
+        },
+        {
+          "name": "result.json",
+          "sha256": "213ab5a502c8fa37cb7bd93441ff0111d20c57f7d68f707c0284df25da181067",
+          "sizeBytes": 4914
+        }
+      ]
+    },
+    {
+      "runId": 44599845356,
+      "jobId": 135827937341,
+      "artifactId": 14567941419,
+      "sourceSHA": "bd20757798ceb80dbe1df7b5eb17c0c42f8ab491",
+      "zipSizeBytes": 146897,
+      "zipSha256": "f88cfdea70ae242eb3ccdba03847c656188b78ca25fad25d327cd5ba2b3b62e9",
+      "runAttempt": 1,
+      "client": "tauri",
+      "case": "key-rotation",
+      "archive": "44599845356-14567941419.zip",
+      "hostKeyOrder": [
+        "A",
+        "B",
+        "B",
+        "B"
+      ],
+      "actualSession": {
+        "authAttempts": 2,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 9,
+        "outputBytes": 102,
+        "closeReason": "peer_eof"
+      },
+      "reportedCleanup": {
+        "peerListenerReleased": true,
+        "fixturePasswordCleared": true,
+        "webdriverProcessStopped": true,
+        "webdriverPortsReleased": true,
+        "privateDirectoryRemoved": true,
+        "fixtureKeyAndPassphrasesCleared": true
+      },
+      "wrongPassphrase": null,
+      "members": [
+        {
+          "name": "ordinary-disconnect.png",
+          "sha256": "a4be799fbc4a0cf156a8c2c64bc0e3f8dadca45e1dddcf74b3e6b53ea45e2a3f",
+          "sizeBytes": 44253,
+          "imageSize": [
+            1440,
+            1200
+          ],
+          "capture": "native WebKitGTK WebDriver viewport",
+          "bounds": [
+            264,
+            76,
+            560,
+            66
+          ]
+        },
+        {
+          "name": "ordinary-home.png",
+          "sha256": "d0fbc04b60a63c9d787da5d8e3b3f3a9115923a79aaea106b6ee79bf19e1da85",
+          "sizeBytes": 32912,
+          "imageSize": [
+            1440,
+            1200
+          ],
+          "capture": "native WebKitGTK WebDriver viewport",
+          "bounds": [
+            264,
+            62,
+            560,
+            44
+          ]
+        },
+        {
+          "name": "ordinary-terminal.png",
+          "sha256": "31f04856ecdf3ba599953770a9a6aa4e17616fb47e0dc22d501a3df2b024af31",
+          "sizeBytes": 29941,
+          "imageSize": [
+            1440,
+            1200
+          ],
+          "capture": "native WebKitGTK WebDriver viewport",
+          "bounds": [
+            276,
+            132,
+            1112,
+            1040
+          ],
+          "officialOcrSequencePassed": true,
+          "independentAppleVisionSequencePassed": true
+        },
+        {
+          "name": "result.json",
+          "sha256": "66c91405b094bd547a6b27fd486efc9e3d403c403821edae78e4592c9264332d",
+          "sizeBytes": 9414
+        },
+        {
+          "name": "rotation-rejected.png",
+          "sha256": "f2743a5351cb6486c4f9f76dd26d038c9feda0bf028466b8e9316bfeb619d03f",
+          "sizeBytes": 65333,
+          "imageSize": [
+            1440,
+            1200
+          ],
+          "capture": "native WebKitGTK WebDriver viewport",
+          "bounds": [
+            260,
+            12,
+            920,
+            468
+          ]
+        }
+      ]
+    }
+  ]
+}

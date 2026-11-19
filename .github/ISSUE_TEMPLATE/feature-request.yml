@@ -1,0 +1,27 @@
+name: 提出功能建议
+description: 说明希望完成的任务和期待的体验
+body:
+  - type: markdown
+    attributes:
+      value: |
+        此 Issue 公开。可用合成示例说明需求。
+        凭据、配对资料、指纹值、主机或设备标识、终端正文、日志、截图和配置文件请留在本机。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决的问题
+      description: 说明你在什么场景下想完成什么任务。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待的体验
+      description: 说明希望产品怎样支持这项任务。
+    validations:
+      required: true
+  - type: input
+    id: platforms
+    attributes:
+      label: 相关平台（选填）
+      description: 可填写系统名或版本。

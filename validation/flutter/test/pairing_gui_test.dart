@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:dartssh2/dartssh2.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:terminal_view/terminal_view.dart';
@@ -85,6 +87,54 @@ Future<void> acceptResponse(WidgetTester tester,Map<String,dynamic> response) as
 void main() {
   setUp(PairingPage.resetMemorySession);
   tearDown(PairingPage.resetMemorySession);
+  testWidgets('pairing labels identify the editable fields and expose the full reviewed fingerprint', (tester) async {
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    final config = fixtureConfig();
+    final keys = TestDeviceKeys(config['privateKeyPem'] as String);
+    await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:PairingPage(tokens:tokens,keys:keys)));
+    const labels = {'host':'SSH 主机 / IP', 'port':'SSH 端口', 'username':'主机账号',
+      'session':'命名会话（非 default）', 'socketPath':'命名会话 socket 绝对路径',
+      'herdrPath':'herdr 可执行文件绝对路径', 'expectedHostKey':'可信渠道核验的 Ed25519 主机公钥',
+      'device':'设备名称（英文、数字、空格）'};
+    final macos = defaultTargetPlatform == TargetPlatform.macOS;
+    for (final entry in labels.entries) {
+      final field = find.byKey(ValueKey('pair-${entry.key}'));
+      await tester.ensureVisible(field);
+      await tester.pumpAndSettle();
+      expect(field.hitTestable(), findsOneWidget);
+      final editable = tester.getSemantics(find.descendant(of:field,matching:find.byType(EditableText)));
+      final named = <SemanticsNode>[];
+      bool collect(SemanticsNode node) {
+        if (node.getSemanticsData().label == entry.value) named.add(node);
+        node.visitChildren(collect);
+        return true;
+      }
+      collect(tester.binding.renderViews.first.owner!.semanticsOwner!.rootSemanticsNode!);
+      expect(named, hasLength(1), reason:entry.key);
+      if (macos) {
+        expect(named.single, editable.parent, reason:entry.key);
+        expect(editable.getSemanticsData().label, isEmpty);
+      } else {
+        expect(named.single, editable, reason:entry.key);
+      }
+      expect(editable.getSemanticsData().flagsCollection.isTextField, isTrue);
+      expect(editable.getSemanticsData().flagsCollection.isReadOnly, isFalse);
+    }
+
+    final key = find.byKey(const ValueKey('pair-expectedHostKey'));
+    await tester.ensureVisible(key);
+    await tester.enterText(key,config['expectedHostKey'] as String);
+    await tester.pumpAndSettle();
+    final fingerprint = find.byKey(const ValueKey('pair-target-fingerprint'));
+    await tester.ensureVisible(fingerprint);
+    await tester.pumpAndSettle();
+    final visibleFingerprint = tester.getSemantics(
+      find.descendant(of:fingerprint,matching:find.byType(EditableText))).getSemanticsData();
+    expect(visibleFingerprint.flagsCollection.isReadOnly, isTrue);
+    expect(visibleFingerprint.value, pairingFingerprint(config['expectedHostKey'] as String));
+    expect(keys.creates,0);
+  }, variant:const TargetPlatformVariant({TargetPlatform.macOS,TargetPlatform.android,TargetPlatform.iOS}));
+
   for (final width in [320.0,390.0]) {
     testWidgets('first pairing at ${width}px ends editing and checks the actual target checkbox once before create',(tester) async {
       tester.view.devicePixelRatio = 1; tester.view.physicalSize = Size(width,844);

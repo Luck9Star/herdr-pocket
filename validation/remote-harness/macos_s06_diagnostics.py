@@ -9,6 +9,11 @@ TEST_SELECTION = 'RunnerTests/MacosS06UITests/testTwoPairedPeersInNativeWindow'
 STAGES = ('entered', 'channelConfigured', 'releaseRead', 'releaseDecoded', 'targetsValidated',
           'channelRoundTrip', 'display', 'homepage', 'pairA', 'pairB', 'keyA', 'keyB',
           'connectA', 'connectB', 'split', 'frames', 'keyboard', 'resize', 'resume', 'stop', 'remove')
+PAIR_CONTROLS = {'entry', 'host', 'port', 'user', 'session', 'socket', 'herdr', 'hostKey', 'device',
+                 'fingerprint', 'targetReview', 'create', 'copy', 'response', 'preview', 'sourceReview',
+                 'accept', 'connect', 'back'}
+PAIR_AX_COUNTS = ('named', 'expectedRole', 'withinRegion', 'hittable', 'enabled', 'namedTextViews',
+                  'namedEditableChildren', 'formTitleHittable', 'storageUnavailableHittable')
 CHANNEL_FAILURES = {'scope_invalid', 'message_rejected', 'topic_occupied', 'prepare_denied',
                     'item_rejected', 'write_denied', 'read_unavailable', 'cleanup_failed'}
 FAILURES = {'private_channel_send_failed', 'private_channel_receive_failed',
@@ -17,6 +22,7 @@ FAILURES = {'private_channel_send_failed', 'private_channel_receive_failed',
             'isolated_display_too_small', 'native_window_missing', 'native_window_origin_not_reached',
             'native_window_width_not_reached', 'native_window_height_not_reached',
             'unique_visible_control_missing', 'public_value_not_read_back', 'public_request_unavailable',
+            'public_clipboard_write_failed',
             'reviewed_host_response_unavailable', 'reviewed_host_response_invalid',
             'peer_close_unconfirmed_while_window_running', 'peer_close_receipt_invalid', 'native_visible_peer_marker_missing',
             'native_tab_focus_unreachable', 'unexpected_native_error'} | {
@@ -61,6 +67,17 @@ def log_facts(text):
     fixed = [failure for failure in failures if failure in FAILURES]
     if fixed:
         facts['fixedFailure'] = fixed[-1]
+    events = re.findall(r'^HP_S06_NATIVE_PAIR_CONTROL=([a-zA-Z]+)[ \t]*$', text, re.M)
+    controls = [code for code in events if code in PAIR_CONTROLS]
+    if controls:
+        facts['lastPairControl'] = controls[-1]
+        pattern = r'^HP_S06_NATIVE_PAIR_AX=([A-Za-z]+)((?:,[0-9]{1,2}){9})[ \t]*$'
+        for code, values in re.findall(pattern, text, re.M):
+            if code != controls[-1]:
+                continue
+            counts = list(map(int, values[1:].split(',')))
+            if counts[1] >= counts[2] >= counts[3] >= counts[4]:
+                facts['pairControlFailure'] = {'control': code, **dict(zip(PAIR_AX_COUNTS, counts))}
     lower = text.lower()
     facts['startupFlags'] = [name for name, patterns in STARTUP.items() if any(p in lower for p in patterns)]
     lines = {int(line) for line in re.findall(r'RunnerTests\.swift:(\d{1,5}):(?:\d+:)?\s*error:', text)}

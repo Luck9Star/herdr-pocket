@@ -476,10 +476,19 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
       status = '资料已填入未审查表单 · 请独立核验指纹与目标后再创建设备身份';
     });
   }
+  Widget pairingField(String label, TextField Function(InputDecoration) field, {String? counterText}) {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.macOS) {
+      return field(InputDecoration(labelText:label,counterText:counterText));
+    }
+    // macOS exposes the editable as a native NSTextField proxy. Keep its name in the AX tree.
+    return Semantics(container:true,explicitChildNodes:true,label:label,
+      child:field(InputDecoration(label:ExcludeSemantics(child:Text(label)),counterText:counterText)));
+  }
   Widget input(String name,String label) => Padding(padding:const EdgeInsets.only(bottom:12),
-    child:TextField(key:ValueKey('pair-$name'),controller:fields[name],enabled:!busy && pairing == null && (savedProfile == null || name == 'device'),
-      autocorrect:false,maxLength:name == 'expectedHostKey' ? 4096 : 1024,decoration:InputDecoration(labelText:label,counterText:''),
-      onChanged:(_) { invalidateScan(); setState(() { targetReviewed = false; profilePreview = null; }); }));
+    child:pairingField(label, (decoration) => TextField(
+      key:ValueKey('pair-$name'),controller:fields[name],enabled:!busy && pairing == null && (savedProfile == null || name == 'device'),
+      autocorrect:false,maxLength:name == 'expectedHostKey' ? 4096 : 1024,decoration:decoration,
+      onChanged:(_) { invalidateScan(); setState(() { targetReviewed = false; profilePreview = null; }); }),counterText:''));
   String get targetFingerprint {
     try { return pairingFingerprint(fields['expectedHostKey']!.text); }
     catch (_) { return '填入完整公钥后显示 SHA256 指纹'; }
@@ -567,8 +576,9 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
           section('02 · 核对主机授权响应',[
           const Text('响应本身没有来源认证。请独立核验主机生成的响应来源、账号与两端指纹；粘贴不等于信任。'),
           if (scanAvailable) TextButton.icon(key:const ValueKey('pair-scan'),onPressed:busy || scanning || profileBlocked || !pageVisible || !appResumed || p.state == 'revoked' ? null : scanResponse,icon:const Icon(Icons.qr_code_scanner),label:const Text('扫描主机响应')),
-          TextField(key:const ValueKey('pair-response'),controller:response,enabled:!busy,maxLength:2048,minLines:3,maxLines:6,
-            decoration:const InputDecoration(labelText:'公开授权／撤销响应 JSON'),onChanged:(_) => previewResponse()),
+          pairingField('公开授权／撤销响应 JSON', (decoration) => TextField(
+            key:const ValueKey('pair-response'),controller:response,enabled:!busy,maxLength:2048,minLines:3,maxLines:6,
+            decoration:decoration,onChanged:(_) => previewResponse())),
           ValueListenableBuilder<TextEditingValue>(valueListenable:response, builder:(context,value,_) =>
             value.text.isEmpty ? const SizedBox.shrink() : TextButton(key:const ValueKey('pair-response-recheck'),
               onPressed:busy || scanning || !pageVisible || !appResumed || profileBlocked

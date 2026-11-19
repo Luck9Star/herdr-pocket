@@ -160,6 +160,29 @@ class MacosS06Checks(unittest.TestCase):
             facts = log_facts(f'HP_S06_NATIVE_FAILURE={marker}\n')
             self.assertEqual(facts['fixedFailure'], marker)
 
+    def test_native_pair_control_diagnostics_publish_only_fixed_counts(self):
+        log = ("HP_S06_NATIVE_STAGE=pairA\n"
+               "HP_S06_NATIVE_PAIR_CONTROL=entry\n"
+               "HP_S06_NATIVE_PAIR_CONTROL=host\n"
+               "HP_S06_NATIVE_PAIR_CONTROL=privateValue\n"
+               "HP_S06_NATIVE_PAIR_AX=host,2,1,1,1,0,0,0,1,0\n"
+               "HP_S06_NATIVE_PAIR_AX=host,2,1,1,1,0,0,0,1,0,private-value\n"
+               "HP_S06_NATIVE_PAIR_AX=host,2,1,1,1,0,0,0,1,90000\n"
+               "HP_S06_NATIVE_PAIR_AX=port,2,1,1,1,0,0,0,1,0\n"
+               "HP_S06_NATIVE_PAIR_AX=host,2,1,1,1,2,0,0,1,0\n"
+               "HP_S06_NATIVE_FAILURE=unique_visible_control_missing\n")
+        facts = log_facts(log)
+        self.assertEqual(facts['lastPairControl'], 'host')
+        self.assertEqual(facts['pairControlFailure'], {
+            'control': 'host', 'named': 2, 'expectedRole': 1, 'withinRegion': 1,
+            'hittable': 1, 'enabled': 0, 'namedTextViews': 0, 'namedEditableChildren': 0,
+            'formTitleHittable': 1, 'storageUnavailableHittable': 0,
+        })
+        self.assertNotIn('private', json.dumps(facts))
+        incomplete = log_facts('HP_S06_NATIVE_PAIR_CONTROL=host\nHP_S06_NATIVE_PAIR_AX=port,2,1,1,1,0,0,0,1,0\n')
+        self.assertEqual(incomplete['lastPairControl'], 'host')
+        self.assertNotIn('pairControlFailure', incomplete)
+
     def test_xcresult_counts_are_only_small_numeric_fields(self):
         raw = {'totalTestCount': 1, 'failedTests': 1, 'passedTests': True, 'skippedTests': 9000,
                'configuration': 'secret-data', 'failedDetails': ['secret-path']}

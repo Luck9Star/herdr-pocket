@@ -8,6 +8,10 @@ final class MacosS06UITests: XCTestCase {
     private typealias Peer = MacosS06Fixture.Peer
     private enum Failure: Error { case check(String) }
     private enum Scope: Equatable { case whole, sidebar, main, left, right }
+    private enum PairControl: String {
+        case entry, host, port, user, session, socket, herdr, hostKey, device, fingerprint
+        case targetReview, create, copy, response, preview, sourceReview, accept, connect, back
+    }
     private lazy var app = XCUIApplication()
     private lazy var clipboard = NSPasteboard.general
     private var window: XCUIElement { app.windows.firstMatch }
@@ -67,52 +71,100 @@ final class MacosS06UITests: XCTestCase {
             .withOffset(CGVector(dx: x, dy: y))
     }
 
-    private func query(_ name: String, kind: XCUIElement.ElementType = .any,
-                       prefix: Bool = false) -> XCUIElementQuery {
+    private func query(_ name: String, kind: XCUIElement.ElementType = .any, prefix: Bool = false,
+                       root: XCUIElement? = nil, publicValue: Bool = false) -> XCUIElementQuery {
         let condition = prefix ? "label BEGINSWITH %@ OR identifier BEGINSWITH %@" : "label == %@ OR identifier == %@"
-        return app.descendants(matching: kind).matching(NSPredicate(format: condition, name, name))
+        let predicate = publicValue ? NSPredicate(format: "value == %@ OR label == %@", name, name)
+                                    : NSPredicate(format: condition, name, name)
+        return (root ?? app).descendants(matching: kind).matching(predicate)
+    }
+
+    private func within(_ region: CGRect, _ element: XCUIElement) -> Bool {
+        let frame = element.frame
+        return element.exists && !frame.isEmpty && region.contains(CGPoint(x: frame.midX, y: frame.midY))
     }
 
     private func matches(_ name: String, scope: Scope, kind: XCUIElement.ElementType = .any,
                          prefix: Bool = false) -> [XCUIElement] {
         let region = bounds(scope)
-        return query(name, kind: kind, prefix: prefix).allElementsBoundByIndex.filter {
-            let frame = $0.frame
-            return $0.exists && !frame.isEmpty && region.contains(CGPoint(x: frame.midX, y: frame.midY))
-        }
+        return query(name, kind: kind, prefix: prefix).allElementsBoundByIndex.filter { within(region, $0) }
     }
 
-    private func scroll(_ scope: Scope, _ amount: CGFloat) {
+    private func scroll(_ scope: Scope, _ amount: CGFloat, pairing: Bool = false) {
         let region = bounds(scope), frame = window.frame
-        let x = scope == .whole || scope == .sidebar ? region.midX : region.minX + 11
+        // Pairing has nested, scrollable text editors. Wheel the outer form from its padding.
+        let useCenter = scope == .sidebar || (scope == .whole && !pairing)
+        let x = useCenter ? region.midX : region.minX + 11
         coordinate(x - frame.minX, region.midY - frame.minY).scroll(byDeltaX: 0, deltaY: amount)
     }
 
+    private func pairMatches(_ name: String, kind: XCUIElement.ElementType, prefix: Bool, control: PairControl)
+        -> (named: [XCUIElement], role: [XCUIElement]) {
+        let named = query(name, prefix: prefix, root: window, publicValue: control == .fingerprint)
+            .allElementsBoundByIndex
+        if kind == .textField {
+            // The macOS editable proxy does not expose the Flutter field label.
+            guard named.count == 1, named[0].elementType != .textField else { return (named, []) }
+            return (named, named[0].descendants(matching: .textField).allElementsBoundByIndex)
+        }
+        return (named, named.filter { kind == .any || $0.elementType == kind })
+    }
+
+    private func tracePairAX(_ name: String, kind: XCUIElement.ElementType, scope: Scope,
+                             prefix: Bool, control: PairControl) {
+        let (named, role) = pairMatches(name, kind: kind, prefix: prefix, control: control)
+        let region = bounds(scope)
+        let inRegion = role.filter { within(region, $0) }
+        let hits = inRegion.filter(\.isHittable)
+        let groups = named.filter { $0.elementType != .textField && $0.elementType != .textView }
+        let editableChildren = groups.prefix(9).reduce(0) {
+            $0 + $1.descendants(matching: .textField).count + $1.descendants(matching: .textView).count
+        }
+        func formHits(_ title: String, prefix: Bool = false) -> Int {
+            query(title, prefix: prefix, root: window).allElementsBoundByIndex
+                .filter { within(window.frame, $0) && $0.isHittable }.count
+        }
+        let counts = [named.count, role.count, inRegion.count, hits.count, hits.filter(\.isEnabled).count,
+                      named.filter { $0.elementType == .textView }.count, editableChildren,
+                      formHits("设备配对"), formHits("此平台的设备安全存储桥不可用", prefix: true)]
+        trace("PAIR_AX", ([control.rawValue] + counts.map { String(min($0, 99)) }).joined(separator: ","))
+    }
+
     private func reveal(_ name: String, in scope: Scope = .whole, kind: XCUIElement.ElementType = .any,
-                        prefix: Bool = false, enabled: Bool = false) throws -> XCUIElement {
+                        prefix: Bool = false, enabled: Bool = false, pair control: PairControl? = nil) throws -> XCUIElement {
+        if let control { trace("PAIR_CONTROL", control.rawValue) }
         func hit() -> XCUIElement? {
-            let found = matches(name, scope: scope, kind: kind, prefix: prefix).filter {
-                $0.isHittable && (!enabled || $0.isEnabled)
+            let candidates: [XCUIElement]
+            if let control {
+                let region = bounds(scope)
+                let role = pairMatches(name, kind: kind, prefix: prefix, control: control).role
+                if kind == .textField && role.count != 1 { return nil }
+                candidates = role.filter { within(region, $0) }
+            } else {
+                candidates = matches(name, scope: scope, kind: kind, prefix: prefix)
             }
+            let found = candidates.filter { $0.isHittable && (!enabled || $0.isEnabled) }
             return found.count == 1 ? found[0] : nil
         }
         if let element = try? until("initial_control_unavailable", seconds: 4, hit) { return element }
         for direction in [CGFloat(-390), 390] {
             for _ in 0..<14 {
-                scroll(scope, direction)
+                scroll(scope, direction, pairing: control != nil)
                 Thread.sleep(forTimeInterval: 0.15)
                 if let element = hit() { return element }
             }
         }
+        if let control { tracePairAX(name, kind: kind, scope: scope, prefix: prefix, control: control) }
         throw Failure.check("unique_visible_control_missing")
     }
 
-    private func click(_ name: String, in scope: Scope = .whole, kind: XCUIElement.ElementType = .button) throws {
-        try reveal(name, in: scope, kind: kind, enabled: true).click()
+    private func click(_ name: String, in scope: Scope = .whole, kind: XCUIElement.ElementType = .button,
+                       pair control: PairControl? = nil) throws {
+        try reveal(name, in: scope, kind: kind, enabled: true, pair: control).click()
     }
 
-    private func paste(_ text: String, into label: String) throws {
-        let field = try reveal(label, kind: .textField, enabled: true)
+    private func paste(_ text: String, into label: String, pair control: PairControl) throws {
+        let field = try reveal(label, kind: .textField, enabled: true, pair: control)
         field.click()
         clipboard.clearContents()
         try require(clipboard.setString(text, forType: .string), "public_clipboard_write_failed")
@@ -152,20 +204,24 @@ final class MacosS06UITests: XCTestCase {
     }
 
     private func request(_ peer: Peer, index: Int) throws {
-        try click("配对添加", in: .main)
-        let fields = [("SSH 主机 / IP", peer.host), ("SSH 端口", String(peer.port)),
-                      ("主机账号", peer.username), ("命名会话（非 default）", peer.session),
-                      ("命名会话 socket 绝对路径", peer.socketPath),
-                      ("herdr 可执行文件绝对路径", peer.herdrPath),
-                      ("可信渠道核验的 Ed25519 主机公钥", peer.expectedHostKey),
-                      ("设备名称（英文、数字、空格）", peer.session)]
-        for (label, value) in fields { try paste(value, into: label) }
-        _ = try reveal(peer.fingerprint)
-        try click("我已通过可信渠道核验账号、主机公钥与命名会话资料", kind: .checkBox)
+        try click("配对添加", in: .main, pair: .entry)
+        let fields: [(PairControl, String, String)] = [
+            (.host, "SSH 主机 / IP", peer.host),
+            (.port, "SSH 端口", String(peer.port)),
+            (.user, "主机账号", peer.username),
+            (.session, "命名会话（非 default）", peer.session),
+            (.socket, "命名会话 socket 绝对路径", peer.socketPath),
+            (.herdr, "herdr 可执行文件绝对路径", peer.herdrPath),
+            (.hostKey, "可信渠道核验的 Ed25519 主机公钥", peer.expectedHostKey),
+            (.device, "设备名称（英文、数字、空格）", peer.session),
+        ]
+        for (control, label, value) in fields { try paste(value, into: label, pair: control) }
+        _ = try reveal(peer.fingerprint, kind: .staticText, pair: .fingerprint)
+        try click("我已通过可信渠道核验账号、主机公钥与命名会话资料", kind: .checkBox, pair: .targetReview)
         mark(index == 0 ? "keyA" : "keyB")
-        try click("在此设备创建独立身份并生成公开请求")
+        try click("在此设备创建独立身份并生成公开请求", pair: .create)
         clipboard.clearContents()
-        try click("复制当前公开请求")
+        try click("复制当前公开请求", pair: .copy)
         let request = try until("public_request_unavailable") {
             guard let text = self.clipboard.string(forType: .string),
                   text.utf8.count <= 2048, text.starts(with: "{") else { return nil as String? }
@@ -177,12 +233,12 @@ final class MacosS06UITests: XCTestCase {
         guard let response = String(data: payload, encoding: .utf8) else {
             throw Failure.check("reviewed_host_response_invalid")
         }
-        try paste(response, into: "公开授权／撤销响应 JSON")
-        _ = try reveal("待审查响应", prefix: true)
-        try click("我已独立核验响应来源、账号与两端指纹", kind: .checkBox)
-        try click("审查并接受绑定响应")
-        _ = try reveal("主动审查连接并读取看板", kind: .button, enabled: true)
-        try click("Back")
+        try paste(response, into: "公开授权／撤销响应 JSON", pair: .response)
+        _ = try reveal("待审查响应", prefix: true, pair: .preview)
+        try click("我已独立核验响应来源、账号与两端指纹", kind: .checkBox, pair: .sourceReview)
+        try click("审查并接受绑定响应", pair: .accept)
+        _ = try reveal("主动审查连接并读取看板", kind: .button, enabled: true, pair: .connect)
+        try click("Back", pair: .back)
     }
 
     private func rowControl(_ control: String, after title: String, before other: String?,

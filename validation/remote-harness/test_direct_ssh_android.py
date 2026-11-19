@@ -20,6 +20,78 @@ _spec.loader.exec_module(runner)
 
 
 class GuardTests(unittest.TestCase):
+    def test_status_zero_offline_screenshot_gets_a_transport_diagnostic(self):
+        request = {'tag': 'key-rotation', 'attempt': 1, 'bounds': [0, 20, 400, 500],
+                   'viewSize': [400, 600], 'observedTarget': 'fixture@127.0.0.1:40002'}
+        reply = CompletedProcess([], 0, b'error: device offline\n', b'')
+        with tempfile.TemporaryDirectory() as temp, \
+             patch.object(runner, 'adb', return_value=reply) as adb, \
+             patch.object(runner, 'encrypted_device_state', return_value='offline'):
+            completed = {}
+            with self.assertRaisesRegex(runner.Failure, 'direct_android_screenshot_offline') as failure:
+                runner.screen_checkpoint(request, completed, Mock(), Mock(username='fixture', port=40002),
+                                         'cache/herdr-direct-ssh-123', Path(temp))
+            self.assertEqual(completed, {})
+            self.assertEqual(list(Path(temp).iterdir()), [])
+            self.assertEqual(adb.call_count, 1)
+            diagnostic = failure.exception.diagnostic
+            self.assertEqual(diagnostic['deviceState'], 'offline')
+            self.assertEqual(diagnostic['source'], 'integration')
+            self.assertEqual((diagnostic['tag'], diagnostic['attempt']), ('key-rotation', 1))
+            self.assertNotIn('error: device offline', json.dumps(diagnostic))
+
+    def test_frozen_screenshot_requires_fixed_path_one_body_read_and_exact_size(self):
+        relative = 'cache/herdr-direct-ssh-123'
+        path = relative + '/rotation-connected.png'
+        png = b'\x89PNG\r\n\x1a\n' + b'body'
+        size = CompletedProcess([], 0, str(len(png)).encode() + b'\n', b'')
+        body = CompletedProcess([], 0, png, b'')
+        with patch.object(runner, 'adb', side_effect=[size, body]) as adb:
+            self.assertEqual(runner.read_screen_png('integration', relative=relative, name='rotation-connected'), png)
+            self.assertEqual([call.args for call in adb.call_args_list], [
+                ('shell', '-T', 'run-as', runner.PACKAGE, 'stat', '-c', '%s', path),
+                ('exec-out', 'run-as', runner.PACKAGE, 'cat', path),
+            ])
+        for wrong_relative, wrong_name in ((relative + '/..', 'rotation-connected'),
+                                           (relative, 'private-key'), ('cache/foreign-123', 'connected')):
+            with patch.object(runner, 'adb') as adb, self.assertRaisesRegex(runner.Failure, 'path_invalid'):
+                runner.read_screen_png('integration', relative=wrong_relative, name=wrong_name)
+            adb.assert_not_called()
+
+        negatives = (
+            ('missing', [CompletedProcess([], 1, b'', f"stat: '{path}': No such file or directory\n".encode())]),
+            ('missing', [size, CompletedProcess([], 0, f'cat: {path}: No such file or directory\n'.encode(), b'')]),
+            ('stat_failed', [CompletedProcess([], 0, b'private text\n', b'')]),
+            ('oversize', [CompletedProcess([], 0, str(runner.SCREENSHOT_MAX_BYTES + 1).encode(), b'')]),
+            ('empty', [CompletedProcess([], 0, b'0\n', b'')]),
+            ('empty', [size, CompletedProcess([], 0, b'', b'')]),
+            ('short_read', [size, CompletedProcess([], 0, png[:-1], b'')]),
+            ('short_read', [size, CompletedProcess([], 0, png[:5], b'')]),
+            ('size_mismatch', [size, CompletedProcess([], 0, png + b'a', b'')]),
+            ('signature_invalid', [size, CompletedProcess([], 0, b'invalid text', b'')]),
+            ('read_failed', [size, CompletedProcess([], 0, png, b'private stderr')]),
+            ('read_timeout', [size, __import__('subprocess').TimeoutExpired('private command', 30)]),
+        )
+        for outcome, replies in negatives:
+            with self.subTest(outcome=outcome), patch.object(runner, 'adb', side_effect=replies) as adb, \
+                 patch.object(runner, 'encrypted_device_state', return_value='offline'), \
+                 self.assertRaisesRegex(runner.Failure, '^direct_android_screenshot_' + outcome + '$') as failure:
+                runner.read_screen_png('integration', relative=relative, name='rotation-connected')
+            self.assertEqual(adb.call_count, len(replies))
+            diagnostic = failure.exception.diagnostic
+            self.assertEqual(diagnostic['outcome'], outcome)
+            self.assertEqual(diagnostic['deviceState'], 'offline')
+            self.assertNotIn('private', json.dumps(diagnostic))
+            self.assertNotIn(path, json.dumps(diagnostic))
+
+    def test_system_screenshot_classifies_channel_failure_before_ocr(self):
+        reply = CompletedProcess([], 1, b'', b'error: device offline\n')
+        with patch.object(runner, 'adb', return_value=reply) as adb, \
+             self.assertRaisesRegex(runner.Failure, '^direct_android_screenshot_offline$') as failure:
+            runner.read_screen_png('device')
+        adb.assert_called_once_with('exec-out', 'screencap', '-p', check=False)
+        self.assertEqual(failure.exception.diagnostic['source'], 'device')
+
     def test_screen_checkpoint_compares_actual_device_pixels_and_keeps_failure_evidence(self):
         class GateError(RuntimeError):
             def __init__(self):
@@ -43,6 +115,8 @@ class GuardTests(unittest.TestCase):
         def adb(*args, **kwargs):
             if args[0] == 'exec-out':
                 return CompletedProcess([], 0, png_old if args[1] == 'run-as' else replies.pop(0), b'')
+            if args[4:5] == ('stat',):
+                return CompletedProcess([], 0, str(len(png_old)).encode(), b'')
             return CompletedProcess([], 0, b'', b'')
         with tempfile.TemporaryDirectory() as temp, patch.dict(sys.modules, {'terminal_screenshot_gate': gate_module}), patch.object(runner, 'adb', side_effect=adb):
             output = Path(temp)
@@ -99,6 +173,8 @@ class GuardTests(unittest.TestCase):
         integration = header + struct.pack('>II', 400, 600)
         device = header + struct.pack('>II', 400, 650)
         def adb(*args, **kwargs):
+            if args[4:5] == ('stat',):
+                return CompletedProcess([], 0, str(len(integration)).encode(), b'')
             return CompletedProcess([], 0, integration if args[1] == 'run-as' else device, b'')
         with tempfile.TemporaryDirectory() as temp, patch.object(runner, 'adb', side_effect=adb):
             output = Path(temp)
@@ -147,10 +223,12 @@ class GuardTests(unittest.TestCase):
                 fixture_module = types.SimpleNamespace(DirectSshFixture=Mock(side_effect=peers))
                 process = Mock()
                 process.poll.side_effect = [None, 1, 1]
+                read_diagnostic = {'source': 'integration', 'operation': 'read', 'outcome': 'short_read',
+                                   'deviceState': 'device', 'expectedBytes': 24, 'stdoutBytes': 8, 'stderrBytes': 0}
                 def checkpoint(request, screens, *unused):
                     screens.update({tag: {**value, 'private': 'secret'} for tag, value in observed.items()})
                     screens['unknown'] = {'attempt': 1, 'accepted': False, 'expectedTarget': 'secret'}
-                    raise runner.Failure('simulated_device_failure')
+                    raise runner.ScreenshotReadFailure(read_diagnostic)
                 def device_text(*args):
                     if args == ('devices',):
                         return 'List of devices attached\nemulator-5554 device'
@@ -175,11 +253,12 @@ class GuardTests(unittest.TestCase):
                      patch.object(runner, 'read_public_json', return_value={'request': True}), \
                      patch.object(runner, 'screen_checkpoint', side_effect=checkpoint), \
                      patch.object(runner.subprocess, 'Popen', return_value=process):
-                    with self.assertRaisesRegex(runner.Failure, 'simulated_device_failure'):
+                    with self.assertRaisesRegex(runner.Failure, 'direct_android_screenshot_short_read'):
                         runner.run(args, env)
                 report = json.loads((output / 'result.json').read_text())
                 self.assertEqual(report['status'], 'failed')
                 self.assertEqual(report['screenProof'], observed)
+                self.assertEqual(report['screenshotReadDiagnostic'], read_diagnostic)
                 self.assertNotIn('secret', json.dumps(report))
 
     def test_protocol_dependency_is_present_when_required(self):
@@ -798,16 +877,19 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
         gate = Mock(return_value={'markerVisible': True, 'tokenVisible': True})
         gate_module = types.SimpleNamespace(ScreenshotGateError=type('GateError', (ValueError,), {}),
                                             verify_terminal_screenshot=gate)
+        def adb(*args, **unused):
+            data = str(len(header)).encode() if args[4:5] == ('stat',) else header
+            return CompletedProcess([], 0, data, b'')
         with tempfile.TemporaryDirectory() as temp, patch.dict(sys.modules, {'terminal_screenshot_gate': gate_module}), \
-             patch.object(runner, 'adb', return_value=CompletedProcess([], 0, header, b'')):
+             patch.object(runner, 'adb', side_effect=adb):
             completed = {}
-            runner.screen_checkpoint(request, completed, fixture, None, 'cache/test', Path(temp), require_rotation=False)
+            runner.screen_checkpoint(request, completed, fixture, None, 'cache/herdr-direct-ssh-123', Path(temp), require_rotation=False)
             self.assertTrue(completed['ordinary']['accepted'])
             self.assertEqual(gate.call_count, 2)
             self.assertTrue(all(call.kwargs['expected_token'] == fixture.screen_token for call in gate.call_args_list))
             with self.assertRaises(runner.Failure):
                 runner.screen_checkpoint({**request, 'tag': 'key-rotation'}, {}, fixture, None,
-                                         'cache/test', Path(temp), require_rotation=False)
+                                         'cache/herdr-direct-ssh-123', Path(temp), require_rotation=False)
 
     def test_failure_does_not_publish_secret_or_embed_it_in_build_defines(self):
         import shutil

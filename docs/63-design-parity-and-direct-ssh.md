@@ -27,7 +27,7 @@ Tauri Android 文件名虽含 `universal`，包内仅有 `arm64-v8a`；下文 AP
 | 普通 SSH | 标准 SSH 服务器；密码或已有私钥；开启独立 PTY shell | 探测的公钥须独立核验并明确确认；密码/私钥只用于本次连接；关闭即退休本次会话 |
 | 配对添加 / herdr 工作台 | 已有远端 herdr 命名会话；公开资料审查、设备独立身份、主机 helper 确认、单独 SSH 验证 | 授权响应不代替主机身份校验；默认观察，逐键/草稿还须满足现有保护能力和目标绑定 |
 
-普通 SSH 不调用 herdr、Unix socket 或配对 helper，也不伪造 agent 看板。目前使用系统 TCP/DNS 路由；没有把内置三网或后台恢复当作已完成。主机指纹变化时停止，不自动接受替换；认证失败与取消不会保存本次秘密。Rust 的会话 ID、原始输出字节、递增序号与逐包确认隔离多会话；连接中可取消，结果不明的输入不会自动重发。
+普通 SSH 不调用 herdr、Unix socket 或配对 helper，也不伪造 agent 看板。目前使用系统 TCP/DNS 路由；没有把内置三网或后台恢复当作已完成。主机指纹变化时停止，不自动接受替换；认证失败与取消不会保存本次秘密。Rust 的会话 ID、原始输出字节、递增序号与逐包确认隔离多会话；连接中可取消，结果不明的输入不会自动重发。主动断开的语义是本机侧结束：确认本机已结束且清凭据即显示「本机已断开」，无远端报告只讲本机和凭据；仅当确有明确远端结束证据（如 exit 状态报告）才加远端一句，不把它推断为远端主动退出，也不改变凭据清理与返回首页不误报的判定。本机连接关闭失败时单独说明（会话可能仍在），不声称已成功断开；成功断开后返回首页显示「本机已断开」，本机连接关闭失败后返回首页保留失败提示，无正在关闭的连接时不报断开成功。
 
 实现入口：[Rust 标准 SSH](../validation/transport-rust/src/direct_shell.rs)、[Tauri 命令](../validation/tauri/src-tauri/src/direct_shell.rs)、[Tauri 页面](../validation/tauri/src/direct-ssh.js)、[Flutter 页面](../validation/flutter/lib/direct_ssh_page.dart)。
 

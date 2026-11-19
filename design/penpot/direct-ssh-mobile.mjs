@@ -208,7 +208,7 @@ function home(board, returned) {
     text('HP', margin + 17, top + 27, { size: 12, bold: true, fill: color.textInverse, align: 'middle', limit: 30 });
     text('Herdr Pocket', margin + 44, top + 28, { size: 22, bold: true, limit: span - 44 });
   });
-  if (returned) notice('closed-feedback', '普通 SSH 已断开', [], top + 56);
+  if (returned) notice('closed-feedback', '本机已断开', [], top + 56);
   const cardTop = top + (returned ? 116 : 72);
   layer('home-empty-card', margin, cardTop, span, 268, () => {
     rect(margin, cardTop, span, 268, color.card, tokens.radii.card, color.border);
@@ -274,7 +274,15 @@ function endpoint(board, feedback, focused = false) {
   header('普通 SSH');
   let y = safeTop + 76;
   if (feedback === 'disconnected') {
-    y = notice('closed-feedback', '已断开连接', ['本次凭据已清空。重新连接时请重新填写。'], y) + 16;
+    // 用户定稿：确认本机已结束且清凭据即显示「本机已断开」；无远端报告只讲本机和凭据。
+    y = notice('closed-feedback', '本机已断开', ['凭据已清空，重连时请重新填写。'], y) + 16;
+  } else if (feedback === 'disconnected-remote-exit') {
+    // 仅当确有明确远端结束证据（如 exit 状态报告）才加远端一句；320 窄屏拆两行避免超宽。
+    const lines = board.screen.width > 320 ? ['远端已报告结束，凭据已清空。重连时请重新填写。'] : ['远端已报告结束，凭据已清空。', '重连时请重新填写。'];
+    y = notice('closed-feedback', '本机已断开', lines, y) + 16;
+  } else if (feedback === 'disconnect-failed') {
+    // 关停失败单独说明，不声称成功；不新增操作，返回首页语义另页说明。
+    y = notice('stop-failed-feedback', '本机连接关闭失败', ['会话可能仍在。可返回首页。'], y, 'danger') + 16;
   } else if (feedback === 'previous-trust') {
     y = notice('trust-preserved', '已保留旧信任', ['请重新探测并独立核对主机指纹。'], y) + 16;
   }
@@ -285,7 +293,8 @@ function endpoint(board, feedback, focused = false) {
   y = field('port', '端口', '22', margin + span - portWidth, y, portWidth) + 20;
   button('probe', '探测并核对主机密钥', y);
   if (feedback !== 'previous-trust') footnote('探测时仅获取主机密钥，认证在核对之后进行。', y + 70);
-  if (feedback === 'disconnected') button('return-home', '返回首页', y + 84, { kind: 'secondary' });
+  if (feedback === 'disconnected' || feedback === 'disconnected-remote-exit') button('return-home', '返回首页', y + 84, { kind: 'secondary' });
+  if (feedback === 'disconnect-failed') button('return-home', '返回首页', y + 84, { kind: 'secondary' });
   if (focused) board.keyboardPreview();
 }
 
@@ -400,6 +409,8 @@ const states = [
   ['terminal-closed', '终端 · 键盘收起', (board) => terminal(board, false)],
   ['settings-active', '设置 · 会话仍连接', settings],
   ['disconnected', '断开连接', (board) => endpoint(board, 'disconnected')],
+  ['disconnected-remote-exit', '断开 · 远端报告结束', (board) => endpoint(board, 'disconnected-remote-exit')],
+  ['disconnect-failed', '断开失败', (board) => endpoint(board, 'disconnect-failed')],
   ['returned', '断开后返回首页', (board) => home(board, true)],
   ['key-changed', '指纹变化 · 阻止连接', changed],
   ['previous-trust', '取消并保留旧信任', (board) => endpoint(board, 'previous-trust')],

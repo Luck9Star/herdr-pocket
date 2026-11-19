@@ -32,15 +32,17 @@ node direct-ssh-desktop.mjs out.svg pages/         # 另存总览 + 每屏单页
 | 看板 · 会话保持 | `board-active` | `nav-terminal`（返回原会话）, `home-*` | 顶部提示不断开 |
 | 网络 · 会话保持 | `network-active` | `nav-terminal`, `network-add` | 顶部提示不断开 |
 | 设置 · 会话保持 | `settings-active` | `font-size`, `save-font-size`, `transfer-settings`, `nav-*` | 顶部提示会话仍连接 |
-| 已断开 | `disconnected` | `return-home`, `probe` | 凭据清空反馈 |
-| 返回首页 | `returned` | `home-direct-ssh` | 断开反馈条 |
+| 已断开（常态） | `disconnected` | `return-home`, `probe` | 确认本机已结束且清凭据即显示「本机已断开」；无远端报告只讲本机和凭据 |
+| 已断开 · 远端报告结束 | `disconnected-remote-exit` | `return-home`, `probe` | 确有 exit 状态报告等远端结束证据时加「远端已报告结束」，主判定仍为本机断开 |
+| 断开失败 | `disconnect-failed` | `return-home` | 本机连接关闭失败单独说明，不声称成功；不新增操作，重试走既有断开入口 |
+| 返回首页 | `returned` | `home-direct-ssh` | 成功断开后显示「本机已断开」；本机连接关闭失败后保留失败提示；无正在关闭的连接时不报断开成功 |
 | 换钥拒绝 | `key-changed` | `recheck`, `keep-previous-trust` | 新旧指纹并列，算法可不同（旧 ssh-ed25519 / 新 rsa-sha2-512） |
 | 保留旧信任 | `previous-trust` | `probe` | 提示重新探测 |
 | 重新核对 | `recheck-trust` | `trust-confirm`, `trust-cancel` | 算法与指纹逐项等于 `key-changed` 新指纹（rsa-sha2-512） |
 会话进行中的状态（`terminal`、`board-active`、`network-active`、`settings-active`）在 `terminal` 导航处显示在线状态：1440/980 为 8×8 圆点加「在线」文字；700 rail 为 8×8 圆点（`<title>` 会话在线）。`nav-*` 与 `sidebar-toggle` 命中区允许位于侧栏（x < 224 / < 64），其余 hit 全部位于内容区。
 ### 键盘焦点顺序与返回语义（双壳同一规则）
 - 表单页：`host` → `username` → `port` → `probe`；认证页：方式选择（`auth-password`/`auth-key`）→ 凭据框 → `connect`；核对页：`trust-confirm` → `trust-cancel`。
-- 页面标题栏 `back` 返回上一页，不提交任何输入；`disconnect` 需显式点击，断开后凭据清空。
+- 页面标题栏 `back` 返回上一页，不提交任何输入；`disconnect` 需显式点击，断开后凭据清空。断开判定以本机侧为准：确认本机已结束且清凭据即显示「本机已断开」，无远端报告只讲本机和凭据；仅当确有明确远端结束证据（如 exit 状态报告）才加远端一句，不把本机断开推断为远端主动退出。成功断开后返回首页显示「本机已断开」；本机连接关闭失败后返回首页保留失败提示；无正在关闭的连接时不报断开成功。
 - 切到看板/网络/设置再经 `nav-terminal` 返回：恢复原终端视图与会话状态，不产生新连接、不发送输入、不重置滚动位置。
 - Flutter 与 Tauri 两壳按同一 geometry/锚点顺序验收；实际系统命中（点击/聚焦/按键）由各壳平台输入实现，不由画板断言。
 ## 逐点验收门槛

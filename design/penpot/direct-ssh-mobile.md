@@ -30,8 +30,10 @@ node design/penpot/direct-ssh-mobile.mjs \
 | `terminal-open` | 已建立 PTY 与 Shell，真实系统键盘展开，底栏收起。顶部保持连接身份和可命中的断开操作，辅助键在 IME 上方，终端可见远端回显。 | `disconnect`、`terminal-status`、`keyboard-toggle`、`terminal-panel`、`terminal-keys`、各 `key-*`、`system-keyboard` |
 | `terminal-closed` | 同一活动会话收起系统键盘，终端扩展。底栏恢复，辅助键留在底栏上方，可重新打开键盘或去设置。 | `disconnect`、`terminal-status`、`keyboard-toggle`、`terminal-panel`、`terminal-keys`、各 `key-*`、`terminal-tabs`、`tab-settings` |
 | `settings-active` | 在活动连接期间切到设置，显示连接仍活动及原目标。点击底栏「终端」回到同一会话的键盘收起状态。 | `active-ssh`、`target-card`、`settings-tabs`、`tab-terminal` |
-| `disconnected` | 显式断开，回到保留连接目标的表单。临时密码、私钥与口令已清空，可重新探测或返回首页。 | `closed-feedback`、`host`、`username`、`port`、`probe`、`return-home` |
-| `returned` | 返回未添加主机的首页，显示一次「普通 SSH 已断开」反馈。 | `closed-feedback`、`home-empty-card`、`home-direct-ssh`、`home-tabs` |
+| `disconnected` | 显式断开（常态）：确认本机已结束且清凭据即显示「本机已断开」，无远端报告只讲本机和凭据，不推断远端主动退出。回到保留连接目标的表单。 | `closed-feedback`、`host`、`username`、`port`、`probe`、`return-home` |
+| `disconnected-remote-exit` | 同上，但确有明确远端结束证据（如 exit 状态报告）：反馈加「远端已报告结束」，凭据清理与返回首页不变。 | `closed-feedback`、`host`、`username`、`port`、`probe`、`return-home` |
+| `disconnect-failed` | 本机连接关闭失败：单独说明「会话可能仍在」，不声称断开成功；不新增操作，仅「返回首页」；关闭失败后返回首页时保留失败提示。 | `stop-failed-feedback`、`host`、`username`、`port`、`probe`、`return-home` |
+| `returned` | 成功断开后返回未添加主机的首页，显示一次「本机已断开」反馈；本机连接关闭失败后返回首页则保留失败提示；无正在关闭的连接时不报断开成功。 | `closed-feedback`、`home-empty-card`、`home-direct-ssh`、`home-tabs` |
 | `key-changed` | 发现主机密钥不同，阻断认证和终端输入。可独立比对旧指纹与本次呈现的新指纹，或取消并保留旧信任。 | `changed-warning`、`target-card`、`changed-keys`、`previous-key-fingerprint`、`presented-key-fingerprint`、`recheck`、`keep-previous-trust` |
 | `previous-trust` | 用户放弃换钥后回到原目标表单，旧信任保留。后续探测仍按该目标的已核对结果处理。 | `trust-preserved`、`host`、`username`、`port`、`probe` |
 | `recheck-trust` | 重新探测后独立审查目标、密钥算法和完整新指纹。显式确认才更新该目标的信任并继续认证；取消保留旧信任。 | `target-card`、`key-evidence`、`key-fingerprint`、`trust-confirm`、`trust-cancel` |
@@ -42,7 +44,7 @@ node design/penpot/direct-ssh-mobile.mjs \
 
 - 终端可用状态下，键盘操作的无障碍名称随状态为「打开键盘」或「收起键盘」。该操作只变更输入焦点和画面可用高度，终端、连接和已有回显继续保留，切换本身零输入。画板中的辅助键为两壳共有键，其他已支持的键仍按各自现有入口提供。
 - 收起键盘后可用底栏切换看板、网络或设置。切出终端时退出终端输入焦点，隐藏页禁止输入，回到底栏「终端」恢复原会话及原回显，无需重认证。此处仅指应用内切页，应用进入系统后台仍按现有客户端的连接生命周期处理。
-- 「断开」关闭当前 SSH 会话并清空本次凭据，随后可退回首页。原生系统返回若关闭 SSH 路由，也应关闭会话和清理凭据。关闭路由和底栏跨页切换在验收时分别记录。
+- 「断开」关闭当前 SSH 会话并清空本次凭据，随后可退回首页。断开的判定是本机侧：确认本机已结束且清凭据即显示「本机已断开」，无远端报告只讲本机和凭据；仅当确有明确远端结束证据（如 exit 状态报告）才加远端一句。成功断开后返回首页显示「本机已断开」；本机连接关闭失败后返回首页保留失败提示；无正在关闭的连接时不报断开成功。原生系统返回若关闭 SSH 路由，也应关闭会话和清理凭据。关闭路由和底栏跨页切换在验收时分别记录。
 - 基线 Tauri 的底栏可切到设置再回到同一连接，已有 macOS 原生证据。R19 的 iOS 终端截图记录了 Tauri 底栏遮挡按钮边缘。基线 Flutter 普通 SSH 是独立路由，返回会销毁该页的连接。画板将底栏往返和正常退出同时列为共用视觉目标。 [既有功能证据](../../docs/63-design-parity-and-direct-ssh.md#本轮实际验证) · [R19 终端截图观察](../../docs/70-ios-ssh-host-key-rotation.md#r19-同源结果两壳通过活动标题与顶栏分离)
 
 ## 坐标与判定

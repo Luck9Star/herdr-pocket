@@ -356,6 +356,37 @@ enum NativeControlPolicy {
     static let mobilePasswordLabel = "密码（仅本次使用）"
     // WebKit can insert a single ASCII space at the inline label boundary.
     static let mobilePasswordLabels = [mobilePasswordLabel, "密码 （仅本次使用）"]
+    enum AuthMethod: String, CaseIterable {
+        case key, password
+
+        var identifier: String { "ssh-auth-" + rawValue }
+        var label: String { self == .key ? "已有私钥" : "密码" }
+
+        // WebKit adds the Toggle trait to these aria-pressed buttons on iOS.
+        static let roles: Set<String> = ["button", "toggle", "switch"]
+
+        func matches(_ fact: Fact) -> Bool {
+            fact.label == label && (fact.identifier == identifier || fact.identifier.isEmpty || fact.identifier == label)
+        }
+
+        enum Issue: String, Error {
+            case missing = "native_encrypted_auth_method_missing"
+            case ambiguous = "native_encrypted_auth_method_ambiguous"
+            case wrongRole = "native_encrypted_auth_method_role_invalid"
+            case wrongIdentity = "native_encrypted_auth_method_identity_invalid"
+        }
+
+        func candidate(_ facts: [Fact]) -> Result<Int, Issue> {
+            let matches = facts.indices.filter {
+                facts[$0].identifier == identifier || (self.matches(facts[$0]) && facts[$0].role != "staticText")
+            }
+            guard matches.count <= 1 else { return .failure(.ambiguous) }
+            guard let index = matches.first else { return .failure(.missing) }
+            guard self.matches(facts[index]) else { return .failure(.wrongIdentity) }
+            guard Self.roles.contains(facts[index].role) else { return .failure(.wrongRole) }
+            return .success(index)
+        }
+    }
     enum KeyField: String, CaseIterable {
         case pem = "ssh-key"
         case passphrase = "ssh-passphrase"
@@ -682,7 +713,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
     private enum MobileWitnessObservation<Proof> {
         case ready(Proof)
-        case pending(String, () -> [String: Any])
+        case pending(String, (() -> [String: Any])?)
     }
     private struct TerminalHeader {
         let nodes: [Observed]
@@ -1218,7 +1249,8 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func reveal(_ item: XCUIElement, matching expected: RevealedControl? = nil, scrolling: Bool = true,
-                        protectRouteTabs: Bool = false, mobileOwnerFailure: String? = nil) throws -> RevealedControl {
+                        protectRouteTabs: Bool = false, mobileOwnerFailure: String? = nil,
+                        authMethod: NativeControlPolicy.AuthMethod? = nil) throws -> RevealedControl {
         try require(item.waitForExistence(timeout: 20), "native_control_missing")
         let ownerFailure = mobileOwnerFailure ?? "native_control_owner_unproven"
         let queryMayBind = expected != nil && mobileOwnerFailure != nil
@@ -1241,6 +1273,13 @@ final class TauriDirectSSHUITests: XCTestCase {
                 throw NSError(domain: ownerFailure, code: 1)
             }
             let resolved = RevealedControl(live: bound, owner: owner, window: scope.window, web: scope.web)
+            if let method = authMethod {
+                guard case .success(let index) = method.candidate(rows.map({ authMethodFact($0.snapshot) })),
+                      rows[index].path == owner.path, owner.snapshot.isEnabled else {
+                    try require(false, ownerFailure)
+                    throw NSError(domain: ownerFailure, code: 1)
+                }
+            }
             if let prior = prior {
                 try require(sameControlScope(resolved, prior) && sameIdentity(owner.snapshot, prior.owner.snapshot), ownerFailure)
             }
@@ -1429,7 +1468,11 @@ final class TauriDirectSSHUITests: XCTestCase {
         // live element that agrees with the raw snapshot identity and frame.
         let snapshot = owner.snapshot
         let match: NSPredicate
-        if let field = NativeControlPolicy.KeyField.allCases.first(where: {
+        let method = authMethodFact(snapshot)
+        if let choice = NativeControlPolicy.AuthMethod.allCases.first(where: { $0.matches(method) }),
+           NativeControlPolicy.AuthMethod.roles.contains(method.role) {
+            match = NSPredicate(format: "identifier == %@ OR label == %@", choice.identifier, choice.label)
+        } else if let field = NativeControlPolicy.KeyField.allCases.first(where: {
             $0.matches(identifier: snapshot.identifier, label: snapshot.label)
         }), field.accepts(role: snapshot.elementType == .textView ? "textView" : role(snapshot.elementType)) {
             match = NSPredicate(format: "identifier == %@ OR label IN %@", field.rawValue, field.labels)
@@ -1485,10 +1528,16 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func tapMobileButton(_ control: RevealedControl, _ ownerFailure: String) throws {
+    private func tapMobileButton(_ control: RevealedControl, _ ownerFailure: String,
+                                 authMethod: NativeControlPolicy.AuthMethod? = nil) throws {
         let current = try reveal(control.live.element, matching: control,
-            protectRouteTabs: true, mobileOwnerFailure: ownerFailure).live
-        try require(current.snapshot.elementType == .button, ownerFailure)
+            protectRouteTabs: true, mobileOwnerFailure: ownerFailure, authMethod: authMethod).live
+        if let method = authMethod {
+            let fact = authMethodFact(current.snapshot)
+            try require(method.matches(fact) && NativeControlPolicy.AuthMethod.roles.contains(fact.role), ownerFailure)
+        } else {
+            try require(current.snapshot.elementType == .button, ownerFailure)
+        }
         try require(current.snapshot.isEnabled, "native_control_disabled")
         current.element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
@@ -2687,10 +2736,10 @@ final class TauriDirectSSHUITests: XCTestCase {
     @MainActor
     private func encryptedDraft(port: Int, owner: RevealedControl, retry: Bool) throws -> RevealedControl {
         let attempt = retry ? "retry" : "wrong"
-        try phase("paste")
         let before = try encryptedForm(port: port, owner: owner)
         try require(credentialEmpty(before.pem.live.snapshot) && credentialEmpty(before.passphrase.live.snapshot) &&
                     !before.submit.live.snapshot.isEnabled, "native_encrypted_key_credentials_retained")
+        try phase("paste")
         try post("encrypted_key_clipboard_" + attempt)
         try tapMobileButton(before.paste, "native_encrypted_key_paste_unproven")
         let deadline = Date().addingTimeInterval(12)
@@ -2731,13 +2780,52 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func selectAuthMethod(_ kind: (String, String), port: Int, owner: RevealedControl) throws -> RevealedControl {
-        let (rows, anchors) = try mobileWitness([("ssh-step-title", "SSH 账号认证", false),
-            ("ssh-reviewed-endpoint", target(port), false), (kind.0, kind.1, true)])
-        let failure = "native_encrypted_key_owner_unproven"
-        let choice = try mobileControl(anchors[2], rows, failure)
-        try require(sameControlScope(choice, owner), failure)
-        try tapMobileButton(choice, failure)
+    private func authMethodFact(_ node: any XCUIElementSnapshot) -> NativeControlPolicy.Fact {
+        let category: String
+        switch node.elementType {
+        case .toggle: category = "toggle"
+        case .switch: category = "switch"
+        default: category = role(node.elementType)
+        }
+        return .init(identifier: node.identifier, label: node.label, role: category, value: nil)
+    }
+
+    @MainActor
+    private func selectAuthMethod(_ method: NativeControlPolicy.AuthMethod, port: Int, owner: RevealedControl) throws -> RevealedControl {
+        try phase("select_" + method.rawValue)
+        let pageFailure = "native_encrypted_auth_page_unproven"
+        let ownerFailure = "native_encrypted_auth_method_owner_unproven"
+        let choice: RevealedControl = try waitForMobileWitness([("ssh-step-title", "SSH 账号认证", false),
+            ("ssh-reviewed-endpoint", target(port), false), ("ssh-approved-note", "本次主机密钥已确认", false),
+            ("ssh-connect", "连接 SSH", true)], includeOffscreenText: true,
+            onMissing: { try self.require(false, pageFailure) }) { rows, anchors in
+            let submit = anchors[3]
+            guard let scope = controlScope(submit, rows), sameControlScope(scope, owner) else {
+                try require(false, ownerFailure)
+                throw NSError(domain: ownerFailure, code: 1)
+            }
+            try require(!submit.snapshot.isEnabled, "native_review_lock_invalid")
+            switch method.candidate(rows.map { authMethodFact($0.snapshot) }) {
+            case .success(let index):
+                let candidate = rows[index]
+                guard let candidateScope = controlScope(candidate, rows), sameControlScope(candidateScope, owner) else {
+                    try require(false, ownerFailure)
+                    throw NSError(domain: ownerFailure, code: 1)
+                }
+                try require(candidate.snapshot.isEnabled, "native_control_disabled")
+                guard case .success(let control) = mobileBinding(candidate, rows) else {
+                    return .pending("native_encrypted_auth_method_live_unproven", nil)
+                }
+                try require(control.live.snapshot.isEnabled, "native_control_disabled")
+                return .ready(control)
+            case .failure(let issue):
+                if issue == .missing { return .pending(issue.rawValue, nil) }
+                try require(false, issue.rawValue)
+                throw issue
+            }
+        }
+        try tapMobileButton(choice, "native_encrypted_auth_method_live_unproven", authMethod: method)
+        try phase(method.rawValue + "_form")
         return choice
     }
 
@@ -2754,9 +2842,7 @@ final class TauriDirectSSHUITests: XCTestCase {
             throw NSError(domain: "native_encrypted_key_owner_unproven", code: 1)
         }
         try post("encrypted_key_reviewed")
-        try phase("select_key")
-        let keyMethod = ("ssh-auth-key", "已有私钥")
-        let key = try selectAuthMethod(keyMethod, port: port, owner: approval)
+        let key = try selectAuthMethod(.key, port: port, owner: approval)
 
         let wrong = try encryptedDraft(port: port, owner: key, retry: false)
         try phase("wrong_submit")
@@ -2769,9 +2855,9 @@ final class TauriDirectSSHUITests: XCTestCase {
 
         // Reset the prior paste instruction via the normal method controls. The
         // original confirmed target stays in place and no credentials are sent.
-        try phase("select_key")
-        let passwordMethod = try selectAuthMethod(("ssh-auth-password", "密码"), port: port, owner: key)
-        let retryKey = try selectAuthMethod(keyMethod, port: port, owner: passwordMethod)
+        let passwordMethod = try selectAuthMethod(.password, port: port, owner: key)
+        let emptyPassword = try mobileAuth(port: port, ready: false, previous: passwordMethod).password
+        let retryKey = try selectAuthMethod(.key, port: port, owner: emptyPassword)
         let correct = try encryptedDraft(port: port, owner: retryKey, retry: true)
         try phase("connect")
         try post("encrypted_key_retry_submit")

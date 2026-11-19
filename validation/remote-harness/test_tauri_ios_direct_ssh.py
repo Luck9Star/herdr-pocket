@@ -1491,7 +1491,9 @@ class NativeDiagnosticPublishingTests(unittest.TestCase):
                 for code in ios.MOBILE_PASSWORD_FAILURES:
                     payload = {'stage': 'native_failure', 'nativeCheckpoint': phase, 'nativeFailureCode': code}
                     state = ios.Checkpoints(None, None, output, {},
-                                            encrypted=object() if phase == 'encrypted_key_fingerprint' else None)
+                                            encrypted=object() if phase.startswith('encrypted_key_') else None)
+                    if phase == 'encrypted_key_password_form':
+                        state.index = state.stages.index('encrypted_key_clipboard_retry')
                     state.accept(payload)
                     self.assertEqual(state.result, {'nativeCheckpoint': phase, 'nativeFailureCode': code})
             payload = {'stage': 'native_failure', 'nativeCheckpoint': 'ordinary_fingerprint',
@@ -1989,6 +1991,29 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
 
 
 class EncryptedKeyFixtureTests(unittest.TestCase):
+    def test_auth_choice_diagnostics_distinguish_selection_and_selected_form(self):
+        for phase in ios.ENCRYPTED_AUTH_PHASES:
+            payload = {'stage': 'native_progress', 'nativeCheckpoint': phase}
+            state = ios.Checkpoints(None, None, '/unused', {}, encrypted=object())
+            with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                state.accept(payload)
+            state.index = state.stages.index('encrypted_key_clipboard_retry')
+            with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                state.accept(payload | {'raw': 'private-value'})
+            self.assertNotIn('private-value', json.dumps(state.result))
+            state.accept(payload)
+            self.assertEqual(state.result, {'nativeCheckpoint': phase})
+        for code in ios.ENCRYPTED_AUTH_FAILURES:
+            payload = {'stage': 'native_failure', 'nativeCheckpoint': 'encrypted_key_select_key',
+                       'nativeFailureCode': code}
+            state = ios.Checkpoints(None, None, '/unused', {}, encrypted=object())
+            state.index = state.stages.index('encrypted_key_clipboard_wrong')
+            state.accept(payload)
+            self.assertEqual(state.result['nativeFailureCode'], code)
+            state = ios.Checkpoints(None, None, '/unused', {})
+            with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                state.accept(payload)
+
     def test_generated_key_requires_its_passphrase_and_peer_disallows_password(self):
         import paramiko
         with ios.EncryptedKeyFixture(screen_proof=True, channel_deadline=time.monotonic() + 60) as fixture:

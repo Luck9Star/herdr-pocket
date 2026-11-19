@@ -47,13 +47,18 @@ ENCRYPTED_KEY_STAGES = ('encrypted_key_form', 'encrypted_key_probe', 'encrypted_
                         'encrypted_key_terminal', 'encrypted_key_disconnect_attempt', 'encrypted_key_disconnected',
                         'encrypted_key_returned_home')
 ENCRYPTED_KEY_PNG = 'encrypted-key-terminal.png'
+ENCRYPTED_AUTH_PHASES = frozenset(('encrypted_key_select_key', 'encrypted_key_key_form',
+                                  'encrypted_key_select_password', 'encrypted_key_password_form'))
+ENCRYPTED_AUTH_FAILURES = frozenset('native_encrypted_auth_' + code for code in (
+    'page_unproven', 'method_missing', 'method_ambiguous', 'method_identity_invalid', 'method_role_invalid',
+    'method_owner_unproven', 'method_live_unproven'))
 ORDINARY_ACTIVE_STEPS = ('keyboard_opened', 'keyboard_closed', 'board', 'terminal_from_board',
                          'network', 'terminal_from_network', 'settings', 'terminal_from_settings')
 NATIVE_PHASES = frozenset(prefix + '_' + phase for prefix in ('ordinary', 'key_change', 'encrypted_key') for phase in (
     'launch', 'open_add', 'open_ssh', 'host', 'port', 'username', 'probe', 'fingerprint',
     'password', 'connect', 'terminal_focus', 'terminal_input', 'terminal_capture', 'disconnect',
-    'review_capture', 'cancel', 'cancel_check', 'reprobe', 'new_fingerprint')) | {
-        'ordinary_return_home', 'ordinary_active_flow', 'encrypted_key_return_home', 'encrypted_key_select_key',
+    'review_capture', 'cancel', 'cancel_check', 'reprobe', 'new_fingerprint')) | ENCRYPTED_AUTH_PHASES | {
+        'ordinary_return_home', 'ordinary_active_flow', 'encrypted_key_return_home',
         'encrypted_key_paste', 'encrypted_key_passphrase', 'encrypted_key_wrong_submit'}
 GEOMETRY_PHASES = frozenset(
     prefix + '_' + phase for prefix in ('ordinary', 'key_change')
@@ -67,7 +72,7 @@ GEOMETRY_REASONS = frozenset((
 MAX_GEOMETRY_REASONS_PER_CHECKPOINT = 24
 MOBILE_PASSWORD_PHASES = frozenset((
     'ordinary_fingerprint', 'ordinary_password', 'key_change_fingerprint',
-    'key_change_new_fingerprint', 'key_change_password', 'encrypted_key_fingerprint'))
+    'key_change_new_fingerprint', 'key_change_password', 'encrypted_key_fingerprint', 'encrypted_key_password_form'))
 MOBILE_PASSWORD_FAILURES = frozenset('native_mobile_password_' + reason for reason in (
     'identity_missing', 'secure_role_missing', 'wrong_role', 'raw_ambiguous',
     'raw_owner_unproven', 'live_owner_unproven', 'live_missing', 'live_unreadable',
@@ -98,7 +103,7 @@ NATIVE_FAILURES = frozenset((
     'native_mobile_submit_owner_unproven', 'native_mobile_return_owner_unproven',
     'native_encrypted_key_owner_unproven', 'native_encrypted_key_method_unproven',
     'native_encrypted_key_paste_unproven', 'native_encrypted_key_rejection_unproven',
-    'native_encrypted_key_credentials_retained')) | MOBILE_PASSWORD_FAILURES
+    'native_encrypted_key_credentials_retained')) | MOBILE_PASSWORD_FAILURES | ENCRYPTED_AUTH_FAILURES
 HOME_MEMBERS = frozenset(('brand', 'headerAdd', 'emptyAdd', 'homeHeading', 'emptyHeading',
                          'zeroHosts', 'ordinaryShortcut', 'addHeading', 'sshOption'))
 COMPACT_HOME_MEMBERS = {'emptyDescription', 'compactShortcut'}
@@ -1345,6 +1350,18 @@ class Checkpoints:
             require(self.failure is None and phase in NATIVE_PHASES
                     and (self.encrypted is not None or not phase.startswith('encrypted_key_')),
                     'tauri_ios_native_diagnostic_invalid')
+            if phase in ENCRYPTED_AUTH_PHASES:
+                slots = {'encrypted_key_clipboard_retry'}
+                if phase in ('encrypted_key_select_key', 'encrypted_key_key_form'):
+                    slots.add('encrypted_key_clipboard_wrong')
+                keys = {'stage', 'nativeCheckpoint'}
+                if stage == 'native_failure':
+                    keys.add('nativeFailureCode')
+                    code = payload.get('nativeFailureCode')
+                    if isinstance(code, str) and code in MOBILE_PASSWORD_FAILURES and 'passwordObservation' in payload:
+                        keys.add('passwordObservation')
+                require(self.index < len(self.stages) and self.stages[self.index] in slots and set(payload) == keys,
+                        'tauri_ios_native_diagnostic_invalid')
             detail = None
             if 'geometryDetail' in payload:
                 require(stage == 'native_progress' and phase in ('ordinary_password', 'key_change_password')
@@ -1376,6 +1393,9 @@ class Checkpoints:
             if stage == 'native_failure':
                 code = payload.get('nativeFailureCode')
                 require(type(code) is str and code in NATIVE_FAILURES, 'tauri_ios_native_diagnostic_invalid')
+                if code in ENCRYPTED_AUTH_FAILURES:
+                    require(phase in ('encrypted_key_select_key', 'encrypted_key_select_password'),
+                            'tauri_ios_native_diagnostic_invalid')
                 observation = 'passwordObservation' in payload
                 if observation or code in MOBILE_PASSWORD_FAILURES:
                     keys = {'stage', 'nativeCheckpoint', 'nativeFailureCode'}

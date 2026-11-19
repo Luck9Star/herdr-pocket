@@ -658,6 +658,9 @@ final class Adapter {
     func bindKeyField(_ field: NativeControlPolicy.KeyField, owner: RevealedControl) throws -> RevealedControl {
         try encryptedField(field, rows: rows, owner: owner)
     }
+    func chooseAuthMethod(_ method: NativeControlPolicy.AuthMethod, owner: RevealedControl) throws {
+        _ = try selectAuthMethod(method, port: 2222, owner: owner)
+    }
     func auth(_ previous: RevealedControl, ready: Bool = false) throws -> (password: RevealedControl, submit: RevealedControl) {
         try mobileAuth(port: 2222, ready: ready, previous: previous)
     }
@@ -696,6 +699,7 @@ final class Adapter {
             "func tapMobileButton(_ control:", "enum MobileWitnessObservation<Proof>", "func mobileWitness(_ targets:",
             "func visibleWitness(_ rows:", "func waitForMobileWitness<Proof>", "func mobileAuth(port:", "func mobilePassword(in rows:",
             "func mobilePasswordObservation(in rows:", "func encryptedField(_ field:",
+            "func authMethodFact(_ node:", "func selectAuthMethod(_ method:",
             "func controlGeometry(_ owner:", "func controlVisibleFrame(_ owner:", "func routeTabsOcclusion(_ owner:",
             "func reportFormGeometry(_ failure:", "func failControlGeometry(_ failure:",
             "func tap(_ item:", "func fillPassword(_ item:",
@@ -820,6 +824,47 @@ let replacedView = row(passwordControl.web.snapshot, path: [0, 1])
 let replacedAuthOwner = RevealedControl(live: passwordControl.live, owner: passwordControl.owner,
     window: passwordControl.window, web: replacedView)
 check(!authCandidate.sameMobileOwner(confirmation, replacedAuthOwner), "an otherwise equal auth control in a different WebView must fail")
+let method = NativeControlPolicy.AuthMethod.key
+let oldFacts = [NativeControlPolicy.Fact(identifier: method.identifier, label: method.label, role: "toggle", value: nil)]
+check(NativeControlPolicy.pageWitness(oldFacts, paths: [[0, 0, 1]], windows: [[0]], webs: [[0, 0]],
+              targets: [(method.identifier, method.label, true)]) == nil,
+      "the R1 button-only witness rejects a WebKit toggle before any tap")
+func authChoice(_ kind: NativeControlPolicy.AuthMethod = .key, type: XCUIElement.ElementType = .toggle,
+                id: String? = nil, label: String? = nil, raw: [[Int]] = [], enabled: Bool = true,
+                queriedFrame: CGRect = oldFrame, hits: Bool = true) -> (Adapter, Element) {
+    let (base, _, live) = mobileCase(type, id: id ?? kind.identifier, label: label ?? kind.label,
+                                     raw: raw, hits: hits, enabled: enabled, queriedFrame: queriedFrame)
+    let page = [("ssh-step-title", "SSH 账号认证"), ("ssh-reviewed-endpoint", "fixture-target"),
+                ("ssh-approved-note", "本次主机密钥已确认"), ("ssh-connect", "连接 SSH")]
+    let anchors = page.enumerated().map { index, entry in
+        row(Snapshot(identifier: entry.0, label: entry.1,
+            elementType: index == 3 ? .button : .staticText, frame: movedFrame, isEnabled: index != 3), path: [0, 0, 10 + index])
+    }
+    return (Adapter(app: base.app, current: base.current, rows: base.rows + anchors, blockers: [],
+                    observations: base.observations, pathControls: base.pathControls), live)
+}
+for (kind, role, id) in [(NativeControlPolicy.AuthMethod.key, XCUIElement.ElementType.toggle, "ssh-auth-key"),
+                         (.key, .switch, ""), (.password, .button, "密码")] {
+    let (candidate, live) = authChoice(kind, type: role, id: id)
+    try candidate.chooseAuthMethod(kind, owner: passwordControl)
+    check(candidate.nativePhase.hasSuffix(kind.rawValue + "_form") && live.taps == 1,
+          "the exact enabled control is tapped once in the proven auth page before observing the form")
+}
+for (candidate, live) in [authChoice(type: .checkBox), authChoice(type: .staticText),
+                           authChoice(id: "foreign"), authChoice(label: "已有私钥（陌生）"),
+                           authChoice(raw: [[0, 0, 7]]), authChoice(raw: [[1, 0, 7]]),
+                           authChoice(enabled: false), authChoice(queriedFrame: movedFrame), authChoice(hits: false)] {
+    check((try? candidate.chooseAuthMethod(.key, owner: passwordControl)) == nil && live.taps == 0,
+          "unrelated, ambiguous, wrong-role or unsafe method controls must not be tapped")
+}
+let (foreignMethodPage, foreignMethodLive) = authChoice()
+check((try? foreignMethodPage.chooseAuthMethod(.key, owner: replacedAuthOwner)) == nil && foreignMethodLive.taps == 0,
+      "the choice must keep the previously approved WebView")
+let (ambiguousAtTouch, ambiguousAtTouchLive) = authChoice()
+let mixedRole = row(snapshot(.button, identifier: "ssh-auth-key", label: "已有私钥"), path: [0, 0, 22])
+ambiguousAtTouch.observations?.trees = [ambiguousAtTouch.rows, ambiguousAtTouch.rows + [mixedRole]]
+check((try? ambiguousAtTouch.chooseAuthMethod(.key, owner: passwordControl)) == nil && ambiguousAtTouchLive.taps == 0,
+      "a newly duplicated method in a different supported role cannot be tapped")
 for (kind, type, id, label) in [
     (NativeControlPolicy.KeyField.pem, XCUIElement.ElementType.textView, "ssh-key", "私钥 PEM（仅本次使用）"),
     (.pem, .textView, "", "私钥 PEM（仅本次使用）"),

@@ -22,7 +22,7 @@ HERDR_SHA256 = 'fb77c2232a05a8035421382c894392f4174e4e38a18e48af3dd0290157c3a7e2
 SESSIONS = {'et': 's06-a', 'ts': 's06-b'}
 MARKERS = {'et': 'HPS06A', 'ts': 'HPS06B'}
 MARKER_ROW, MARKER_COLUMN = 12, 5
-CHECKS = ('homepage', 'reviewedPairings', 'twoVisibleTargets', 'bothTicksAdvanced', 'stockControlsDisabled',
+CHECKS = ('homepage', 'reviewedPublicProfiles', 'reviewedPairings', 'twoVisibleTargets', 'bothTicksAdvanced', 'stockControlsDisabled',
           'keyboardFocus', 'narrowStowed', 'originalSidesRestored', 'autoResumedOriginalObservation', 'stoppedBoth',
           'localProfilesAbsentFromBoard', 'channelRoundTrip')
 

@@ -23,6 +23,8 @@ try:
     from macos_s06_diagnostics import TEST_SELECTION, checked_summary, diagnostics, log_facts
     from paired_dual_demo import fixture_sshd_config, ssh_args
     from paired_gui import GuiFailure, wait_for
+    from herdr_pocket_helper.profile import encode_profile
+    from herdr_pocket_helper.wire import fingerprint
     from pairing import MemoryKeyStore, PendingPairing, encode
     from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat
 except ModuleNotFoundError as missing:
@@ -63,6 +65,7 @@ class MacosS06Checks(unittest.TestCase):
         for widths in ([1440, 1440, 1440], [1440, 700], [1440, 700.0, 1440]):
             with self.assertRaisesRegex(GuiFailure, 'widths_invalid'):
                 runner.checked_ui_result({**report, 'widths': widths})
+        self.assertIn('reviewedPublicProfiles', report['checks'])
         self.assertIn('localProfilesAbsentFromBoard', report['checks'])
         self.assertNotIn('localIdentitiesRemoved', report['checks'])
 
@@ -235,44 +238,6 @@ class MacosS06Checks(unittest.TestCase):
         self.assertEqual(facts['lastPairInputStep'], 'focus')
         self.assertEqual(facts['fixedFailure'], 'public_pair_focus_unproven')
         self.assertNotIn('private', json.dumps(facts))
-
-    def test_pair_default_diagnostics_keep_only_approved_comparisons(self):
-        log = ("HP_S06_NATIVE_PAIR_CONTROL=port\n"
-               "HP_S06_NATIVE_PAIR_VALUE=port,before,defaultValue\n"
-               "HP_S06_NATIVE_PAIR_VALUE=port,after,exact\n"
-               "HP_S06_NATIVE_PAIR_CONTROL=port\n"
-               "HP_S06_NATIVE_PAIR_INPUT=port,selectDefault\n"
-               "HP_S06_NATIVE_PAIR_INPUT=port,pasting\n"
-               "HP_S06_NATIVE_PAIR_VALUE=port,before,defaultValue\n"
-               "HP_S06_NATIVE_PAIR_VALUE=port,after,defaultBefore\n"
-               "HP_S06_NATIVE_PAIR_VALUE=port,after,exact,rawSecret\n"
-               "HP_S06_NATIVE_PAIR_VALUE=device,after,exact\n"
-               "HP_S06_NATIVE_PAIR_VALUE=port,after,rawSecret\n")
-        facts = log_facts(log)
-        self.assertEqual(facts['lastPairInputStep'], 'pasting')
-        self.assertEqual(facts['pairDefaultComparisons'], {'before': 'defaultValue', 'after': 'defaultBefore'})
-        self.assertNotIn('rawSecret', json.dumps(facts))
-        self.assertNotIn('pairDefaultComparisons', log_facts(log + "HP_S06_NATIVE_PAIR_CONTROL=port\n"))
-
-    @unittest.skipUnless(shutil.which('swiftc'), 'requires local Swift')
-    def test_pair_default_comparison_requires_the_full_expected_value(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            driver = root / 'main.swift'
-            driver.write_text('''let samples: [(String?, MacosS06PairValue)] = [
-    (nil, .unavailable), ("", .empty), ("22", .defaultValue), ("44016", .exact),
-    ("2244016", .defaultBefore), ("4401622", .defaultAfter), ("4401", .other),
-    ("44016 ", .other), ("44017", .other),
-]
-for (value, expected) in samples {
-    precondition(MacosS06PairValue.compare(value, expected: "44016", initial: "22") == expected)
-}
-precondition(MacosS06PairValue.compare("Pocket phones06-b", expected: "s06-b", initial: "Pocket phone") == .defaultBefore)
-''')
-            executable = root / 'check-value'
-            subprocess.run(['swiftc', runner.HERE / 'macos_s06_fixture.swift', driver, '-o', executable],
-                           check=True, timeout=30)
-            subprocess.run([executable], check=True, timeout=5)
 
     def test_generated_native_focus_color_comes_from_app_tokens(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -459,7 +424,16 @@ precondition(focused())
         driver.write_text('''import Foundation
 do {
     let fixture = try JSONDecoder().decode(MacosS06Fixture.self, from: FileHandle.standardInput.readDataToEndOfFile())
-    print(fixture.hasIndependentTargets ? "valid" : "binding")
+    if fixture.hasIndependentTargets {
+        for peer in fixture.peers {
+            let profile = try JSONEncoder().encode(peer.publicProfile)
+            let record = [String(decoding: profile, as: UTF8.self), peer.profilePreview]
+            let line = try JSONEncoder().encode(record)
+            print(String(decoding: line, as: UTF8.self))
+        }
+    } else {
+        print("binding")
+    }
 } catch {
     print("decode")
 }
@@ -467,8 +441,27 @@ do {
         probe = base / 'decode-fixture'
         subprocess.run([compiler, str(runner.HERE / 'macos_s06_fixture.swift'), str(driver), '-o', str(probe)],
                        check=True, capture_output=True, timeout=25)
-        self.assertEqual(subprocess.check_output([probe], input=payload, timeout=5), b'valid\n')
+        rows = subprocess.check_output([probe], input=payload, timeout=5).splitlines()
         release = json.loads(payload)
+        self.assertEqual(len(rows), 2)
+        fields = ('host', 'port', 'username', 'session', 'socketPath', 'herdrPath', 'expectedHostKey')
+        for row, peer in zip(rows, release['peers']):
+            profile_wire, preview = json.loads(row)
+            profile = json.loads(profile_wire)
+            self.assertEqual(profile, {**{key: peer[key] for key in fields}, 'provider': 'direct',
+                                       'version': 1, 'type': 'herdr-connection-profile'})
+            self.assertEqual(json.loads(encode_profile(profile)), profile)
+            self.assertEqual(fingerprint(profile['expectedHostKey']), peer['fingerprint'])
+            self.assertEqual(preview.splitlines(), [
+                '待预览（尚未信任）', f"主机 {peer['host']}:{peer['port']}", f"账号 {peer['username']}",
+                '网络 direct', f"会话 {peer['session']}", f"socket {peer['socketPath']}",
+                f"herdr {peer['herdrPath']}", f"主机指纹 {peer['fingerprint']}",
+            ])
+            for mutation in ({'privateKeyPem': 'forbidden'}, {'port': str(profile['port'])},
+                             {'session': 'default'}):
+                with self.assertRaises(ValueError):
+                    encode_profile({**profile, **mutation})
+
         wrong_port = copy.deepcopy(release)
         wrong_port['peers'][0]['port'] = str(wrong_port['peers'][0]['port'])
         wrong_key = copy.deepcopy(release)

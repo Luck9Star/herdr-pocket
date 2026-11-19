@@ -17,6 +17,37 @@ struct MacosS06Fixture: Decodable {
         var title: String { "\(host) / \(session)" }
         var remoteTitle: String { "\(session) · 远端终端" }
         var binding: String { "\(paneId) · \(terminalId)" }
+
+        struct PublicProfile: Encodable {
+            let version = 1
+            let type = "herdr-connection-profile"
+            let provider = "direct"
+            let host: String
+            let port: Int
+            let username: String
+            let session: String
+            let socketPath: String
+            let herdrPath: String
+            let expectedHostKey: String
+        }
+
+        var publicProfile: PublicProfile {
+            PublicProfile(host: host, port: port, username: username, session: session,
+                          socketPath: socketPath, herdrPath: herdrPath, expectedHostKey: expectedHostKey)
+        }
+
+        var profilePreview: String {
+            """
+            待预览（尚未信任）
+            主机 \(host):\(port)
+            账号 \(username)
+            网络 \(publicProfile.provider)
+            会话 \(session)
+            socket \(socketPath)
+            herdr \(herdrPath)
+            主机指纹 \(fingerprint)
+            """
+        }
     }
 
     let schemaVersion: Int
@@ -29,19 +60,5 @@ struct MacosS06Fixture: Decodable {
             a.port != b.port && a.fingerprint != b.fingerprint && a.paneId == b.paneId &&
             a.terminalId != b.terminalId && a.session == "s06-a" && b.session == "s06-b" &&
             a.marker == "HPS06A" && b.marker == "HPS06B"
-    }
-}
-
-enum MacosS06PairValue: String {
-    case unavailable, empty, exact, defaultValue, defaultBefore, defaultAfter, other
-
-    static func compare(_ value: String?, expected: String, initial: String) -> Self {
-        guard let value else { return .unavailable }
-        if value.isEmpty { return .empty }
-        if value.utf8.elementsEqual(expected.utf8) { return .exact }
-        if value.utf8.elementsEqual(initial.utf8) { return .defaultValue }
-        if value.utf8.elementsEqual((initial + expected).utf8) { return .defaultBefore }
-        if value.utf8.elementsEqual((expected + initial).utf8) { return .defaultAfter }
-        return .other
     }
 }

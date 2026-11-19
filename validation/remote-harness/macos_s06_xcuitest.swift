@@ -10,15 +10,8 @@ final class MacosS06UITests: XCTestCase {
     private enum Scope: Equatable { case whole, sidebar, main, left, right }
     private enum PairControl: String {
         case entry, host, port, user, session, socket, herdr, hostKey, device, fingerprint
+        case profileInput, profilePreview, profileFill, provider
         case targetReview, create, copy, response, preview, sourceReview, accept, connect, back
-
-        var initialText: String? {
-            switch self {
-            case .port: return "22"
-            case .device: return "Pocket phone"
-            default: return nil
-            }
-        }
     }
     private lazy var app = XCUIApplication()
     private lazy var clipboard = NSPasteboard.general
@@ -201,7 +194,7 @@ final class MacosS06UITests: XCTestCase {
         }
     }
 
-    private func enterPublicValue(_ text: String, into label: String, pair control: PairControl) throws {
+    private func activatePairField(_ label: String, control: PairControl) throws -> CGRect {
         _ = try reveal(label, kind: .textField, enabled: true, pair: control)
         let code = control.rawValue
         let windowFrame = window.frame
@@ -217,52 +210,31 @@ final class MacosS06UITests: XCTestCase {
         trace("PAIR_INPUT", "\(code),click")
         live.field.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
         trace("PAIR_INPUT", "\(code),focus")
-        let before = try focusedPairField(label, control: control, in: windowFrame)
-        func exact(_ value: String?) -> Bool { value?.utf8.elementsEqual(text.utf8) == true }
-        let ownerBeforeExact = exact(before.field.value as? String)
-        app.typeKey("a", modifierFlags: .command)
         _ = try focusedPairField(label, control: control, in: windowFrame)
-        // Keep the clipboard private to the isolated test desktop across the
-        // selection check, single replacement, and independent final copy.
-        defer { clipboard.clearContents() }
-        if let initial = control.initialText {
-            trace("PAIR_INPUT", "\(code),selectDefault")
-            clipboard.clearContents()
-            let cleared = clipboard.changeCount
-            app.typeKey("c", modifierFlags: .command)
-            let selected: String? = try? until("public_pair_default_not_selected", seconds: 4) {
-                guard self.clipboard.changeCount != cleared else { return nil }
-                return self.clipboard.string(forType: .string)
-            }
-            let relation = MacosS06PairValue.compare(selected, expected: text, initial: initial)
-            trace("PAIR_VALUE", "\(code),before,\(relation.rawValue)")
-            try require(relation == .defaultValue, "public_pair_default_not_selected")
-            clipboard.clearContents()
-            try require(clipboard.setString(text, forType: .string), "public_clipboard_write_failed")
-            _ = try focusedPairField(label, control: control, in: windowFrame)
-            trace("PAIR_INPUT", "\(code),pasting")
-            app.typeKey("v", modifierFlags: .command)
-        } else {
+        return windowFrame
+    }
+
+    private func verifyPairValue(_ text: String, label: String, control: PairControl,
+                                 typingResponse: Bool = false) throws {
+        let windowFrame = try activatePairField(label, control: control)
+        let code = control.rawValue
+        func exact(_ value: String?) -> Bool { value?.utf8.elementsEqual(text.utf8) == true }
+        let before = try focusedPairField(label, control: control, in: windowFrame)
+        let ownerBeforeExact = exact(before.field.value as? String)
+        if typingResponse {
             trace("PAIR_INPUT", "\(code),typing")
-            // The focused Flutter editor receives app-level keyboard input.
             app.typeText(text)
+            trace("PAIR_INPUT", "\(code),typed")
         }
-        trace("PAIR_INPUT", "\(code),typed")
         let after = try focusedPairField(label, control: control, in: windowFrame)
         let ownerAfterExact = exact(after.field.value as? String)
         let editors = after.owner.descendants(matching: .textView).allElementsBoundByIndex
             .filter { within(after.owner.frame, $0) }
         let editorExact = editors.count == 1 && exact(editors[0].value as? String)
-        // Only the isolated runner reaches this code. Discard any earlier
-        // pasteboard content and compare only an actual copy from the live editor.
         var changed = false
         var copyExact = false
-        var copied: String?
         defer {
-            if let initial = control.initialText {
-                let relation = MacosS06PairValue.compare(copied, expected: text, initial: initial)
-                trace("PAIR_VALUE", "\(code),after,\(relation.rawValue)")
-            }
+            clipboard.clearContents()
             let bits = [ownerBeforeExact, ownerAfterExact, editors.count == 1, editorExact, changed, copyExact]
                 .map { $0 ? "1" : "0" }.joined()
             trace("PAIR_READ", "\(code),\(bits)")
@@ -275,12 +247,70 @@ final class MacosS06UITests: XCTestCase {
         app.typeKey("c", modifierFlags: .command)
         _ = try until("public_value_not_read_back") {
             changed = self.clipboard.changeCount != cleared
-            copied = changed ? self.clipboard.string(forType: .string) : nil
-            copyExact = exact(copied)
+            if changed { copyExact = exact(self.clipboard.string(forType: .string)) }
             return copyExact ? true : nil
         }
         _ = try focusedPairField(label, control: control, in: windowFrame)
         trace("PAIR_INPUT", "\(code),verified")
+    }
+
+    private func importPublicProfile(_ peer: Peer) throws {
+        let bytes = try JSONEncoder().encode(peer.publicProfile)
+        guard bytes.count <= 2048, let text = String(data: bytes, encoding: .utf8) else {
+            throw Failure.check("public_profile_payload_invalid")
+        }
+        trace("PAIR_CONTROL", PairControl.profileInput.rawValue)
+        _ = try reveal("扫描或粘贴公开资料", kind: .staticText, publicValue: true,
+                       missing: "public_profile_input_missing")
+        let windowFrame = window.frame
+        // The AppKit proxy may omit the Flutter label. The two real headings
+        // delimit the only editable control in the public import card.
+        func findProfileInput() -> XCUIElement? {
+            guard app.state == .runningForeground, app.windows.count == 1, window.frame == windowFrame else {
+                return nil
+            }
+            let heading = query("扫描或粘贴公开资料", kind: .staticText, root: window, publicValue: true)
+                .allElementsBoundByIndex
+            let next = query("01 · 确认连接目标", kind: .staticText, root: window, publicValue: true)
+                .allElementsBoundByIndex
+            guard heading.count == 1, next.count == 1, !heading[0].frame.isEmpty, !next[0].frame.isEmpty else {
+                return nil
+            }
+            let top = heading[0].frame.maxY, bottom = next[0].frame.minY
+            let fields = window.descendants(matching: .textField).allElementsBoundByIndex.filter {
+                let frame = $0.frame
+                return within(windowFrame, $0) && frame.minY >= top && frame.maxY <= bottom
+                    && frame.minX <= heading[0].frame.midX && frame.maxX > heading[0].frame.midX
+                    && $0.isEnabled && $0.isHittable
+            }
+            return fields.count == 1 ? fields[0] : nil
+        }
+        let field = try until("public_profile_input_missing", seconds: 4, findProfileInput)
+        let frame = field.frame
+        Thread.sleep(forTimeInterval: 0.1)
+        guard let live = findProfileInput(), live.frame == frame else {
+            throw Failure.check("public_pair_click_geometry_unstable")
+        }
+        clipboard.clearContents()
+        defer { clipboard.clearContents() }
+        try require(clipboard.setString(text, forType: .string), "public_clipboard_write_failed")
+        let center = live.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        center.click()
+        center.rightClick()
+        let paste = try until("public_profile_paste_unavailable", seconds: 5) {
+            let controls = self.query("Paste", root: self.window).allElementsBoundByIndex.filter {
+                ($0.elementType == .button || $0.elementType == .menuItem)
+                    && self.within(windowFrame, $0) && $0.isHittable && $0.isEnabled
+            }
+            return controls.count == 1 ? controls[0] : nil
+        }
+        paste.click()
+        trace("PAIR_CONTROL", PairControl.profilePreview.rawValue)
+        _ = try reveal(peer.profilePreview, kind: .staticText, publicValue: true,
+                       missing: "public_profile_preview_unverified")
+        try click("明确填入未审查表单", pair: .profileFill)
+        _ = try reveal("资料已填入未审查表单 · 请独立核验指纹与目标后再创建设备身份",
+                       kind: .staticText, publicValue: true, missing: "public_profile_fill_unconfirmed")
     }
 
     private func resize(_ width: CGFloat, height: CGFloat? = nil) throws -> Int {
@@ -315,6 +345,7 @@ final class MacosS06UITests: XCTestCase {
 
     private func request(_ peer: Peer, index: Int) throws {
         try click("配对添加", in: .main, pair: .entry)
+        try importPublicProfile(peer)
         let fields: [(PairControl, String, String)] = [
             (.host, "SSH 主机 / IP", peer.host),
             (.port, "SSH 端口", String(peer.port)),
@@ -323,10 +354,14 @@ final class MacosS06UITests: XCTestCase {
             (.socket, "命名会话 socket 绝对路径", peer.socketPath),
             (.herdr, "herdr 可执行文件绝对路径", peer.herdrPath),
             (.hostKey, "可信渠道核验的 Ed25519 主机公钥", peer.expectedHostKey),
-            (.device, "设备名称（英文、数字、空格）", peer.session),
+            (.device, "设备名称（英文、数字、空格）", "Pocket phone"),
         ]
-        for (control, label, value) in fields { try enterPublicValue(value, into: label, pair: control) }
+        for (control, label, value) in fields { try verifyPairValue(value, label: label, control: control) }
+        trace("PAIR_CONTROL", PairControl.provider.rawValue)
+        _ = try reveal("网络 provider（仅配置，入网未知）\n直连配置", publicValue: true)
         _ = try reveal(peer.fingerprint, kind: .staticText, pair: .fingerprint)
+        let create = try reveal("在此设备创建独立身份并生成公开请求", kind: .button, pair: .create)
+        try require(!create.isEnabled, "public_profile_review_bypassed")
         try click("我已通过可信渠道核验账号、主机公钥与命名会话资料", kind: .checkBox, pair: .targetReview)
         mark(index == 0 ? "keyA" : "keyB")
         try click("在此设备创建独立身份并生成公开请求", pair: .create)
@@ -343,7 +378,7 @@ final class MacosS06UITests: XCTestCase {
         guard let response = String(data: payload, encoding: .utf8) else {
             throw Failure.check("reviewed_host_response_invalid")
         }
-        try enterPublicValue(response, into: "公开授权／撤销响应 JSON", pair: .response)
+        try verifyPairValue(response, label: "公开授权／撤销响应 JSON", control: .response, typingResponse: true)
         _ = try reveal("待审查响应", prefix: true, pair: .preview)
         try click("我已独立核验响应来源、账号与两端指纹", kind: .checkBox, pair: .sourceReview)
         try click("审查并接受绑定响应", pair: .accept)
@@ -582,7 +617,7 @@ final class MacosS06UITests: XCTestCase {
         try click("主机看板", in: .sidebar)
         try remove(a, other: b)
         try remove(b, other: a)
-        let checks = ["homepage", "reviewedPairings", "twoVisibleTargets", "bothTicksAdvanced",
+        let checks = ["homepage", "reviewedPublicProfiles", "reviewedPairings", "twoVisibleTargets", "bothTicksAdvanced",
                       "stockControlsDisabled", "keyboardFocus", "narrowStowed", "originalSidesRestored",
                       "autoResumedOriginalObservation", "stoppedBoth", "localProfilesAbsentFromBoard", "channelRoundTrip"]
         let evidence: [String: Any] = ["widths": [start, narrow, returned],

@@ -1,0 +1,710 @@
+{
+  "sourceSHA": "44d7838e53020cc306ffbef9030c08c740a89381",
+  "variant": "before",
+  "engine": "webkit",
+  "browser": "26.4",
+  "scope": "production Tauri Web UI, browser-generated trusted keyboard events, synthetic native IPC, no SSH",
+  "initial": {
+    "views": {
+      "collection": "HTMLCollection",
+      "filter": "undefined",
+      "buttons": [
+        {
+          "label": "fixture-alpha · w1:p1",
+          "pressed": "false",
+          "disabled": false,
+          "visible": true,
+          "handler": "function"
+        },
+        {
+          "label": "fixture-beta · w1:p2",
+          "pressed": "true",
+          "disabled": false,
+          "visible": true,
+          "handler": "function"
+        }
+      ]
+    },
+    "hosts": {
+      "collection": "HTMLCollection",
+      "filter": "undefined",
+      "buttons": [
+        {
+          "label": "fixture-alpha",
+          "pressed": "false",
+          "disabled": false,
+          "visible": true,
+          "handler": "function"
+        },
+        {
+          "label": "fixture-beta",
+          "pressed": "false",
+          "disabled": false,
+          "visible": true,
+          "handler": "function"
+        }
+      ]
+    },
+    "workbenchVisible": true,
+    "focus": {
+      "id": "",
+      "tag": "BODY",
+      "label": ""
+    },
+    "viewPanel": "fixture-beta · w1:p2 · term_b002",
+    "inputs": 0
+  },
+  "clickControls": [
+    {
+      "part": "views",
+      "expected": "fixture-alpha",
+      "before": "fixture-beta · w1:p2",
+      "after": "fixture-alpha · w1:p1",
+      "focus": {
+        "id": "",
+        "tag": "BODY",
+        "label": ""
+      }
+    },
+    {
+      "part": "views",
+      "expected": "fixture-beta",
+      "before": "fixture-alpha · w1:p1",
+      "after": "fixture-beta · w1:p2",
+      "focus": {
+        "id": "",
+        "tag": "BODY",
+        "label": ""
+      }
+    },
+    {
+      "part": "hosts",
+      "expected": "fixture-beta",
+      "before": null,
+      "after": "fixture-beta",
+      "focus": {
+        "id": "",
+        "tag": "BODY",
+        "label": ""
+      }
+    },
+    {
+      "part": "hosts",
+      "expected": "fixture-alpha",
+      "before": "fixture-beta",
+      "after": "fixture-alpha",
+      "focus": {
+        "id": "",
+        "tag": "BODY",
+        "label": ""
+      }
+    }
+  ],
+  "shortcuts": [
+    {
+      "key": "Control+1",
+      "part": "views",
+      "expected": "fixture-alpha",
+      "before": {
+        "views": {
+          "collection": "HTMLCollection",
+          "filter": "undefined",
+          "buttons": [
+            {
+              "label": "fixture-alpha · w1:p1",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            },
+            {
+              "label": "fixture-beta · w1:p2",
+              "pressed": "true",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            }
+          ]
+        },
+        "hosts": {
+          "collection": "HTMLCollection",
+          "filter": "undefined",
+          "buttons": [
+            {
+              "label": "fixture-alpha",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            },
+            {
+              "label": "fixture-beta",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            }
+          ]
+        },
+        "workbenchVisible": true,
+        "focus": {
+          "id": "host-return-home",
+          "tag": "BUTTON",
+          "label": "返回主机看板"
+        },
+        "viewPanel": "fixture-beta · w1:p2 · term_b002",
+        "inputs": 0
+      },
+      "after": {
+        "views": {
+          "collection": "HTMLCollection",
+          "filter": "undefined",
+          "buttons": [
+            {
+              "label": "fixture-alpha · w1:p1",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            },
+            {
+              "label": "fixture-beta · w1:p2",
+              "pressed": "true",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            }
+          ]
+        },
+        "hosts": {
+          "collection": "HTMLCollection",
+          "filter": "undefined",
+          "buttons": [
+            {
+              "label": "fixture-alpha",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            },
+            {
+              "label": "fixture-beta",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            }
+          ]
+        },
+        "workbenchVisible": true,
+        "focus": {
+          "id": "host-return-home",
+          "tag": "BUTTON",
+          "label": "返回主机看板"
+        },
+        "viewPanel": "fixture-beta · w1:p2 · term_b002",
+        "inputs": 0
+      },
+      "keyEvent": {
+        "key": "1",
+        "code": "Digit1",
+        "ctrl": true,
+        "alt": false,
+        "shift": false,
+        "trusted": true,
+        "target": "BUTTON",
+        "defaultPrevented": false
+      },
+      "observedErrors": [
+        {
+          "name": "TypeError",
+          "message": "TypeError: (t.children||[]).filter is not a function. (In '(t.children||[]).filter(e=>Yt(e)===Z)', '(t.children||[]).filter' is undefined)",
+          "stack": [
+            "sn@http://127.0.0.1:49423/assets/index-BzI9iN_S.js:53:63767",
+            "cn@http://127.0.0.1:49423/assets/index-BzI9iN_S.js:53:63810",
+            "dn@http://127.0.0.1:49423/assets/index-BzI9iN_S.js:53:64610"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "Control+Tab",
+      "part": "views",
+      "expected": "fixture-beta",
+      "before": {
+        "views": {
+          "collection": "HTMLCollection",
+          "filter": "undefined",
+          "buttons": [
+            {
+              "label": "fixture-alpha · w1:p1",
+              "pressed": "true",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            },
+            {
+              "label": "fixture-beta · w1:p2",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            }
+          ]
+        },
+        "hosts": {
+          "collection": "HTMLCollection",
+          "filter": "undefined",
+          "buttons": [
+            {
+              "label": "fixture-alpha",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            },
+            {
+              "label": "fixture-beta",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            }
+          ]
+        },
+        "workbenchVisible": true,
+        "focus": {
+          "id": "host-return-home",
+          "tag": "BUTTON",
+          "label": "返回主机看板"
+        },
+        "viewPanel": "fixture-alpha · w1:p1 · term_a001",
+        "inputs": 0
+      },
+      "after": {
+        "views": {
+          "collection": "HTMLCollection",
+          "filter": "undefined",
+          "buttons": [
+            {
+              "label": "fixture-alpha · w1:p1",
+              "pressed": "true",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            },
+            {
+              "label": "fixture-beta · w1:p2",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            }
+          ]
+        },
+        "hosts": {
+          "collection": "HTMLCollection",
+          "filter": "undefined",
+          "buttons": [
+            {
+              "label": "fixture-alpha",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            },
+            {
+              "label": "fixture-beta",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            }
+          ]
+        },
+        "workbenchVisible": true,
+        "focus": {
+          "id": "host-return-home",
+          "tag": "BUTTON",
+          "label": "返回主机看板"
+        },
+        "viewPanel": "fixture-alpha · w1:p1 · term_a001",
+        "inputs": 0
+      },
+      "keyEvent": {
+        "key": "Tab",
+        "code": "Tab",
+        "ctrl": true,
+        "alt": false,
+        "shift": false,
+        "trusted": true,
+        "target": "BUTTON",
+        "defaultPrevented": false
+      },
+      "observedErrors": [
+        {
+          "name": "TypeError",
+          "message": "TypeError: (t.children||[]).filter is not a function. (In '(t.children||[]).filter(e=>Yt(e)===Z)', '(t.children||[]).filter' is undefined)",
+          "stack": [
+            "sn@http://127.0.0.1:49423/assets/index-BzI9iN_S.js:53:63767",
+            "ln@http://127.0.0.1:49423/assets/index-BzI9iN_S.js:53:63874",
+            "dn@http://127.0.0.1:49423/assets/index-BzI9iN_S.js:53:64572"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "Control+Shift+Tab",
+      "part": "views",
+      "expected": "fixture-alpha",
+      "before": {
+        "views": {
+          "collection": "HTMLCollection",
+          "filter": "undefined",
+          "buttons": [
+            {
+              "label": "fixture-alpha · w1:p1",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            },
+            {
+              "label": "fixture-beta · w1:p2",
+              "pressed": "true",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            }
+          ]
+        },
+        "hosts": {
+          "collection": "HTMLCollection",
+          "filter": "undefined",
+          "buttons": [
+            {
+              "label": "fixture-alpha",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            },
+            {
+              "label": "fixture-beta",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            }
+          ]
+        },
+        "workbenchVisible": true,
+        "focus": {
+          "id": "host-return-home",
+          "tag": "BUTTON",
+          "label": "返回主机看板"
+        },
+        "viewPanel": "fixture-beta · w1:p2 · term_b002",
+        "inputs": 0
+      },
+      "after": {
+        "views": {
+          "collection": "HTMLCollection",
+          "filter": "undefined",
+          "buttons": [
+            {
+              "label": "fixture-alpha · w1:p1",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            },
+            {
+              "label": "fixture-beta · w1:p2",
+              "pressed": "true",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            }
+          ]
+        },
+        "hosts": {
+          "collection": "HTMLCollection",
+          "filter": "undefined",
+          "buttons": [
+            {
+              "label": "fixture-alpha",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            },
+            {
+              "label": "fixture-beta",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            }
+          ]
+        },
+        "workbenchVisible": true,
+        "focus": {
+          "id": "host-return-home",
+          "tag": "BUTTON",
+          "label": "返回主机看板"
+        },
+        "viewPanel": "fixture-beta · w1:p2 · term_b002",
+        "inputs": 0
+      },
+      "keyEvent": {
+        "key": "Tab",
+        "code": "Tab",
+        "ctrl": true,
+        "alt": false,
+        "shift": true,
+        "trusted": true,
+        "target": "BUTTON",
+        "defaultPrevented": false
+      },
+      "observedErrors": [
+        {
+          "name": "TypeError",
+          "message": "TypeError: (t.children||[]).filter is not a function. (In '(t.children||[]).filter(e=>Yt(e)===Z)', '(t.children||[]).filter' is undefined)",
+          "stack": [
+            "sn@http://127.0.0.1:49423/assets/index-BzI9iN_S.js:53:63767",
+            "ln@http://127.0.0.1:49423/assets/index-BzI9iN_S.js:53:63874",
+            "dn@http://127.0.0.1:49423/assets/index-BzI9iN_S.js:53:64572"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "Alt+1",
+      "part": "hosts",
+      "expected": "fixture-alpha",
+      "before": {
+        "views": {
+          "collection": "HTMLCollection",
+          "filter": "undefined",
+          "buttons": [
+            {
+              "label": "fixture-alpha · w1:p1",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            },
+            {
+              "label": "fixture-beta · w1:p2",
+              "pressed": "true",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            }
+          ]
+        },
+        "hosts": {
+          "collection": "HTMLCollection",
+          "filter": "undefined",
+          "buttons": [
+            {
+              "label": "fixture-alpha",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            },
+            {
+              "label": "fixture-beta",
+              "pressed": "true",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            }
+          ]
+        },
+        "workbenchVisible": true,
+        "focus": {
+          "id": "host-return-home",
+          "tag": "BUTTON",
+          "label": "返回主机看板"
+        },
+        "viewPanel": "fixture-beta · w1:p2 · term_b002",
+        "inputs": 0
+      },
+      "after": {
+        "views": {
+          "collection": "HTMLCollection",
+          "filter": "undefined",
+          "buttons": [
+            {
+              "label": "fixture-alpha · w1:p1",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            },
+            {
+              "label": "fixture-beta · w1:p2",
+              "pressed": "true",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            }
+          ]
+        },
+        "hosts": {
+          "collection": "HTMLCollection",
+          "filter": "undefined",
+          "buttons": [
+            {
+              "label": "fixture-alpha",
+              "pressed": "false",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            },
+            {
+              "label": "fixture-beta",
+              "pressed": "true",
+              "disabled": false,
+              "visible": true,
+              "handler": "function"
+            }
+          ]
+        },
+        "workbenchVisible": true,
+        "focus": {
+          "id": "host-return-home",
+          "tag": "BUTTON",
+          "label": "返回主机看板"
+        },
+        "viewPanel": "fixture-beta · w1:p2 · term_b002",
+        "inputs": 0
+      },
+      "keyEvent": {
+        "key": "1",
+        "code": "Digit1",
+        "ctrl": false,
+        "alt": true,
+        "shift": false,
+        "trusted": true,
+        "target": "BUTTON",
+        "defaultPrevented": false
+      },
+      "observedErrors": [
+        {
+          "name": "TypeError",
+          "message": "TypeError: (t.children||[]).filter is not a function. (In '(t.children||[]).filter(e=>Yt(e)===Z)', '(t.children||[]).filter' is undefined)",
+          "stack": [
+            "sn@http://127.0.0.1:49423/assets/index-BzI9iN_S.js:53:63767",
+            "cn@http://127.0.0.1:49423/assets/index-BzI9iN_S.js:53:63810",
+            "dn@http://127.0.0.1:49423/assets/index-BzI9iN_S.js:53:64667"
+          ]
+        }
+      ]
+    }
+  ],
+  "plainTab": {
+    "before": {
+      "id": "host-return-home",
+      "tag": "BUTTON",
+      "label": "返回主机看板"
+    },
+    "after": {
+      "id": "",
+      "tag": "SUMMARY",
+      "label": "配对与连接资料"
+    },
+    "keyEvent": {
+      "key": "Tab",
+      "code": "Tab",
+      "ctrl": false,
+      "alt": false,
+      "shift": false,
+      "trusted": true,
+      "target": "BUTTON",
+      "defaultPrevented": false
+    }
+  },
+  "final": {
+    "views": {
+      "collection": "HTMLCollection",
+      "filter": "undefined",
+      "buttons": [
+        {
+          "label": "fixture-alpha · w1:p1",
+          "pressed": "false",
+          "disabled": false,
+          "visible": true,
+          "handler": "function"
+        },
+        {
+          "label": "fixture-beta · w1:p2",
+          "pressed": "true",
+          "disabled": false,
+          "visible": true,
+          "handler": "function"
+        }
+      ]
+    },
+    "hosts": {
+      "collection": "HTMLCollection",
+      "filter": "undefined",
+      "buttons": [
+        {
+          "label": "fixture-alpha",
+          "pressed": "true",
+          "disabled": false,
+          "visible": true,
+          "handler": "function"
+        },
+        {
+          "label": "fixture-beta",
+          "pressed": "false",
+          "disabled": false,
+          "visible": true,
+          "handler": "function"
+        }
+      ]
+    },
+    "workbenchVisible": true,
+    "focus": {
+      "id": "",
+      "tag": "BODY",
+      "label": ""
+    },
+    "viewPanel": "fixture-beta · w1:p2 · term_b002",
+    "inputs": 0
+  },
+  "errors": [
+    {
+      "name": "TypeError",
+      "message": "(t.children||[]).filter is not a function. (In '(t.children||[]).filter(e=>Yt(e)===Z)', '(t.children||[]).filter' is undefined)",
+      "stack": [
+        "TypeError: (t.children||[]).filter is not a function. (In '(t.children||[]).filter(e=>Yt(e)===Z)', '(t.children||[]).filter' is undefined)",
+        "    at cn (http://127.0.0.1:49423/assets/index-BzI9iN_S.js:53:63810)",
+        "    at dn (http://127.0.0.1:49423/assets/index-BzI9iN_S.js:53:64610)"
+      ]
+    },
+    {
+      "name": "TypeError",
+      "message": "(t.children||[]).filter is not a function. (In '(t.children||[]).filter(e=>Yt(e)===Z)', '(t.children||[]).filter' is undefined)",
+      "stack": [
+        "TypeError: (t.children||[]).filter is not a function. (In '(t.children||[]).filter(e=>Yt(e)===Z)', '(t.children||[]).filter' is undefined)",
+        "    at ln (http://127.0.0.1:49423/assets/index-BzI9iN_S.js:53:63874)",
+        "    at dn (http://127.0.0.1:49423/assets/index-BzI9iN_S.js:53:64572)"
+      ]
+    },
+    {
+      "name": "TypeError",
+      "message": "(t.children||[]).filter is not a function. (In '(t.children||[]).filter(e=>Yt(e)===Z)', '(t.children||[]).filter' is undefined)",
+      "stack": [
+        "TypeError: (t.children||[]).filter is not a function. (In '(t.children||[]).filter(e=>Yt(e)===Z)', '(t.children||[]).filter' is undefined)",
+        "    at cn (http://127.0.0.1:49423/assets/index-BzI9iN_S.js:53:63810)",
+        "    at dn (http://127.0.0.1:49423/assets/index-BzI9iN_S.js:53:64667)"
+      ]
+    }
+  ]
+}

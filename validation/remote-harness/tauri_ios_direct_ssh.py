@@ -1336,6 +1336,31 @@ class Checkpoints:
             require(len(trace) < 4, 'tauri_ios_capture_diagnostic_invalid')
             self.result.setdefault('captureDiagnostics', {}).setdefault(phase, []).append(detail)
             return
+        if 'manualHostEntry' in payload:
+            invalid = 'tauri_ios_native_diagnostic_invalid'
+            detail = payload['manualHostEntry']
+            keyboard_states = ('hidden', 'visible', 'unproven')
+            readback_states = ('match', 'empty', 'different', 'unavailable')
+            require(set(payload) == {'stage', 'nativeCheckpoint', 'manualHostEntry'}
+                    and stage == 'native_progress' and self.failure is None and self.encrypted is not None
+                    and payload['nativeCheckpoint'] == self.result.get('nativeCheckpoint') == 'encrypted_key_host'
+                    and type(detail) is dict and set(detail) == {
+                        'sample', 'initialKeyboard', 'keyboard', 'formUIFocus', 'liveHostUIFocus',
+                        'treeHostReadback', 'liveHostReadback', 'portReadback', 'userReadback'}
+                    and detail['sample'] in ('afterTap', 'afterInput')
+                    and detail['initialKeyboard'] in keyboard_states and detail['keyboard'] in keyboard_states
+                    and detail['formUIFocus'] in ('host', 'port', 'user', 'none', 'multiple')
+                    and type(detail['liveHostUIFocus']) is bool
+                    and detail['treeHostReadback'] in readback_states and detail['liveHostReadback'] in readback_states,
+                    invalid)
+            trace = self.result.get('manualHostEntry', [])
+            sibling_states = ('notCompared',) if not trace else ('unchanged', 'changed', 'unavailable')
+            require((not trace and detail['sample'] == 'afterTap'
+                     or len(trace) == 1 and detail['sample'] == 'afterInput'
+                     and detail['initialKeyboard'] == trace[0]['initialKeyboard'])
+                    and detail['portReadback'] in sibling_states and detail['userReadback'] in sibling_states, invalid)
+            self.result.setdefault('manualHostEntry', []).append(dict(detail))
+            return
         if stage in ('native_progress', 'native_failure'):
             phase = payload.get('nativeCheckpoint')
             require(self.failure is None and isinstance(phase, str) and phase in NATIVE_PHASES

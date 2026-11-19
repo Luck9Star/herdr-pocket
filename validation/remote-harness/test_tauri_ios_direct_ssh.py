@@ -620,6 +620,35 @@ class GeometryReasonTests(unittest.TestCase):
         with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
             self.state.accept(payload | {'nativeCheckpoint': 'ordinary_password'})
 
+    def test_manual_host_diagnostics_accept_exactly_two_ordered_samples_without_text(self):
+        state = ios.Checkpoints(None, None, self.directory.name, {}, encrypted=object())
+        phase = {'stage': 'native_progress', 'nativeCheckpoint': 'encrypted_key_host'}
+        state.accept(phase)
+        first = {'sample': 'afterTap', 'initialKeyboard': 'hidden', 'keyboard': 'visible',
+                 'formUIFocus': 'host', 'liveHostUIFocus': True, 'treeHostReadback': 'empty',
+                 'liveHostReadback': 'empty', 'portReadback': 'notCompared', 'userReadback': 'notCompared'}
+        second = first | {'sample': 'afterInput', 'formUIFocus': 'port',
+                          'portReadback': 'changed', 'userReadback': 'unchanged'}
+        for invalid in (
+            phase | {'manualHostEntry': second},
+            phase | {'manualHostEntry': first | {'input': 'fixture-secret'}},
+            phase | {'manualHostEntry': first | {'formUIFocus': 'fixture-secret'}},
+            phase | {'manualHostEntry': first | {'liveHostUIFocus': 1}},
+            phase | {'manualHostEntry': first, 'nativeCheckpoint': 'encrypted_key_passphrase'},
+            phase | {'manualHostEntry': first, 'stage': 'native_failure'},
+        ):
+            with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                state.accept(invalid)
+            self.assertNotIn('manualHostEntry', state.result)
+        state.accept(phase | {'manualHostEntry': first})
+        for invalid in (first, second | {'initialKeyboard': 'visible'}, second | {'userReadback': 'notCompared'}):
+            with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                state.accept(phase | {'manualHostEntry': invalid})
+        state.accept(phase | {'manualHostEntry': second})
+        with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+            state.accept(phase | {'manualHostEntry': second})
+        self.assertEqual(state.result['manualHostEntry'], [first, second])
+
     def test_secret_exposure_diagnostic_only_accepts_bounded_categories(self):
         state = ios.Checkpoints(None, None, self.directory.name, {}, encrypted=object())
         candidate = {'role': 'textView', 'scope': 'sameWeb', 'relation': 'ancestor',

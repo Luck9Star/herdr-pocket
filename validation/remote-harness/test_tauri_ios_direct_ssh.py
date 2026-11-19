@@ -1336,6 +1336,21 @@ let inner = CGRect(x:0,y:59,width:440,height:897)
 let visible = NativeFramePolicy.visible(window:screen,screen:screen,webAncestors:[screen,screen,inner],
     occlusions:[CGRect(x:0,y:0,width:440,height:62),CGRect(x:0,y:656,width:440,height:300)])!
 check(visible == CGRect(x:0,y:62,width:440,height:594))
+let statusBar = CGRect(x: 0, y: 0, width: 440, height: 62)
+let docked = CGRect(x: 0, y: 656, width: 440, height: 266)
+check(NativeFramePolicy.visible(window: screen, screen: screen, webAncestors: [inner],
+                               occlusions: [statusBar, docked]) == nil)
+func active(_ keyboards: [CGRect], web: CGRect = inner, bars: [CGRect] = [statusBar], shown: Bool = true)
+                -> NativeFramePolicy.ActiveViewport {
+    NativeFramePolicy.activeViewport(window: screen, screen: screen, webAncestors: [web],
+                                    statusBars: bars, keyboardPresent: shown, keyboardFrames: keyboards)
+}
+check(active([docked, docked]).visible == visible)
+check(active([docked], web: CGRect(x: 0, y: 59, width: 440, height: 590)).visible?.maxY == 649)
+check(active([docked], web: CGRect(x: 0, y: 680, width: 440, height: 240)).reason == "keyboard_covers_viewport")
+check(active([docked, docked.offsetBy(dx: 0, dy: 1)]).reason == "keyboard_frame_unproven")
+check(active([docked], bars: [CGRect(x: 0, y: 120, width: 440, height: 62)]).reason == "status_bar_viewport_invalid")
+check(active([docked], shown: false).reason == "keyboard_state_changed")
 check(NativeFramePolicy.unique([screen,screen,inner]).count == 2)
 check(NativeFramePolicy.visible(window:screen,screen:screen,webAncestors:[],occlusions:[]) == nil)
 let parent=CGRect(x:10,y:100,width:420,height:100), leaf=CGRect(x:20,y:120,width:400,height:40)
@@ -1385,6 +1400,53 @@ print("native geometry cases passed")
 
 
 class NativeDiagnosticPublishingTests(unittest.TestCase):
+    def test_active_geometry_failure_publishes_only_fixed_phase_and_bounded_shapes(self):
+        from ios_direct_ssh_batch import publish_evidence
+        phase = 'ordinary_active_flow'
+        detail = {'context': 'keyboard_open_after', 'page': 'terminal', 'reason': 'keyboard_frame_unproven',
+                  'keyboardVisible': True, 'screen': [0, 0, 440, 956], 'viewport': [0, 59, 440, 897],
+                  'visible': None, 'statusBars': [[0, 0, 440, 62]], 'keyboards': [[60, 646, 320, 276]],
+                  'frames': [[372, 130, 44, 44]]}
+        payload = {'stage': 'native_active_diagnostic', 'nativeCheckpoint': phase, 'detail': detail}
+        sha = 'a' * 40
+        with tempfile.TemporaryDirectory() as output:
+            work = Path(output)
+            def checkpoint(index='ordinary_input', native_phase=phase):
+                report = {'status': 'failed', 'sourceSHA': sha, 'artifacts': {}}
+                state = ios.Checkpoints(None, None, output, report)
+                state.index = ios.STAGES.index(index)
+                state.accept({'stage': 'native_progress', 'nativeCheckpoint': native_phase})
+                return state, report
+
+            state, report = checkpoint()
+            state.accept(payload)
+            with self.assertRaisesRegex(ios.Failure, 'active_diagnostic_invalid'):
+                state.accept(payload)
+            state.accept({'stage': 'native_failure', 'nativeCheckpoint': phase,
+                          'nativeFailureCode': 'native_visible_frame_invalid'})
+            self.assertEqual(report['activeDiagnostic'], {'nativeCheckpoint': phase, **detail})
+            public = work / 'public'
+            public.mkdir()
+            ios.write_json(public / 'result.json', report)
+            self.assertEqual(publish_evidence(public, work / 'verified', shell='tauri', source_sha=sha), {'result.json'})
+            self.assertEqual(json.loads((work / 'verified/result.json').read_text()), report)
+
+            for change in ({'text': 'synthetic secret'}, {'reason': 'synthetic secret'}, {'context': []},
+                           {'page': 'network'}, {'keyboardVisible': 1}, {'screen': [0, 0, 440, True]},
+                           {'viewport': [0, 0, 440, -1]}, {'keyboards': [[10001, 0, 440, 200]]},
+                           {'frames': [{'rawLabel': 'synthetic secret'}]}, {'statusBars': [None] * 5}):
+                with self.subTest(change=change), self.assertRaisesRegex(ios.Failure, 'active_diagnostic_invalid'):
+                    checkpoint()[0].accept({**payload, 'detail': {**detail, **change}})
+            for state, value in (
+                (checkpoint(index='ordinary_password')[0], payload),
+                (checkpoint(native_phase='ordinary_port')[0], {**payload, 'nativeCheckpoint': 'ordinary_port'}),
+                (checkpoint()[0], {**payload, 'arbitrary': 'synthetic secret'}),
+                (checkpoint()[0], {**payload, 'nativeCheckpoint': 'key_change_terminal_focus'}),
+            ):
+                with self.assertRaisesRegex(ios.Failure, 'active_diagnostic_invalid'):
+                    state.accept(value)
+                self.assertNotIn('activeDiagnostic', state.result)
+
     def test_password_observation_redacts_and_survives_ci_publication(self):
         from ios_direct_ssh_batch import publish_evidence
         raw = {'role': 'secureTextField', 'owner': 'sameWeb', 'idKind': 'empty', 'labelKind': 'spaced',

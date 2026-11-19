@@ -157,6 +157,36 @@ def public_capture_diagnostic(value, *, review=False):
     return result
 
 
+def public_active_diagnostic(value):
+    codes = {'page_witness_unproven', 'owner_unproven', 'page_clipped', 'page_conflict', 'action_unbound',
+             'action_live_unproven', 'route_tabs_occluded', 'status_bar_action_invalid', 'window_invalid',
+             'screen_invalid', 'web_ancestor_invalid', 'viewport_empty', 'status_bar_viewport_invalid',
+             'keyboard_frame_unproven', 'keyboard_covers_viewport', 'keyboard_state_changed', 'keyboard_missing',
+             'field_invalid', 'field_outside', 'field_unhittable'}
+    contexts = ('connect', 'disconnect', 'route_before', 'route_after', 'keyboard_open_before',
+                'keyboard_open_after', 'keyboard_close_before', 'keyboard_close_after')
+    scalar_rects = ('screen', 'viewport', 'visible')
+    arrays = {'statusBars': 4, 'keyboards': 4, 'frames': 5}
+    invalid = 'tauri_ios_active_diagnostic_invalid'
+
+    def rectangle(rect):
+        return rect is None or (isinstance(rect, list) and len(rect) == 4
+                                and all(type(n) is int and -10000 <= n <= 10000 for n in rect)
+                                and rect[2] >= 0 and rect[3] >= 0)
+
+    require(isinstance(value, dict)
+            and set(value) == {'context', 'page', 'reason', 'keyboardVisible', *scalar_rects, *arrays}
+            and type(value['context']) is str and value['context'] in contexts
+            and type(value['reason']) is str and value['reason'] in codes
+            and type(value['page']) is str and value['page'] in ('terminal', 'board', 'network', 'settings')
+            and (value['context'].startswith('route_') or value['page'] == 'terminal')
+            and type(value['keyboardVisible']) is bool
+            and all(rectangle(value[key]) for key in scalar_rects)
+            and all(isinstance(value[key], list) and len(value[key]) <= limit
+                    and all(rectangle(frame) for frame in value[key]) for key, limit in arrays.items()), invalid)
+    return json.loads(json.dumps(value))
+
+
 def public_connect_diagnostic(value):
     statuses = ('unknown', 'idle', 'disconnected', 'connecting', 'connected', 'review_blocked',
                 'review_required', 'authentication_failed', 'start_failed', 'connection_failed',
@@ -998,6 +1028,25 @@ class Checkpoints:
     def accept(self, payload):
         stage = payload.get('stage')
         require('passwordObservation' not in payload or stage == 'native_failure', 'tauri_ios_native_diagnostic_invalid')
+        if stage == 'native_active_diagnostic':
+            invalid = 'tauri_ios_active_diagnostic_invalid'
+            require(set(payload) == {'stage', 'nativeCheckpoint', 'detail'} and self.failure is None
+                    and 'activeDiagnostic' not in self.result, invalid)
+            detail = public_active_diagnostic(payload['detail'])
+            phase, context = payload['nativeCheckpoint'], detail['context']
+            require(isinstance(phase, str) and phase == self.result.get('nativeCheckpoint'), invalid)
+            scenario = 'ordinary' if phase.startswith('ordinary_') else 'key_change'
+            if context.startswith('route_'):
+                allowed = {'ordinary_active_flow': 'ordinary_input'}
+            elif context.startswith('keyboard_'):
+                allowed = {'ordinary_active_flow': 'ordinary_input', scenario + '_terminal_focus': scenario + '_input',
+                           scenario + '_terminal_capture': scenario + '_terminal'}
+            else:
+                target = 'input' if context == 'connect' else 'disconnected'
+                allowed = {scenario + '_' + context: scenario + '_' + target}
+            require(phase in allowed and self.index == STAGES.index(allowed[phase]), invalid)
+            self.result['activeDiagnostic'] = {'nativeCheckpoint': phase, **detail}
+            return
         if stage == 'ordinary_active':
             case = self.result['cases']['ordinary']
             trace = case.get('activeFlow', [])

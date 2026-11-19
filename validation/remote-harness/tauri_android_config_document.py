@@ -45,7 +45,9 @@ ERRORS = {'unsafe_runner', 'unowned_device', 'invalid_display', 'install_unconfi
           'archive_invalid', 'tamper_guard_failed', 'catalog_read_failed', 'catalog_mismatch',
           'catalog_changed', 'configuration_ui_unconfirmed', 'shared_storage_mount_unconfirmed',
           'download_parent_unconfirmed', 'download_folder_create_failed', 'font_save_rejected',
-          'font_save_receipt_unavailable', 'font_save_receipt_unconfirmed'}
+          'font_save_probe_unavailable', 'font_save_dispatch_unconfirmed',
+          'font_save_click_unconfirmed', 'font_save_storage_unconfirmed',
+          'font_save_status_unconfirmed'}
 
 
 def require(condition, error):
@@ -79,19 +81,21 @@ def binary_file(prefix, path, limit, error):
     return result.stdout
 
 
-def catalog(font, *, facts=None, before=None):
-    if facts is not None:
-        facts['catalog'] = 'unreadable'
-    raw = binary_file(['run-as', PACKAGE], HOME_RECORDS, 131072, 'catalog_read_failed')
+def read_catalog():
+    return binary_file(['run-as', PACKAGE], HOME_RECORDS, 131072, 'catalog_read_failed')
+
+
+def catalog(font, *, raw=None):
+    if raw is None:
+        raw = read_catalog()
     try:
         value = json.loads(raw)
     except (ValueError, UnicodeError):
         raise GuiFailure('catalog_read_failed') from None
-    matches = value == {'version': 1, 'hosts': [], 'networkProfiles': [],
-                        'preferences': {'terminalFontSize': font}}
-    if facts is not None:
-        facts['catalog'] = 'expected' if matches else 'previous_bytes' if raw == before else 'mismatch'
-    require(matches, 'catalog_mismatch')
+    require(value == {'version': 1, 'hosts': [], 'networkProfiles': [],
+                      'preferences': {'terminalFontSize': font}}
+            and type(value['version']) is int
+            and type(value['preferences']['terminalFontSize']) is int, 'catalog_mismatch')
     return raw
 
 
@@ -360,7 +364,55 @@ def status(browser, selector, expected):
             + json.dumps(expected) + '; })()')
 
 
+# Listen without modifying the controls, event propagation, or product callbacks.
+FONT_SAVE_OBSERVER = """(expected => {
+    const [input, button, status] = ['terminal-font-size', 'terminal-font-save',
+                                   'terminal-font-status'].map(id => document.getElementById(id));
+    if (!input || !button || !status || input.value !== expected) return null;
+    const previousText = status.firstChild;
+    const events = {pointerDown:'none', pointerUp:'none', click:'none', viewportAtPress:'unobserved'};
+    const listeners = [['pointerdown','pointerDown'], ['pointerup','pointerUp'], ['click','click']]
+        .map(([type, field]) => [type, event => {
+            if (field === 'pointerDown') {
+                const view = window.visualViewport;
+                events.viewportAtPress = !view ? 'unavailable' :
+                    view.height < innerHeight - 1 || view.offsetTop > 0 ? 'reduced' : 'full';
+            }
+            events[field] = events[field] !== 'none' ? 'multiple' : !event.isTrusted ? 'untrusted' :
+                !event.composedPath().includes(button) ? 'other' :
+                input.value !== expected ? 'different_value' : 'target';
+        }]);
+    listeners.forEach(([type, handler]) => document.addEventListener(type, handler, {capture:true, passive:true}));
+    return {
+        sample() {
+            const text = status.isConnected && status.getClientRects().length ? status.textContent : '';
+            const receipt = text === '字号已保存；不改变远端终端尺寸。' ?
+                (previousText === status.firstChild ? 'same_success' : 'success') :
+                text === '字号保存未确认；请核查后重试。' || text === '请输入 10 至 28 的整数。' ?
+                'rejected' : text ? 'unexpected' : 'empty';
+            return {...events, receipt};
+        },
+        close() { listeners.forEach(([type, handler]) => document.removeEventListener(type, handler, true)); }
+    };
+})(%s)"""
+
+FONT_EVENT_STATES = ('none', 'target', 'other', 'different_value', 'untrusted', 'multiple')
+FONT_PROBE_STATES = {
+    'pointerDown': FONT_EVENT_STATES, 'pointerUp': FONT_EVENT_STATES, 'click': FONT_EVENT_STATES,
+    'viewportAtPress': ('unobserved', 'unavailable', 'reduced', 'full'),
+    'receipt': ('same_success', 'success', 'rejected', 'unexpected', 'empty'),
+}
+
+
 def set_font(browser, font, *, facts=None, before=None):
+    if facts is None:
+        facts = {}
+    facts.update(dispatch='not_attempted', catalog='not_read', probe='unavailable')
+    if before is not None:
+        facts['catalog'] = 'unreadable'
+        same = read_catalog() == before
+        facts['catalog'] = 'previous_bytes' if same else 'different_baseline'
+        require(same, 'catalog_changed')
     # This is a number input (select() is unavailable), so enter through a focused
     # control using CDP key events and text input, without assigning DOM values.
     selector = '#terminal-font-size'
@@ -371,57 +423,81 @@ def set_font(browser, font, *, facts=None, before=None):
                                                'modifiers': 2, 'windowsVirtualKeyCode': 65})
     browser.call('Input.insertText', {'text': str(font)})
     require(browser.read(selector, 'value') == str(font), 'configuration_ui_unconfirmed')
-    if facts is None:
-        facts = {}
-    facts.update(receipt='unavailable', catalog='not_read')
     try:
-        snapshot = browser.call('Runtime.evaluate', {'expression': """(() => {
-            const node = document.querySelector('#terminal-font-status');
-            return node ? [node, node.firstChild, node.textContent] : null;
-        })()""", 'returnByValue': False})
+        snapshot = browser.call('Runtime.evaluate', {
+            'expression': FONT_SAVE_OBSERVER % json.dumps(str(font)), 'returnByValue': False})
     except GuiFailure:
-        raise GuiFailure('font_save_receipt_unavailable') from None
+        raise GuiFailure('font_save_probe_unavailable') from None
     handle = snapshot.get('result', {}).get('objectId')
     require(isinstance(handle, str) and bool(handle) and 'exceptionDetails' not in snapshot,
-            'font_save_receipt_unavailable')
-    # The same success text remains visible during both writes. Its previous Text
-    # node is stale even when its contents match. Keep only a read-only CDP handle.
-    verify = """function () {
-        const [node, child, text] = this;
-        if (node !== document.querySelector('#terminal-font-status')) return 'unavailable';
-        if (node.firstChild === child && node.textContent === text) return 'waiting';
-        if (!node.getClientRects().length) return 'unavailable';
-        if (node.textContent === '字号已保存；不改变远端终端尺寸。') return 'saved';
-        if (node.textContent === '字号保存未确认；请核查后重试。' ||
-            node.textContent === '请输入 10 至 28 的整数。') return 'rejected';
-        return 'unexpected';
-    }"""
+            'font_save_probe_unavailable')
+
+    def observe():
+        facts['probe'] = 'unavailable'
+        try:
+            reply = browser.call('Runtime.callFunctionOn', {'objectId': handle,
+                                 'functionDeclaration': 'function () { return this.sample(); }',
+                                 'returnByValue': True})
+        except GuiFailure:
+            raise GuiFailure('font_save_probe_unavailable') from None
+        value = reply.get('result', {}).get('value')
+        require('exceptionDetails' not in reply and isinstance(value, dict)
+                and set(value) == set(FONT_PROBE_STATES)
+                and all(value[field] in allowed for field, allowed in FONT_PROBE_STATES.items()),
+                'font_save_probe_unavailable')
+        facts.update(value, probe='observed')
 
     def saved():
+        observe()
         try:
-            result = browser.call('Runtime.callFunctionOn', {'objectId': handle,
-                                  'functionDeclaration': verify, 'returnByValue': True})
+            raw = read_catalog()
         except GuiFailure:
-            facts['receipt'] = 'unavailable'
-            raise GuiFailure('font_save_receipt_unavailable') from None
-        observed = result.get('result', {}).get('value')
-        if 'exceptionDetails' in result or observed not in ('waiting', 'saved', 'rejected', 'unexpected'):
-            observed = 'unavailable'
-        facts['receipt'] = observed
-        require(observed not in ('unavailable', 'unexpected'), 'font_save_receipt_unavailable')
-        require(observed != 'rejected', 'font_save_rejected')
-        return observed == 'saved'
+            facts['catalog'] = 'unreadable'
+            raw = None
+        if raw is not None:
+            if raw == before:
+                facts['catalog'] = 'previous_bytes'
+                raw = None
+            else:
+                facts['catalog'] = 'mismatch'
+                catalog(font, raw=raw)
+                facts['catalog'] = 'expected'
+        require(facts['click'] in ('none', 'target'), 'font_save_click_unconfirmed')
+        require(facts['receipt'] != 'rejected', 'font_save_rejected')
+        return raw if facts['click'] == 'target' and facts['receipt'] in ('success', 'same_success') else None
 
     try:
-        facts['receipt'] = 'waiting'
-        browser.click('#terminal-font-save')
-        wait_for(saved, 'font_save_receipt_unconfirmed')
-        return catalog(font, facts=facts, before=before)
+        facts['dispatch'] = 'uncertain'
+        try:
+            browser.click('#terminal-font-save')
+        except GuiFailure:
+            try:
+                observe()
+            except GuiFailure:
+                pass
+            raise GuiFailure('font_save_dispatch_unconfirmed') from None
+        facts['dispatch'] = 'returned'
+        # Blink can retain the old Text node on identical textContent. A trusted
+        # click with this number and the actual bytes proves the new save instead.
+        try:
+            return wait_for(saved, 'font_save_storage_unconfirmed')
+        except GuiFailure as error:
+            if str(error) == 'font_save_storage_unconfirmed':
+                if facts.get('click') != 'target':
+                    raise GuiFailure('font_save_click_unconfirmed') from None
+                if facts['catalog'] == 'expected':
+                    raise GuiFailure('font_save_status_unconfirmed') from None
+            raise
     finally:
+        try:
+            browser.call('Runtime.callFunctionOn', {'objectId': handle,
+                         'functionDeclaration': 'function () { this.close(); }'})
+        except GuiFailure:
+            pass  # The device cleanup still closes the debugger connection.
         try:
             browser.call('Runtime.releaseObject', {'objectId': handle})
         except GuiFailure:
-            pass  # The device cleanup still closes the debugger connection.
+            pass
 
 
 def exercise(browser, picker, folder, report):

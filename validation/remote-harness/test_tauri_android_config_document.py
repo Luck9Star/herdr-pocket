@@ -37,82 +37,94 @@ def catalog_bytes(font):
 
 class FontSaveTests(unittest.TestCase):
     class Browser:
-        def __init__(self, publish):
-            self.publish = publish
+        def __init__(self, *, click='target', receipt='same_success', dispatch_fails=False):
+            self.click_target = click
+            self.receipt = receipt
+            self.dispatch_fails = dispatch_fails
             self.saves = 0
-            self.reads = 0
-            self.release_count = 0
+            self.closed = 0
+            self.released = 0
 
         def evaluate(self, expression):
-            # The initial page still displays the first successful save's text.
             return True
 
         def click(self, selector):
             if selector == '#terminal-font-save':
                 self.saves += 1
+                if self.dispatch_fails:
+                    raise GuiFailure('untrusted dispatch detail')
 
         def read(self, selector, prop):
             return str(config.CONTROL_FONT)
 
         def call(self, method, params):
             if method == 'Runtime.evaluate':
-                return {'result': {'objectId': 'fixture-status-snapshot'}}
+                return {'result': {'objectId': 'fixture-listener'}}
             if method == 'Runtime.callFunctionOn':
-                self.reads += 1
-                return {'result': {'value': self.publish(self.reads)}}
+                if 'this.sample()' in params['functionDeclaration']:
+                    return {'result': {'value': {
+                        'pointerDown': 'target', 'pointerUp': 'target', 'click': self.click_target,
+                        'viewportAtPress': 'reduced', 'receipt': self.receipt}}}
+                if 'this.close()' in params['functionDeclaration']:
+                    self.closed += 1
             if method == 'Runtime.releaseObject':
-                self.release_count += 1
+                self.released += 1
             return {}
 
-    def test_old_success_cannot_complete_new_save_before_durable_write(self):
-        with tempfile.TemporaryDirectory() as root:
-            path = Path(root) / 'owned-catalog'
-            path.write_bytes(catalog_bytes(config.FONT))
+    @staticmethod
+    def sample(probe, error, **options):
+        return probe() or config.require(False, error)
 
-            def publish(reads):
-                if reads == 1:
-                    return 'waiting'
-                temp = path.with_suffix('.new')
-                temp.write_bytes(catalog_bytes(config.CONTROL_FONT))
-                temp.replace(path)
-                return 'saved'
+    def test_catalog_transition_does_not_require_the_same_success_text_node_to_change(self):
+        before, after = catalog_bytes(config.FONT), catalog_bytes(config.CONTROL_FONT)
+        browser, facts = self.Browser(), {}
 
-            browser = self.Browser(publish)
-            with patch.object(config, 'binary_file', side_effect=lambda *args: path.read_bytes()) as read:
-                self.assertEqual(config.set_font(browser, config.CONTROL_FONT),
-                                 catalog_bytes(config.CONTROL_FONT))
-            self.assertEqual((browser.saves, browser.reads, browser.release_count), (1, 2, 1))
-            read.assert_called_once()
+        with patch.object(config, 'binary_file', side_effect=[before, before, after]) as read:
+            self.assertEqual(config.set_font(browser, config.CONTROL_FONT, facts=facts, before=before), after)
+        self.assertEqual(read.call_count, 3)
+        self.assertEqual((browser.saves, browser.closed, browser.released), (1, 1, 1))
+        self.assertEqual((facts['click'], facts['receipt'], facts['catalog']), ('target', 'same_success', 'expected'))
 
-    def test_fresh_success_with_wrong_catalog_remains_a_failure(self):
-        prior = catalog_bytes(config.FONT)
-        for raw, classification in ((prior, 'previous_bytes'), (catalog_bytes(17), 'mismatch')):
-            with self.subTest(classification=classification):
-                browser = self.Browser(lambda reads: 'saved')
-                facts = {}
-                with patch.object(config, 'binary_file', return_value=raw):
-                    with self.assertRaisesRegex(GuiFailure, '^catalog_mismatch$'):
-                        config.set_font(browser, config.CONTROL_FONT, facts=facts, before=prior)
-                self.assertEqual(facts, {'receipt': 'saved', 'catalog': classification})
-                self.assertEqual((browser.saves, browser.release_count), (1, 1))
-
-    def test_no_fresh_success_does_not_read_catalog_or_retry(self):
-        for receipt, code in (('waiting', 'font_save_receipt_unconfirmed'),
-                              ('rejected', 'font_save_rejected')):
-            with self.subTest(receipt=receipt):
-                browser = self.Browser(lambda reads: receipt)
-                facts = {}
-
-                def one_read(probe, error):
-                    return probe() or config.require(False, error)
-
-                with patch.object(config, 'binary_file') as read, \
-                        patch.object(config, 'wait_for', side_effect=one_read):
+    def test_wrong_or_unproven_outcome_is_not_replayed_or_accepted(self):
+        before, after = catalog_bytes(config.FONT), catalog_bytes(config.CONTROL_FONT)
+        for click, receipt, raw, code, catalog in (
+            ('target', 'same_success', before, 'font_save_storage_unconfirmed', 'previous_bytes'),
+            ('target', 'success', catalog_bytes(17), 'catalog_mismatch', 'mismatch'),
+            ('target', 'success', after.replace(b':13', b':13.0'), 'catalog_mismatch', 'mismatch'),
+            ('target', 'rejected', before, 'font_save_rejected', 'previous_bytes'),
+            ('target', 'empty', after, 'font_save_status_unconfirmed', 'expected'),
+            ('none', 'same_success', after, 'font_save_click_unconfirmed', 'expected'),
+            ('other', 'same_success', before, 'font_save_click_unconfirmed', 'previous_bytes'),
+            ('different_value', 'success', after, 'font_save_click_unconfirmed', 'expected'),
+            ('untrusted', 'success', after, 'font_save_click_unconfirmed', 'expected'),
+            ('multiple', 'success', after, 'font_save_click_unconfirmed', 'expected'),
+        ):
+            with self.subTest(click=click, receipt=receipt, code=code):
+                browser, facts = self.Browser(click=click, receipt=receipt), {}
+                with patch.object(config, 'binary_file', side_effect=[before, raw]), \
+                        patch.object(config, 'wait_for', side_effect=self.sample):
                     with self.assertRaisesRegex(GuiFailure, '^' + code + '$'):
-                        config.set_font(browser, config.CONTROL_FONT, facts=facts)
-                read.assert_not_called()
-                self.assertEqual(facts, {'receipt': receipt, 'catalog': 'not_read'})
-                self.assertEqual((browser.saves, browser.release_count), (1, 1))
+                        config.set_font(browser, config.CONTROL_FONT, facts=facts, before=before)
+                self.assertEqual((facts['click'], facts['receipt'], facts['catalog']), (click, receipt, catalog))
+                self.assertEqual((browser.saves, browser.closed, browser.released), (1, 1, 1))
+
+    def test_uncertain_dispatch_is_not_replayed(self):
+        browser, facts = self.Browser(click='none', dispatch_fails=True), {}
+        before = catalog_bytes(config.FONT)
+        with patch.object(config, 'binary_file', return_value=before) as read:
+            with self.assertRaisesRegex(GuiFailure, '^font_save_dispatch_unconfirmed$'):
+                config.set_font(browser, config.CONTROL_FONT, facts=facts, before=before)
+        read.assert_called_once()
+        self.assertEqual((facts['dispatch'], facts['click']), ('uncertain', 'none'))
+        self.assertEqual((browser.saves, browser.closed, browser.released), (1, 1, 1))
+
+    def test_known_baseline_must_still_match_before_typing_or_clicking(self):
+        browser, facts = self.Browser(), {}
+        with patch.object(config, 'binary_file', return_value=catalog_bytes(config.CONTROL_FONT)):
+            with self.assertRaisesRegex(GuiFailure, '^catalog_changed$'):
+                config.set_font(browser, config.CONTROL_FONT, facts=facts, before=catalog_bytes(config.FONT))
+        self.assertEqual((facts['dispatch'], facts['catalog']), ('not_attempted', 'different_baseline'))
+        self.assertEqual((browser.saves, browser.closed, browser.released), (0, 0, 0))
 
 
 class ForegroundTests(unittest.TestCase):

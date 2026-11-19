@@ -36,6 +36,13 @@ ROTATION_PUBLIC_FIELDS = {'schemaVersion', 'platform', 'homepageEntry', 'sameTar
 ROTATION_PHASES = {'rejected': 2, 'cancelled': 2, 'reprobed': 3, 'complete': 4}
 ORDINARY_MOBILE_PHASES = ('keyboard_shown', 'keyboard_hidden', 'board_visible', 'board_returned',
                          'network_visible', 'network_returned', 'settings_visible', 'settings_returned')
+ORDINARY_APP_STAGES = {*ORDINARY_MOBILE_PHASES, 'fixture_validation', 'rotation_home',
+    'rotation_initial_probe', 'rotation_rejected', 'rotation_cancelled', 'rotation_fresh_probe',
+    'rotation_authenticate', 'rotation_input', 'rotation_disconnect', 'rotation_complete',
+    'home', 'target', 'probe', 'authenticate', 'secret_entry', 'connect_tap', 'connect_preflight',
+    'await_terminal', 'await_welcome', 'input', 'disconnect', 'disconnect_tap', 'disconnect_wait',
+    'disconnect_secret', 'disconnect_status', 'disconnect_exception', 'disconnect_complete',
+    'peer_confirmed', 'report_data_set'}
 
 
 class Failure(ValueError):
@@ -425,6 +432,60 @@ def safe_failure(error, phase):
             'sourceLocations': frames[-4:]}
 
 
+def ordinary_app_diagnostics(relative, startup):
+    """Read only the owned test exchange, without affecting the original failure."""
+    try:
+        present = package_present()
+    except (Failure, OSError, subprocess.SubprocessError):
+        startup['appReadback'] = 'read_failed'
+        return None
+    startup['packageObserved'] = present
+    if not present:
+        startup['appReadback'] = 'not_installed'
+        return None
+    try:
+        stage = read_public_json(relative + '/stage.json', 256, package_known=True)
+        failure = read_public_json(relative + '/failure.json', 256, package_known=True)
+    except (Failure, OSError, subprocess.SubprocessError):
+        startup['appReadback'] = 'read_failed'
+        return None
+    if ((stage is not None and (set(stage) != {'stage'} or type(stage['stage']) is not str
+                                or stage['stage'] not in ORDINARY_APP_STAGES))
+            or (failure is not None and (set(failure) != {'stage', 'code'}
+                or type(failure['stage']) is not str or failure['stage'] not in ORDINARY_APP_STAGES
+                or failure['code'] != 'direct_ssh_android_ui_failed'))
+            or (stage is not None and failure is not None and stage['stage'] != failure['stage'])):
+        startup['appReadback'] = 'invalid'
+        return None
+    observed = failure if failure is not None else stage
+    startup['appReadback'] = 'verified' if observed is not None else 'missing'
+    if observed is not None:
+        startup['appStage'] = observed['stage']
+    return failure['stage'] if failure is not None else None
+
+
+def ordinary_failure_area(startup):
+    stage = startup['appStage']
+    if stage != 'not_observed':
+        return 'fixture_validation' if stage == 'fixture_validation' else 'ui_stage_observed'
+    tool = startup.get('tool')
+    if tool is None or tool['streamState'] != 'eof':
+        return 'unknown'
+    marks = tool['markers']
+    if marks['uiTestStarted']:
+        return 'fixture_validation' if marks['fixtureValidationFailed'] else 'unknown'
+    matches = [
+        area for area, observed in (
+            ('build', not marks['installationStarted']
+                      and (marks['dartCompileFailed'] or marks['gradleCommandFailed'])),
+            ('install', marks['installationStarted'] and marks['installationFailed']
+                        and startup['appReadback'] == 'not_installed'),
+            ('launch', marks['vmServiceFailed'] or (marks['appStartFailed'] and startup['packageObserved'])),
+        ) if observed
+    ]
+    return matches[0] if len(matches) == 1 else 'unknown'
+
+
 def verify_prepared(app, env):
     tool_path = ROOT / 'validation/flutter/tool/android_device_test.py'
     sys.path.insert(0, str(tool_path.parent))
@@ -467,6 +528,10 @@ def run(args, env):
     reverses = []
     process = None
     private = None
+    progress = None
+    startup = {'deviceState': 'not_checked', 'packageObserved': False,
+               'appStage': 'not_observed', 'appReadback': 'not_checked'}
+    report['startup'] = startup
     try:
         phase = 'software_keyboard_setup'
         adb('shell', 'settings', 'put', 'secure', 'show_ime_with_hard_keyboard', '1')
@@ -495,91 +560,86 @@ def run(args, env):
             command = ['flutter', 'test', '--no-pub', '--no-uninstall', '--reporter', 'expanded', '-d', SERIAL,
                        '--dart-define-from-file=' + str(defines), TARGET]
             phase = 'driver_start'
-            with (private / 'flutter-private.log').open('wb') as log:
-                process = subprocess.Popen(command, cwd=app, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-                deadline = time.monotonic() + 1200
-                peer_confirmed = False
-                while process.poll() is None and time.monotonic() < deadline:
-                    phase = 'await_device_result'
-                    screen = read_public_json(relative + '/screen-request.json')
-                    if screen is not None:
-                        screen_checkpoint(screen, screens, fixture, rotation_fixture, relative, output)
-                    checkpoint = read_public_json(relative + '/rotation-stage.json')
-                    if checkpoint is not None:
-                        evidence = rotation_checkpoint(rotation_fixture, checkpoint, rotation['checkpoints'])
-                        if evidence is not None:
-                            phase_name, stage = checked_rotation_stage(checkpoint, rotation['checkpoints'])
-                            phase = 'rotation_' + phase_name
-                            if fixture.snapshot()['connections'] != 0:
-                                raise Failure('direct_android_rotation_touched_ordinary_peer')
-                            if process.poll() is not None:
-                                raise Failure('direct_android_driver_exited_before_rotation_confirmation')
-                            if phase_name == 'complete':
-                                device = read_public_json(relative + '/rotation-result.json')
-                                if device is None:
-                                    raise Failure('direct_android_rotation_result_missing')
-                                rotation['device'] = safe_rotation_result(json.dumps(device))
-                                rotation['peerClosedBeforeDriverExit'] = True
-                            rotation['checkpoints'][phase_name] = evidence
-                            reply = json.dumps({'phase': phase_name, 'stage': stage,
-                                                'serverEvidenceAccepted': True}).encode()
-                            pending = relative + '/rotation-' + phase_name + '-confirmed.new'
-                            adb('shell', '-T', 'run-as', PACKAGE, 'tee', pending, data=reply)
-                            adb('shell', 'run-as', PACKAGE, 'mv', pending,
-                                relative + '/rotation-' + phase_name + '-confirmed.json')
-                    mobile_stage = read_public_json(relative + '/ordinary-mobile-stage.json')
-                    if mobile_stage is not None:
-                        checkpoint = ordinary_mobile_checkpoint(fixture, mobile_stage, mobile)
-                        if checkpoint is not None:
-                            phase_name, evidence = checkpoint
-                            phase = 'ordinary_mobile_' + phase_name
-                            if process.poll() is not None:
-                                raise Failure('direct_android_driver_exited_before_mobile_confirmation')
-                            mobile[phase_name] = evidence
-                            reply = json.dumps({'phase': phase_name, 'serverEvidenceAccepted': True}).encode()
-                            pending = relative + '/ordinary-mobile-' + phase_name + '-confirmed'
-                            adb('shell', '-T', 'run-as', PACKAGE, 'tee', pending + '.new', data=reply)
-                            adb('shell', 'run-as', PACKAGE, 'mv', pending + '.new', pending + '.json')
-                    public = read_public_json(relative + '/result.json')
-                    if public is not None:
-                        safe_result(json.dumps(public))
-                        require_ordinary_mobile_checkpoints(mobile)
-                        if set(screens) != {'ordinary', 'key-rotation'} or not all(x['accepted'] for x in screens.values()):
-                            raise Failure('direct_android_screen_proof_missing')
-                        if 'device' not in rotation or set(rotation['checkpoints']) != set(ROTATION_PHASES):
-                            raise Failure('direct_android_rotation_confirmation_missing')
-                        phase = 'peer_close_confirmation'
-                        if (not fixture.wait_for('markerReceived') or not fixture.wait_for('sessionClosed')
-                                or not fixture.wait_for_connections_closed(2)):
-                            raise Failure('direct_android_remote_input_or_close_missing')
-                        ordinary_session_evidence(fixture, closed=True)
+            process = subprocess.Popen(command, cwd=app, env=env, stdout=subprocess.PIPE,
+                                       stderr=subprocess.STDOUT, start_new_session=True)
+            progress = SanitizedToolProgress(process.stdout, markers={**TOOL_MARKERS, **ORDINARY_TOOL_MARKERS})
+            deadline = time.monotonic() + 1200
+            peer_confirmed = False
+            while process.poll() is None and time.monotonic() < deadline:
+                phase = 'await_device_result'
+                screen = read_public_json(relative + '/screen-request.json')
+                if screen is not None:
+                    screen_checkpoint(screen, screens, fixture, rotation_fixture, relative, output)
+                checkpoint = read_public_json(relative + '/rotation-stage.json')
+                if checkpoint is not None:
+                    evidence = rotation_checkpoint(rotation_fixture, checkpoint, rotation['checkpoints'])
+                    if evidence is not None:
+                        phase_name, stage = checked_rotation_stage(checkpoint, rotation['checkpoints'])
+                        phase = 'rotation_' + phase_name
+                        if fixture.snapshot()['connections'] != 0:
+                            raise Failure('direct_android_rotation_touched_ordinary_peer')
                         if process.poll() is not None:
-                            raise Failure('direct_android_driver_exited_before_peer_confirmation')
-                        # The device test is still alive and waiting here, so
-                        # driver shutdown cannot masquerade as the UI's close.
-                        reply = b'{"protocolAccepted":true,"peerClosedBeforeDriverExit":true}'
-                        pending = relative + '/peer-confirmed.new'
+                            raise Failure('direct_android_driver_exited_before_rotation_confirmation')
+                        if phase_name == 'complete':
+                            device = read_public_json(relative + '/rotation-result.json')
+                            if device is None:
+                                raise Failure('direct_android_rotation_result_missing')
+                            rotation['device'] = safe_rotation_result(json.dumps(device))
+                            rotation['peerClosedBeforeDriverExit'] = True
+                        rotation['checkpoints'][phase_name] = evidence
+                        reply = json.dumps({'phase': phase_name, 'stage': stage,
+                                            'serverEvidenceAccepted': True}).encode()
+                        pending = relative + '/rotation-' + phase_name + '-confirmed.new'
                         adb('shell', '-T', 'run-as', PACKAGE, 'tee', pending, data=reply)
-                        adb('shell', 'run-as', PACKAGE, 'mv', pending, relative + '/peer-confirmed.json')
-                        peer_confirmed = True
-                        report['peerClosedBeforeDriverExit'] = True
-                        break
-                    time.sleep(.5)
-                phase = 'await_driver_exit'
-                try:
-                    code = process.wait(timeout=max(1, deadline - time.monotonic()))
-                except subprocess.TimeoutExpired:
-                    raise Failure('direct_android_flutter_timeout') from None
-                if code == 0 and not peer_confirmed:
-                    raise Failure('direct_android_peer_confirmation_missing')
+                        adb('shell', 'run-as', PACKAGE, 'mv', pending,
+                            relative + '/rotation-' + phase_name + '-confirmed.json')
+                mobile_stage = read_public_json(relative + '/ordinary-mobile-stage.json')
+                if mobile_stage is not None:
+                    checkpoint = ordinary_mobile_checkpoint(fixture, mobile_stage, mobile)
+                    if checkpoint is not None:
+                        phase_name, evidence = checkpoint
+                        phase = 'ordinary_mobile_' + phase_name
+                        if process.poll() is not None:
+                            raise Failure('direct_android_driver_exited_before_mobile_confirmation')
+                        mobile[phase_name] = evidence
+                        reply = json.dumps({'phase': phase_name, 'serverEvidenceAccepted': True}).encode()
+                        pending = relative + '/ordinary-mobile-' + phase_name + '-confirmed'
+                        adb('shell', '-T', 'run-as', PACKAGE, 'tee', pending + '.new', data=reply)
+                        adb('shell', 'run-as', PACKAGE, 'mv', pending + '.new', pending + '.json')
+                public = read_public_json(relative + '/result.json')
+                if public is not None:
+                    safe_result(json.dumps(public))
+                    require_ordinary_mobile_checkpoints(mobile)
+                    if set(screens) != {'ordinary', 'key-rotation'} or not all(x['accepted'] for x in screens.values()):
+                        raise Failure('direct_android_screen_proof_missing')
+                    if 'device' not in rotation or set(rotation['checkpoints']) != set(ROTATION_PHASES):
+                        raise Failure('direct_android_rotation_confirmation_missing')
+                    phase = 'peer_close_confirmation'
+                    if (not fixture.wait_for('markerReceived') or not fixture.wait_for('sessionClosed')
+                            or not fixture.wait_for_connections_closed(2)):
+                        raise Failure('direct_android_remote_input_or_close_missing')
+                    ordinary_session_evidence(fixture, closed=True)
+                    if process.poll() is not None:
+                        raise Failure('direct_android_driver_exited_before_peer_confirmation')
+                    # The device test is still alive and waiting here, so
+                    # driver shutdown cannot masquerade as the UI's close.
+                    reply = b'{"protocolAccepted":true,"peerClosedBeforeDriverExit":true}'
+                    pending = relative + '/peer-confirmed.new'
+                    adb('shell', '-T', 'run-as', PACKAGE, 'tee', pending, data=reply)
+                    adb('shell', 'run-as', PACKAGE, 'mv', pending, relative + '/peer-confirmed.json')
+                    peer_confirmed = True
+                    report['peerClosedBeforeDriverExit'] = True
+                    break
+                time.sleep(.5)
+            phase = 'await_driver_exit'
+            try:
+                code = process.wait(timeout=max(1, deadline - time.monotonic()))
+            except subprocess.TimeoutExpired:
+                raise Failure('direct_android_flutter_timeout') from None
+            if code == 0 and not peer_confirmed:
+                raise Failure('direct_android_peer_confirmation_missing')
             cleanup['flutterToolStopped'] = True
             if code:
-                # Stage is an enum from our test; never export the raw test log.
-                failure = read_public_json(relative + '/failure.json', 256)
-                if failure is not None:
-                    stage = failure.get('stage', '')
-                    if isinstance(stage, str) and re.fullmatch(r'[a-z_]{1,40}', stage):
-                        report['failureStage'] = stage
                 raise Failure('direct_android_device_test_failed')
             phase = 'read_device_result'
             public = read_public_json(relative + '/result.json')
@@ -612,6 +672,11 @@ def run(args, env):
         report['diagnostic'] = safe_failure(error, phase)
         if isinstance(error, ScreenshotReadFailure):
             report['screenshotReadDiagnostic'] = error.diagnostic
+        if process is not None:
+            startup['deviceState'] = encrypted_device_state()
+            failure_stage = ordinary_app_diagnostics(relative, startup)
+            if failure_stage is not None:
+                report['failureStage'] = failure_stage
     finally:
         report['lastPhase'] = phase
         report['protocol'] = fixture.snapshot()
@@ -627,6 +692,15 @@ def run(args, env):
                 os.killpg(process.pid, signal.SIGKILL)
                 process.wait(timeout=10)
         cleanup['flutterToolStopped'] = process is None or process.poll() is not None
+        if process is not None and type(process.returncode) is int and -255 <= process.returncode <= 255:
+            startup['toolExitCode'] = process.returncode
+        if progress is not None:
+            startup['tool'] = progress.finish()
+            cleanup['flutterToolStopped'] &= startup['tool']['streamState'] == 'eof'
+            if startup['tool']['streamState'] != 'running':
+                process.stdout.close()
+        if primary is not None:
+            startup['failureArea'] = ordinary_failure_area(startup)
         try:
             for reverse in reverses:
                 adb('reverse', '--remove', reverse)
@@ -810,16 +884,25 @@ TOOL_MARKERS = {
     'deviceOffline': (b'error: device offline',),
 }
 
+ORDINARY_TOOL_MARKERS = {
+    'dartCompileFailed': (b'target kernel_snapshot_program failed:',),
+    'gradleCommandFailed': (b'gradle task assembledebug failed with exit code ',),
+    'installationFailed': (b'package install error: failure',),
+    'appStartFailed': (b'unable to start the app on the device.',),
+    'vmServiceFailed': (b'the vm service is not available on the test device.',),
+    'fixtureValidationFailed': (b'direct_ssh_android_isolated_fixture_required',),
+}
+
 
 class SanitizedToolProgress:
-    def __init__(self, stream):
+    def __init__(self, stream, *, markers=TOOL_MARKERS):
         self._lock = threading.Lock()
-        self._markers = dict.fromkeys(TOOL_MARKERS, False)
+        self._markers = dict.fromkeys(markers, False)
         self._state = 'running'
-        self._thread = threading.Thread(target=self._drain, args=(stream,), daemon=True)
+        self._thread = threading.Thread(target=self._drain, args=(stream, markers), daemon=True)
         self._thread.start()
 
-    def _drain(self, stream):
+    def _drain(self, stream, markers):
         tail = b''
         try:
             while True:
@@ -830,7 +913,7 @@ class SanitizedToolProgress:
                     break
                 window = (tail + chunk).lower()
                 with self._lock:
-                    for name, patterns in TOOL_MARKERS.items():
+                    for name, patterns in markers.items():
                         if all(pattern in window for pattern in patterns):
                             self._markers[name] = True
                 tail = window[-512:]

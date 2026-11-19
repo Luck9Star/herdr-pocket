@@ -14,6 +14,9 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
   let blocked = false;
   let probeGeneration = 0;
   let writes = Promise.resolve();
+  // An explicit remote report needs a valid exitStatus (0 included) or a
+  // non-empty normalized exit signal name; bare EOF exits stay neutral.
+  let remoteReport = false;
 
   const sameTarget = (target, key) => key && target.host === key.host && Number(target.port) === key.port;
   function invalidateReview() { probeGeneration++; reviewed = null; }
@@ -36,19 +39,33 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
     connecting = false;
     const id = sessionId;
     sessionId = null;
+    const reported = remoteReport;
     let closed = false;
+    let failed = false;
     if (id) {
-      // Tauri serializes Rust unit as null; JavaScript callers can return void.
       try {
         const response = await invoke('ssh_shell_close', {sessionId: id});
+        // Contract: resolve(null/undefined) — native resolves only after the
+        // local session really retired. Any other resolved value must not
+        // impersonate a confirmed teardown.
         closed = response === null || response === undefined;
-      } catch {}
+      } catch {
+        // Reject means the local shutdown itself failed.
+        failed = true;
+      }
     }
+
     if (current !== generation) return;
-    if ((id || explicit) && !closed) {
-      onStatus('已结束本地会话；无法确认远端连接已关闭。', false, 'close_unconfirmed', {closed, explicit});
-    } else {
-      onStatus(closed ? '已断开；重新连接需要再次输入凭据。' : '尚未连接。', false, undefined, {closed, explicit});
+    if (explicit || id) {
+      if (failed || !closed) {
+        onStatus('本机连接关闭失败；会话可能仍在。可返回首页。', false, failed ? 'close_failed' : 'close_unconfirmed',
+          {closed: false, explicit, remoteReported: reported});
+      } else {
+        onStatus(reported ? '本机已断开；远端已报告结束，凭据已清空。' : '本机已断开；凭据已清空，重连时请重新填写。',
+          false, undefined, {closed, explicit, remoteReported: reported});
+      }
+    } else if (closed) {
+      onStatus('本机已断开；凭据已清空，重连时请重新填写。', false, undefined, {closed, explicit, remoteReported: reported});
     }
   }
   async function open(target, credentials, confirmed) {
@@ -64,6 +81,7 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
     const early = [];
     let assigned = null;
     sequence = 0;
+    remoteReport = false;
     const channel = channelFactory();
     function deliver(event) {
       if (current !== generation || !assigned || event?.sessionId !== assigned || !Number.isSafeInteger(event.seq) || event.seq <= sequence) return;
@@ -94,13 +112,20 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
       }
       else if (event.kind === 'exit' || event.kind === 'error') {
         connecting = false; ready = false;
+        if (event.kind === 'exit') {
+          const status = event.exitStatus;
+          const signal = typeof event.exitSignal === 'string' ? event.exitSignal.trim() : '';
+          const signals = ['ABRT','ALRM','FPE','HUP','ILL','INT','KILL','PIPE','QUIT','SEGV','TERM','USR1'];
+          remoteReport = (status === null || status === undefined ? false : Number.isInteger(status) && status >= 0 && status <= 0xFFFFFFFF)
+            || (signal !== '' && signals.includes(signal.toUpperCase()));
+        }
         const messages = {host_key_mismatch:'主机公钥与已核对的指纹不一致，连接已拒绝。请重新探测并核对。', authentication_failed:'认证失败，请检查用户名和认证方式后重试。', rsa_sha2_required:'服务器未提供 RSA SHA-2 用户认证，当前 RSA 私钥无法登录。'};
         if (event.error === 'host_key_mismatch') {
           pinnedFingerprint = pinnedFingerprint || (reviewed && reviewed.fingerprint) || null;
           invalidateReview();
           blocked = true;
         }
-        onStatus(event.kind === 'exit' ? '远端会话已结束。' : messages[event.error] || '连接失败或已中断，请核查连接资料。', false, event.error || event.kind,
+        onStatus(event.kind === 'exit' ? (remoteReport ? '远端已报告结束。' : '会话已结束。') : messages[event.error] || '连接失败或已中断，请核查连接资料。', false, event.error || event.kind,
           event.error === 'host_key_mismatch' ? {presentedFingerprint, pinnedFingerprint, blocked: true} : undefined);
       }
     }
@@ -140,6 +165,7 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
     catch { if (current === generation && id === sessionId) { ready = false; onStatus('终端尺寸更新失败；请检查连接。', false); } return false; }
   }
   return {probe, invalidateReview, open, close, write, resize, isReady: () => ready, isActive: () => ready || connecting,
+    remoteReported: () => remoteReport,
     isBlocked: () => blocked, pinnedFingerprint: () => pinnedFingerprint,
     resetTargetBlock: () => { blocked = false; presentedFingerprint = null; pinnedFingerprint = null; }};
 }

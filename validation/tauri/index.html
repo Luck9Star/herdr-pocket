@@ -64,8 +64,8 @@
     <p class="ssh-desktop-only">连接普通远程 shell；无需 herdr。先探测指纹并通过可信渠道独立核对，再填写认证方式。</p>
     <form id="ssh-form" autocomplete="off">
       <div id="ssh-target-fields">
-        <section id="ssh-closed-feedback" class="ssh-mobile-only" aria-label="已断开连接" hidden>
-          <p>已断开连接</p><p>本次凭据已清空。重新连接时请重新填写。</p>
+        <section id="ssh-closed-feedback" class="ssh-mobile-only" aria-label="本机已断开" hidden>
+          <p id="ssh-closed-title">本机已断开</p><p id="ssh-closed-detail">凭据已清空，重连时请重新填写。</p>
         </section>
         <section id="ssh-prior-trust" class="ssh-mobile-only" aria-label="已保留旧信任" hidden>
           <p>已保留旧信任</p><p>请重新探测并独立核对主机指纹。</p>

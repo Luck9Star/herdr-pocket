@@ -214,14 +214,18 @@ impl server::Handler for Peer {
             session.channel_failure(id)?;
             return Ok(());
         }
+        let (report, hold_channel) = self
+            .reject
+            .strip_prefix("hold-")
+            .map_or((self.reject, false), |report| (report, true));
         if matches!(
-            self.reject,
-            "no-report" | "status-zero" | "TERM" | "USR2" | "fixture-signal"
+            report,
+            "no-report" | "status-zero" | "TERM" | "USR2" | "fixture-signal" | "unconsumed-status"
         ) {
             session.channel_success(id)?;
-            match self.reject {
+            match report {
                 "status-zero" => session.exit_status_request(id, 0)?,
-                "no-report" => {}
+                "no-report" | "unconsumed-status" => {}
                 signal => session.exit_signal_request(
                     id,
                     russh::Sig::Custom(signal.into()),
@@ -230,8 +234,18 @@ impl server::Handler for Peer {
                     "en",
                 )?,
             }
-            session.eof(id)?;
-            session.close(id)?;
+            if hold_channel {
+                // The client delivers this only after consuming prior channel messages.
+                session.data(id, b"report-barrier".as_slice())?;
+                if report == "unconsumed-status" {
+                    session.exit_status_request(id, 0)?;
+                } else if report == "no-report" {
+                    session.eof(id)?;
+                }
+            } else {
+                session.eof(id)?;
+                session.close(id)?;
+            }
             return Ok(());
         }
         self.facts.shells.fetch_add(1, Ordering::SeqCst);
@@ -827,6 +841,70 @@ async fn exit_events_only_include_evidence_sent_by_the_peer() {
         );
         assert!(!json.to_string().contains("fixture"));
         assert_eq!(shell.task.await.unwrap(), Ok(()));
+        fixture.cleaned().await;
+    }
+}
+
+#[tokio::test]
+async fn cancelled_shell_reports_only_consumed_exit_evidence_after_retirement() {
+    use std::{
+        future::{Future, poll_fn},
+        pin::pin,
+        task::Poll,
+    };
+
+    for (peer, status, signal) in [
+        ("hold-status-zero", Some(0), None),
+        ("hold-TERM", None, Some("TERM")),
+        ("hold-USR2", None, Some("USR2")),
+        ("hold-fixture-signal", None, Some("other")),
+        ("hold-no-report", None, None),
+        ("hold-unconsumed-status", None, None),
+    ] {
+        let fixture = Fixture::start(peer).await;
+        let (control, commands) = shell_commands();
+        let (send, mut events) = mpsc::unbounded_channel();
+        let mut shell = pin!(run_shell(fixture.config(true), commands, move |event| {
+            send.send(event).map_err(|_| "cancelled")
+        }));
+        let (ready, marker) = tokio::select! {
+            result = &mut shell => panic!("unexpected shell result: {result:?}"),
+            events = timeout(Duration::from_secs(5), async {
+                (events.recv().await.unwrap(), events.recv().await.unwrap())
+            }) => events.unwrap(),
+        };
+        assert_eq!((ready.seq, ready.kind), (1, "ready"));
+        assert_eq!((marker.seq, marker.kind), (2, "data"));
+        assert_eq!(marker.data.as_deref(), Some(b"report-barrier".as_slice()));
+        assert_eq!(fixture.facts.active.load(Ordering::SeqCst), 1);
+
+        // Keep the marker unacknowledged so later reports cannot be consumed.
+        control.close();
+        assert!(
+            poll_fn(|cx| Poll::Ready(shell.as_mut().poll(cx)))
+                .await
+                .is_pending()
+        );
+        assert!(matches!(
+            events.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty)
+        ));
+        assert_eq!(
+            timeout(Duration::from_secs(2), shell).await.unwrap(),
+            Err("cancelled")
+        );
+
+        if status.is_some() || signal.is_some() {
+            let exit = events
+                .try_recv()
+                .unwrap_or_else(|_| panic!("missing exit for {peer}"));
+            assert_eq!((exit.seq, exit.kind), (3, "exit"));
+            assert_eq!((exit.exit_status, exit.exit_signal), (status, signal));
+        }
+        assert!(
+            events.try_recv().is_err(),
+            "unexpected duplicate event for {peer}"
+        );
         fixture.cleaned().await;
     }
 }

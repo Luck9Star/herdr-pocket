@@ -95,7 +95,12 @@ test('MT09 MT10: direct input sends only current visible epoch and stops after s
     channels[0].onmessage({kind:'frame',generation:g,epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});await flush();
     channels[0].onmessage({kind:'observation',generation:g,snapshot:{epoch:1,phase:'active'}});
     channels[0].onmessage({kind:'input_ready',generation:g,epoch:1,unknown:false,recovery_status:'ready'});
+    find('启用草稿输入').onclick();await flush();
+    assert.match(ui.tabImpacts([direct.hostId])[0].input,/草稿输入已启用/);
     find('逐键输入').onclick();await flush();await flush();term.data('a');await flush();
+    assert.deepEqual(ui.tabImpacts(['other',direct.hostId,direct.hostId]),[{
+      label:`标签 1 · ${direct.hostId} · ${direct.paneId}`,state:'正在观察',input:'逐键输入已启用；每次输入单独发送。',
+    }]);
     assert.equal(calls.filter(c=>c.name==='remote_tab_input_send' && c.args.draft===false).length,1);
     const receipt=nodes['view-content'].all().find(n=>n.dataset.role==='input-receipt');
     assert.equal(receipt.hidden,false);assert.match(receipt.children[1].textContent,/请求 ID：a{32}.*w1:p1.*term_a001.*受理 1 字节.*命令结果/);
@@ -103,6 +108,10 @@ test('MT09 MT10: direct input sends only current visible epoch and stops after s
     const beforeRender=nodes['view-content'].replaceCount;const b=ui.create(mesh.hostId,mesh);
     assert.equal(nodes['view-content'].replaceCount,beforeRender,'another tab must not detach focused direct terminal');
     await ui.select(b);term.data('b');await flush();
+    channels[0].onmessage({kind:'observation',generation:g,snapshot:{epoch:2,phase:'paused'}});
+    assert.deepEqual(ui.tabImpacts([direct.hostId]),[{
+      label:`标签 1 · ${direct.hostId} · ${direct.paneId}`,state:'观察已暂停',input:'输入已关闭。',
+    }]);
     assert.equal(receipt.hidden,true);
     assert.equal(calls.filter(c=>c.name==='remote_tab_input_send').length,1);
   } finally {globalThis.document=oldDocument;globalThis.window=oldWindow;}

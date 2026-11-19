@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildImportChoices, previewIsCurrent, validExportPassword, exportIfCurrent } from '../src/config-transfer-ui.js';
+import { buildImportChoices, previewIsCurrent, validExportPassword, exportIfCurrent, initConfigTransfer } from '../src/config-transfer-ui.js';
 const entries = [{ index: 0, conflicts: [{ id: 'a' }, { id: 'b' }] }, { index: 1, conflicts: [] }];
 test('requires an explicit choice per entry and replaces every conflict', () => {
   assert.throws(() => buildImportChoices(entries, new Map([[0, 'replace']])));
@@ -55,7 +55,6 @@ class FakeElement {
   querySelector(selector) {const nodes=this.descendants();if(selector==='[role=status]')return nodes.find(n=>n.attrs.role==='status');if(selector==='h2')return nodes.find(n=>n.tagName==='h2');if(selector==='.config-preview')return nodes.find(n=>n.className==='config-preview');if(selector==='.config-preview h3')return nodes.find(n=>n.className==='config-preview')?.descendants().find(n=>n.tagName==='h3');return undefined;}
 }
 async function runNetworkOnlyImport({applyFails=false, readFails=false}={}) {
-  const {initConfigTransfer}=await import('../src/config-transfer-ui.js');
   const panel=new FakeElement('section'), opener=new FakeElement('button');panel.hidden=true;
   const previousDocument=globalThis.document, previousWindow=globalThis.window;
   globalThis.document={hidden:false,getElementById:id=>id==='config-transfer'?panel:opener,createElement:tag=>new FakeElement(tag),createTextNode:text=>new FakeElement('#text',text),addEventListener(){}};
@@ -102,4 +101,59 @@ test('unknown save with successful refresh shows actual new catalog without repl
   const view=await runNetworkOnlyImport({applyFails:true});
   assert.equal(view.applies,1);assert.equal(view.applied,0);assert.equal(view.reads,2);assert.equal(view.exportDisabled,false);
   assert.ok(view.texts.some(s=>s.includes('新网络 · tailscale')));assert.ok(view.texts.some(s=>s.includes('导入结果未确认')));
+});
+
+test('import preview lists only the tabs for currently selected replacements before applying', async () => {
+  const panel=new FakeElement('section'), opener=new FakeElement('button');
+  const previousDocument=globalThis.document, previousWindow=globalThis.window;
+  globalThis.document={hidden:false,getElementById:id=>id==='config-transfer'?panel:opener,createElement:tag=>new FakeElement(tag),createTextNode:text=>new FakeElement('#text',text),addEventListener(){}};
+  globalThis.window={addEventListener(){}};
+  const target={username:'fixture',host:'fixture.invalid',port:22,session:'demo'};
+  const entry=(index, id)=>({index,host:{label:`导入主机 ${index+1}`,provider:'system',target},sameLabelIndices:[],conflicts:[{id,name:`本机主机 ${index+1}`,target}]});
+  const impacts={
+    'opaque-id-a': [
+      {label:'标签 1 · 研发 · w1:p1',state:'观察已暂停',input:'输入已关闭。'},
+      {label:'标签 3 · 研发 · w1:p2',state:'正在观察',input:'草稿输入已启用；仅在核对并确认后发送。'},
+    ],
+    'opaque-id-b': [{label:'标签 2 · 运维 · 选择终端',state:'未连接',input:'输入已关闭。'}],
+  };
+  const commands=[], stopped=[];
+  let appliedChoices;
+  async function invoke(name, args) {
+    commands.push(name);
+    if(name==='config_document_platform')return 'macos';
+    if(name==='network_list')return {profiles:[]};
+    if(name==='config_document_open')return [1,2,3];
+    if(name==='config_preview')return {ticket:'single',activeHostIds:Object.keys(impacts),plan:{entries:[entry(0,'opaque-id-a'),entry(1,'opaque-id-b')]}};
+    if(name==='config_apply') {
+      appliedChoices=args.choices;
+      return {added:[],retired:[],removedIds:[]};
+    }
+    throw Error(name);
+  }
+  try {
+    initConfigTransfer({native:true,invoke,getHosts:()=>[],refreshHosts:async()=>{},onApplied:async()=>{},
+      getTabImpacts:ids=>ids.flatMap(id=>impacts[id] || []),onAffected:ids=>stopped.push(ids)});
+    const button=label=>panel.descendants().find(n=>n.tagName==='button' && n.textContent===label);
+    const choose=(index,value)=>panel.descendants().find(n=>n.name===`config-choice-${index}` && n.value===value).onchange();
+    const impact=()=>panel.descendants().filter(n=>n.className==='config-affected').flatMap(n=>[n,...n.descendants()]).map(n=>n.textContent).join(' ');
+    await opener.onclick();await button('选择加密文件').onclick();
+    panel.descendants().find(n=>n.tagName==='input' && n.type==='password' && n.parent.textContent==='导入口令').value='synthetic-passphrase';
+    await button('解密并预览').onclick();
+    assert.doesNotMatch(panel.descendants().map(n=>n.textContent).join(' '),/opaque-id-|synthetic-passphrase|将关闭.*标签/);
+    assert.doesNotMatch(impact(),/研发|运维/);
+    choose(0,'replace');choose(1,'add');
+    assert.match(impact(),/标签 1 · 研发 · w1:p1.*观察已暂停.*输入已关闭/);
+    assert.match(impact(),/标签 3 · 研发 · w1:p2.*正在观察.*草稿输入已启用/);
+    assert.doesNotMatch(impact(),/运维/);
+    choose(0,'keep');choose(1,'replace');
+    assert.match(impact(),/标签 2 · 运维 · 选择终端.*未连接.*输入已关闭/);
+    assert.doesNotMatch(impact(),/研发/);
+    assert.deepEqual(stopped,[]);
+    assert.equal(commands.includes('config_apply'),false);
+    await button('确认应用所选操作').onclick();
+    assert.equal(commands.filter(name=>name==='config_apply').length,1);
+    assert.deepEqual(appliedChoices.map(choice=>choice.replaceIds),[[],['opaque-id-b']]);
+    assert.deepEqual(stopped,[['opaque-id-b']]);
+  } finally {globalThis.document=previousDocument;globalThis.window=previousWindow;}
 });

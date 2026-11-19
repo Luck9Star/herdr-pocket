@@ -1,6 +1,10 @@
 """Native GTK S06 driver. Reuses WebDriver and the reviewed two-peer fixture."""
 import base64
+from contextlib import contextmanager, nullcontext
+import ctypes
 import json
+import os
+from pathlib import Path
 import re
 import time
 
@@ -10,6 +14,74 @@ from paired_gui import WebDriver, GuiFailure, bounded_wire, fixture_terminal_id,
 WINDOW_HEIGHT = 1200
 WIDE_WIDTH = 1440
 NARROW_WIDTH = 700
+
+
+def owned_xvfb(env, *, proc=Path('/proc'), parent=None):
+    """Match the Xvfb child of our own xvfb-run wrapper and its authorization file."""
+    display, authority = env.get('DISPLAY', ''), env.get('XAUTHORITY', '')
+    if not re.fullmatch(r':[0-9]+', display) or not authority:
+        return False
+
+    def argv(pid):
+        return [os.fsdecode(arg) for arg in (proc / str(pid) / 'cmdline').read_bytes().split(b'\0') if arg]
+
+    pid = os.getppid() if parent is None else parent
+    try:
+        while pid > 1:
+            if any(Path(arg).name == 'xvfb-run' for arg in argv(pid)[:2]):
+                children = (proc / str(pid) / 'task' / str(pid) / 'children').read_text().split()
+                for child in children:
+                    try:
+                        args = argv(child)
+                    except FileNotFoundError:
+                        continue
+                    if (len(args) >= 2 and Path(args[0]).name == 'Xvfb' and args[1] == display and
+                            ('-auth', authority) in zip(args, args[1:]) and
+                            ('-nolisten', 'tcp') in zip(args, args[1:])):
+                        return True
+                return False
+            status = (proc / str(pid) / 'status').read_text()
+            pid = int(re.search(r'^PPid:\s+([0-9]+)$', status, re.MULTILINE)[1])
+    except (OSError, TypeError, ValueError):
+        return False
+    return False
+
+
+@contextmanager
+def park_xvfb_pointer(env):
+    if not owned_xvfb(env):
+        yield False
+        return
+    try:
+        x11 = ctypes.CDLL('libX11.so.6')  # A runtime dependency of Xvfb.
+    except OSError as error:
+        raise GuiFailure('s06_tauri_xvfb_x11_unavailable') from error
+    display_type, window_type, integer = ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int
+    x11.XOpenDisplay.argtypes, x11.XOpenDisplay.restype = [ctypes.c_char_p], display_type
+    x11.XDefaultRootWindow.argtypes, x11.XDefaultRootWindow.restype = [display_type], window_type
+    x11.XGetInputFocus.argtypes = [display_type, ctypes.POINTER(window_type), ctypes.POINTER(integer)]
+    x11.XWarpPointer.argtypes = [display_type, window_type, window_type, integer, integer,
+                               ctypes.c_uint, ctypes.c_uint, integer, integer]
+    x11.XSync.argtypes, x11.XCloseDisplay.argtypes = [display_type, integer], [display_type]
+    display = x11.XOpenDisplay(env['DISPLAY'].encode())
+    if not display:
+        raise GuiFailure('s06_tauri_xvfb_display_unavailable')
+    try:
+        focus, revert_to = window_type(), integer()
+        x11.XGetInputFocus(display, ctypes.byref(focus), ctypes.byref(revert_to))
+        parked = focus.value == 1  # PointerRoot is the bare Xvfb default.
+        if parked:
+            # At the default point (960, 700), a 700px window moves out from
+            # under the pointer and Xvfb sends a real blur. Park before launch.
+            root = x11.XDefaultRootWindow(display)
+            if not x11.XWarpPointer(display, 0, root, 0, 0, 0, 0, 300, 100):
+                raise GuiFailure('s06_tauri_xvfb_pointer_setup_failed')
+            x11.XSync(display, 0)
+        # Xvfb resets the pointer when the last client disconnects.
+        yield parked
+    finally:
+        x11.XCloseDisplay(display)
+
 
 TICK_ROW_SCRIPT = r"""
 const panel=document.querySelector(arguments[0]);
@@ -203,15 +275,19 @@ const selectedB = b?.dataset.focus === 'true' && b.getClientRects().length > 0 &
 const targetB = one(b, ':scope > .panel-head + p')?.textContent.split(' · ').slice(-2).join(' · ') ===
     targets[1].join(' · ');
 const directB = !!editor && !document.hidden && !document.querySelector('dialog[open]') &&
-    document.activeElement === editor && !editor.readOnly && editor.getAttribute('inputmode') === 'text' &&
+    document.hasFocus() && document.activeElement === editor && !editor.readOnly && editor.getAttribute('inputmode') === 'text' &&
     controls?.dataset.mode === 'direct' && connection?.dataset.state === 'active';
 const receiptB = receipt?.includes(` · pane：${targets[1][0]} · terminal：${targets[1][1]} · 受理 1 字节。`) === true;
-const aObserves = one(a, '.tab-mobile-controls')?.dataset.mode === 'observe';
+const aEditor = one(a, '.terminal-host textarea.xterm-helper-textarea');
+const aObserves = one(a, '.tab-mobile-controls')?.dataset.mode === 'observe' &&
+    aEditor?.readOnly === true && aEditor.getAttribute('inputmode') === 'none';
 let record = window.__s06DirectResize;
 if (action === 'arm' && !record && root?.dataset.split === '2' &&
     selectedB && targetB && directB && receiptB && aTab && aObserves) {
-    record = {editor, controls, connection, receipt, aTab, blurred: false, changed: false};
-    record.onBlur = () => { record.blurred = true; };
+    record = {editor, controls, connection, receipt, aTab, firstBlur: null, changed: false};
+    record.onBlur = () => { record.firstBlur ??= {
+        width: innerWidth, documentFocused: document.hasFocus(), editorAttached: editor.isConnected
+    }; };
     editor.addEventListener('blur', record.onBlur, {passive: true});
     const check = mutations => {
         record.changed ||= mutations.some(m =>
@@ -233,12 +309,18 @@ if (action === 'arm' && !record && root?.dataset.split === '2' &&
     window.__s06DirectResize = record;
 }
 record?.drain();
+const singleB = root?.matches(panels[1]) === true;
+const actualB = b ?? (singleB ? root : null);
 const result = {armed: !!record, selectedB, targetB, directB, receiptB, aObserves,
     originalEditor: !!record && record.editor === editor,
     originalInputState: !!record && record.controls === controls && record.connection === connection &&
         record.receipt === receipt && !record.changed,
-    neverBlurred: !!record && !record.blurred,
-    aPaused: !!record && aTab === record.aTab && aTab.textContent.endsWith(' · 观察已暂停')};
+    neverBlurred: !!record && !record.firstBlur,
+    aPaused: !!record && aTab === record.aTab && aTab.textContent.endsWith(' · 观察已暂停'),
+    diagnostic: {width: innerWidth, documentFocused: document.hasFocus(), split: root?.dataset.split,
+        singleB, wrappedB: !!b, originalEditorAttached: record?.editor.isConnected === true,
+        actualBMode: one(actualB, '.tab-mobile-controls')?.dataset.mode,
+        firstBlur: record?.firstBlur ?? null}};
 if (action === 'finish' && record) {
     record.stop();
     delete window.__s06DirectResize;
@@ -915,14 +997,30 @@ def exercise_direct_resize(ui, panels, targets, approvals, check_bytes):
     retained_fields = ('armed', 'selectedB', 'targetB', 'directB', 'receiptB',
                        'originalEditor', 'originalInputState', 'neverBlurred')
     active = ('active', 'active')
-    stage, last = 'wide_before', {}
+    stage, last, diagnostic = 'wide_before', {}, None
+
+    def safe_focus_sample(sample):
+        width = sample.get('width')
+        return {'width': width if type(width) is int and 0 < width <= 16384 else None,
+                'documentFocused': sample.get('documentFocused') is True}
 
     def read(action):
-        nonlocal last
+        nonlocal last, diagnostic
         result = ui.read(DIRECT_RESIZE_SCRIPT, panels, targets, action)
         if not isinstance(result, dict):
             raise GuiFailure('s06_tauri_direct_resize_observation_invalid')
         last = {key: result.get(key) is True for key in (*retained_fields, 'aObserves', 'aPaused')}
+        sample = result.get('diagnostic')
+        if isinstance(sample, dict):
+            first_blur = sample.get('firstBlur')
+            diagnostic = {**safe_focus_sample(sample),
+                          **{key: sample.get(key) is True for key in ('singleB', 'wrappedB', 'originalEditorAttached')},
+                          'split': sample.get('split') if sample.get('split') in ('1', '2') else None,
+                          'actualBMode': sample.get('actualBMode') if sample.get('actualBMode') in
+                          ('observe', 'draft', 'direct') else None,
+                          'firstBlur': {**safe_focus_sample(first_blur),
+                                        'editorAttached': first_blur.get('editorAttached') is True}
+                          if isinstance(first_blur, dict) else None}
         return last
 
     def fields_match(fields, observation):
@@ -987,7 +1085,7 @@ def exercise_direct_resize(ui, panels, targets, approvals, check_bytes):
     except GuiFailure:
         if ui.output is not None:
             (ui.output / 's06-tauri-direct-resize-failure.json').write_text(
-                json.dumps({'stage': stage, 'observation': last}, sort_keys=True))
+                json.dumps({'stage': stage, 'observation': last, 'diagnostic': diagnostic}, sort_keys=True))
         raise
     return {'windowRectRoundTrip': True, 'sizes': [before_window, narrow_window, restored_window],
             'originalEditorFocusAndInputStatePreserved': True, 'originalTargetAndReceiptPreserved': True,
@@ -1000,7 +1098,7 @@ def exercise_direct_resize(ui, panels, targets, approvals, check_bytes):
 
 
 def exercise(args, root, env, configs, approvals, expected):
-    driver, stage = WebDriver(), 'start'
+    driver, stage = WebDriver(), 'prepare_display'
     ui = SplitDriver(driver, args.output)
     guarded = bool(args.input_fixture)
     other = root / 's06-peer-b'
@@ -1011,7 +1109,11 @@ def exercise(args, root, env, configs, approvals, expected):
                 raise GuiFailure('s06_tauri_remote_bytes_changed')
 
     try:
-        with owned_process(['tauri-driver'], cwd=root, env=env, log=root / 's06-tauri-driver.log'):
+        pointer = park_xvfb_pointer(os.environ) if guarded else nullcontext(False)
+        with pointer as parked, owned_process(['tauri-driver'], cwd=root, env=env, log=root / 's06-tauri-driver.log'):
+            if guarded:
+                (args.output / 's06-tauri-xvfb-pointer.json').write_text(json.dumps({'parkedBeforeLaunch': parked}))
+            stage = 'start'
             try:
                 driver.start(args.tauri_app)
                 rect = driver.call('POST', driver.session + '/window/rect', {'width': 1440, 'height': 1200})

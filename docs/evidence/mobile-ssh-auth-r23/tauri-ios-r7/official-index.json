@@ -1,0 +1,209 @@
+{
+  "schemaVersion": 1,
+  "round": "R7",
+  "sourceSHA": "1c441c0cae12ccb00cea64dc9db09b0949626b39",
+  "run": 44450826220,
+  "job": 135314034354,
+  "jobURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44450826220/job/135314034354",
+  "artifact": 14497110066,
+  "artifactURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44450826220/artifacts/14497110066",
+  "zipBytes": 532881,
+  "zipSha256": "f4c58ce8b68da11470348ea52ff22578722c590bfafd1f297a81990bc3cba4c5",
+  "originalResultSha256": "b10784617e4ca5eee47e8d87efe49fc23c8414fc9a6faf2bde218d4c4e059a6b",
+  "platform": "ios-simulator",
+  "simulator": {
+    "deviceType": "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max",
+    "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-26-2"
+  },
+  "toolchain": {
+    "xcodeVersion": "16.4",
+    "xcodeBuild": "16F6",
+    "simulatorSDKVersion": "18.5"
+  },
+  "status": "passed",
+  "lastCompletedStage": "complete",
+  "scope": "受控回环、密码认证、XCTest 输入",
+  "screens": {
+    "ordinary-terminal.png": {
+      "pixels": [
+        1320,
+        2868
+      ],
+      "originalBytes": 219423,
+      "originalSha256": "76ab6487b9c9afaa20c1444af1da5fbeacf0112cb6df4a5c48c2ddcb011a7a30",
+      "archivedBytes": 218602,
+      "archivedSha256": "be53ab54c18f754033bf65f92706bc03dedf8c974b0c627e33982196e5af9741",
+      "pixelSha256": "736dc03f61af10846124b3add503b7f2234369431187268e3dfe7320f5c2cc2c",
+      "removedChunks": [
+        "eXIf",
+        "iTXt"
+      ]
+    },
+    "key-change-review.png": {
+      "pixels": [
+        1320,
+        2868
+      ],
+      "originalBytes": 225663,
+      "originalSha256": "8d1956d7bc0757922820315ea5f39ce99402b6ada062445df603df11e9e27176",
+      "archivedBytes": 224842,
+      "archivedSha256": "91f8b582129ae9c89015abf76d52f34f4903f57ecbb90136a2015a503e592a62",
+      "pixelSha256": "9eb11de631248fb7a60b307d08fc1e635449a2224d8ac264a7a6d4e268b4ce8a",
+      "removedChunks": [
+        "eXIf",
+        "iTXt"
+      ]
+    },
+    "key-change-terminal.png": {
+      "pixels": [
+        1320,
+        2868
+      ],
+      "originalBytes": 218495,
+      "originalSha256": "0c6858a07aa390d92503fae25b5b197e6307ea26e0f51c13fe7f65294c85fff6",
+      "archivedBytes": 217674,
+      "archivedSha256": "1ef59e65d4c1eda1391745734dd964180487d7f241b55abde627ec4c265c526a",
+      "pixelSha256": "ffd763ac4aaa8a58d04c89367e1c9e1499dabbe9a379729297c0fcdc5b5424f2",
+      "removedChunks": [
+        "eXIf",
+        "iTXt"
+      ]
+    }
+  },
+  "cases": {
+    "ordinary": {
+      "status": "passed",
+      "entry": "viaAdd",
+      "connections": [
+        {
+          "hostKey": "A",
+          "authenticationAttempts": 0,
+          "authenticationSuccesses": 0,
+          "pty": 0,
+          "shell": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "singleMarkerLineExact": false,
+          "closed": true
+        },
+        {
+          "hostKey": "A",
+          "authenticationAttempts": 1,
+          "authenticationSuccesses": 1,
+          "pty": 1,
+          "shell": 1,
+          "inputBytes": 9,
+          "outputBytes": 102,
+          "singleMarkerLineExact": true,
+          "closed": true
+        }
+      ],
+      "activeDisconnect": true,
+      "ocr": {
+        "originalFile": "ordinary-terminal-ocr.json",
+        "originalSha256": "0d582886c55fd8663ddf355347a451c7b24ffe742142671df51f6af167d16e99",
+        "imageSha256": "76ab6487b9c9afaa20c1444af1da5fbeacf0112cb6df4a5c48c2ddcb011a7a30",
+        "terminalBounds": [
+          48,
+          984,
+          1224,
+          1238
+        ],
+        "engine": "tesseract 5.5.4",
+        "attempts": 1,
+        "markerVisible": true,
+        "tokenVisible": true,
+        "proofSequenceVisible": true
+      },
+      "fingerprintReviewed": true,
+      "returnHomeCheckpoint": "ordinary_returned_home"
+    },
+    "keyChange": {
+      "status": "passed",
+      "entry": "viaAdd",
+      "connections": [
+        {
+          "hostKey": "A",
+          "authenticationAttempts": 0,
+          "authenticationSuccesses": 0,
+          "pty": 0,
+          "shell": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "singleMarkerLineExact": false,
+          "closed": true
+        },
+        {
+          "hostKey": "B",
+          "authenticationAttempts": 0,
+          "authenticationSuccesses": 0,
+          "pty": 0,
+          "shell": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "singleMarkerLineExact": false,
+          "closed": true
+        },
+        {
+          "hostKey": "B",
+          "authenticationAttempts": 0,
+          "authenticationSuccesses": 0,
+          "pty": 0,
+          "shell": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "singleMarkerLineExact": false,
+          "closed": true
+        },
+        {
+          "hostKey": "B",
+          "authenticationAttempts": 1,
+          "authenticationSuccesses": 1,
+          "pty": 1,
+          "shell": 1,
+          "inputBytes": 9,
+          "outputBytes": 102,
+          "singleMarkerLineExact": true,
+          "closed": true
+        }
+      ],
+      "activeDisconnect": true,
+      "ocr": {
+        "originalFile": "key-change-terminal-ocr.json",
+        "originalSha256": "b6ae30b216eafd14e6997470d3b4e1d449dc1b60f5290378afd6cb6ed7ed829c",
+        "imageSha256": "0c6858a07aa390d92503fae25b5b197e6307ea26e0f51c13fe7f65294c85fff6",
+        "terminalBounds": [
+          48,
+          984,
+          1224,
+          1238
+        ],
+        "engine": "tesseract 5.5.4",
+        "attempts": 1,
+        "markerVisible": true,
+        "tokenVisible": true,
+        "proofSequenceVisible": true
+      },
+      "cancelKeptTrust": true,
+      "freshFingerprintConfirmed": true,
+      "rotationEvidenceStages": [
+        2,
+        3,
+        4
+      ]
+    }
+  },
+  "cleanup": {
+    "simulatorDeleted": true,
+    "fixturesClosed": true,
+    "privateFilesRemoved": true
+  },
+  "unverified": [
+    "活动终端跨底栏保活",
+    "实体设备",
+    "系统 IME 组词",
+    "真实跨网",
+    "Tauri iOS 私钥认证",
+    "换钥案断开后的归家"
+  ]
+}

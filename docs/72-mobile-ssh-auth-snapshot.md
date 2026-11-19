@@ -53,6 +53,8 @@ R7 在 PR #6 合并前提交 `1c441c0cae12ccb00cea64dc9db09b0949626b39` 上运�
 
 R7 验收范围为受控回环密码认证与 XCTest 输入。活动终端在三个底栏页之间切换时保活、实体设备、系统 IME 组词、真实跨网和 Tauri iOS 私钥认证仍待独立验收。原始 ZIP 经完整性及 SHA256 核验，摘要为 `f4c58ce8b68da11470348ea52ff22578722c590bfafd1f297a81990bc3cba4c5`。[R7 原生作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44450826220/job/135314034354) · [证据 ZIP](https://github.com/Luck9Star/herdr-pocket/actions/runs/44450826220/artifacts/14497110066)
 
+长期归档保留三张 1320 × 2868 的系统截图。PNG 仅移除 EXIF 和文本块，解码像素一致。终端内的 `POCKET-ANDROID-SSH-OK` 是共用夹具的回显标记。[普通终端](evidence/mobile-ssh-auth-r23/tauri-ios-r7/ordinary-terminal.png) · [换钥核对](evidence/mobile-ssh-auth-r23/tauri-ios-r7/key-change-review.png) · [换钥后终端](evidence/mobile-ssh-auth-r23/tauri-ios-r7/key-change-terminal.png) · [来源、哈希与脱敏结果](evidence/mobile-ssh-auth-r23/tauri-ios-r7/official-index.json)
+
 ## R22 Android 设备证据
 
 两次作业使用受控 API 35 x86_64 模拟器与回环 SSH，均完成普通连接、主机密钥变化、终端回显和断开。两次使用不同源码，原始 ZIP 已完整重新下载并计算 SHA256。[可复核的运行、工件及内部结果索引](evidence/mobile-ssh-auth-r23/r22-actions.json)

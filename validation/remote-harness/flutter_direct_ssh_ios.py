@@ -18,7 +18,10 @@ import tempfile
 import time
 import uuid
 
+from contextlib import nullcontext
 from flutter_direct_ssh_android import (PUBLIC_FIELDS as FIELDS, ROTATION_PUBLIC_FIELDS, ROTATION_PHASES,
+                                       ENCRYPTED_PUBLIC_FIELDS, ENCRYPTED_UI_PHASES, checked_encrypted_stage,
+                                       encrypted_probe_evidence, safe_encrypted_connect_diagnostic, safe_encrypted_diagnostic,
                                        ORDINARY_MOBILE_PHASES, Failure as SharedFailure, checked_rotation_stage,
                                        ordinary_mobile_checkpoint, ordinary_session_evidence,
                                        require_ordinary_mobile_checkpoints, rotation_checkpoint,
@@ -33,6 +36,9 @@ STAGES = {'home', 'target', 'probe', 'authenticate', 'secret_entry', 'screenshot
 STAGES.update({'rotation_' + name for name in ('home', 'initial_probe', 'rejected', 'cancelled',
                                               'fresh_probe', 'authenticate', 'input', 'disconnect', 'complete')})
 STAGES.update(ORDINARY_MOBILE_PHASES)
+STAGES.update(ENCRYPTED_UI_PHASES | {'encrypted_waiting_private', 'encrypted_home', 'encrypted_probe',
+              'encrypted_review', 'encrypted_rejected', 'encrypted_connect', 'encrypted_disconnect',
+              'encrypted_returned_home'})
 LOG_MARKERS = {'xcodeBuildCompleted': 'Xcode build done.',
                'buildError': 'Failed to build iOS app',
                'launchError': 'Error launching application on',
@@ -202,7 +208,7 @@ def failure_facts(text, private_values):
     return facts
 
 
-def xctest_result_markers(path, private_values=()):
+def xctest_result_markers(path, private_values=(), *, counts_only=False):
     if not path.exists():
         return {'resultBundlePresent': False}
     result = subprocess.run(['xcrun', 'xcresulttool', 'get', 'test-results', 'summary',
@@ -224,6 +230,8 @@ def xctest_result_markers(path, private_values=()):
                         'crashed': 'crashed', 'noTests': 'no tests were found',
                         'bundleLoadFailed': 'test bundle could not be loaded'}.items():
         result[key] = marker in raw
+    if counts_only:
+        return result  # Encrypted runs never export XCTest's free-form text.
     failures = data.get('testFailures', []) if isinstance(data, dict) else []
     messages, identifier, facts = [], None, {}
     if isinstance(failures, list):
@@ -285,11 +293,11 @@ def xctest_result_markers(path, private_values=()):
     return result
 
 
-def check_result(value):
-    if (not isinstance(value, dict) or set(value) != FIELDS or type(value['schemaVersion']) is not int or
+def check_result(value, fields=FIELDS):
+    if (not isinstance(value, dict) or set(value) != fields or type(value['schemaVersion']) is not int or
             value['schemaVersion'] != 1 or value['platform'] != 'ios-simulator' or
             value['physicalImeVerified'] is not False or
-            any(value[key] is not True for key in FIELDS - {'schemaVersion', 'platform', 'physicalImeVerified'})):
+            any(value[key] is not True for key in fields - {'schemaVersion', 'platform', 'physicalImeVerified'})):
         raise Failure('ios_result_incomplete')
     return value
 
@@ -339,9 +347,12 @@ def target_pixel_proof(png, expected_target, bounds):
     raise ScreenshotGateError('ios_target_not_visible')
 
 
-def screen_checkpoint(request, completed, fixture, rotation_fixture, device, exchange, private, output):
+def screen_checkpoint(request, completed, fixture, rotation_fixture, device, exchange, private, output, *, encrypted=None):
+    peers = {'ordinary': fixture, 'key-rotation': rotation_fixture}
+    if encrypted is not None:
+        peers['encrypted'] = encrypted
     keys = {'tag', 'attempt', 'bounds', 'targetBounds', 'viewSize', 'observedTarget'}
-    if (not isinstance(request, dict) or set(request) != keys or request['tag'] not in ('ordinary', 'key-rotation') or
+    if (not isinstance(request, dict) or set(request) != keys or type(request['tag']) is not str or request['tag'] not in peers or
             type(request['attempt']) is not int or not 1 <= request['attempt'] <= 12 or
             not isinstance(request['viewSize'], list) or len(request['viewSize']) != 2 or
             any(type(n) is not int or n <= 0 for n in request['viewSize'])):
@@ -353,7 +364,7 @@ def screen_checkpoint(request, completed, fixture, rotation_fixture, device, exc
                 rect[0] + rect[2] > request['viewSize'][0] or rect[1] + rect[3] > request['viewSize'][1]):
             raise Failure('ios_screen_bounds_invalid')
     tag, attempt = request['tag'], request['attempt']
-    peer = fixture if tag == 'ordinary' else rotation_fixture
+    peer = peers[tag]
     expected_target = f'{peer.username}@127.0.0.1:{peer.port}'
     if request['observedTarget'] != expected_target:
         raise Failure('ios_active_target_mismatch')
@@ -361,13 +372,14 @@ def screen_checkpoint(request, completed, fixture, rotation_fixture, device, exc
         return
     if ((tag in completed and completed[tag]['accepted']) or
             attempt != (completed[tag]['attempt'] + 1 if tag in completed else 1) or
-            (tag == 'ordinary' and not completed.get('key-rotation', {}).get('accepted'))):
+            (tag == 'ordinary' and not completed.get('key-rotation', {}).get('accepted')) or
+            (tag == 'encrypted' and not completed.get('ordinary', {}).get('accepted'))):
         raise Failure('ios_screen_request_out_of_order')
     events = peer.snapshot()['connectionEvents']
     # A screen cannot be admitted before this peer received the sole input.
     if not events or not events[-1]['markerReceived'] or events[-1]['inputBytes'] != 9:
         raise Failure('ios_screen_peer_input_missing')
-    name = 'ordinary-terminal' if tag == 'ordinary' else 'key-change-terminal'
+    name = {'ordinary': 'ordinary-terminal', 'key-rotation': 'key-change-terminal', 'encrypted': 'encrypted-key-terminal'}[tag]
     png = capture_system_screen(device, private / (name + '.png'))
     if list(struct.unpack('>II', png[16:24])) != request['viewSize']:
         raise Failure('ios_screenshot_geometry_mismatch')
@@ -382,7 +394,7 @@ def screen_checkpoint(request, completed, fixture, rotation_fixture, device, exc
     accepted = code is None
     # Export only a credential-free active frame with its full target proven
     # from pixels. Keep the shared gate dictionary unchanged in the OCR file.
-    if target_evidence is not None:
+    if target_evidence is not None and (tag != 'encrypted' or accepted):
         (output / (name + '.png')).write_bytes(png)
         (output / (name + '-ocr.json')).write_text(json.dumps(evidence, indent=2) + '\n')
     completed[tag] = {'attempt': attempt, 'accepted': accepted,
@@ -408,9 +420,12 @@ def review_checkpoint(request, fixture, device, exchange, private, output):
     pending.replace(exchange / 'review-done.json')
 
 
-def public_artifacts(output, *, masked_preconnect=False):
+def public_artifacts(output, *, masked_preconnect=False, include_encrypted_key=False):
     cases, artifacts = {}, {}
-    for tag, name in (('ordinary', 'ordinary-terminal'), ('keyChange', 'key-change-terminal')):
+    names = [('ordinary', 'ordinary-terminal'), ('keyChange', 'key-change-terminal')]
+    if include_encrypted_key:
+        names.append(('encryptedKey', 'encrypted-key-terminal'))
+    for tag, name in names:
         png, proof = name + '.png', name + '-ocr.json'
         if (output / png).is_file() and (output / proof).is_file():
             digest = hashlib.sha256((output / png).read_bytes()).hexdigest()
@@ -420,7 +435,8 @@ def public_artifacts(output, *, masked_preconnect=False):
             artifacts[png] = digest
             cases[tag] = {'terminalScreenshot': {'imageFile': png, 'imageSha256': digest,
                 'criteriaFile': proof, 'criteriaSha256': hashlib.sha256((output / proof).read_bytes()).hexdigest()},
-                'protocolRef': 'protocol' if tag == 'ordinary' else 'rotation.protocol'}
+                'protocolRef': {'ordinary': 'protocol', 'keyChange': 'rotation.protocol',
+                                'encryptedKey': 'encryptedProtocol'}[tag]}
     review = output / 'key-change-review.png'
     if review.is_file():
         digest = hashlib.sha256(review.read_bytes()).hexdigest()
@@ -466,7 +482,7 @@ def connection_diagnostic(value):
     return dict(value)
 
 
-def framework_diagnostic(value, private_values):
+def framework_diagnostic(value, private_values, *, include_excerpt=True):
     if not isinstance(value, dict):
         return None
     result = {}
@@ -477,7 +493,7 @@ def framework_diagnostic(value, private_values):
     if isinstance(line, int) and not isinstance(line, bool) and 1 <= line <= 1000:
         result['sourceLine'] = line
     excerpt = value.get('excerpt')
-    if isinstance(excerpt, list):
+    if include_excerpt and isinstance(excerpt, list):
         result['excerpt'] = [safe for item in excerpt[:3]
                              if (safe := sanitized_failure(item, private_values))]
     probe = semantics_probe(value.get('semantics'))
@@ -530,12 +546,49 @@ def layout_diagnostics(value):
     return result
 
 
-def run(app, output, env):
+def deliver_encrypted_credentials(exchange, peer):
+    # Publish once, mode 0600, without replacing a file the app may already have consumed.
+    target = exchange / 'encrypted-credentials.json'
+    if exchange.is_symlink() or exchange.parent.is_symlink() or not exchange.is_dir():
+        raise Failure('ios_encrypted_exchange_invalid')
+    with tempfile.NamedTemporaryFile(dir=exchange) as pending:
+        pending.write(json.dumps({'privateKey': peer.private_key, 'passphrase': peer.passphrase}).encode())
+        pending.flush()
+        try:
+            os.link(pending.name, target)
+        except FileExistsError:
+            raise Failure('ios_encrypted_credentials_already_delivered') from None
+
+
+def encrypted_case_evidence(exchange, peer, checkpoints):
+    device = check_result(read_json(exchange / 'encrypted-result.json'), ENCRYPTED_PUBLIC_FIELDS)
+    modes = read_json(exchange / 'encrypted-mode-switch.json')
+    if (set(checkpoints) != {'review', 'rejected'} or checkpoints['review'] != checkpoints['rejected'] or
+            not isinstance(modes, dict) or set(modes) != {'passwordToKeyCleared', 'keyToPasswordCleared', 'sameTrust'} or
+            any(value is not True for value in modes.values()) or os.path.lexists(exchange / 'encrypted-credentials.json')):
+        raise Failure('ios_encrypted_checkpoints_incomplete')
+    if not peer.wait_for_connections_closed(2):
+        raise Failure('ios_encrypted_peer_not_closed')
+    ordinary_session_evidence(peer, closed=True)
+    session = peer.snapshot()['connectionEvents'][1]
+    if session.get('singleMarkerLineExact') is not True:
+        raise Failure('ios_encrypted_input_not_exact')
+    fields = ('id', 'hostKey', 'authAttempts', 'authSuccesses', 'ptyRequests', 'shellRequests', 'inputBytes',
+              'outputBytes', 'markerReceived', 'sessionClosed', 'closed', 'singleMarkerLineExact')
+    return {'fingerprintReviewed': device['fingerprintMatched'], 'terminalInputReceived': device['remoteEchoVisible'],
+            'disconnected': device['disconnectUiConfirmed'], 'device': device, 'modeSwitch': modes,
+            'wrongPassphrase': {'rejected': device['wrongPassphraseRejectedLocally'], 'peer': checkpoints['rejected']},
+            'acceptedSession': {field: session[field] for field in fields}, 'authenticationMethod': 'publickey'}
+
+
+def run(app, output, env, *, include_encrypted_key=False):
     if (env.get('GITHUB_ACTIONS') != 'true' or
             not env.get('GITHUB_REF', '').startswith('refs/heads/codex/acceptance/direct-ssh-ios-') or
             not re.fullmatch(r'[0-9a-f]{40}', env.get('GITHUB_SHA', '')) or
             not re.fullmatch(r'\d+', env.get('GITHUB_RUN_ID', '')) or not env.get('RUNNER_TEMP')):
         raise Failure('ios_isolated_ci_required')
+    if include_encrypted_key != env['GITHUB_REF'].startswith('refs/heads/codex/acceptance/direct-ssh-ios-flutter-only-encrypted-key-'):
+        raise Failure('ios_encrypted_ref_mismatch')
     base = Path(env['RUNNER_TEMP']).resolve()
     app, output = Path(app).resolve(), Path(output).resolve()
     if (app == base or output == base or app == output or not app.is_relative_to(base) or
@@ -562,6 +615,7 @@ def run(app, output, env):
     rotation = {'checkpoints': {}}
     report['rotation'] = rotation
     mobile = report['ordinaryMobileCheckpoints'] = {}
+    encrypted, encrypted_checkpoints, key_case, delivered = None, {}, {}, False
     private_values = (fixture.password, fixture.username, fixture.fingerprint, rotation_fixture.password,
                       rotation_fixture.fingerprint, rotation_fixture.rotated_fingerprint, '127.0.0.1',
                       str(app), str(base))
@@ -607,15 +661,23 @@ def run(app, output, env):
         phase = 'simulator_boot_ready'
         command('xcrun', 'simctl', 'bootstatus', device, '-b', timeout=remaining(360))
         phase = 'fixture_start'
-        with fixture, rotation_fixture:
+        if include_encrypted_key:
+            from tauri_ios_direct_ssh import EncryptedKeyFixture
+            encrypted = EncryptedKeyFixture(screen_proof=True, channel_deadline=overall_deadline)
+        with fixture, rotation_fixture, (encrypted or nullcontext()):
             private = Path(tempfile.mkdtemp(prefix='herdr-direct-ios-private-', dir=base))
             defines = private / 'defines.json'
-            defines.write_text(json.dumps({'HERDR_IOS_DIRECT_SSH': '1', 'HERDR_IOS_RUN_ID': env['GITHUB_RUN_ID'],
+            targets = {'HERDR_IOS_DIRECT_SSH': '1', 'HERDR_IOS_RUN_ID': env['GITHUB_RUN_ID'],
                 'HERDR_IOS_DIRECT_TARGET': json.dumps({'host': '127.0.0.1', 'port': fixture.port,
                     'username': fixture.username, 'password': fixture.password, 'fingerprint': fixture.fingerprint}),
                 'HERDR_IOS_ROTATION_TARGET': json.dumps({'host': '127.0.0.1', 'port': rotation_fixture.port,
                     'username': rotation_fixture.username, 'password': rotation_fixture.password,
-                    'fingerprint': rotation_fixture.fingerprint, 'rotatedFingerprint': rotation_fixture.rotated_fingerprint})}))
+                    'fingerprint': rotation_fixture.fingerprint, 'rotatedFingerprint': rotation_fixture.rotated_fingerprint})}
+            if encrypted:
+                targets.update(HERDR_IOS_ENCRYPTED_KEY_CASE='1', HERDR_IOS_ENCRYPTED_KEY_TARGET=json.dumps({
+                    'host': '127.0.0.1', 'port': encrypted.port, 'username': encrypted.username,
+                    'fingerprint': encrypted.fingerprint}))
+            defines.write_text(json.dumps(targets))
             defines.chmod(0o600)
             phase = 'xctest_scaffold'
             prepare_xctest(app)
@@ -666,7 +728,8 @@ def run(app, output, env):
                             review_captured = True
                         screen = read_json(exchange / 'screen-request.json')
                         if screen is not None:
-                            screen_checkpoint(screen, screens, fixture, rotation_fixture, device, exchange, private, output)
+                            screen_checkpoint(screen, screens, fixture, rotation_fixture, device, exchange, private, output,
+                                              encrypted=encrypted if delivered else None)
                         checkpoint = read_json(exchange / 'rotation-stage.json')
                         if checkpoint is not None:
                             evidence = rotation_checkpoint(rotation_fixture, checkpoint, rotation['checkpoints'])
@@ -711,7 +774,7 @@ def run(app, output, env):
                             finally:
                                 (exchange / 'screenshot-done.json').write_text('{}')
                     public = read_json(exchange / 'result.json') if exchange else None
-                    if public is not None:
+                    if public is not None and not confirmed:
                         report['device'] = check_result(public)
                         require_ordinary_mobile_checkpoints(mobile)
                         if (set(screens) != {'ordinary', 'key-rotation'} or
@@ -729,7 +792,35 @@ def run(app, output, env):
                         pending.replace(exchange / 'peer-confirmed.json')
                         confirmed = True
                         report['peerClosedBeforeDriverExit'] = True
-                        break
+                        if not encrypted:
+                            break
+                    if encrypted and exchange and confirmed:
+                        if not delivered and stage == {'stage': 'encrypted_waiting_private'}:
+                            if encrypted.snapshot()['connections'] != 0:
+                                raise Failure('ios_encrypted_peer_not_independent')
+                            deliver_encrypted_credentials(exchange, encrypted)
+                            delivered = True
+                        if delivered:
+                            request = read_json(exchange / 'encrypted-stage.json')
+                            name = checked_encrypted_stage(request, encrypted_checkpoints) if request is not None else None
+                            if name:
+                                encrypted_checkpoints[name] = encrypted_probe_evidence(encrypted)
+                                if process.poll() is not None:
+                                    raise Failure('ios_encrypted_driver_exited_before_confirmation')
+                                pending = exchange / ('encrypted-' + name + '-confirmed.new')
+                                pending.write_text(json.dumps({'phase': name, 'serverEvidenceAccepted': True}))
+                                pending.replace(pending.with_suffix('.json'))
+                            if (exchange / 'encrypted-result.json').is_file():
+                                if not screens.get('encrypted', {}).get('accepted'):
+                                    raise Failure('ios_encrypted_screen_proof_missing')
+                                key_case = encrypted_case_evidence(exchange, encrypted, encrypted_checkpoints)
+                                if process.poll() is not None:
+                                    raise Failure('ios_encrypted_driver_exited_before_confirmation')
+                                pending = exchange / 'encrypted-peer-confirmed.new'
+                                pending.write_text(json.dumps({'protocolAccepted': True, 'peerClosedBeforeDriverExit': True}))
+                                pending.replace(pending.with_suffix('.json'))
+                                key_case['peerClosedBeforeDriverExit'] = True
+                                break
                     time.sleep(.5)
                 phase = 'await_driver_exit'
                 try:
@@ -744,7 +835,7 @@ def run(app, output, env):
                     framework = read_json(exchange / 'framework-error.json')
                     if framework:
                         report['frameworkDiagnostic'] = framework_diagnostic(framework,
-                            (*private_values, str(private)))
+                            (*private_values, str(private)), include_excerpt=not include_encrypted_key)
                     probes = {}
                     for name in ('baseline', 'home', 'report_data_set'):
                         probe = semantics_probe(read_json(exchange / ('semantics-' + name + '.json')))
@@ -752,7 +843,14 @@ def run(app, output, env):
                             probes[name] = probe
                     if probes:
                         report['semanticsProbes'] = probes
-                if code or not confirmed:
+                if code or not confirmed or (include_encrypted_key and not key_case.get('peerClosedBeforeDriverExit')):
+                    if delivered:
+                        for filename, field, validate in (
+                                ('encrypted-diagnostic.json', 'encryptedUiDiagnostic', safe_encrypted_diagnostic),
+                                ('encrypted-connect-diagnostic.json', 'encryptedConnectDiagnostic', safe_encrypted_connect_diagnostic)):
+                            value = read_json(exchange / filename)
+                            if value is not None:
+                                report[field] = validate(value)
                     preflight = read_json(exchange / 'connect-diagnostic.json') if exchange else None
                     if preflight:
                         report['connectDiagnostic'] = ui_diagnostic(preflight)
@@ -767,8 +865,12 @@ def run(app, output, env):
                         report['uiDiagnostic'] = ui_diagnostic(failure)
                         report['connectionDiagnostic'] = connection_diagnostic(failure.get('connection'))
                     raise Failure('ios_device_test_failed' if code else 'ios_peer_confirmation_missing')
-                if report.get('deviceStage') != 'returned_home' or report.get('frameworkDiagnostic') is not None:
+                expected_stage = 'encrypted_returned_home' if include_encrypted_key else 'returned_home'
+                if report.get('deviceStage') != expected_stage or report.get('frameworkDiagnostic') is not None:
                     raise Failure('ios_final_test_state_incomplete')
+                if encrypted:
+                    ordinary_session_evidence(encrypted, closed=True)
+                    key_case.update(status='passed', returnedHome=True)
                 report['device'] = check_result(read_json(exchange / 'result.json'))
                 report['protocol'] = fixture.snapshot()
                 if not all(report['protocol'][name] for name in ('authAccepted', 'ptyRequested', 'shellRequested', 'markerReceived', 'sessionClosed')):
@@ -798,16 +900,23 @@ def run(app, output, env):
             report['flutterLogMarkers'] = log_diagnostics(private / 'flutter-private.log')
             try:
                 report['xctestResult'] = xctest_result_markers(private / 'test-result.xcresult',
-                    (*private_values, str(private)))
+                    (*private_values, str(private)), counts_only=include_encrypted_key)
             except (OSError, subprocess.TimeoutExpired):
                 report['xctestResult'] = {'resultBundlePresent': True, 'summaryReadable': False}
         report['protocol'] = fixture.snapshot()
         rotation['protocol'] = rotation_fixture.snapshot()
+        if encrypted:
+            report['encryptedProtocol'] = encrypted.snapshot()
+            report['encryptedCheckpoints'] = encrypted_checkpoints
         report['screens'] = screens
         try:
-            report.update(public_artifacts(output, masked_preconnect=report.get('maskedPreconnectScreenshot') is True))
-            if report['status'] == 'passed' and not {
-                    'ordinary-terminal.png', 'key-change-review.png', 'key-change-terminal.png'} <= set(report['artifacts']):
+            report.update(public_artifacts(output, masked_preconnect=report.get('maskedPreconnectScreenshot') is True,
+                                           include_encrypted_key=include_encrypted_key))
+            required = {'ordinary-terminal.png', 'key-change-review.png', 'key-change-terminal.png'}
+            if include_encrypted_key:
+                required.add('encrypted-key-terminal.png')
+                report['cases'].setdefault('encryptedKey', {}).update(key_case)
+            if report['status'] == 'passed' and not required <= set(report['artifacts']):
                 raise Failure('ios_artifact_set_incomplete')
         except (Failure, OSError, ValueError):
             report['status'] = 'failed'
@@ -827,6 +936,17 @@ def run(app, output, env):
         rotation_fixture.close()
         cleanup['fixtureClosed'] = (fixture.snapshot()['connectionsClosed'] and
                                     rotation_fixture.snapshot()['connectionsClosed'])
+        if encrypted:
+            encrypted.close()
+            cleanup['encryptedFixtureClosed'] = encrypted.snapshot()['connectionsClosed']
+            cleanup['encryptedSecretsCleared'] = not (encrypted.private_key or encrypted.passphrase or encrypted.wrong_passphrase)
+            if delivered:
+                try:
+                    if exchange.is_symlink() or exchange.parent.is_symlink():
+                        raise OSError()
+                    (exchange / 'encrypted-credentials.json').unlink(missing_ok=True)
+                except OSError:
+                    cleanup['encryptedSecretsCleared'] = False
         report['simulatorCreateAttempted'] = create_attempted
         if not create_attempted:
             cleanup['simulatorDeleted'] = True
@@ -872,9 +992,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--project', required=True)
     parser.add_argument('--output', required=True)
+    parser.add_argument('--include-encrypted-key', action='store_true')
     args = parser.parse_args()
     try:
-        result = run(args.project, args.output, dict(os.environ))
+        result = run(args.project, args.output, dict(os.environ), include_encrypted_key=args.include_encrypted_key)
         print(json.dumps({'status': result['status'], 'kind': result['kind']}))
     except Exception as error:
         print(str(error) if isinstance(error, Failure) else 'ios_runner_failed', file=sys.stderr)

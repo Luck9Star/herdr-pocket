@@ -15,6 +15,28 @@ import ios_direct_ssh_batch as batch
 
 
 class WorkflowRoutingTests(unittest.TestCase):
+    @staticmethod
+    def job(workflow, client):
+        start = workflow.index(f'  {client}-ordinary-ssh-ios:')
+        end = workflow.find('\n  tauri-ordinary-ssh-ios:', start + 1)
+        return workflow[start:end if end != -1 else len(workflow)]
+
+    def test_flutter_encrypted_key_ref_exclusively_guards_two_commands_and_one_new_test(self):
+        workflow = (Path(__file__).resolve().parents[2] / '.github/workflows/direct-ssh-ios.yml').read_text()
+        flutter, tauri = self.job(workflow, 'flutter'), self.job(workflow, 'tauri')
+        prefix = 'refs/heads/codex/acceptance/direct-ssh-ios-flutter-only-encrypted-key-'
+        self.assertIn(f"FLUTTER_INCLUDE_ENCRYPTED_KEY: ${{{{ startsWith(github.ref, '{prefix}') }}}}", flutter)
+        self.assertEqual(flutter.count('options+=(--include-encrypted-key)'), 2)
+        self.assertIn('flutter_direct_ssh_ios.py', flutter)
+        self.assertIn('ios_direct_ssh_batch.py publish', flutter)
+        self.assertIn("-p 'test_flutter_ios_encrypted_key.py'", flutter)
+        self.assertIn('encrypted-key-terminal.png', flutter)
+        self.assertIn('encrypted-key-terminal-ocr.json', flutter)
+        self.assertNotIn('FLUTTER_INCLUDE_ENCRYPTED_KEY', tauri)
+        self.assertNotIn('test_flutter_ios_encrypted_key.py', tauri)
+        self.assertEqual(tauri.count('options+=(--include-encrypted-key)'), 2)
+        self.assertIn("INCLUDE_ENCRYPTED_KEY: ${{ startsWith(github.ref, 'refs/heads/codex/acceptance/direct-ssh-ios-tauri-only-encrypted-key-') }}", tauri)
+
     def test_branch_routes_both_clients_or_a_single_requested_client(self):
         workflow = (Path(__file__).resolve().parents[2] / '.github/workflows/direct-ssh-ios.yml').read_text()
         routes = {}
@@ -32,6 +54,7 @@ class WorkflowRoutingTests(unittest.TestCase):
             (prefix + 'both-r1', {'flutter', 'tauri'}),
             (prefix + 'flutter-only-r1', {'flutter'}),
             (prefix + 'tauri-only-r1', {'tauri'}),
+            (prefix + 'flutter-only-encrypted-key-r1', {'flutter'}),
             (prefix + 'tauri-only-encrypted-key-r1', {'tauri'}),
             ('refs/heads/main', set()),
             ('refs/tags/codex/acceptance/direct-ssh-ios-r1', set()),
@@ -41,14 +64,28 @@ class WorkflowRoutingTests(unittest.TestCase):
                             if all(ref.startswith(branch) != bool(negated) for negated, branch in clauses)}
                 self.assertEqual(selected, expected)
 
-        mode = re.search(r"INCLUDE_ENCRYPTED_KEY: \$\{\{ startsWith\(github.ref, '([^']+)'\) \}\}", workflow)
+        mode = re.search(r"\bINCLUDE_ENCRYPTED_KEY: \$\{\{ startsWith\(github.ref, '([^']+)'\) \}\}", workflow)
         self.assertIsNotNone(mode)
         self.assertEqual(mode[1], prefix + 'tauri-only-encrypted-key-')
-        self.assertEqual(workflow.count('options+=(--include-encrypted-key)'), 2)
+        self.assertEqual(workflow.count('options+=(--include-encrypted-key)'), 4)
 
 
 class PublicEvidenceTests(unittest.TestCase):
     source_sha = 'a' * 40
+
+    @staticmethod
+    def encrypted_key_case():
+        attempts = dict.fromkeys(('authAttempts', 'authSuccesses', 'ptyRequests', 'shellRequests',
+                                  'inputBytes', 'outputBytes'), 0)
+        return {'status': 'passed', 'fingerprintReviewed': True, 'terminalInputReceived': True,
+                'disconnected': True, 'returnedHome': True,
+                'wrongPassphrase': {'rejected': True, 'peer': {'id': 1, 'hostKey': 'A',
+                    'closed': True, **attempts}},
+                'modeSwitch': {'passwordToKeyCleared': True, 'keyToPasswordCleared': True, 'sameTrust': True},
+                'acceptedSession': {'id': 2, 'hostKey': 'A', 'authAttempts': 1, 'authSuccesses': 1,
+                    'ptyRequests': 1, 'shellRequests': 1, 'inputBytes': 9, 'outputBytes': 12,
+                    'markerReceived': True, 'singleMarkerLineExact': True, 'sessionClosed': True, 'closed': True},
+                'authenticationMethod': 'publickey', 'peerClosedBeforeDriverExit': True}
 
     def evidence(self, root, *, status='passed'):
         from PIL import Image
@@ -105,7 +142,7 @@ class PublicEvidenceTests(unittest.TestCase):
             (root / 'result.json').write_text(json.dumps(report))
             with self.assertRaisesRegex(batch.BatchFailure, 'artifact_manifest_invalid'):
                 publish('unexpected', include=False)
-            with self.assertRaisesRegex(batch.BatchFailure, 'source_invalid'):
+            with self.assertRaisesRegex(batch.BatchFailure, 'encrypted_key_case_missing'):
                 publish('flutter-opt-in', shell='flutter')
             with self.assertRaisesRegex(batch.BatchFailure, 'encrypted_key_case_missing'):
                 publish('missing-case')
@@ -122,10 +159,32 @@ class PublicEvidenceTests(unittest.TestCase):
                 publish('wrong-auth')
             wrong['peer']['authAttempts'] = 0
             (root / 'result.json').write_text(json.dumps(report))
-            self.assertEqual(publish('completed'), {'result.json', *report['artifacts'], *batch.TERMINAL_PROOFS.values(), proof})
+            expected = {'result.json', *report['artifacts'], *batch.TERMINAL_PROOFS.values(), proof}
+            self.assertEqual(publish('completed'), expected)
+            report['cases']['encryptedKey'] = self.encrypted_key_case()
+            (root / 'result.json').write_text(json.dumps(report))
+            self.assertEqual(publish('flutter-completed', shell='flutter'), expected)
+            with self.assertRaisesRegex(batch.BatchFailure, 'encrypted_key_case_missing'):
+                publish('flutter-not-tauri')
             (root / proof).unlink()
             with self.assertRaisesRegex(batch.BatchFailure, 'file_invalid'):
-                publish('missing-ocr')
+                publish('missing-ocr', shell='flutter')
+
+    def test_flutter_publication_rejects_missing_trust_cleanup_and_replayed_actions(self):
+        for path, value in ((('modeSwitch', 'sameTrust'), 1), (('modeSwitch', 'keyToPasswordCleared'), False),
+                (('wrongPassphrase', 'peer', 'authAttempts'), 1), (('wrongPassphrase', 'peer', 'id'), True),
+                (('acceptedSession', 'id'), 3), (('acceptedSession', 'hostKey'), 'B'),
+                (('acceptedSession', 'authSuccesses'), True), (('acceptedSession', 'ptyRequests'), 2),
+                (('acceptedSession', 'shellRequests'), 2), (('acceptedSession', 'inputBytes'), 18),
+                (('acceptedSession', 'singleMarkerLineExact'), False), (('acceptedSession', 'outputBytes'), 0),
+                (('peerClosedBeforeDriverExit',), False), (('returnedHome',), False)):
+            with self.subTest(path=path):
+                case = self.encrypted_key_case()
+                target = case
+                for key in path[:-1]:
+                    target = target[key]
+                target[path[-1]] = value
+                self.assertFalse(batch.encrypted_key_case_valid(case, shell='flutter'))
 
     def test_wrong_source_cannot_export_even_a_result(self):
         with tempfile.TemporaryDirectory() as temp:

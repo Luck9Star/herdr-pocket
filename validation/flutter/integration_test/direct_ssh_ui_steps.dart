@@ -565,6 +565,7 @@ Future<void> runEncryptedDirectSshUi(
   required void Function(String) step,
   required void Function(String, Object) publish,
   required Future<void> Function(String) capture,
+  Future<void> Function()? afterTrust,
 }) async {
   Future<void> checkpoint(String phase) async {
     publish('encrypted-stage.json', {'phase': phase});
@@ -713,6 +714,7 @@ Future<void> runEncryptedDirectSshUi(
   step('encrypted_review');
   await checkpoint('review');
   await tap(tester, 'direct-trust-key');
+  if (afterTrust != null) await afterTrust();
   await tap(tester, 'direct-auth-key');
   await pasteKey();
   final passphrase = control('direct-passphrase');

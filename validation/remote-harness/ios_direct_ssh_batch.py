@@ -43,19 +43,49 @@ def read_public_json(root, name):
     return data, value
 
 
+def encrypted_key_case_valid(case, *, shell):
+    if (not isinstance(case, dict) or case.get('status') != 'passed'
+            or not all(case.get(key) is True for key in
+                       ('fingerprintReviewed', 'terminalInputReceived', 'disconnected', 'returnedHome'))):
+        return False
+    wrong = case.get('wrongPassphrase')
+    peer = wrong.get('peer') if isinstance(wrong, dict) else None
+    if (not isinstance(wrong, dict) or wrong.get('rejected') is not True or not isinstance(peer, dict)
+            or peer.get('closed') is not True
+            or any(type(peer.get(key)) is not int or peer[key] != 0 for key in
+                   ('authAttempts', 'authSuccesses', 'ptyRequests', 'shellRequests', 'inputBytes', 'outputBytes'))):
+        return False
+    if shell == 'tauri':
+        actions = case.get('pasteActions')
+        return (peer.get('handshakeCompleted') is True and isinstance(actions, list) and len(actions) == 2
+                and all(action in ('productPaste', 'systemEditMenu') for action in actions))
+    # Flutter rejects the wrong passphrase locally: the only peer event is the original host-key probe.
+    accepted = case.get('acceptedSession')
+    counts = {'id': 2, 'authAttempts': 1, 'authSuccesses': 1, 'ptyRequests': 1, 'shellRequests': 1, 'inputBytes': 9}
+    return (type(peer.get('id')) is int and peer['id'] == 1 and peer.get('hostKey') == 'A'
+            and isinstance(case.get('modeSwitch'), dict) and all(case['modeSwitch'].get(key) is True for key in
+                ('passwordToKeyCleared', 'keyToPasswordCleared', 'sameTrust'))
+            and isinstance(accepted, dict) and accepted.get('hostKey') == 'A'
+            and all(type(accepted.get(key)) is int and accepted[key] == count for key, count in counts.items())
+            and type(accepted.get('outputBytes')) is int and accepted['outputBytes'] > 0
+            and all(accepted.get(key) is True for key in ('markerReceived', 'singleMarkerLineExact', 'sessionClosed', 'closed'))
+            and case.get('authenticationMethod') == 'publickey' and case.get('peerClosedBeforeDriverExit') is True)
+
+
 def publish_evidence(root, destination, *, shell, source_sha, include_encrypted_key=False):
     """Copy only this run's bound public files; leave SSH/OCR to the runners.
 
     Failed runs may retain an already completed scene. A passed result must
-    supply all standard system captures and accepted OCR reports. The Tauri
-    encrypted-key opt-in adds one terminal capture and its OCR report.
+    supply all standard system captures and accepted OCR reports. The encrypted
+    key opt-in adds one terminal capture and its OCR report; Flutter and Tauri
+    each validate their own protocol case facts.
     Even an incomplete passed result retains its sanitized result for diagnosis.
     """
     from PIL import Image
     root, destination = Path(root), Path(destination)
     if root.is_symlink() or not root.is_dir() or destination.exists() or destination.is_symlink():
         raise BatchFailure('ios_batch_public_directory_invalid')
-    if (shell not in ('flutter', 'tauri') or (include_encrypted_key and shell != 'tauri')
+    if (shell not in ('flutter', 'tauri')
             or not re.fullmatch(r'[0-9a-f]{40}', source_sha)):
         raise BatchFailure('ios_batch_source_invalid')
     raw, report = read_public_json(root, 'result.json')
@@ -80,18 +110,7 @@ def publish_evidence(root, destination, *, shell, source_sha, include_encrypted_
             raise BatchFailure('ios_batch_encrypted_key_image_reused')
         cases = report.get('cases')
         case = cases.get('encryptedKey') if isinstance(cases, dict) else None
-        paste_actions = case.get('pasteActions') if isinstance(case, dict) else None
-        wrong = case.get('wrongPassphrase') if isinstance(case, dict) else None
-        peer = wrong.get('peer') if isinstance(wrong, dict) else None
-        if (not isinstance(case, dict) or case.get('status') != 'passed'
-                or not isinstance(paste_actions, list) or len(paste_actions) != 2
-                or any(action not in ('productPaste', 'systemEditMenu') for action in paste_actions)
-                or not isinstance(peer, dict) or wrong.get('rejected') is not True
-                or peer.get('closed') is not True or peer.get('handshakeCompleted') is not True
-                or any(type(peer.get(key)) is not int or peer[key] != 0 for key in
-                       ('authAttempts', 'authSuccesses', 'ptyRequests', 'shellRequests', 'inputBytes', 'outputBytes'))
-                or not all(case.get(key) is True for key in
-                           ('fingerprintReviewed', 'terminalInputReceived', 'disconnected', 'returnedHome'))):
+        if not encrypted_key_case_valid(case, shell=shell):
             raise BatchFailure('ios_batch_encrypted_key_case_missing')
     published = {'result.json'}
     for name in sorted(allowed):

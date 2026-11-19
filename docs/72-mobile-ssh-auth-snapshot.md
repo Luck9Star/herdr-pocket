@@ -1,6 +1,6 @@
 # 手机普通 SSH 核验与认证快照
 
-2026-11-19，合并前复验覆盖 Android API 35 和 iOS 26.2 模拟器。Android 两壳及 Flutter iOS 已通过普通 SSH 和换钥。Tauri iOS R4 停在密码框归属核验，R5 停在 XCTest 驱动编译。Tauri iOS 普通 SSH 和换钥尚未通过。R22 入口批和 R23 本地核验保留在历史记录中。
+2026-11-19，合并前复验覆盖 Android API 35 和 iOS 26.2 模拟器。Android 两壳及 Flutter iOS 已通过普通 SSH 和换钥。Tauri iOS 最新原生复验 R6 进入认证页后停在密码框标识核验。普通案失败，换钥未运行。R22 入口批和 R23 本地核验保留在历史记录中。
 
 各批沿用 [PR #4 的冻结设计](https://github.com/Luck9Star/herdr-pocket/pull/4)。画板提交为 `79deef0e9c03425f368966e32ff1f1d399a3ac02`。旧版 [15 状态前测](https://github.com/Luck9Star/herdr-pocket/blob/af273abca77fe97fd4806fe624dce89c6595869b/design/evidence/direct-ssh-mobile-20261118/baseline/README.md) 与[首批入口对照](https://github.com/Luck9Star/herdr-pocket/blob/af273abca77fe97fd4806fe624dce89c6595869b/design/evidence/direct-ssh-mobile-20261118/first-batch/README.md)提供独立参照。
 
@@ -34,6 +34,12 @@ R5 使用 PR #6 合并前提交 `9e0a2c2af80d1395618bc15496cdf0eb70a7d2b4`。相
 隔离环境的本地驱动套件通过 625 项，另有 5 项因环境条件跳过。Swift 回归用模拟时钟和合成 AX 快照依次呈现字段缺失、矩形无效、坐标变化和稳定控件，覆盖驱动等待及约束。该测试模拟一种控件时序，R4 实际的 AX 变化顺序和失败条件仍无可复核记录。
 
 R5 完成应用构建及模拟器应用选择，随后停在 `xctest_build`，固定错误码为 `tauri_ios_xctest_build_failed`。脱敏工件定位到 `Driver.swift:1410:17` 的 `swift_compile_error`，未公开编译器错误文本。普通和换钥均为 `not_run`。工件保留夹具指纹，未记录服务端认证、PTY 或会话计数。模拟器、夹具和临时文件均已清理。工件仅含 `result.json`，ZIP SHA256 为 `e5a25f0f498f68589ca9bbc71a2662ef599221bf4f358cfb9625b1bb55a67e0f`。[运行 44426897288](https://github.com/Luck9Star/herdr-pocket/actions/runs/44426897288/job/135233950568) · [证据 ZIP](https://github.com/Luck9Star/herdr-pocket/actions/runs/44426897288/artifacts/14483954956)
+
+R6 使用 PR #6 合并前提交 `04e58eed1a088e92d53a9b83d81cec26830fc495`。相对 R5，代码变化限于 XCTest 驱动闭包中的一处显式 `self` 引用及 Swift 测试替身的类语义。用同一引用语义替身和 Swift 5 模式编译抽取的驱动方法时，R5 版本报缺少显式捕获，R6 版本通过。该对照覆盖驱动的编译回归。其余三个作业仍沿用 R2 的实测 SHA。
+
+R6 在 iPhone 17 Pro Max、iOS 26.2 模拟器编译并运行 XCTest 驱动，经空首页与接入选择进入普通 SSH 表单。普通探测已完成。驱动点击确认后，在 `ordinary_fingerprint` 检查点识别到认证页标题、目标端点、确认提示与禁用的连接按钮。等待窗口结束时，观测中没有匹配驱动预期标识或标签的密码控件，固定码为 `native_mobile_password_identity_missing`。未进入 `ordinary_password`，也未尝试输入凭据。公开记录缺少实际密码控件的 AX 角色、标识和矩形，无法确认控件实际状态或客户端原因。
+
+普通案失败，换钥未运行。回环服务端在清理前后均记录 1 条已关闭的 A 探测连接，认证、PTY、Shell、输入和输出均为 0。模拟器、夹具和临时文件均已清理。工件仅含 `result.json`，ZIP SHA256 为 `304e6e1a8cb34c470fc7622b5df69c833a49d0798a49857bdf48c0ac1ce3f98d`。[运行 44429685294](https://github.com/Luck9Star/herdr-pocket/actions/runs/44429685294/job/135243553257) · [证据 ZIP](https://github.com/Luck9Star/herdr-pocket/actions/runs/44429685294/artifacts/14487242429)
 
 ## R22 Android 设备证据
 
@@ -103,18 +109,18 @@ Flutter 四组依次通过 32 项普通 SSH、2 项换钥、5 项手机认证与
 
 原生作业在 GitHub Actions 内准备 Flutter SDK，并执行 `candidate.py apply` 与 `verify-lock`。候选依赖只允许在 CI 生成的工程中应用。本地 Widget 复跑使用上面的参考依赖。
 
-复跑 Tauri iOS R5 时选择 `platform=ios-tauri-only`，只触发 Tauri 作业。复跑 R2 时使用表中的 `bda3c59`，`platform=ios` 触发 iOS 两壳，`platform=android` 触发两个 Android 工作流。每次将 `attempt` 设为尚未使用的分支后缀。推送即调度一次。[iOS 工作流](../.github/workflows/direct-ssh-ios.yml) · [Flutter Android 工作流](../.github/workflows/direct-ssh-android.yml) · [Tauri Android 工作流](../.github/workflows/tauri-android-direct-ssh.yml)
+复跑 Tauri iOS R6 时选择 `platform=ios-tauri-only`，只触发 Tauri 作业。复跑 R2 时使用表中的 `bda3c59`，`platform=ios` 触发 iOS 两壳，`platform=android` 触发两个 Android 工作流。每次将 `attempt` 设为尚未使用的分支后缀。推送即调度一次。[iOS 工作流](../.github/workflows/direct-ssh-ios.yml) · [Flutter Android 工作流](../.github/workflows/direct-ssh-android.yml) · [Tauri Android 工作流](../.github/workflows/tauri-android-direct-ssh.yml)
 
 ```sh
 (
   set -e
-  checkpoint=9e0a2c2af80d1395618bc15496cdf0eb70a7d2b4
+  checkpoint=04e58eed1a088e92d53a9b83d81cec26830fc495
   if ! git cat-file -e "${checkpoint}^{commit}" 2>/dev/null; then
     git fetch origin refs/heads/codex/ssh-mobile-auth-integration
   fi
   git cat-file -e "${checkpoint}^{commit}"
   platform=ios-tauri-only
-  attempt=replay-r5-1
+  attempt=replay-r6-1
   git push origin "${checkpoint}:refs/heads/codex/acceptance/direct-ssh-$platform-$attempt"
 )
 ```

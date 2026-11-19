@@ -17,6 +17,8 @@ Future<ThemeData> loadImportEvidenceFonts(ThemeData theme, String? cjkFont) asyn
     textTheme: theme.textTheme.apply(fontFamily: family),
     primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: family),
     appBarTheme: theme.appBarTheme.copyWith(titleTextStyle: theme.appBarTheme.titleTextStyle?.copyWith(fontFamily: family)),
+    chipTheme: theme.chipTheme.copyWith(labelStyle: theme.chipTheme.labelStyle?.copyWith(fontFamily: family),
+      secondaryLabelStyle: theme.chipTheme.secondaryLabelStyle?.copyWith(fontFamily: family)),
   );
 }
 

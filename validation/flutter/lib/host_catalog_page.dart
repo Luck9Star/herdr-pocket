@@ -1085,11 +1085,13 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
         },
         onOpenPane:(pane) => openPane(tab,pane))));
   Widget retainedTab(HostTab tab) {
-    final screen = tab.retainedScreen, view = tab.view.value;
+    final screen = tab.retainedScreen;
     final style = TerminalStyle(fontFamily:'ProbeNerd',fontSize:screen?.fontSize ?? 14);
-    return ListView(key:ValueKey('retired-host-view-${tab.id}'),padding:const EdgeInsets.all(16),children:[
+    return ValueListenableBuilder<HostTabView>(valueListenable:tab.view,builder:(context,view,_) =>
+      ListView(key:ValueKey('retired-host-view-${tab.id}'),padding:const EdgeInsets.all(16),children:[
       Text('${tab.label} · ${view.label}',style:Theme.of(context).textTheme.titleLarge),
       Text('${view.target}\n${view.frameLabel}'),
+      Text(screen == null ? '可手动关闭此标签。' : '仅可查看最后画面。可手动关闭此标签。'),
       if (screen != null) ...[
         const SizedBox(height:12),
         Text('${screen.session} / ${screen.paneId}'),
@@ -1099,7 +1101,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
               child:ExcludeFocus(child:TerminalView(screen.terminal,theme:widget.tokens.terminalTheme,textStyle:style,
                 scrollController:scroll,readOnly:true,autoResize:false,simulateScroll:false,hardwareKeyboardOnly:true,shortcuts:const {}))))),
       ],
-    ]);
+    ]));
   }
   Widget tabBar() => SingleChildScrollView(
     scrollDirection: Axis.horizontal,
@@ -1363,7 +1365,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
                     ),
                   ),
                 ),
-              if (showingTab)
+              if (showingTab && (tabs.active?.retired != true || (!canSplit && tabs.splitId != null)))
                 ConstrainedBox(
                   constraints: BoxConstraints(
                     maxHeight: available.maxHeight * .12,

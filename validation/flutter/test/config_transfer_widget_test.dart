@@ -113,6 +113,8 @@ void main() {
     await tapVisible(tester,'host-tab-${oldTab.id}'); await tester.pumpAndSettle();
     final historical = find.byKey(ValueKey('retired-host-view-${oldTab.id}'));
     expect(historical,findsOneWidget);
+    expect(find.text('仅可查看最后画面。可手动关闭此标签。'),findsOneWidget);
+    expect(find.textContaining('返回后需主动恢复并等待原目标新画面'),findsNothing);
     final oldTerminal = tester.widget<TerminalView>(find.descendant(of:historical,matching:find.byType(TerminalView)));
     expect(oldTerminal.readOnly,isTrue); expect(oldTerminal.terminal,same(original));
     expect(oldTerminal.terminal.onOutput,isNull);
@@ -382,6 +384,13 @@ void main() {
     final replacement = catalog.profiles.singleWhere((p) => p.label == first.label && !p.retired);
     expect(replacement.id,isNot(first.id));
     expect(replacement.hasIdentity,isFalse);
+    await tester.pageBack(); await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithIcon(NavigationDestination,Icons.terminal)); await tester.pumpAndSettle();
+    final emptyHistory = find.byKey(ValueKey('retired-host-view-${newTab.id}'));
+    expect(emptyHistory,findsOneWidget);
+    expect(find.descendant(of:emptyHistory,matching:find.textContaining('尚无终端画面')),findsOneWidget);
+    expect(find.descendant(of:emptyHistory,matching:find.text('可手动关闭此标签。')),findsOneWidget);
+    expect(find.textContaining('仅可查看最后画面'),findsNothing);
     await tester.pumpWidget(const SizedBox()); tabs.dispose(); catalog.dispose();
   });
 

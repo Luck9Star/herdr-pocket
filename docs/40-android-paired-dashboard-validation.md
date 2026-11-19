@@ -44,3 +44,5 @@
 从 390 × 844 的已存主机入口核对身份并连接。夹具明确拒绝持续订阅，Flutter 仍取得一次权威看板。对端主动结束已认证的 SSH 后，修前仍显示可选的单次报告。修后保留「上次主机报告」、受阻数 1 和原同步时间，禁用原 pane 的选择；连接代际和认证数保持不变，无自动拨号或发送。
 
 另在 1440 × 1000 的 Flutter Widget 分屏中建立两条独立回环 SSH。A 断线后，B 沿原连接收到状态事件，重新读取权威快照，受阻数从 1 更新为 0。B 随后自行断线，界面保留各自最后报告。两项使用 Flutter 3.47.9、真实 Ed25519 SSH、合成 herdr 协议和临时签名密钥，在已准备的隔离工程里将 `HERDR_FIXTURE_PYTHON` 指向安装 Paramiko 4.0.0 的 Python，运行 `flutter test --no-pub test/dashboard_peer_eof_test.dart`。真实 herdr 进程、实体手机和真实跨网的断线恢复仍待验证。 [正常入口回归](../validation/flutter/test/dashboard_peer_eof_test.dart) · [回环 SSH 夹具](../validation/flutter/test/dashboard_peer_eof_fixture.py)
+
+Flutter S06 stock 作业会复用锁定的 Python 环境，先运行这两项对端关闭回归，再进入真实双目标验收。 [工作流](../.github/workflows/paired-gui-validation.yml)

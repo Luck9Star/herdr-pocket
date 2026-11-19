@@ -84,6 +84,12 @@ jobs:
           cd "$RUNNER_TEMP/flutter-gui"
           flutter pub get
           python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-gui"
+      - name: Verify Flutter dashboard when an authenticated peer closes
+        if: ${{ matrix.route == 'flutter' && inputs.s06_split && !inputs.s06_guarded && !inputs.input_fixture }}
+        working-directory: ${{ runner.temp }}/flutter-gui
+        run: |
+          HERDR_FIXTURE_PYTHON="$RUNNER_TEMP/pairing-venv/bin/python" \
+            "$RUNNER_TEMP/flutter-sdk/bin/flutter" test --no-pub --reporter expanded test/dashboard_peer_eof_test.dart
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         if: matrix.route == 'tauri'
         with:

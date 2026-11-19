@@ -3,17 +3,51 @@ import 'dart:io';
 import 'dart:ui' show FlutterView, Size;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show ButtonStyleButton, OutlinedButton;
+import 'package:flutter/material.dart'
+    show
+        ButtonStyleButton,
+        EditableText,
+        EditableTextState,
+        FilledButton,
+        FocusManager,
+        ModalRoute,
+        OutlinedButton,
+        SelectableText,
+        TextButton,
+        TextField,
+        Theme;
 import 'package:flutter/rendering.dart' show DiagnosticsDebugCreator, RenderBox;
 import 'package:flutter/services.dart'
-    show MissingPluginException, PlatformException;
-import 'package:flutter/widgets.dart' show DebugCreator, Element, State, Text;
+    show
+        LogicalKeyboardKey,
+        MissingPluginException,
+        PhysicalKeyboardKey,
+        PlatformException;
+import 'package:flutter/widgets.dart' show DebugCreator, Element, State, Text, View;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/direct_ssh_page.dart';
+import 'package:herdr_flutter_probe/host_catalog_page.dart';
+import 'package:herdr_flutter_probe/main.dart' as app;
 import 'package:integration_test/integration_test.dart';
+import 'package:terminal_view/terminal_view.dart';
 
-import 'direct_ssh_ui_steps.dart' show control, tapControl;
-import 'linux_direct_ssh_test.dart' show LinuxTarget, runLinuxOrdinary, waitUi;
+import 'direct_ssh_ui_steps.dart'
+    show
+        control,
+        hasMarker,
+        openDirectSshFromHome,
+        tap,
+        tapControl,
+        verifyLocalClose;
+import 'linux_direct_ssh_test.dart'
+    show
+        Checkpoint,
+        LinuxTarget,
+        outcomePixels,
+        reviewLinuxFingerprint,
+        runLinuxOrdinary,
+        visiblePixels,
+        waitUi;
 
 const _diagnosticAnchors = {
   'app-sidebar',
@@ -206,10 +240,323 @@ Future<void> _verifyWindowsReturnHome(
   returnStep('geometry');
 }
 
+// The shared fingerprint witness needs only target metadata. Its encrypted
+// Linux fixture path has a different credential policy and is not used here.
+class WindowsKeyTarget implements LinuxTarget {
+  const WindowsKeyTarget(this.port, this.fingerprint);
+
+  @override
+  final int port;
+  @override
+  final String fingerprint;
+  @override
+  String get label => 'fixture@127.0.0.1:$port';
+  @override
+  bool get encrypted => false;
+  @override
+  Null get password => null;
+  @override
+  Null get privateKey => null;
+  @override
+  Null get passphrase => null;
+  @override
+  Null get wrongPassphrase => null;
+  @override
+  Null get rotatedFingerprint => null;
+}
+
+bool windowsDirectSshHomeReady(WidgetTester tester, Finder home) {
+  if (home.evaluate().length != 1) return false;
+  final entry = find.descendant(
+    of: home,
+    matching: control('hosts-direct-ssh'),
+  ).hitTestable();
+  if (entry.evaluate().length != 1) return false;
+  final button = tester.widget(entry);
+  return button is ButtonStyleButton && button.onPressed != null;
+}
+
+Future<void> runWindowsDirectSshPublicKey(
+  WidgetTester tester,
+  WindowsKeyTarget target,
+  String privateKey, {
+  required void Function(String) step,
+  required Checkpoint checkpoint,
+}) async {
+  step('home');
+  await tester.runAsync(app.main);
+  final home = find.byType(HostCatalogPage);
+  await waitUi(
+    tester,
+    () => windowsDirectSshHomeReady(tester, home),
+    'windows_direct_publickey_home_timeout',
+  );
+  final catalog = tester.widget<HostCatalogPage>(home);
+  final homeState = tester.state(home);
+  expect(
+    catalog.catalog == null &&
+        catalog.adapterFactory == null &&
+        catalog.keys == null,
+    isTrue,
+  );
+
+  step('form');
+  await openDirectSshFromHome(tester);
+  final page = find.byType(DirectSshPage);
+  final view = View.of(tester.element(page));
+  expect(Theme.of(tester.element(page)).platform, TargetPlatform.windows);
+  final fields = [
+    ('direct-host', '127.0.0.1'),
+    ('direct-port', '${target.port}'),
+    ('direct-user', 'fixture'),
+  ];
+  for (final (name, value) in fields) {
+    final field = control(name);
+    await tester.ensureVisible(field);
+    await tester.enterText(field, value);
+    await tester.pump();
+    expect(tester.widget<TextField>(field).controller!.text == value, isTrue);
+  }
+  final connect = control('direct-connect'),
+      pemField = control('direct-secret');
+  expect(connect, findsNothing);
+  expect(pemField, findsNothing);
+  step('probe');
+  await reviewLinuxFingerprint(
+    tester,
+    target,
+    target.fingerprint,
+    checkpoint,
+    'probe',
+  );
+
+  step('private_key');
+  final approvedTarget = control('direct-target-value');
+  await waitUi(
+    tester,
+    () =>
+        ModalRoute.of(tester.element(page))?.isCurrent == true &&
+        control('direct-trust-header').evaluate().isEmpty &&
+        control('direct-trust-approved').hitTestable().evaluate().length == 1 &&
+        pemField.hitTestable().evaluate().length == 1 &&
+        connect.evaluate().length == 1,
+    'windows_direct_publickey_review_close_timeout',
+  );
+  expect(
+    tester.widget<SelectableText>(approvedTarget).data == target.label,
+    isTrue,
+  );
+  expect(tester.widget<TextField>(pemField).obscureText, isTrue);
+  expect(tester.widget<TextField>(pemField).controller!.text.isEmpty, isTrue);
+  expect(tester.widget<FilledButton>(connect).onPressed, isNull);
+  final keyMode = control('direct-auth-key');
+  await tapControl(
+    tester,
+    keyMode,
+    'windows_key_mode',
+    beforeTap: () =>
+        expect(tester.widget<OutlinedButton>(keyMode).onPressed, isNotNull),
+  );
+
+  final passphraseField = control('direct-passphrase');
+  final editable = find.descendant(
+    of: pemField,
+    matching: find.byType(EditableText),
+  );
+  await tapControl(
+    tester,
+    pemField,
+    'windows_pem',
+    beforeTap: () {
+      final pem = tester.widget<TextField>(pemField);
+      expect(
+        pem.enabled != false && !pem.obscureText && pem.maxLines != 1,
+        isTrue,
+        reason: 'windows_direct_publickey_pem_not_ready',
+      );
+    },
+  );
+  await waitUi(
+    tester,
+    () =>
+        editable.evaluate().length == 1 &&
+        tester
+            .state<EditableTextState>(editable)
+            .widget
+            .focusNode
+            .hasPrimaryFocus,
+    'windows_direct_publickey_focus_timeout',
+  );
+  final editor = tester.state<EditableTextState>(editable);
+  final input = editor.widget;
+  final passphrase = tester.widget<TextField>(passphraseField);
+  bool focusBound() =>
+      editable.evaluate().length == 1 &&
+      identical(View.of(tester.element(editable)), view) &&
+      identical(tester.state<EditableTextState>(editable), editor) &&
+      identical(editor.widget.controller, input.controller) &&
+      identical(editor.widget.focusNode, input.focusNode) &&
+      input.focusNode.hasPrimaryFocus;
+  bool credentialsEmpty() =>
+      input.controller.text.isEmpty && passphrase.controller!.text.isEmpty;
+  expect(
+    focusBound() &&
+        !input.obscureText &&
+        !input.readOnly &&
+        passphrase.obscureText &&
+        credentialsEmpty(),
+    isTrue,
+  );
+  tester.testTextInput.enterText(privateKey);
+  await tester.idle();
+  await tester.pump();
+  bool keyReady() =>
+      focusBound() &&
+      input.controller.text == privateKey &&
+      passphrase.controller!.text.isEmpty &&
+      tester.widget<SelectableText>(approvedTarget).data == target.label;
+  expect(
+    keyReady(),
+    isTrue,
+    reason: 'windows_direct_publickey_readback_failed',
+  );
+  await checkpoint('key_entry', const {
+    'privateKeyExact': true,
+    'passphraseEmpty': true,
+  });
+  await tap(
+    tester,
+    'direct-connect',
+    requireEnabled: true,
+    stableHitPoint: true,
+    beforeTap: () => expect(keyReady(), isTrue),
+  );
+  privateKey = '';
+
+  step('connected');
+  final terminalView = find.byType(TerminalView),
+      bound = control('direct-active-target');
+  await waitUi(
+    tester,
+    () =>
+        terminalView.evaluate().length == 1 &&
+        bound.hitTestable().evaluate().length == 1 &&
+        hasMarker(
+          tester.widget<TerminalView>(terminalView).terminal,
+          'POCKET-ANDROID-READY',
+        ),
+    'windows_direct_publickey_terminal_timeout',
+  );
+  final terminal = tester.widget<TerminalView>(terminalView).terminal;
+  final terminalState = tester.state<TerminalViewState>(terminalView);
+  bool targetBound() =>
+      terminalView.evaluate().length == 1 &&
+      identical(View.of(tester.element(terminalView)), view) &&
+      identical(tester.state<TerminalViewState>(terminalView), terminalState) &&
+      tester.widget<Text>(bound).data == target.label;
+  expect(targetBound() && credentialsEmpty(), isTrue);
+  expect(
+    find
+        .descendant(
+          of: control('direct-terminal-status'),
+          matching: find.text('已连接'),
+        )
+        .hitTestable(),
+    findsOneWidget,
+  );
+  await checkpoint('connected', const {});
+
+  step('input');
+  await tapControl(tester, terminalView, 'windows_terminal', reveal: false);
+  bool inputBound() =>
+      targetBound() &&
+      terminalState.hasInputConnection &&
+      identical(
+        FocusManager.instance.primaryFocus?.context
+            ?.findAncestorStateOfType<TerminalViewState>(),
+        terminalState,
+      );
+  await waitUi(
+    tester,
+    inputBound,
+    'windows_direct_publickey_terminal_focus_timeout',
+  );
+  expect(find.widgetWithText(TextButton, 'Enter').hitTestable(), findsNothing);
+  tester.testTextInput.enterText('hp-check');
+  await tester.pump();
+  expect(inputBound(), isTrue);
+  await tester.sendKeyEvent(
+    LogicalKeyboardKey.enter,
+    physicalKey: PhysicalKeyboardKey.enter,
+  );
+  await waitUi(
+    tester,
+    () => hasMarker(terminal, 'POCKET-ANDROID-SSH-OK'),
+    'windows_direct_publickey_echo_timeout',
+  );
+
+  step('capture');
+  expect(
+    targetBound() &&
+        credentialsEmpty() &&
+        control('direct-form').evaluate().isEmpty,
+    isTrue,
+  );
+  final geometry = visiblePixels(tester, terminalView, bound);
+  await checkpoint('capture', geometry);
+  expect(visiblePixels(tester, terminalView, bound), geometry);
+  expect(targetBound(), isTrue);
+
+  step('disconnect');
+  final disconnect = control('direct-desktop-disconnect');
+  expect(disconnect.hitTestable(), findsOneWidget);
+  expect(tester.widget<TextButton>(disconnect).onPressed, isNotNull);
+  await tapControl(tester, disconnect, 'windows_disconnect', reveal: false);
+  await waitUi(
+    tester,
+    () =>
+        terminalView.evaluate().isEmpty &&
+        bound.evaluate().isEmpty &&
+        control('direct-form').evaluate().length == 1 &&
+        control('direct-status').evaluate().length == 1 &&
+        tester.widget<Text>(control('direct-status')).data == '本机已断开',
+    'windows_direct_publickey_disconnect_timeout',
+  );
+  await verifyLocalClose(tester, tester.state(page));
+  expect(credentialsEmpty(), isTrue);
+  expect(pemField, findsNothing);
+  expect(passphraseField, findsNothing);
+  expect(connect, findsNothing);
+  expect(
+    tester.widget<FilledButton>(control('direct-probe')).onPressed,
+    isNotNull,
+  );
+  for (final (name, value) in fields) {
+    expect(
+      tester.widget<TextField>(control(name)).controller!.text == value,
+      isTrue,
+    );
+  }
+  final closed = control('direct-closed-feedback');
+  final outcomeGeometry = outcomePixels(tester, closed);
+  await checkpoint('disconnect', outcomeGeometry);
+  expect(outcomePixels(tester, closed), outcomeGeometry);
+  step('return_home');
+  await _verifyWindowsReturnHome(tester, home, homeState, step);
+  final homeNotice = control('home-ssh-closed');
+  final homeGeometry = outcomePixels(tester, homeNotice);
+  await checkpoint('complete', homeGeometry);
+  expect(outcomePixels(tester, homeNotice), homeGeometry);
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   const directory = String.fromEnvironment('HERDR_FLUTTER_WINDOWS_DIRECT_DIR');
-  testWidgets('native Windows ordinary SSH password', (tester) async {
+  const publicKey = bool.fromEnvironment('HERDR_FLUTTER_WINDOWS_DIRECT_PUBLICKEY');
+  const testName = publicKey
+      ? 'native Windows ordinary SSH public key'
+      : 'native Windows ordinary SSH password';
+  testWidgets(testName, (tester) async {
     if (!Platform.isWindows ||
         !kDebugMode ||
         !RegExp(r'^[A-Za-z]:[\\/]').hasMatch(directory) ||
@@ -231,10 +578,29 @@ void main() {
     final value =
         jsonDecode(targetFile.readAsStringSync()) as Map<String, dynamic>;
     targetFile.deleteSync();
-    if (value.length != 3 || !value.containsKey('password')) {
-      fail('windows_direct_password_fixture_required');
+    final LinuxTarget target;
+    String? privateKey;
+    if (publicKey) {
+      final port = value['port'];
+      final fingerprint = value['fingerprint'];
+      final pem = value['privateKey'];
+      if (value.length != 3 ||
+          port is! int || port < 1024 || port > 65535 ||
+          fingerprint is! String ||
+          !RegExp(r'^SHA256:[A-Za-z0-9+/]{43}$').hasMatch(fingerprint) ||
+          pem is! String ||
+          !pem.startsWith('-----BEGIN OPENSSH PRIVATE KEY-----\n') ||
+          !pem.trimRight().endsWith('-----END OPENSSH PRIVATE KEY-----')) {
+        fail('windows_direct_publickey_fixture_required');
+      }
+      target = WindowsKeyTarget(port, fingerprint);
+      privateKey = pem;
+    } else {
+      if (value.length != 3 || !value.containsKey('password')) {
+        fail('windows_direct_password_fixture_required');
+      }
+      target = LinuxTarget.parse(value);
     }
-    final target = LinuxTarget.parse(value);
     value.clear();
     publish('window', {'processId': pid});
     var currentPhase = 'window';
@@ -267,26 +633,39 @@ void main() {
       }
       bindingHandler!(details);
     };
-    try {
-      await runLinuxOrdinary(
+    Future<void> checkpoint(String phase, Map<String, Object> evidence) async {
+      if (phase == 'complete') step('return_home_publish');
+      publish(phase, evidence);
+      final reply = File(path('$phase.ok'));
+      await waitUi(
         tester,
-        target,
-        platform: TargetPlatform.windows,
-        step: step,
-        verifyHome: (home, homeState) =>
-            _verifyWindowsReturnHome(tester, home, homeState, step),
-        checkpoint: (phase, evidence) async {
-          if (phase == 'complete') step('return_home_publish');
-          publish(phase, evidence);
-          final reply = File(path('$phase.ok'));
-          await waitUi(
-            tester,
-            reply.existsSync,
-            'windows_direct_peer_ack_timeout_$phase',
-          );
-          if (phase == 'complete') step('return_home_acknowledged');
-        },
+        reply.existsSync,
+        'windows_direct_peer_ack_timeout_$phase',
       );
+      if (phase == 'complete') step('return_home_acknowledged');
+    }
+    try {
+      if (publicKey) {
+        final verification = runWindowsDirectSshPublicKey(
+          tester,
+          target as WindowsKeyTarget,
+          privateKey!,
+          step: step,
+          checkpoint: checkpoint,
+        );
+        privateKey = null;
+        await verification;
+      } else {
+        await runLinuxOrdinary(
+          tester,
+          target,
+          platform: TargetPlatform.windows,
+          step: step,
+          verifyHome: (home, homeState) =>
+              _verifyWindowsReturnHome(tester, home, homeState, step),
+          checkpoint: checkpoint,
+        );
+      }
       expect(
         observedFrameworkError,
         isFalse,

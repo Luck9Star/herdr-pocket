@@ -33,6 +33,9 @@
     gap:0 12px;
   }
   #home-ssh[data-ssh-close] .ssh-host-field { grid-column:1 / -1; }
+  #home-ssh[data-ssh-close] #ssh-port { appearance:textfield; }
+  #home-ssh[data-ssh-close] #ssh-port::-webkit-outer-spin-button,
+  #home-ssh[data-ssh-close] #ssh-port::-webkit-inner-spin-button { appearance:none; margin:0; }
   #home-ssh[data-ssh-close] :is(#ssh-probe, #ssh-return-home:not([hidden])) {
     display:block;
     width:100%;

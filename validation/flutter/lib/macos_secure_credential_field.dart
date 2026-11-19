@@ -11,10 +11,12 @@ class MacosSecureCredentialField extends StatefulWidget {
     required this.label,
     required this.identifier,
     required this.enabled,
+    this.decoration,
   });
   final TextEditingController controller;
   final String label, identifier;
   final bool enabled;
+  final InputDecoration? decoration;
   @override
   State<MacosSecureCredentialField> createState() =>
       _MacosSecureCredentialFieldState();
@@ -130,10 +132,11 @@ class _MacosSecureCredentialFieldState
   @override
   Widget build(BuildContext context) => InputDecorator(
     isEmpty: widget.controller.text.isEmpty,
-    decoration: InputDecoration(
-      enabled: widget.enabled && !_unavailable,
+    decoration: (widget.decoration ?? InputDecoration(
       floatingLabelBehavior: FloatingLabelBehavior.always,
       label: ExcludeSemantics(child: Text(widget.label)),
+    )).copyWith(
+      enabled: widget.enabled && !_unavailable,
       errorText: _unavailable ? '原生安全输入不可用，请重新打开此页。' : null,
     ),
     child: SizedBox(

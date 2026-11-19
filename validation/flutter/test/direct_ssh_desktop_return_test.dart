@@ -33,6 +33,8 @@ void main() {
         await tester.enterText(key('direct-host'), '127.0.0.1'); await tester.enterText(key('direct-port'), Platform.environment['HERDR_DIRECT_SSH_FIXTURE_PORT']!);
         await tester.enterText(key('direct-user'), 'fixture'); await tester.pump();
         await tester.tap(key('direct-probe')); await tester.pump(); await waitFor(tester, key('direct-trust-key'));
+        await tester.pumpAndSettle();
+        expect(key('direct-trust-key').hitTestable(), findsOneWidget);
         await tester.tap(key('direct-trust-key')); await tester.pumpAndSettle();
         await tester.enterText(key('direct-secret'), 'temporary'); await tester.pump(); await tester.ensureVisible(key('direct-connect')); await tester.tap(key('direct-connect')); await tester.pump();
         await waitFor(tester, find.byType(TerminalView));

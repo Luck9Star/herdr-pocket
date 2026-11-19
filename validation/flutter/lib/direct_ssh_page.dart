@@ -5,7 +5,7 @@ import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
-import 'package:flutter/services.dart' show Clipboard;
+import 'package:flutter/services.dart' show Clipboard, FilteringTextInputFormatter, LengthLimitingTextInputFormatter;
 import 'package:terminal_view/terminal_view.dart';
 import 'design_tokens.dart';
 import 'macos_secure_credential_field.dart';
@@ -19,6 +19,7 @@ String formatDirectSshTarget(String username, String host, int port) {
 
 enum DirectSshConnectPhase { idle, keyParse, socket, handshake, hostKeyVerified, passwordRequest, shellRequest, connected }
 enum DirectSshConnectFailure { keyParse, socket, handshake, handshakeTimeout, authRejected, authAborted, authTimeout, timeout, hostKeyChanged, transport, cancelled, other }
+enum DirectSshRouteExit { targetBack }
 
 /// Standalone SSH shell. Host key verification precedes every authentication.
 class DirectSshPage extends StatefulWidget {
@@ -30,6 +31,7 @@ class DirectSshPage extends StatefulWidget {
     this.closeCatalogTabs,
     this.sessionVisible,
     this.onSelectDestination,
+    this.desktopFlowShell,
   });
   final DesignTokens tokens;
   final ValueChanged<bool>? onReturnAfterDisconnect;
@@ -37,6 +39,7 @@ class DirectSshPage extends StatefulWidget {
   final void Function(Set<String>)? closeCatalogTabs;
   final ValueListenable<bool>? sessionVisible;
   final ValueChanged<int>? onSelectDestination;
+  final Widget Function(Widget page, ValueChanged<int> select)? desktopFlowShell;
   @override
   State<DirectSshPage> createState() => _DirectSshPageState();
 }
@@ -83,7 +86,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       (int.tryParse(port.text.trim()) ?? 0) > 0 && (int.tryParse(port.text.trim()) ?? 65536) <= 65535;
 
   bool get canConnect => valid && !busy && !hostKeyReviewRequired && fingerprint != null && checkedTarget == target &&
-    (mobileLayout ? mobileCredentialReady : secret.text.isNotEmpty);
+    (mobileLayout || desktopEntryLayout(context) ? mobileCredentialReady : secret.text.isNotEmpty);
   bool get mobileCredentialReady {
     if (!keyAuth) return secret.text.isNotEmpty;
     final input = secret.text.trim();
@@ -314,8 +317,9 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       if (generation != epoch || originalTarget != target) return;
       localClient.close(); localSocket.destroy(); client = null; socket = null;
       if (!mounted) return;
-      final approved = mobileLayout
-        ? await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => mobileTrustPage(originalTarget, result.$1, result.$2)))
+      final approved = mobileLayout || desktopEntryLayout(context)
+        ? await Navigator.push<bool>(context, MaterialPageRoute(builder: (routeContext) =>
+            mobileTrustPage(routeContext, originalTarget, result.$1, result.$2)))
         : await showDialog<bool>(context: context, builder: (context) => AlertDialog(
         title: const Text('核对主机密钥'),
         content: SelectableText('目标 $originalTarget\n算法 ${result.$1}\n${result.$2}\n\n请通过可信的独立渠道核对完整指纹。确认后仅对本次页面有效。'),
@@ -464,6 +468,9 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     (Theme.of(context).platform == TargetPlatform.iOS || Theme.of(context).platform == TargetPlatform.android) &&
     MediaQuery.sizeOf(context).width < 600;
 
+  bool desktopEntryLayout(BuildContext context) =>
+    widget.desktopFlowShell != null && MediaQuery.sizeOf(context).width >= 700;
+
   bool get mobileLargeText => MediaQuery.textScalerOf(context).scale(1) > 1;
   double get mobileInputHeight => mobileLargeText ? 64 : 48;
   double get mobileButtonHeight => mobileLargeText ? 64 : 48;
@@ -497,34 +504,93 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   ButtonStyle get mobilePrimaryButton => FilledButton.styleFrom(textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600));
   ButtonStyle get mobileSecondaryButton => OutlinedButton.styleFrom(textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600), foregroundColor: widget.tokens.color('textPrimary'),
     side: BorderSide(color: widget.tokens.color('borderStrong')), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)));
-  Widget mobileTrustPage(String originalTarget, String foundAlgorithm, String foundFingerprint) {
+
+  Widget entryList({required bool desktop, Key? key, required List<Widget> children}) => ListView(
+    key: key,
+    padding: EdgeInsets.fromLTRB(desktop ? 40 : mobileMargin, 20, desktop ? 40 : mobileMargin, 24),
+    children: desktop ? [
+      Align(alignment: Alignment.topLeft, child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 560),
+        child: SizedBox(width: double.infinity, child: FocusTraversalGroup(policy: WidgetOrderTraversalPolicy(),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children))))),
+    ] : children,
+  );
+
+  void showCatalogDestination(int index) {
+    FocusScope.of(context).unfocus();
+    if (busy) stop(message: '已取消，未重放操作。');
+    cancelKeyPaste();
+    secret.clear();
+    passphrase.clear();
+    widget.onSelectDestination?.call(index);
+  }
+
+  Widget desktopEntryPage({
+    required String title,
+    required String headerKey,
+    required String backKey,
+    required Widget body,
+    required VoidCallback? back,
+    required ValueChanged<int> selectDestination,
+    bool showStop = false,
+  }) => widget.desktopFlowShell!(Scaffold(body: SafeArea(child: Column(children: [
+    Container(key: ValueKey(headerKey), height: mobileLargeText ? 80 : 56,
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: widget.tokens.color('border')))),
+      child: Row(children: [
+        SizedBox(width: back == null ? 40 : 8),
+        if (back != null) ...[
+          SizedBox.square(dimension: 44, child: MergeSemantics(child: Semantics(identifier: 'direct-back',
+            label: '返回', child: BackButton(key: ValueKey(backKey), onPressed: back)))),
+          const SizedBox(width: 12),
+        ],
+        Expanded(child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600))),
+        if (showStop) TextButton(onPressed: disconnect, child: const Text('断开')),
+        const SizedBox(width: 40),
+      ])),
+    Expanded(child: body),
+  ]))), selectDestination);
+
+  Widget mobileTrustPage(BuildContext routeContext, String originalTarget, String foundAlgorithm, String foundFingerprint) {
     final t = widget.tokens;
-    final large = MediaQuery.textScalerOf(context).scale(1) > 1;
+    final desktop = desktopEntryLayout(routeContext);
+    final large = MediaQuery.textScalerOf(routeContext).scale(1) > 1;
+    final evidenceRadius = BorderRadius.circular(16);
+    final evidenceBorder = Border.all(color: t.color('border'));
     Widget textLabel(String text) => Text(text, style: TextStyle(fontSize: 12, color: t.color('textSecondary')));
     final evidence = large ? Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       textLabel('主机密钥算法'), SelectableText(foundAlgorithm, key: const ValueKey('direct-key-algorithm'), style: const TextStyle(fontFamily: 'ProbeNerd')),
       const Divider(), textLabel('完整 SHA256 指纹'), SelectableText(foundFingerprint, key: const ValueKey('direct-key-fingerprint'), style: const TextStyle(fontSize: 13, fontFamily: 'ProbeNerd')),
-    ])) : SizedBox(height: 120, child: Stack(children: [
+    ])) : SizedBox(height: desktop ? 122 : 120, child: Stack(children: [
       Positioned(left: 12, top: 6, child: textLabel('主机密钥算法')),
       Positioned(left: 12, right: 12, top: 24, child: SelectableText(foundAlgorithm, key: const ValueKey('direct-key-algorithm'), style: const TextStyle(fontFamily: 'ProbeNerd'))),
       Positioned(left: 12, right: 12, top: 53, child: Divider(height: 1, color: t.color('border'))),
       Positioned(left: 12, top: 57, child: textLabel('完整 SHA256 指纹')),
-      Positioned(left: 12, right: 12, top: 76, child: SelectableText(foundFingerprint,
-        key: const ValueKey('direct-key-fingerprint'), style: const TextStyle(fontSize: 13, height: 1.3, fontFamily: 'ProbeNerd'))),
+      Positioned(left: 12, right: 12, top: desktop ? 79 : 76, child: desktop
+        ? SizedBox(key: const ValueKey('direct-key-fingerprint'), height: 34,
+          child: Align(alignment: Alignment.topLeft, child: SizedBox(width: 220, child: SelectableText(foundFingerprint,
+            style: const TextStyle(fontSize: 13, height: 1.3, fontFamily: 'ProbeNerd')))))
+        : SelectableText(foundFingerprint, key: const ValueKey('direct-key-fingerprint'),
+            style: const TextStyle(fontSize: 13, height: 1.3, fontFamily: 'ProbeNerd'))),
     ]));
-    return Scaffold(appBar: mobileHeader('核对主机密钥'),
-      body: SafeArea(child: ListView(padding: EdgeInsets.fromLTRB(mobileMargin, 20, mobileMargin, 24), children: [
+    final body = entryList(desktop: desktop, children: [
         mobileTargetCard(originalTarget), const SizedBox(height: 12),
         Container(key: const ValueKey('direct-key-evidence'),
-          decoration: BoxDecoration(color: t.color('card'), borderRadius: BorderRadius.circular(16), border: Border.all(color: t.color('border'))),
+          decoration: BoxDecoration(color: t.color('card'), borderRadius: evidenceRadius, border: desktop ? null : evidenceBorder),
+          foregroundDecoration: desktop ? BoxDecoration(borderRadius: evidenceRadius, border: evidenceBorder) : null,
           child: evidence),
-        const SizedBox(height: 16), SizedBox(height: large ? null : 52, child: Text('请通过服务器控制台或向管理员独立核对。\n算法和完整指纹一致后，再确认继续。',
+        const SizedBox(height: 16), SizedBox(key: desktop ? const ValueKey('direct-independent-verification') : null,
+          height: large ? null : 52, child: Text('请通过服务器控制台或向管理员独立核对。\n算法和完整指纹一致后，再确认继续。',
           style: TextStyle(fontSize: 13, height: 1.6, color: t.color('textSecondary')))),
         const SizedBox(height: 6), SizedBox(height: mobileButtonHeight, child: FilledButton(style: mobilePrimaryButton, key: const ValueKey('direct-trust-key'),
           onPressed: () => Navigator.pop(context, true), child: const Text('指纹一致，确认继续'))),
         const SizedBox(height: 12), SizedBox(height: mobileButtonHeight, child: OutlinedButton(key: const ValueKey('direct-trust-cancel'),
           style: mobileSecondaryButton, onPressed: () => Navigator.pop(context, false), child: Text(hostKeyReviewRequired ? '取消核对，保留旧信任' : '取消核对'))),
-      ])));
+      ]);
+    if (!desktop) return Scaffold(appBar: mobileHeader('核对主机密钥'), body: SafeArea(child: body));
+    return desktopEntryPage(title: '核对主机密钥', headerKey: 'direct-trust-header', backKey: 'direct-trust-back',
+      body: body, back: () => Navigator.pop(routeContext, false), selectDestination: (index) {
+        Navigator.pop(routeContext, false);
+        showCatalogDestination(index);
+      });
   }
   void returnAfterDisconnect() => Navigator.pop(context);
   void backFromMobileAuth() {
@@ -567,10 +633,10 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       ]))),
     ]);
   }
-  Widget mobileTargetForm() {
+  Widget mobileTargetForm({bool desktop = false}) {
     final outcome = disconnectOutcomeCopy;
     final failed = closeCleanupFailed;
-    return ListView(key: const ValueKey('direct-form'), padding: EdgeInsets.fromLTRB(mobileMargin, 20, mobileMargin, 24), children: [
+    return entryList(desktop: desktop, key: const ValueKey('direct-form'), children: [
     if (userDisconnected && !busy) ...[
       Container(key: const ValueKey('direct-closed-feedback'), constraints: const BoxConstraints(minHeight: 66),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -602,7 +668,9 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       Expanded(child: mobileField('用户名', SizedBox(height: mobileInputHeight, child: TextField(key: const ValueKey('direct-user'), controller: user, enabled: !busy,
         decoration: mobileInput('demo'))))),
       const SizedBox(width: 12), SizedBox(width: 84, child: mobileField('端口', SizedBox(height: mobileInputHeight, child: TextField(key: const ValueKey('direct-port'),
-        controller: port, enabled: !busy, keyboardType: TextInputType.number, decoration: mobileInput('22'))))),
+        controller: port, enabled: !busy, keyboardType: TextInputType.number,
+        inputFormatters: desktop ? [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(5)] : null,
+        decoration: mobileInput('22'))))),
     ]),
     const SizedBox(height: 20), SizedBox(height: mobileButtonHeight, child: FilledButton(style: mobilePrimaryButton, key: const ValueKey('direct-probe'),
       onPressed: valid && !busy ? probe : null, child: const Text('探测并核对主机密钥'))),
@@ -613,8 +681,22 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     if (busy) TextButton(onPressed: () => stop(message: '已取消，未重放操作。'), child: const Text('取消')),
     ]);
   }
-  Widget mobileAuthForm() {
+  Widget mobileAuthForm({bool desktop = false}) {
     final t = widget.tokens;
+    final credentialEnabled = !busy && !hostKeyReviewRequired;
+    final nativeCredentials = desktop && !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+    const passwordLabel = '密码（仅本次使用）', passphraseLabel = '私钥口令（加密私钥需要）';
+    Widget credential(String id, String label, TextEditingController controller, {required double height, bool pem = false}) {
+      if (nativeCredentials && !pem) {
+        return ConstrainedBox(constraints: BoxConstraints(minHeight: height), child: MacosSecureCredentialField(
+          key: ValueKey(id), controller: controller,
+          enabled: credentialEnabled, label: label, identifier: id,
+          decoration: mobileInput('').copyWith(contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3))));
+      }
+      return SizedBox(height: height, child: TextField(key: ValueKey(id), controller: controller, enabled: credentialEnabled,
+        obscureText: !pem, minLines: pem ? 2 : 1, maxLines: pem ? 2 : 1,
+        decoration: mobileInput(pem ? '粘贴已有私钥的完整 PEM' : '未填写')));
+    }
     Widget choice(String text, bool value) => Expanded(child: SizedBox(height: mobileLargeText ? 60 : 44, child: OutlinedButton(
       key: ValueKey(value ? 'direct-auth-key' : 'direct-auth-password'),
       style: OutlinedButton.styleFrom(backgroundColor: t.color(keyAuth == value ? 'brandSoft' : 'card'),
@@ -623,28 +705,28 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
       onPressed: busy || hostKeyReviewRequired ? null : () => setState(() { cancelKeyPaste(); keyAuth = value; secret.clear(); passphrase.clear(); }),
       child: Text(text))));
-    return ListView(key: const ValueKey('direct-form'), padding: EdgeInsets.fromLTRB(mobileMargin, 20, mobileMargin, 24), children: [
+    return entryList(desktop: desktop, key: const ValueKey('direct-form'), children: [
       mobileTargetCard(checkedTarget ?? target), const SizedBox(height: 10),
-      Container(height: 44, padding: const EdgeInsets.symmetric(horizontal: 12), alignment: Alignment.centerLeft,
+      Container(key: desktop ? const ValueKey('direct-trust-approved') : null,
+        height: 44, padding: const EdgeInsets.symmetric(horizontal: 12), alignment: Alignment.centerLeft,
         decoration: BoxDecoration(color: t.color('successSoft'), borderRadius: BorderRadius.circular(10), border: Border.all(color: t.color('successBorder'))),
         child: Text('本次主机密钥已确认', style: TextStyle(color: t.color('successText'), fontWeight: FontWeight.bold))),
       if (status != '已确认本次主机密钥；连接时将重新核对。') ...[const SizedBox(height: 10), Semantics(liveRegion: true, child: Text(status, key: const ValueKey('direct-status')))],
       SizedBox(height: MediaQuery.sizeOf(context).width < 360 ? 12 : 20),
-      const Text('认证方式', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)), const SizedBox(height: 4),
+      SizedBox(height: desktop && !mobileLargeText ? 18 : null,
+        child: const Text('认证方式', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+      const SizedBox(height: 4),
       Row(children: [choice('密码', false), const SizedBox(width: 8), choice('已有私钥', true)]), const SizedBox(height: 14),
-      mobileField(keyAuth ? '私钥 PEM（仅本次使用）' : '密码（仅本次使用）',
-        SizedBox(height: keyAuth ? (mobileLargeText ? 110 : MediaQuery.sizeOf(context).width < 360 ? 68 : 84) : mobileInputHeight,
-          child: TextField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy && !hostKeyReviewRequired,
-            obscureText: !keyAuth, minLines: keyAuth ? 2 : 1, maxLines: keyAuth ? 2 : 1,
-            decoration: mobileInput(keyAuth ? '粘贴已有私钥的完整 PEM' : '未填写')))),
+      mobileField(keyAuth ? '私钥 PEM（仅本次使用）' : passwordLabel,
+        credential('direct-secret', passwordLabel, secret, pem: keyAuth,
+          height: keyAuth ? (mobileLargeText ? 110 : MediaQuery.sizeOf(context).width < 360 ? 68 : 84) : mobileInputHeight)),
       if (keyAuth) ...[const SizedBox(height: 10), SizedBox(height: mobileButtonHeight, child: OutlinedButton(key: const ValueKey('direct-paste-key'),
         style: mobileSecondaryButton, onPressed: busy || pastingKey || !foreground || hostKeyReviewRequired ? null : pastePrivateKey, child: const Text('粘贴私钥'))),
         // Keep the credential field and button at the same sliver indices.
         pasteStatus == null ? const SizedBox.shrink()
           : Semantics(liveRegion: true, child: Text(pasteStatus!, key: const ValueKey('direct-paste-status'))),
-        const SizedBox(height: 12), mobileField('私钥口令（加密私钥需要）', SizedBox(height: mobileInputHeight,
-          child: TextField(key: const ValueKey('direct-passphrase'), controller: passphrase, enabled: !busy && !hostKeyReviewRequired,
-            obscureText: true, decoration: mobileInput('未填写')))),
+        const SizedBox(height: 12), mobileField(passphraseLabel,
+          credential('direct-passphrase', passphraseLabel, passphrase, height: mobileInputHeight)),
       ],
       const SizedBox(height: 14), SizedBox(height: mobileButtonHeight, child: FilledButton(style: mobilePrimaryButton, key: const ValueKey('direct-connect'),
         onPressed: canConnect ? connect : null, child: const Text('连接 SSH'))),
@@ -653,7 +735,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       if (busy) TextButton(onPressed: () => stop(message: '已取消，未重放操作。'), child: const Text('取消')),
     ]);
   }
-  Widget mobileHostKeyChangeView() {
+  Widget mobileHostKeyChangeView({bool desktop = false}) {
     final change = hostKeyChange!, t = widget.tokens;
     final sameAlgorithm = change.oldAlgorithm == change.newAlgorithm;
     Widget keyText(String key, String value) => SelectableText(value, key: ValueKey(key),
@@ -671,7 +753,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       Text('新指纹 · 待核对 · ${change.newAlgorithm}', style: TextStyle(fontSize: 12, color: t.color('dangerText'))),
       keyText('direct-host-key-new', change.newFingerprint),
     ]));
-    return ListView(key: const ValueKey('direct-host-key-change'), padding: EdgeInsets.fromLTRB(mobileMargin, 20, mobileMargin, 24), children: [
+    return entryList(desktop: desktop, key: const ValueKey('direct-host-key-change'), children: [
       Container(key: const ValueKey('direct-changed-warning'), constraints: const BoxConstraints(minHeight: 84),
         padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: t.color('dangerSoft'), borderRadius: BorderRadius.circular(10),
           border: Border.all(color: t.color('dangerBorder'))),
@@ -1210,13 +1292,25 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       ],
     );
   }
+  void backFromDesktopEntry() {
+    if (mobileAuth && !hostKeyReviewRequired) {
+      backFromMobileAuth();
+    } else {
+      Navigator.pop(context, DirectSshRouteExit.targetBack);
+    }
+  }
+
   @override
-  Widget build(BuildContext context) => PopScope<void>(
-    canPop: hostKeyChange == null && !settingsActive,
+  Widget build(BuildContext context) {
+    final desktopEntry = desktopEntryLayout(context) && !connected && !userDisconnected;
+    final authenticating = mobileAuth && !hostKeyReviewRequired;
+    return PopScope(
+    canPop: hostKeyChange == null && !settingsActive && !desktopEntry,
     onPopInvokedWithResult: (didPop, result) {
       if (!didPop && settingsActive && connected) {
         selectMobileTerminal(false);
       }
+      if (!didPop && desktopEntry && hostKeyChange == null) backFromDesktopEntry();
       if (didPop && busy) stop(notify: false);
       if (didPop && userDisconnected) {
         if (closeCleanupFailed || closeLocalConfirmed) {
@@ -1228,7 +1322,15 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
         }
       }
     },
-    child: Scaffold(
+    child: desktopEntry ? desktopEntryPage(
+      title: hostKeyChange != null ? '主机指纹发生变化' : authenticating ? 'SSH 账号认证' : '普通 SSH',
+      headerKey: 'direct-page-header', backKey: 'direct-back-hit',
+      body: hostKeyChange != null ? mobileHostKeyChangeView(desktop: true)
+        : authenticating ? mobileAuthForm(desktop: true) : mobileTargetForm(desktop: true),
+      back: hostKeyChange == null ? backFromDesktopEntry : null,
+      selectDestination: showCatalogDestination,
+      showStop: busy,
+    ) : Scaffold(
       bottomNavigationBar: mobileLayout && connected && MediaQuery.viewInsetsOf(context).bottom == 0 ? mobileConnectedNavigation() : null,
       appBar: mobileLayout && connected ? mobileActiveHeader() : mobileLayout && !connected ? mobileHeader(hostKeyChange != null ? '主机指纹发生变化' : mobileAuth && !hostKeyReviewRequired ? 'SSH 账号认证' : '普通 SSH',
         canGoBack: hostKeyChange == null && (ModalRoute.of(context)?.impliesAppBarDismissal ?? false), showStop: busy, onBack: mobileAuth && !hostKeyReviewRequired ? backFromMobileAuth
@@ -1317,5 +1419,6 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       ))),
     ])),
     ),
-  );
+    );
+  }
 }

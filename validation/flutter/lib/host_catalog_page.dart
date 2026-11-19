@@ -34,6 +34,8 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   static const desktopMinWidth = 960.0;
   static const wideSidebarWidth = 224.0;
   static const splitWorkspaceMinWidth = 960.0;
+  static const desktopDestinations = [(Icons.dashboard_outlined, '看板'), (Icons.terminal, '终端'),
+    (Icons.language, '网络'), (Icons.settings_outlined, '设置')];
   bool get canToggleDesktopSidebar => MediaQuery.sizeOf(context).width < desktopMinWidth;
   bool get desktopSidebarExpanded => !canToggleDesktopSidebar || narrowSidebarExpanded;
   double get desktopSidebarWidth => desktopSidebarExpanded ? wideSidebarWidth : 64.0;
@@ -51,7 +53,8 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   int destination = 0;
   bool splitUpdatePending = false;
   bool workspaceWide = false;
-  bool narrowSidebarExpanded = false;
+  final sshSidebarPreference = ValueNotifier((narrowExpanded: false, wideCollapsed: false));
+  bool get narrowSidebarExpanded => sshSidebarPreference.value.narrowExpanded;
   final hostSearch = TextEditingController();
   final expandedHostManagement = <String>{};
   HostTaskFilter taskFilter = HostTaskFilter.all;
@@ -68,6 +71,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   @override
   void dispose() {
     sshVisible.dispose();
+    sshSidebarPreference.dispose();
     hostSearch.dispose();
     WidgetsBinding.instance.removeObserver(this);
     summaries.removeListener(tabChanged);
@@ -329,7 +333,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   bool get mobileEmptyBoard => MediaQuery.sizeOf(context).width < desktopRailMinWidth && emptyCatalogBoard;
   bool get desktopEmptyBoard => MediaQuery.sizeOf(context).width >= desktopRailMinWidth && emptyCatalogBoard;
 
-  Future<void> openDirectSsh() async {
+  Future<void> openDirectSsh({bool fromChooser = false}) async {
     tabs.select(null);
     if (sshClosedNotice) setState(() { sshClosedNotice = false; sshClosedSucceeded = false; });
     if (sshRouteOpen) {
@@ -344,11 +348,12 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       sshVisible.value = true;
     });
     final navigator = sshNavigator.currentState!;
-    final route = MaterialPageRoute<void>(
+    final route = MaterialPageRoute<DirectSshRouteExit>(
       builder: (_) => DirectSshPage(
         tokens: widget.tokens,
         catalog: catalog,
         sessionVisible: sshVisible,
+        desktopFlowShell: desktopSshFlowShell,
         onSelectDestination: (index) {
           setState(() {
             destination = index;
@@ -365,7 +370,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
         },
       ),
     );
-    await navigator.push<void>(route);
+    final exit = await navigator.push(route);
     await route.completed;
     if (mounted) {
       setState(() {
@@ -373,13 +378,16 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
         sshVisible.value = false;
         destination = 0;
       });
+      if (fromChooser && exit == DirectSshRouteExit.targetBack) unawaited(chooseConnection());
     }
   }
 
   Future<void> chooseConnection() async {
     if (sshClosedNotice) setState(() { sshClosedNotice = false; sshClosedSucceeded = false; });
-    final choice = await Navigator.push<String>(context, MaterialPageRoute(builder: (context) {
-      final margin = MediaQuery.sizeOf(context).width < 360 ? 16.0 : 24.0;
+    final choice = await Navigator.push<Object>(context, MaterialPageRoute(builder: (context) {
+      final width = MediaQuery.sizeOf(context).width;
+      final desktop = width >= desktopRailMinWidth;
+      final margin = desktop ? 40.0 : width < 360 ? 16.0 : 24.0;
       final large = MediaQuery.textScalerOf(context).scale(1) > 1;
       Widget option(String key, String title, String detail, IconData icon, bool primary, String value) =>
         ConstrainedBox(constraints: const BoxConstraints(minHeight: 100), child: SizedBox(height: large ? null : 100, child: Material(
@@ -399,27 +407,87 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
                 else FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(detail,
                   style: TextStyle(fontSize: 13, letterSpacing: 0, color: widget.tokens.color('textSecondary')))),
               ]))))));
-      return Scaffold(body: SafeArea(child: Column(children: [
+      Widget readingColumn(Widget child) => desktop ? Align(alignment: Alignment.centerLeft,
+        child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 560),
+          child: SizedBox(width: double.infinity, child: child))) : child;
+      final page = Scaffold(body: SafeArea(child: Column(children: [
         Container(key: const ValueKey('choose-header'), height: large ? 72 : 56,
           decoration: BoxDecoration(border: Border(bottom: BorderSide(color: widget.tokens.color('border')))),
-          child: Row(children: [SizedBox(width: margin - 8), SizedBox(width: 44, height: 44,
+          child: Row(children: [SizedBox(width: margin - (desktop ? 32 : 8)), SizedBox(width: 44, height: 44,
             child: IconButton(key: const ValueKey('choose-back'), padding: EdgeInsets.zero, tooltip: '返回',
               onPressed: () => Navigator.pop(context), icon: const Icon(Icons.arrow_back))),
-            const SizedBox(width: 8), const Text('添加主机', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))])),
+            SizedBox(width: desktop ? 12 : 8), const Text('添加主机', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))])),
         Expanded(child: ListView(padding: EdgeInsets.fromLTRB(margin, 24, margin, 24), children: [
-          SizedBox(height: large ? null : 28, child: Transform.translate(offset: Offset(0, large ? 0 : -4),
-            child: const Text('选择连接方式', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 0)))),
+          readingColumn(SizedBox(height: large ? null : 28, child: Transform.translate(offset: Offset(0, large ? 0 : -4),
+            child: const Text('选择连接方式', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 0))))),
           const SizedBox(height: 16),
-          option('choose-ssh', '普通 SSH 终端', '使用服务器密码或已有私钥打开远程 Shell。', Icons.terminal, true, 'ssh'),
+          readingColumn(option('choose-ssh', '普通 SSH 终端', '使用服务器密码或已有私钥打开远程 Shell。', Icons.terminal, true, 'ssh')),
           const SizedBox(height: 12),
-          option('choose-herdr', 'herdr 配对 / 手动连接', '接入 herdr 工作台，查看会话和任务。', Icons.web_asset_outlined, false, 'herdr'),
+          readingColumn(option('choose-herdr', 'herdr 配对 / 手动连接', '接入 herdr 工作台，查看会话和任务。', Icons.web_asset_outlined, false, 'herdr')),
         ])),
       ])));
+      return desktop ? desktopSshFlowShell(page, (index) => Navigator.pop(context, index)) : page;
     }));
     if (!mounted) return;
-    if (choice == 'ssh') openDirectSsh();
+    if (choice == 'ssh') await openDirectSsh(fromChooser: true);
     if (choice == 'herdr') await open();
+    if (choice is int) selectSshFlowDestination(choice);
   }
+
+  void selectSshFlowDestination(int index) {
+    if (index == 1 && sshRouteOpen) {
+      setState(() => sshVisible.value = true);
+      return;
+    }
+    if (index != 1) tabs.select(null);
+    setState(() => destination = index);
+  }
+
+  Widget desktopSshFlowShell(Widget page, ValueChanged<int> select) =>
+    ValueListenableBuilder(valueListenable: sshSidebarPreference, builder: (context, preference, _) {
+      final narrow = MediaQuery.sizeOf(context).width < desktopMinWidth;
+      final expanded = narrow ? preference.narrowExpanded : !preference.wideCollapsed;
+      final navInset = expanded ? 8.0 : 10.0;
+      final tokens = widget.tokens;
+      return Row(children: [
+        Material(color: tokens.color('card'), child: Container(
+          key: const ValueKey('app-sidebar'),
+          width: expanded ? wideSidebarWidth : 64,
+          foregroundDecoration: BoxDecoration(border: Border(right: BorderSide(color: tokens.color('border')))),
+          child: ListView(primary: false, padding: EdgeInsets.fromLTRB(navInset, 8, navInset, 0), children: [
+            Align(alignment: Alignment.centerLeft, child: SizedBox.square(dimension: 44, child: IconButton(
+              key: const ValueKey('sidebar-toggle'),
+              onPressed: () => setState(() => sshSidebarPreference.value = (
+                narrowExpanded: narrow ? !expanded : preference.narrowExpanded,
+                wideCollapsed: narrow ? preference.wideCollapsed : expanded,
+              )),
+              tooltip: expanded ? '收起侧栏' : '展开侧栏',
+              icon: Icon(expanded ? Icons.menu_open : Icons.menu),
+            ))),
+            const SizedBox(height: 16),
+            for (var i = 0; i < desktopDestinations.length; i++) ...[
+              InkWell(key: ValueKey('ssh-flow-nav-$i'), borderRadius: BorderRadius.circular(10),
+                onTap: () => select(i), child: SizedBox(height: 44, child: Semantics(
+                  label: desktopDestinations[i].$2, button: true,
+                  child: Row(mainAxisAlignment: expanded ? MainAxisAlignment.start : MainAxisAlignment.center, children: [
+                    if (expanded) const SizedBox(width: 14),
+                    Icon(desktopDestinations[i].$1, size: 24, color: tokens.color('textSecondary')),
+                    if (expanded) ...[const SizedBox(width: 10), Text(desktopDestinations[i].$2)],
+                  ])))),
+              const SizedBox(height: 8),
+            ],
+            if (expanded && catalog.profiles.isEmpty)
+              Padding(padding: const EdgeInsets.fromLTRB(12, 8, 12, 8), child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('主机', style: TextStyle(fontSize: 12, color: tokens.color('textSecondary'))),
+                  const SizedBox(height: 6),
+                  Text('还没有主机 · 从看板添加', style: TextStyle(fontSize: 13, color: tokens.color('textMutedReadable'))),
+                ])),
+          ]),
+        )),
+        Expanded(child: page),
+      ]);
+    });
 
   double get cardRadius => ((widget.tokens.data['radii'] as Map)['card'] as num).toDouble();
 
@@ -990,7 +1058,9 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
           SizedBox.square(dimension: 44, child: IconButton(
             key: const ValueKey('sidebar-toggle'),
             tooltip: desktopSidebarExpanded ? '收起侧栏' : '展开侧栏',
-            onPressed: () => setState(() => narrowSidebarExpanded = !narrowSidebarExpanded),
+            onPressed: () => setState(() => sshSidebarPreference.value = (
+              narrowExpanded: !narrowSidebarExpanded, wideCollapsed: sshSidebarPreference.value.wideCollapsed,
+            )),
             icon: Icon(desktopSidebarExpanded ? Icons.menu_open : Icons.menu),
           )),
           if (desktopSidebarExpanded)
@@ -1042,8 +1112,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
     ])));
   }
   Widget desktopRail() {
-    final entries = [(Icons.dashboard_outlined, '看板'), (Icons.terminal, '终端'),
-      (Icons.language, '网络'), (Icons.settings_outlined, '设置')];
+    final entries = desktopDestinations;
     return ListView(padding: const EdgeInsets.only(left: 10, right: 9), children: [
         for (var i = 0; i < entries.length; i++)
           Padding(padding: EdgeInsets.only(top: i == 0 ? 16 : 8), child: Material(

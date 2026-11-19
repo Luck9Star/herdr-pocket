@@ -24,14 +24,22 @@ import {hostSummaryIdentity} from './host-dashboard-summary.js';
  *  切换焦点沿用 gate.js 的 focusRevision 语义（旧面板租约立即失效）；分屏绝不 resize 远端画布。 */
 export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null,getFontSize=()=>14,channelFactory,terminalFactory,onDashboard=()=>{},clipboardRead=readClipboardForPaste,keyboardRequest=requestMobileKeyboard}) {
   const tabs=new RemoteTabs(), root=document.getElementById('tab-workspace');
+  const workspacePage=document.getElementById('remote-page');
   const nav=document.getElementById('view-tabs'), body=document.getElementById('view-content');
   let switching=false, textSelection=null, fontDiagnostics=null, mountedTabs=[];
   // 桌面分屏（切片 2）：splitOn 只是本地布局意图；能否真的双面板由窗口宽度与标签数共同决定。
   // 分屏绝不发送 PTY resize——每个面板沿用自己连接时选定的观察画布（docs/05:137；transport 层已断言观察不含 resize）。
-  let splitOn=false, splitPartnerId=null, lastWide=globalThis.window?.innerWidth>=900;
+  let splitOn=false, splitPartnerId=null, splitPause=null, lastWide=globalThis.window?.innerWidth>=900;
   const splitButton=document.getElementById('workbench-split');
   function isWide(){const width=globalThis.window?.innerWidth;return typeof width==='number' && width>=900;}
   function splitPartner(){if(!splitOn || !isWide())return null;const tab=tabs.get(splitPartnerId);return tab && tab.id!==tabs.activeId ? tab : null;}
+  function restoreSplitPause(tab){
+    if(splitPause?.tab!==tab || splitPause.restoring || splitPartner()!==tab || tab.state!=='paused' || !canResume(tab))return false;
+    splitPause.restoring=true;
+    void resume(tab,splitPause);
+    return true;
+  }
+  function retireSplitPause(tab){if(splitPause?.tab===tab || tabs.activeId===tab.id)splitPause=null;}
   // 面板身份标记：单面板（未分屏）时 #view-content 自身就是唯一面板，标记挂在它身上；
   // 真分屏时标记只存在于各自的 section 包装层上。
   function markSinglePanel(tab){body.dataset.role='workbench-panel';body.dataset.tabId=tab.id;body.dataset.focus='true';}
@@ -364,6 +372,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   }
   async function select(id) {
     if(switching || id===tabs.activeId)return;
+    splitPause=null;
     const swapping=splitPartner()?.id===id;
     switching=true;render();
     const previous=tabs.get(tabs.activeId);
@@ -394,11 +403,29 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     catch {if(tab.controlRevision!==controlRevision)return;await cancel(tab);status(tab,'暂停未确认，连接已取消；不会自动重连。');}
     finally {tab.suppressBlur=false;}
   }
-  async function resume(tab) {
-    if((tabs.activeId!==tab.id && splitPartner()!==tab) || tab.state!=='paused')return;
+  function workspaceVisible(){return !document.hidden && !workspacePage?.hidden;}
+  function canResume(tab) {
+    return workspaceVisible() && !switching && !tab.closing && !tab.invalidated && (tabs.activeId===tab.id || splitPartner()===tab);
+  }
+  async function resume(tab,layoutPause=null) {
+    if(!canResume(tab) || tab.state!=='paused')return;
     tab.diagnostics?.resume();
     const controlRevision=++tab.controlRevision;tab.state='resuming';tab.selectionTextReady=false;tab.inputReady=false;tab.wantsPause=false;tab.board.invalidate('resuming');boardEvent(tab,'starting');tab.selectionReady=false;render();
-    try {const pending=invoke('remote_tab_visible',{tabId:tab.id,clientGeneration:tab.token.generation,generation:tab.nativeGeneration});tab.visibilityPending=pending;await pending;tab.visibilityPending=null;if(tab.wantsPause)return;await invoke('remote_tab_control',{tabId:tab.id,clientGeneration:tab.token.generation,generation:tab.nativeGeneration,action:'resume'});}
+    try {
+      const pending=invoke('remote_tab_visible',{tabId:tab.id,clientGeneration:tab.token.generation,generation:tab.nativeGeneration});
+      tab.visibilityPending=pending;await pending;tab.visibilityPending=null;
+      if(tab.wantsPause || tab.controlRevision!==controlRevision)return;
+      if(!canResume(tab) || (layoutPause && splitPause!==layoutPause)){
+        // No resume was sent. Keep the acknowledged pause available for a later manual resume.
+        if(tab.state==='resuming'){
+          tab.state='paused';tab.wantsPause=true;tab.diagnostics?.pause();
+          status(tab,'观察已暂停，SSH 保留；需主动恢复。');
+        }
+        return;
+      }
+      if(layoutPause)splitPause=null;
+      await invoke('remote_tab_control',{tabId:tab.id,clientGeneration:tab.token.generation,generation:tab.nativeGeneration,action:'resume'});
+    }
     catch(error) {if(String(error)==='control_superseded' || tab.controlRevision!==controlRevision)return;await cancel(tab);status(tab,'恢复未完成，连接已取消。');}
   }
   async function enableInput(tab) {
@@ -588,6 +615,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     finally {if(tab.inflightReview===pending)tab.inflightReview=null;if(tabs.get(tab.id)===tab){tab.draftPending--;if(sameLease(tab,binding))tab.inputBusy=false;render();}}
   }
   async function cancel(tab) {
+    retireSplitPause(tab);
     if(tab.inputBusy && tab.inflightReview){tab.unknown=true;tab.unknownReview=tab.inflightReview;}
     clearReceipt(tab);
     tab.diagnostics?.finish('cancelled');tab.diagnosticView?.update(tab.diagnostics);
@@ -656,7 +684,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
         }
         if(event.kind==='selection_ready') {if(event.epoch===tab.epoch && paneVisible() && !tab.wantsPause){tab.selectionReady=true;renderDashboard(tab);recheckBlocked(tab);}return;}
         if(event.kind==='stage') {if(!tab.wantsPause && !document.hidden && paneVisible()){tab.diagnostics.stage(event.stage);const text=connectionStageText(event.stage);if(text)status(tab,text);}return;}
-        if(event.kind==='observation') {if(!Number.isSafeInteger(event.snapshot?.epoch) || (tab.epoch!==null && event.snapshot.epoch<tab.epoch))return;if(event.snapshot.epoch!==tab.epoch){if(tab.blockedIntent && !tab.blockedVerified)tab.blockedBound=false;tab.selectionTextReady=false;retireDirectPending(tab);tab.suppressBlur=true;tab.board.advance(event.snapshot.epoch);boardEvent(tab,'stale');tab.selectionReady=false;tab.frames=new RemoteFrameQueue();tab.inputRevision++;tab.inputBusy=false;tab.inputReady=false;tab.inputEpoch=null;tab.mode='observe';tab.queue.clear();if(tab.terminal)tab.terminal.options.disableStdin=true;}tab.epoch=event.snapshot.epoch;tab.state=event.snapshot.phase;if(['paused','pausing','closed'].includes(tab.state)){tab.board.invalidate(tab.state);boardEvent(tab,'stale');tab.selectionReady=false;}status(tab,tab.state==='paused'?'观察已暂停，SSH 保留；需主动恢复。':tab.state==='active'?'观察已连接；输入状态见下方。':'正在切换观察状态…');updateTabButton(tab);tab.suppressBlur=false;return;}
+        if(event.kind==='observation') {if(!Number.isSafeInteger(event.snapshot?.epoch) || (tab.epoch!==null && event.snapshot.epoch<tab.epoch))return;if(event.snapshot.epoch!==tab.epoch){if(tab.blockedIntent && !tab.blockedVerified)tab.blockedBound=false;tab.selectionTextReady=false;retireDirectPending(tab);tab.suppressBlur=true;tab.board.advance(event.snapshot.epoch);boardEvent(tab,'stale');tab.selectionReady=false;tab.frames=new RemoteFrameQueue();tab.inputRevision++;tab.inputBusy=false;tab.inputReady=false;tab.inputEpoch=null;tab.mode='observe';tab.queue.clear();if(tab.terminal)tab.terminal.options.disableStdin=true;}tab.epoch=event.snapshot.epoch;tab.state=event.snapshot.phase;if(['paused','pausing','closed'].includes(tab.state)){tab.board.invalidate(tab.state);boardEvent(tab,'stale');tab.selectionReady=false;}status(tab,tab.state==='paused'?'观察已暂停，SSH 保留；需主动恢复。':tab.state==='active'?'观察已连接；输入状态见下方。':'正在切换观察状态…');updateTabButton(tab);tab.suppressBlur=false;if(tab.state==='paused')restoreSplitPause(tab);return;}
         if(event.kind==='input_ready') {if(event.epoch!==tab.epoch || tab.blockedIntent && !tab.blockedVerified)return;tab.inputReady=true;tab.unknown=event.unknown || event.recovery_status==='unavailable' || !!(tab.unknownReview && tab.unknownReview.target.paneId===tab.target?.paneId && tab.unknownReview.target.terminalId===tab.target?.terminalId);tab.recoveryStatus=event.recovery_status;tab.message=event.recovery_status==='unavailable'?'安全记录不可用；输入保持锁定。':event.unknown?'存在未确认的发送结果，输入保持锁定；请核查原目标。':'已收到完整画面，可显式开启草稿输入。';render();return;}
         if(event.kind!=='frame' || event.epoch!==tab.epoch || !paneVisible())return;
         if(tab.blockedIntent && !tab.blockedVerified && (!tab.blockedBound || !event.frame?.full || !blockedMatches(tab,tab.target))){void cancel(tab);return;}
@@ -694,12 +722,12 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     finally {if(tabs.get(tab.id)===tab && tab.token===token){tab.diagnostics?.finish();tab.diagnosticView?.update(tab.diagnostics);tab.board.invalidate('disconnected');boardEvent(tab,'stale');tab.selectionReady=false;tabs.invalidate(tab.id);tab.state='disconnected';tab.reviewed=false;tab.closing=false;tab.nativeGeneration=null;tab.inputEpoch=null;render();}}
   }
   function setFont(size) {for(const tab of tabs.list())if(tab.terminal){tab.localViewport.capture();tab.terminal.options.fontSize=size;}}
-  function prepareAffected(ids) {const affected=tabs.affected(ids);for(const tab of affected){tab.controlRevision++;if(tab.inputBusy && tab.inflightReview){tab.unknown=true;tab.unknownReview=tab.inflightReview;}tab.diagnostics?.finish('host_selection_changed');retireDirectPending(tab);tab.board.invalidate('configuration_changed');boardEvent(tab,'stale');tab.selectionReady=false;tab.suppressBlur=true;tab.invalidated=true;tab.reviewed=false;tab.message='目标或网络配置已变更，请关闭此标签并新建。';tab.inputRevision++;tab.inputBusy=false;tab.inputEpoch=null;tab.mode='observe';tab.queue.clear();if(tab.terminal)tab.terminal.options.disableStdin=true;tabs.invalidate(tab.id);tab.closing=true;tab.state='disconnected';}render();for(const tab of affected)tab.suppressBlur=false;}
+  function prepareAffected(ids) {const affected=tabs.affected(ids);for(const tab of affected){retireSplitPause(tab);tab.controlRevision++;if(tab.inputBusy && tab.inflightReview){tab.unknown=true;tab.unknownReview=tab.inflightReview;}tab.diagnostics?.finish('host_selection_changed');retireDirectPending(tab);tab.board.invalidate('configuration_changed');boardEvent(tab,'stale');tab.selectionReady=false;tab.suppressBlur=true;tab.invalidated=true;tab.reviewed=false;tab.message='目标或网络配置已变更，请关闭此标签并新建。';tab.inputRevision++;tab.inputBusy=false;tab.inputEpoch=null;tab.mode='observe';tab.queue.clear();if(tab.terminal)tab.terminal.options.disableStdin=true;tabs.invalidate(tab.id);tab.closing=true;tab.state='disconnected';}render();for(const tab of affected)tab.suppressBlur=false;}
   function affected(ids) {for(const tab of tabs.affected(ids)){tab.diagnostics?.finish('host_selection_changed');tab.invalidated=true;tab.reviewed=false;tab.message='目标或网络配置已变更，请关闭此标签并新建。';void cancel(tab);}}
   function background() {for(const tab of tabs.list())tab.pasteReadSequence++;textSelection?.close();textSelection=null;fontDiagnostics?.close(false);fontDiagnostics=null;for(const tab of tabs.list()){tab.pasteReview=null;void cancel(tab);}}
   function prepareHide(){const active=tabs.get(tabs.activeId);if(active)active.pasteReadSequence++;textSelection?.close();textSelection=null;fontDiagnostics?.close(false);fontDiagnostics=null;const tab=tabs.get(tabs.activeId);if(tab)tab.suppressBlur=true;}
   function cancelPrepareHide(){const tab=tabs.get(tabs.activeId);if(tab){tab.suppressBlur=false;if(tab.mode==='direct' && document.activeElement!==tab.terminal?.textarea)void loseDirect(tab);}}
-  async function hide() {textSelection?.close();textSelection=null;const tab=tabs.get(tabs.activeId);if(tab && ['connecting','starting','active','resuming'].includes(tab.state))await pause(tab);else if(tab)tab.suppressBlur=false;const partner=splitPartner();if(partner && ['connecting','starting','active','resuming'].includes(partner.state))await pause(partner);}
+  async function hide() {splitPause=null;textSelection?.close();textSelection=null;const tab=tabs.get(tabs.activeId);if(tab && ['connecting','starting','active','resuming'].includes(tab.state))await pause(tab);else if(tab)tab.suppressBlur=false;const partner=splitPartner();if(partner && ['connecting','starting','active','resuming'].includes(partner.state))await pause(partner);}
   globalThis.window?.addEventListener?.('blur',()=>{let changed=false;for(const tab of tabs.list()){tab.pasteFocusRevision++;if(tab.pasteReview){tab.pasteReview=null;changed=true;}}if(changed)render();});
   // ---- 桌面分屏（切片 2）：本地布局开关。沿用 fixture #split 的交互范式与诚实声明——
   // 只变更本地布局；未发送 PTY resize，各面板观察画布保持连接时的选定值（docs/05:137）。 ----
@@ -712,7 +740,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   async function setSplit(on) {
     if(switching || on===splitOn)return;  // 标签切换进行中不接分屏：避免 aria-pressed 与真实布局脱节
     if(on && (!isWide() || tabs.list().length<2))return;  // 窄窗或不足两个标签：分屏入口不可用
-    splitOn=on;
+    splitPause=null;splitOn=on;
     if(on) {
       splitPartnerId=tabs.list().find(candidate=>candidate.id!==tabs.activeId)?.id || null;
       const partner=tabs.get(splitPartnerId);
@@ -728,12 +756,16 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     const wide=isWide();
     if(wide===lastWide)return;
     lastWide=wide;
+    if(!workspaceVisible()){render();return;}
     // 只在跨越 900px 边界时处理：窄窗回落单面板并暂停分屏侧；回到宽窗恢复副面板。全程不触发远端 resize。
     const partner=splitOn ? tabs.get(splitPartnerId) : null;
-    if(!partner){render();return;}
-    if(wide){if(partner.state==='paused')void resume(partner);else render();}
-    else if(['connecting','starting','active','resuming'].includes(partner.state))void pause(partner);
-    else render();
+    if(!partner || partner.id===tabs.activeId){render();return;}
+    if(wide){if(!restoreSplitPause(partner))render();}
+    else if(['connecting','starting','active','resuming'].includes(partner.state)){
+      // Only a pause caused by this split's layout can be resumed by widening or a late snapshot.
+      splitPause={tab:partner,restoring:false};
+      void pause(partner);
+    } else render();
   });
   render();return {hasTabs:()=>tabs.list().length>0,create,createBlocked,select,prepareAffected,affected,background,prepareHide,cancelPrepareHide,hide,setFont};
 }

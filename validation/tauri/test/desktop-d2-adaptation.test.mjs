@@ -28,14 +28,15 @@ const flush=()=>new Promise(resolve=>setImmediate(resolve));
 
 function setup({innerWidth=1280}={}) {
   const oldDocument=globalThis.document, oldWindow=globalThis.window;
-  const nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content','workbench-split'].map(id=>[id,new Element('div')]));
+  const nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content','workbench-split','remote-page'].map(id=>[id,new Element('div')]));
   const listeners={};
   globalThis.document={hidden:false,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};
   globalThis.window={innerWidth,addEventListener:(name,fn)=>{(listeners[name] ??= []).push(fn);},confirm:()=>true};
   const calls=[],channels=[],observes=[],terminals=[],resizes=[],tabTargets={};
-  let generation=0;
+  let generation=0, heldVisibility=null;
   const invoke=(name,args)=>{calls.push({name,args});
     if(name==='remote_tab_reserve')return Promise.resolve(++generation);
+    if(name==='remote_tab_visible' && heldVisibility?.tabId===args.tabId)return heldVisibility.pending;
     if(name==='remote_tab_input_mode')return Promise.resolve(7);
     if(name==='remote_tab_input_send'){const pane=tabTargets[args.tabId];return Promise.resolve({status:'accepted',receipt:{requestId:'0'.repeat(32),paneId:pane.paneId,terminalId:pane.terminalId,acceptedBytes:args.bytes.length}});}
     if(name==='remote_tab_observe'){observes.push(args);channels.push(args.onEvent);return new Promise(()=>{});}
@@ -54,8 +55,14 @@ function setup({innerWidth=1280}={}) {
     send(tab,{kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});
     send(tab,{kind:'input_ready',epoch:1,unknown:false,recovery_status:'none'});await flush();await flush();};
   const openTab=async id=>{const pane=target(id);const tab=ui.create(pane.hostId,pane);tabTargets[tab]=pane;await ui.select(tab);await connectActive();await activate(tab);return tab;};
-  const settlePaused=async tab=>{send(tab,{kind:'observation',snapshot:{epoch:1,phase:'paused'}});await flush();};
+  const settlePaused=async (tab,epoch=1)=>{send(tab,{kind:'observation',snapshot:{epoch,phase:'paused'}});await flush();};
   return {
+    holdVisibility:tabId=>{
+      let release;
+      const pending=new Promise(resolve=>{release=resolve;});
+      heldVisibility={tabId,pending};
+      return ()=>{heldVisibility=null;release();};
+    },
     nodes,ui,calls,observes,terminals,resizes,splitButton:nodes['workbench-split'],
     // 单面板（未分屏）没有 section 包装层：#view-content 自身就是唯一面板（带同样的 data-role 标记）。
     panels:()=>{const wrapped=nodes['view-content'].all().filter(n=>n.dataset.role==='workbench-panel');return wrapped.length?wrapped:(nodes['view-content'].dataset.role==='workbench-panel'?[nodes['view-content']]:[]);},
@@ -154,6 +161,120 @@ test('D2: widening back restores both panels without rebuilding observation or r
     // resize 纪律（整个收窄/变宽来回）
     assert.equal(s.resizes.length,0,'窗口来回伸缩不得触发 terminal.resize');
     assert.ok(!s.calls.some(c=>c.name.includes('resize')),'全程不得出现任何 resize 类后端调用');
+  } finally { s.restore(); }
+});
+
+async function beginRapidWiden(s) {
+  const a=await s.openTab('direct-pane-a');
+  const b=await s.openTab('mesh-pane-b');
+  await s.settlePaused(a);
+  s.splitButton.onclick();await s.flush();
+  s.send(a,{kind:'observation',snapshot:{epoch:2,phase:'active'}});
+  const start=s.calls.length;
+  s.setWidth(700);await s.flush();
+  s.send(a,{kind:'observation',snapshot:{epoch:3,phase:'pausing'}});
+  assert.deepEqual(s.panels().map(panel=>panel.dataset.tabId),[b]);
+  s.setWidth(1440);await s.flush();
+  const controls=()=>s.calls.slice(start).filter(({name})=>name==='remote_tab_control').map(({args})=>[args.tabId,args.action]);
+  assert.deepEqual(controls(),[[a,'pause']],'The viewport widened before the secondary pane acknowledged pause');
+  return {a,b,controls};
+}
+
+test('D2: a late pause snapshot resumes the still-visible secondary pane exactly once', async () => {
+  const s=setup({innerWidth:1440});
+  try {
+    const {a,b,controls}=await beginRapidWiden(s);
+    const start=s.calls.length;
+    const release=s.holdVisibility(a);
+    await s.settlePaused(a,3);
+    await s.settlePaused(a,3);
+    assert.equal(s.calls.slice(start).filter(({name,args})=>name==='remote_tab_visible' && args.tabId===a).length,1);
+    assert.deepEqual(controls(),[[a,'pause']]);
+    release();await s.flush();
+    assert.deepEqual(controls(),[[a,'pause'],[a,'resume']]);
+    assert.deepEqual(s.panels().map(panel=>[panel.dataset.tabId,panel.dataset.focus]),[[b,'true'],[a,'false']]);
+    const acks=()=>s.calls.slice(start).filter(({name,args})=>name==='remote_tab_ack' && args.tabId===a).map(({args})=>args.epoch);
+    const frame={seq:1,full:true,cols:80,rows:24,bytes:[65]};
+    s.send(a,{kind:'frame',epoch:2,frame});await s.flush();
+    assert.deepEqual(acks(),[]);
+    const pane=target('direct-pane-a');
+    s.send(a,{kind:'observation',snapshot:{epoch:4,phase:'resuming'}});
+    s.send(a,{kind:'target_bound',epoch:4,pane_id:pane.paneId,terminal_id:pane.terminalId});
+    s.send(a,{kind:'frame',epoch:4,frame});await s.flush();
+    assert.deepEqual(acks(),[4]);
+    assert.ok(!s.calls.slice(start).some(({name})=>name==='remote_tab_input_mode'));
+    assert.equal(s.observes.length,2);
+    assert.equal(s.resizes.length,0);
+    assert.ok(!s.calls.some(({name})=>name==='remote_tab_input_send' || name.includes('resize')));
+  } finally { s.restore(); }
+});
+
+for(const [description,change] of [
+  ['the window narrows again',s=>s.setWidth(700)],
+  ['the user selects the original secondary tab', (s,{a})=>s.ui.select(a)],
+  ['the user switches off split view',s=>s.splitButton.onclick()],
+  ['the user leaves the workspace',s=>s.ui.hide()],
+  ['the user closes the primary tab',(s,{b})=>s.panelOf(b).all().find(n=>n.textContent==='关闭此标签').onclick()],
+  ['the primary target changes',s=>s.ui.prepareAffected([target('mesh-pane-b').hostId])],
+  ['the secondary target changes',s=>s.ui.prepareAffected([target('direct-pane-a').hostId])],
+]) {
+  test(`D2: a late pause snapshot does not resume the secondary pane after ${description}`, async () => {
+    const s=setup({innerWidth:1440});
+    try {
+      const state=await beginRapidWiden(s);
+      await change(s,state);await s.flush();
+      await s.settlePaused(state.a,3);
+      assert.deepEqual(state.controls().filter(([,action])=>action==='resume'),[]);
+    } finally { s.restore(); }
+  });
+}
+
+test('D2: selecting the secondary pane while visibility is pending still requires its manual resume', async () => {
+  const s=setup({innerWidth:1440});
+  try {
+    const {a,controls}=await beginRapidWiden(s);
+    const release=s.holdVisibility(a);
+    await s.settlePaused(a,3);
+    await s.ui.select(a);
+    release();await s.flush();
+    assert.deepEqual(controls(),[[a,'pause']]);
+    const resume=s.panelOf(a).all().find(node=>node.textContent==='恢复观察');
+    assert.equal(resume.disabled,false);
+    resume.onclick();await s.flush();
+    assert.deepEqual(controls(),[[a,'pause'],[a,'resume']]);
+  } finally { s.restore(); }
+});
+
+test('D2: widening does not resume a pane paused by explicitly leaving the workspace', async () => {
+  const s=setup({innerWidth:1440});
+  try {
+    const a=await s.openTab('direct-pane-a');
+    const b=await s.openTab('mesh-pane-b');
+    await s.settlePaused(a);
+    s.splitButton.onclick();await s.flush();
+    s.send(a,{kind:'observation',snapshot:{epoch:2,phase:'active'}});
+    const start=s.calls.length;
+    const hiding=s.ui.hide();
+    s.nodes['remote-page'].hidden=true;
+    s.setWidth(700);s.setWidth(1440);
+    await hiding;
+    await s.settlePaused(a,3);
+    await s.settlePaused(b);
+    assert.ok(!s.calls.slice(start).some(({name,args})=>name==='remote_tab_control' && args.action==='resume'));
+  } finally { s.restore(); }
+});
+
+test('D2: a resumed observation rejects a replacement terminal and never acknowledges its frame', async () => {
+  const s=setup({innerWidth:1440});
+  try {
+    const {a}=await beginRapidWiden(s);
+    await s.settlePaused(a,3);
+    const start=s.calls.length;
+    s.send(a,{kind:'observation',snapshot:{epoch:4,phase:'resuming'}});
+    s.send(a,{kind:'target_bound',epoch:4,pane_id:target('direct-pane-a').paneId,terminal_id:'term_c001'});
+    s.send(a,{kind:'frame',epoch:4,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});
+    await s.flush();
+    assert.deepEqual(s.calls.slice(start).filter(({args})=>args.tabId===a).map(({name})=>name),['remote_tab_cancel']);
   } finally { s.restore(); }
 });
 

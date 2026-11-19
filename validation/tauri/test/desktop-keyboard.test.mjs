@@ -358,6 +358,31 @@ test('逐键输入聚焦终端时，路由层对任何按键零副作用：无 i
   } finally { s.restore(); }
 });
 
+test('逐键输入的退出快捷键接受浏览器的非数组 children，并只移动焦点', async () => {
+  const s=setupWorkspace();
+  try {
+    const a=await s.openTab('direct-pane-a');
+    const b=await s.openTab('mesh-pane-b');
+    s.key({key:'\\',ctrlKey:true,shiftKey:true});await s.flush();
+    const active=s.panelOf(b), partner=s.panelOf(a);
+    const escapeTarget=partner.all().find(node=>node.dataset.role==='panel-focus');
+    active.all().find(node=>node.tagName==='button' && node.textContent==='逐键输入').onclick();await s.flush();
+    const terminal=s.terminals.find(tab=>tab.options.disableStdin===false);
+    assert.equal(globalThis.document.activeElement,terminal.textarea);
+    active.append(terminal.textarea);
+    const body=s.nodes['view-content'], children=body.children;
+    body.children={length:children.length,[Symbol.iterator]:()=>children.values()};
+
+    const before=s.calls.length;
+    const chord=s.key({key:'F6',ctrlKey:true,shiftKey:true});
+    assert.equal(chord.consumed,true);
+    assert.equal(globalThis.document.activeElement,escapeTarget);
+    assert.equal(active.dataset.focus,'true');
+    assert.equal(partner.dataset.focus,'false');
+    assert.equal(s.calls.length,before);
+  } finally { s.restore(); }
+});
+
 test('窄窗集成：分屏快捷键拒绝，标签切换仍可用', async () => {
   const s=setupWorkspace({innerWidth:800});
   try {

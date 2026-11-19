@@ -405,6 +405,7 @@ final class XCUIElement {
     var inputs: [String] = []
     var inputValue: String?
     var forcedReadback: String?
+    var staleReadbacks = 0
     var exists = false
     var onTap: (() -> Void)?
     var descendantsByRole: [ElementType: [XCUIElement]] = [:]
@@ -620,6 +621,10 @@ final class Adapter {
         let fallback = formControls[row.snapshot.label] ?? current
         let live = observations?.live(fallback) ?? fallback
         guard let value = live.element.inputValue else { return live }
+        if live.element.staleReadbacks > 0 {
+            live.element.staleReadbacks -= 1
+            return live
+        }
         let snapshot = Snapshot(identifier: live.snapshot.identifier, label: live.snapshot.label,
                                 elementType: live.snapshot.elementType, frame: live.snapshot.frame,
                                 isEnabled: live.snapshot.isEnabled, value: value)
@@ -688,7 +693,7 @@ final class Adapter {
             "func passwordGeometryDetail(_ viewport:", "func scrollToControl(_ owner:",
             "func controlIdentityRows(_ current:", "func controlOwner(_ current:",
             "func reveal(_ item:", "func tapForm(_ name:",
-            "func mobileLiveControl(_ owner:", "func sameControlScope(_ lhs:",
+            "func mobileLiveControl(_ owner:", "func authMethodFact(_ node:", "func sameControlScope(_ lhs:",
             "func sameControlScope(_ scope:", "func mobileControl(_ anchor:", "func mobileBinding(_ anchor:",
             "func tapMobileButton(_ control:", "enum MobileWitnessObservation<Proof>", "func mobileWitness(_ targets:",
             "func visibleWitness(_ rows:", "func waitForMobileWitness<Proof>", "func mobileAuth(port:", "func mobilePassword(in rows:",
@@ -1810,6 +1815,15 @@ check(writeSucceeded && writeElement.inputs == ["2222"] && writeSnapshots.liveRe
       "the actual fill entry must wait for keyboard geometry to stabilize and type exactly once")
 check(writeSnapshots.checkpoints.compactMap { $0.1["geometryReason"] as? String } == ["field_occluded", "field_outside"],
       "the fill adapter must preserve distinct rejection reasons in sample order before recovering")
+let delayedElement = Element()
+delayedElement.staleReadbacks = 2
+let delayed = Adapter(app: App(frame: screen),
+                      current: LiveControl(snapshot: moved, hittable: true, element: delayedElement),
+                      rows: formRows(moved), blockers: [keyboard])
+var delayedSucceeded = true
+do { try delayed.fillPort("2222") } catch { delayedSucceeded = false }
+check(delayedSucceeded && delayedElement.inputs == ["2222"],
+      "delayed readback must be sampled again on the same field without replaying input")
 let failedReadback = Element()
 failedReadback.forcedReadback = "wrong"
 let unread = Adapter(app: App(frame: screen),
@@ -2078,8 +2092,25 @@ precondition(NativeControlPolicy.clearCount("请输入主机地址", placeholder
 precondition(NativeControlPolicy.clearCount("输入密码", placeholder: "输入密码", secure: true) == 0)
 precondition(NativeControlPolicy.clearCount("••••", placeholder: nil, secure: true) == nil)
 precondition(!NativeControlPolicy.credentialEmpty("••••", placeholder: nil))
+precondition(NativeControlPolicy.credentialMasked("••••"))
+precondition(!NativeControlPolicy.credentialMasked("•••6"))
+precondition(!NativeControlPolicy.credentialMasked(""))
+precondition(!NativeControlPolicy.credentialMasked(nil))
 precondition(!NativeControlPolicy.credentialEmpty("密码", placeholder: nil))
 precondition(NativeControlPolicy.credentialEmpty("密码", placeholder: "密码"))
+let key = NativeControlPolicy.AuthMethod.key
+let keyButton = F(identifier: "ssh-auth-key", label: "已有私钥", role: "toggle", value: nil)
+let otherKeyButton = F(identifier: "", label: "已有私钥", role: "button", value: nil)
+let wrongKeyRole = F(identifier: "ssh-auth-key", label: "已有私钥", role: "textField", value: nil)
+precondition(try! key.candidate([keyButton]).get() == 0)
+precondition(key.candidate([keyButton, otherKeyButton]) == .failure(.ambiguous))
+precondition(key.candidate([wrongKeyRole]) == .failure(.wrongRole))
+let pem = NativeControlPolicy.KeyField.pem
+precondition(pem.matches(identifier: "", label: "私钥 PEM（仅本次使用）"))
+precondition(pem.accepts(role: "textView") && !pem.accepts(role: "secureTextField"))
+let passphrase = NativeControlPolicy.KeyField.passphrase
+precondition(passphrase.matches(identifier: "", label: "私钥口令 （加密私钥需要）"))
+precondition(passphrase.accepts(role: "secureTextField") && !passphrase.accepts(role: "textField"))
 let unknown = NSObject()
 precondition(NativeControlPolicy.valueText(nil) == "")
 precondition(NativeControlPolicy.valueText(unknown) == nil)

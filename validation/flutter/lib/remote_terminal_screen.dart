@@ -1,6 +1,19 @@
 import 'package:terminal_view/core.dart';
 import 'remote_frame_geometry.dart';
 
+typedef RegisterHostTransport = void Function() Function(Future<void> Function(),{
+  RetainedHostScreen? Function()? takeScreen,
+});
+
+class RetainedHostScreen {
+  const RetainedHostScreen(this.terminal,this.session,this.paneId,this.terminalId,this.frameAt,this.fontSize);
+  final Terminal terminal;
+  final String session,paneId;
+  final String? terminalId;
+  final DateTime frameAt;
+  final double fontSize;
+}
+
 /// Creates a local screen matching a validated observer grid. No SSH resize.
 Terminal createRemoteTerminalScreen(int cols,int rows) {
   if (!validRemoteFrameGeometry(cols,rows)) throw ArgumentError('Invalid remote frame geometry');

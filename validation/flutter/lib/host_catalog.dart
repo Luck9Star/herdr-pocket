@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
@@ -470,7 +471,7 @@ class HostCatalog extends ChangeNotifier {
     return (hosts:hosts,networks:networks,fontSize:fontSize);
   }
   Future<void> applyConfigImport(ConfigImportPlan plan,List<ConfigImportChoice> choices,{Set<String> selectedNetworks=const {},bool applyPreferences=false,
-      void Function(Set<String>)? beforeCommit}) {
+      FutureOr<void> Function(Set<String>)? beforeCommit}) {
     if (writing) throw const RemoteFailure('catalog_busy');
     choices = List<ConfigImportChoice>.unmodifiable(choices);
     selectedNetworks = Set<String>.unmodifiable(selectedNetworks);
@@ -480,7 +481,7 @@ class HostCatalog extends ChangeNotifier {
       prepared = _prepareConfigImport(plan,choices,selectedNetworks,applyPreferences);
       return prepared.hosts;
     },networkAction:(_) => prepared.networks,fontSize:applyPreferences ? plan.config!.terminalFontSize : null,
-      beforeSave:() => beforeCommit?.call({for (var i = 0; i < choices.length; i++)
+      beforeSaveCheck:beforeCommit == null ? null : () async => await beforeCommit({for (var i = 0; i < choices.length; i++)
         if (choices[i].action == ConfigImportAction.replace) ...plan.conflicts[i].map((p) => p.id)}));
   }
 

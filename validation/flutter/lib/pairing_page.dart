@@ -10,6 +10,7 @@ import 'host_catalog.dart';
 import 'pairing.dart';
 import 'remote_adapter.dart';
 import 'remote_page.dart';
+import 'remote_terminal_screen.dart' show RegisterHostTransport;
 import 'remote_workflow_widgets.dart';
 import 'host_task_summary.dart';
 
@@ -29,7 +30,7 @@ class PairingPage extends StatefulWidget {
   final void Function(RemotePane)? onOpenPane;
   final HostDashboardLease Function(HostProfile)? summaryLeaseFactory;
   final RemoteReadOnlyAdapter? adapter;
-  final VoidCallback Function(Future<void> Function())? registerTransport;
+  final RegisterHostTransport? registerTransport;
   @visibleForTesting final RemoteReadOnlyAdapter Function(SocketConnector)? overlayAdapterFactory;
   final void Function(Map<String,dynamic>)? onRequest;
   static PendingDevicePairing? retainedPairing;

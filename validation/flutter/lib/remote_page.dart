@@ -39,7 +39,7 @@ class RemotePage extends StatefulWidget {
   final DesignTokens tokens;
   final NetworkConnectionBinding? networkBinding;
   final RemoteReadOnlyAdapter? adapter;
-  final VoidCallback Function(Future<void> Function())? registerTransport;
+  final RegisterHostTransport? registerTransport;
   @visibleForTesting final RemoteReadOnlyAdapter Function(SocketConnector)? overlayAdapterFactory;
   final Map<String,dynamic>? pairedTarget;
   final DeviceKeys? deviceKeys;
@@ -220,7 +220,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     widget.summaryLease?.registry.addListener(summaryChanged);
     originalNetworkBinding = widget.networkBinding;
     adapter.captureInputJournalReview = inputGate.captureJournalRefresh;
-    releaseTransport = widget.registerTransport?.call(closeForTab);
+    releaseTransport = widget.registerTransport?.call(closeForTab,takeScreen:takeScreen);
     draft.addListener(draftChanged);
     terminalFocus.addListener(terminalFocusChanged);
     widget.visibility?.addListener(visibilityChanged);
@@ -368,6 +368,14 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       stop('网络绑定已改变、停用或目录不可用 · 已停止，请关闭后重新审查');
     } else if (mounted) { setState(() {}); }
   }
+  RetainedHostScreen? takeScreen() {
+    final screen = terminal, frame = snapshot, frameAt = capturedAt;
+    if (screen == null || frame == null || frameAt == null) return null;
+    terminal = null;
+    screen.onOutput = null;
+    return RetainedHostScreen(screen,frame.session,frame.paneId,capturedTerminalId,frameAt,
+      (widget.networkBinding?.terminalFontSize ?? 14).toDouble());
+  }
   void visibilityChanged() {
     if (tabClosing != null) return;
     if (widget.visibility?.value == false) {
@@ -425,12 +433,13 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     }
   }
   Future<void> stop([String message = '已取消；不会重连或发送输入']) {
+    if (tabClosing != null) return tabClosing!;
     showingFontDiagnostics = false;
     resetKeyboardControls();
     dismissPasteReview(); clearScreenSelection(); retirePendingPasteRead();
     widget.summaryLease?.invalidate(); summaryAttempt = null;
     inputGate.invalidate(); terminalFocus.unfocus(); if (mounted) FocusScope.of(context).unfocus();
-    request++; frozenNode = null; identityLease?.cancel();
+    request++; frozenNode = null; identityLease?.cancel(); identityLease = null;
     final cancelling = adapter.cancel();
     unawaited(cancelling.then<void>((_) {},onError:(Object _,StackTrace __) {}));
     connectionDiagnostics?.stopped();

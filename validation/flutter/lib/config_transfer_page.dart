@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'config_transfer.dart';
@@ -8,7 +9,7 @@ import 'remote_adapter.dart' show RemoteFailure;
 class ConfigTransferPage extends StatefulWidget {
   const ConfigTransferPage({super.key,required this.catalog,required this.closeTabs,this.tabs,this.documents});
   final HostCatalog catalog;
-  final void Function(Set<String>) closeTabs;
+  final FutureOr<void> Function(Set<String>) closeTabs;
   final HostTabs? tabs;
   final ConfigDocuments? documents;
   @override State<ConfigTransferPage> createState() => _ConfigTransferPageState();
@@ -55,7 +56,7 @@ class _ConfigTransferPageState extends State<ConfigTransferPage> {
     };
   }
   Iterable<(int,HostTab)> affectedTabs(Set<String> hosts) =>
-    (widget.tabs?.tabs ?? const <HostTab>[]).indexed.where((entry) => hosts.contains(entry.$2.hostId));
+    (widget.tabs?.tabs ?? const <HostTab>[]).indexed.where((entry) => !entry.$2.retired && hosts.contains(entry.$2.hostId));
   List<(String,bool)> impactScope(Set<String> hosts) =>
     [for (final (_,tab) in affectedTabs(hosts)) (tab.id,tab.inputEligible.value)];
 
@@ -64,7 +65,7 @@ class _ConfigTransferPageState extends State<ConfigTransferPage> {
     return Card(key:const ValueKey('transfer-impact'),child:Padding(padding:const EdgeInsets.all(12),child:Column(
       crossAxisAlignment:CrossAxisAlignment.start,children:[
         if (affected.isEmpty) const Text('当前没有受影响的本地标签。') else ...[
-          Text('确认后将停止连接',style:Theme.of(context).textTheme.titleSmall),
+          Text('确认后将停止连接并保留停用标签和最后画面',style:Theme.of(context).textTheme.titleSmall),
           for (final (index,tab) in affected) Padding(
             key:ValueKey('transfer-affected-tab-${tab.id}'),padding:const EdgeInsets.only(top:6),
             child:ValueListenableBuilder<HostTabView>(valueListenable:tab.view,builder:(_,view,_) => Text(
@@ -93,6 +94,8 @@ class _ConfigTransferPageState extends State<ConfigTransferPage> {
           ? '此阶段不导出已绑定网络的主机 · 请等待保留网络绑定的迁移格式，不能静默降级为系统直连。'
           : error is RemoteFailure && error.code == 'catalog_transfer_impact_changed'
           ? '受影响的标签已变化 · 请重新核对确认。'
+          : error is RemoteFailure && error.code == 'catalog_transfer_close_unconfirmed'
+          ? '受影响的标签已停用，但连接关闭未确认 · 本次未保存，请先核验原连接。'
           : error is RemoteFailure && widget.catalog.ready
           ? '导入选择冲突、容量不足或审查计划已过期 · 尚未保存，请修正并重新审查。'
           : '操作未确认或目录版本冲突 · 文件或本机保存可能已生效，请返回重新读取核验；不会重放。'; });
@@ -138,14 +141,17 @@ class _ConfigTransferPageState extends State<ConfigTransferPage> {
     if (reviewedPlan == null || !reviewed || choices.any((value) => value == null)) return;
     final decisions = [for (final choice in choices) ConfigImportChoice(choice!)];
     final approvedImpact = reviewedImpact;
-    await widget.catalog.applyConfigImport(reviewedPlan,decisions,selectedNetworks:Set.of(importNetworks),applyPreferences:applyPreferences,beforeCommit:(affected) {
+    await widget.catalog.applyConfigImport(reviewedPlan,decisions,selectedNetworks:Set.of(importNetworks),applyPreferences:applyPreferences,beforeCommit:(affected) async {
       // Whole-plan validation and the queue-time revision check have passed.
-      // Revocation is synchronous and immediately precedes the one catalog CAS.
       if (!listEquals(approvedImpact,impactScope(affected))) {
         if (mounted) setState(() { reviewed = false; });
         throw const RemoteFailure('catalog_transfer_impact_changed');
       }
-      widget.closeTabs(affected);
+      await widget.closeTabs(affected);
+      if (impactScope(affected).isNotEmpty) {
+        if (mounted) setState(() { reviewed = false; });
+        throw const RemoteFailure('catalog_transfer_impact_changed');
+      }
       if (mounted) setState(() { plan = null; choices = []; reviewed = false; });
     });
     if (mounted) setState(() { message = '本机公开资料已原子更新 · 新条目没有设备身份，需正式配对。被替换身份已停用保留，请在原主机核验撤销或明确删除。'; });

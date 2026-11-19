@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
@@ -193,6 +194,39 @@ void main() {
     expect(tester.widget<CheckboxListTile>(find.byKey(const ValueKey('transfer-review'))).value,isFalse);
     expect(tester.widget<FilledButton>(apply).onPressed,isNull);
     expect(disk.writes,writes);
+
+    // Reconfirm the updated scope and use the real settings import action.
+    // Tabs outside this replacement, including the same-named new profile's
+    // future tabs, are identified by their own profile IDs.
+    final close = Completer<void>();
+    var closes = 0;
+    newTab.registerTransport(() { closes++; return close.future; });
+    await tapVisible(tester,'transfer-review');
+    await tapVisible(tester,'transfer-apply');
+    expect(disk.writes,writes);
+    await tester.pump(const Duration(seconds:5));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('连接关闭未确认 · 本次未保存'),findsOneWidget);
+    expect(newTab.view.value.state,'retired-unconfirmed');
+    expect(newTab.inputEligible.value,isFalse);
+    expect(disk.writes,writes);
+    expect(closes,1);
+    close.complete();
+    await tester.pumpAndSettle();
+    expect(newTab.view.value.state,'retired');
+    await tapVisible(tester,'transfer-review');
+    await tapVisible(tester,'transfer-apply');
+    await tester.pumpAndSettle();
+    expect(closes,1);
+    expect(disk.writes,writes+1);
+    expect(tabs.tabs,[...originalTabs,newTab]);
+    expect(tabs.tabs.map((tab) => tab.view.value.label),[
+      '已停用 · 连接已停止','已停用 · 连接已停止','陈旧','陈旧','已停用 · 连接已停止',
+    ]);
+    expect(newTab.inputEligible.value,isFalse);
+    final replacement = catalog.profiles.singleWhere((p) => p.label == first.label && !p.retired);
+    expect(replacement.id,isNot(first.id));
+    expect(replacement.hasIdentity,isFalse);
     await tester.pumpWidget(const SizedBox()); tabs.dispose(); catalog.dispose();
   });
 

@@ -6,7 +6,7 @@ import os
 import random
 from pathlib import Path
 import shutil
-from subprocess import CompletedProcess
+from subprocess import CompletedProcess, TimeoutExpired
 import sys
 import unittest
 from unittest.mock import patch
@@ -53,6 +53,48 @@ class ScreenshotInputTests(unittest.TestCase):
         for bounds in ((0, 0, 20), (0, 0, 20, True), (0, 0, 20.0, 20), None):
             with self.subTest(bounds=bounds), self.assertRaisesRegex(ScreenshotGateError, 'bounds_invalid'):
                 verify_terminal_screenshot(b'', expected_token=TOKEN, bounds=bounds)
+
+
+@unittest.skipUnless(importlib.util.find_spec('PIL') is not None, 'Pillow required for OCR invocation controls')
+class OcrInvocationTests(unittest.TestCase):
+    def verify(self):
+        png = Path(__file__).with_name('testdata') / 'flutter-terminal-font-control.png'
+        return verify_terminal_screenshot(png, expected_token=TOKEN, bounds=(0, 0, 550, 220))
+
+    @patch('terminal_screenshot_gate.shutil.which', return_value='tesseract')
+    def test_version_banner_formats_use_the_same_exact_recognition(self, _):
+        banners = ((b'tesseract v5.5.3.20260724\r\n leptonica-1.87.0\r\n', '5.5.3.20260724'),
+                   (b'tesseract 5.5.4\n leptonica-1.87.0\n', '5.5.4'),
+                   (b'tesseract 5.3.4-12-gcafe\n', '5.3.4'))
+        for banner, version in banners:
+            with self.subTest(banner=banner), patch('terminal_screenshot_gate.subprocess.run') as tool:
+                tool.side_effect = [CompletedProcess([], 0, banner, b''),
+                                    CompletedProcess([], 0, f'{MARKER}\n{TOKEN}\n'.encode(), b'')]
+                evidence = self.verify()
+                self.assertEqual(evidence['ocrEngine'], f'tesseract {version}')
+                self.assertTrue(evidence['proofSequenceVisible'])
+                self.assertEqual(tool.call_count, 2)
+
+    @patch('terminal_screenshot_gate.shutil.which', return_value='tesseract')
+    def test_ocr_failure_reports_fixed_step_without_version_or_transcript_content(self, _):
+        version = CompletedProcess([], 0, b'tesseract v5.5.3.20260724\r\n', b'')
+        failures = (
+            ([OSError('private CLI data')], 'version_command'),
+            ([CompletedProcess([], 0, b'tesseract vv5.5.3 private CLI data\r\n', b'')], 'version_banner'),
+            ([CompletedProcess([], 0, b'tesseract 5.5.3bogus private CLI data\r\n', b'')], 'version_banner'),
+            ([version, TimeoutExpired('private CLI data', 30)], 'recognition_command'),
+            ([version, CompletedProcess([], 0, b'\xff private CLI data', b'')], 'recognition_decode'),
+        )
+        for replies, stage in failures:
+            with self.subTest(stage=stage), \
+                    patch('terminal_screenshot_gate.subprocess.run', side_effect=replies) as tool:
+                with self.assertRaisesRegex(ScreenshotGateError, 'ocr_failed') as caught:
+                    self.verify()
+                details = caught.exception.evidence
+                self.assertEqual(details.get('ocrFailureStage'), stage)
+                self.assertFalse(details['markerVisible'] or details['tokenVisible'])
+                self.assertNotIn('private CLI data', json.dumps(details))
+                self.assertEqual(tool.call_count, len(replies))
 
 
 class ScreenshotRasterTests(unittest.TestCase):

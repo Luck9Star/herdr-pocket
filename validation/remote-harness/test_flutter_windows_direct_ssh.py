@@ -1,3 +1,5 @@
+import hashlib
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -240,17 +242,83 @@ for start in (lambda: paired_gui.FixtureApproval(None, None, None),
             for name, value in {'window': {'processId': 42}, 'probe': {'algorithm': 'ssh-rsa'},
                                 'connected': {}, 'capture': {}}.items():
                 (root / f'{name}.json').write_text(json.dumps(value), encoding='utf-8')
+            process = Mock(poll=Mock(return_value=None))
             with self.assertRaisesRegex(windows.GuiFailure, 'unowned_application'):
-                windows.exchange(Mock(), object(), root, fixture, {})
+                windows.exchange(process, object(), root, fixture, {}, {})
             find.assert_not_called()
             job.QueryInformationJobObject.return_value = (2, 42)
             report = {}
             with self.assertRaisesRegex(windows.GuiFailure, 'unexpected_input'):
-                windows.exchange(Mock(), object(), root, fixture, report)
+                windows.exchange(process, object(), root, fixture, report, {})
             self.assertEqual(report['checkpoint'], 'capture')
             self.assertTrue((root / 'probe.ok').exists() and (root / 'connected.ok').exists())
             self.assertFalse((root / 'capture.ok').exists())
             capture.assert_not_called()
+
+    def test_completion_requires_live_launcher_and_attributes_the_publish_exit_race(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            completed = root / 'complete.json'
+            report = {}
+            process = Mock(poll=Mock(return_value=1))
+            with self.assertRaisesRegex(windows.GuiFailure, 'application_ended_early'):
+                windows.request(process, root, 'complete', report)
+            self.assertEqual(report, dict(launcherExit='failure', checkpointPublishedAtExit=False))
+
+            def publish_on_exit_check():
+                completed.write_text('{}', encoding='utf-8')
+                return 0
+
+            process.poll.side_effect = publish_on_exit_check
+            with self.assertRaisesRegex(windows.GuiFailure, 'application_ended_early'):
+                windows.request(process, root, 'complete', report)
+            self.assertEqual(report, dict(launcherExit='success', checkpointPublishedAtExit=True))
+            self.assertFalse((root / 'complete.ok').exists())
+            process.poll.side_effect = None
+            process.poll.return_value = None
+            self.assertEqual(windows.request(process, root, 'complete', {}), {})
+
+    def test_return_stage_reports_only_allowlisted_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for phase, public in [('return_home_notice', 'return_home_notice'),
+                                  ('return_home_publish', 'return_home_publish'),
+                                  ('disconnect', 'disconnect'), ('private exception', None), ([], None)]:
+                (root / 'stage.json').write_text(json.dumps({'phase': phase}), encoding='utf-8')
+                self.assertEqual(windows.read_ui_stage(root), public)
+
+    def test_failure_retains_terminal_and_disconnect_crops_with_original_pixel_mapping(self):
+        data = io.BytesIO()
+        full = Image.new('RGB', (20, 20), 'red')
+        full.paste('blue', (8, 8, 12, 12))
+        full.save(data, format='PNG')
+        png = data.getvalue()
+        digest = hashlib.sha256(png).hexdigest()
+        evidence = {'imageSize': [20, 20], 'imageSha256': digest}
+        report = {'status': 'failed',
+                  'terminal': {**evidence, 'terminalBounds': [8, 8, 4, 4]},
+                  'disconnectOutcome': {**evidence, 'outcomeBounds': [9, 9, 2, 2]}}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            frames = {f'ordinary-{name}.png': png for name in ('terminal', 'disconnect', 'home')}
+            windows.save_partial_crops(root, frames, report)
+            self.assertEqual({path.name for path in root.iterdir()},
+                             {'partial-terminal-crop.png', 'partial-disconnect-crop.png'})
+            for item in report['partialFrames'].values():
+                path = root / item['file']
+                self.assertEqual(item['imageSha256'], hashlib.sha256(path.read_bytes()).hexdigest())
+                self.assertEqual(item['sourceImageSha256'], digest)
+                x, y, width, height = item['sourceBounds']
+                with Image.open(path) as crop:
+                    self.assertEqual(crop.tobytes(), full.crop((x, y, x + width, y + height)).tobytes())
+            self.assertEqual(report['status'], 'failed')
+            self.assertNotIn('returnedHome', report)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report['terminal']['imageSha256'] = '0' * 64
+            with self.assertRaisesRegex(windows.GuiFailure, 'partial_source_mismatch'):
+                windows.save_partial_crops(root, frames, report)
+            self.assertEqual(list(root.iterdir()), [])
 
 
 if __name__ == '__main__':

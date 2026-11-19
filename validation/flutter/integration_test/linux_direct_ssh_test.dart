@@ -675,30 +675,92 @@ Future<void> runLinuxOrdinary(
   expect(outcomePixels(tester, control('direct-closed-feedback')), outcomeGeometry);
 
   step('return_home');
+  final windowsReturn = platform == TargetPlatform.windows;
+  String? lastReturnStep;
+  void returnStep(String stage) {
+    if (!windowsReturn || stage == lastReturnStep) return;
+    lastReturnStep = stage;
+    step('return_home_$stage');
+  }
+
+  final returnButton = control('direct-return-home');
+  var readyToReturn = false;
   await tapControl(
     tester,
-    control('direct-return-home'),
+    returnButton,
     'linux_return_home',
-    reveal: false,
+    reveal: windowsReturn,
+    onObservation: windowsReturn
+        ? (stage, ready) {
+            readyToReturn = ready;
+            returnStep('button_$stage');
+          }
+        : null,
+    beforeTap: windowsReturn
+        ? () {
+            if (readyToReturn) {
+              returnStep('button_enabled');
+              expect(
+                tester.widget<OutlinedButton>(returnButton).onPressed,
+                isNotNull,
+              );
+              returnStep('tap');
+            }
+          }
+        : null,
   );
-  await waitUi(
-    tester,
-    () =>
-        find.byType(DirectSshPage, skipOffstage: false).evaluate().isEmpty &&
-        home.evaluate().length == 1 &&
-        control('hosts-direct-ssh').hitTestable().evaluate().length == 1,
-    'linux_direct_return_home_timeout',
+  final homeNotice = control('home-ssh-closed');
+  final homeEntry = control('hosts-direct-ssh').hitTestable();
+  final homeTitle = find.descendant(
+    of: homeNotice,
+    matching: control('home-ssh-closed-title'),
   );
+  await waitUi(tester, () {
+    if (find.byType(DirectSshPage, skipOffstage: false).evaluate().isNotEmpty) {
+      returnStep('route');
+      return false;
+    }
+    if (home.evaluate().length != 1) {
+      returnStep('catalog');
+      return false;
+    }
+    if (homeEntry.evaluate().length != 1) {
+      returnStep('entry');
+      return false;
+    }
+    if (windowsReturn &&
+        tester.widget<ButtonStyleButton>(homeEntry).onPressed == null) {
+      returnStep('entry_disabled');
+      return false;
+    }
+    if (windowsReturn &&
+        (homeNotice.hitTestable().evaluate().length != 1 ||
+            homeTitle.hitTestable().evaluate().length != 1)) {
+      returnStep('notice');
+      return false;
+    }
+    return true;
+  }, 'linux_direct_return_home_timeout');
+  returnStep('catalog_identity');
   expect(tester.state(home), same(homeState));
-  expect(control('home-ssh-closed').hitTestable(), findsOneWidget);
+  returnStep('receipt');
+  expect(homeNotice.hitTestable(), findsOneWidget);
   expect(
-    tester.widget<Text>(control('home-ssh-closed-title')).data,
+    tester
+        .widget<Text>(
+          windowsReturn ? homeTitle : control('home-ssh-closed-title'),
+        )
+        .data,
     '本机已断开',
   );
+  returnStep('flutter_exception');
   expect(tester.takeException(), isNull);
-  final homeGeometry = outcomePixels(tester, control('home-ssh-closed'));
+  returnStep('geometry');
+  final homeGeometry = outcomePixels(tester, homeNotice);
+  returnStep('publish');
   await checkpoint('complete', homeGeometry);
-  expect(outcomePixels(tester, control('home-ssh-closed')), homeGeometry);
+  returnStep('acknowledged');
+  expect(outcomePixels(tester, homeNotice), homeGeometry);
 }
 
 void main() {

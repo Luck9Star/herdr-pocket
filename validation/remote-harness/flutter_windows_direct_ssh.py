@@ -18,11 +18,11 @@ import sys
 import tempfile
 import time
 
-from PIL import ImageGrab, ImageStat
+from PIL import Image, ImageGrab, ImageStat
 from direct_ssh_fixture import DirectSshFixture
 from flutter_linux_direct_ssh import (
-    FLUTTER_COMMIT, FLUTTER_ROOT, FLUTTER_VERSION, PENDING_PIXELS, SHARED_STEPS,
-    locked_dependencies, read_exchange, read_ui_stage,
+    FLUTTER_COMMIT, FLUTTER_ROOT, FLUTTER_VERSION, PENDING_PIXELS, PHASES as UI_PHASES, SHARED_STEPS,
+    locked_dependencies, read_exchange,
 )
 from paired_gui import GuiFailure, wait_for
 from tauri_linux_direct_ssh import probe_evidence, require, session_evidence
@@ -40,6 +40,11 @@ if sys.platform == 'win32':
 
 TEST = 'windows_direct_ssh_test.dart'
 PHASES = ('probe', 'connected', 'capture', 'disconnect', 'complete')
+RETURN_STEPS = frozenset('return_home_' + stage for stage in (
+    'button_checking', 'button_missing', 'button_multiple', 'button_disabled', 'button_not_hit', 'button_unstable',
+    'button_ready', 'button_enabled', 'tap', 'route', 'catalog', 'entry', 'entry_disabled', 'notice',
+    'catalog_identity', 'receipt', 'flutter_exception', 'geometry', 'publish', 'acknowledged',
+))
 WINDOW_TITLE = 'herdr_flutter_probe'
 WINDOW_CLASS = 'FLUTTER_RUNNER_WIN32_WINDOW'
 CAPTURE = 'Win32 visible desktop framebuffer, clipped to FLUTTERVIEW client pixels'
@@ -288,19 +293,32 @@ def terminal_capture(hwnd, process_id, value, token):
             time.sleep(.15)
 
 
-def exchange(process, job, root, fixture, report):
-    def request(name, timeout=45):
-        def available():
-            value = read_exchange(root, name)
-            if value is not None:
-                return (value,)
-            require(process.poll() is None, 'windows_direct_application_ended_early')
-            return None
-        return wait_for(available, f'windows_direct_checkpoint_timeout_{name}', timeout=timeout)[0]
+def read_ui_stage(root):
+    value = read_exchange(root, 'stage')
+    if value is not None and value.keys() == {'phase'}:
+        phase = value['phase']
+        if isinstance(phase, str) and (phase in UI_PHASES or phase in RETURN_STEPS):
+            return phase
 
-    images = {}
+
+def request(process, root, name, report, *, timeout=45):
+    def available():
+        value = read_exchange(root, name)
+        exit_code = process.poll()
+        if exit_code is not None:
+            report['launcherExit'] = 'success' if exit_code == 0 else 'failure'
+            # A rename can race the first read. Presence after process exit is
+            # diagnostic only: the live foreground capture still needs an app.
+            report['checkpointPublishedAtExit'] = value is not None or read_exchange(root, name) is not None
+            raise GuiFailure('windows_direct_application_ended_early')
+        return (value,) if value is not None else None
+
+    return wait_for(available, f'windows_direct_checkpoint_timeout_{name}', timeout=timeout)[0]
+
+
+def exchange(process, job, root, fixture, report, images):
     report['checkpoint'] = 'window'
-    owner = request('window', timeout=900)
+    owner = request(process, root, 'window', report, timeout=900)
     process_id = owner.get('processId')
     require(set(owner) == {'processId'} and type(process_id) is int and process_id > 0 and process_id in
             win32job.QueryInformationJobObject(job, win32job.JobObjectBasicProcessIdList),
@@ -310,7 +328,8 @@ def exchange(process, job, root, fixture, report):
     win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
     for phase in PHASES:
         report['checkpoint'] = phase
-        value = request(phase)
+        # Return has separate control and receipt waits in the live app.
+        value = request(process, root, phase, report, timeout=100 if phase == 'complete' else 45)
         if phase == 'probe':
             framebuffer(hwnd, process_id)
             require(value.keys() == {'algorithm'} and value['algorithm'] in ('ssh-rsa', 'rsa-sha2-256', 'rsa-sha2-512'),
@@ -330,22 +349,22 @@ def exchange(process, job, root, fixture, report):
             report['fingerprintConfirmed'] = True
         elif phase == 'capture':
             session_evidence(fixture.snapshot(), sent=True, closed=False)
-            images['ordinary-terminal.png'], report['terminal'] = terminal_capture(hwnd, process_id, value,
-                                                                                 fixture.screen_token)
+            png, evidence = terminal_capture(hwnd, process_id, value, fixture.screen_token)
             session_evidence(fixture.snapshot(), sent=True, closed=False)
+            images['ordinary-terminal.png'], report['terminal'] = png, evidence
         else:
             require(fixture.wait_for_connections_closed(2), 'windows_direct_peer_close_unconfirmed')
             session_evidence(fixture.snapshot(), sent=True, closed=True)
             name = 'disconnect' if phase == 'disconnect' else 'home'
-            images[f'ordinary-{name}.png'], report[f'{name}Outcome'] = grab(hwnd, process_id, value, terminal=False)
+            png, evidence = grab(hwnd, process_id, value, terminal=False)
             session_evidence(fixture.snapshot(), sent=True, closed=True)
+            images[f'ordinary-{name}.png'], report[f'{name}Outcome'] = png, evidence
         (root / f'{phase}.ok').touch(exist_ok=False)
     require(process.wait(timeout=30) == 0, 'windows_direct_test_failed_after_home')
     report.update(returnedHome=True, credentialFieldsCleared=True)
-    return images
 
 
-def run(app, source, report, base):
+def run(app, source, report, base, images):
     report['checkpoint'] = 'desktop'
     check_desktop()
     user32 = ctypes.windll.user32
@@ -371,7 +390,7 @@ def run(app, source, report, base):
             try:
                 with owned_job(command, cwd=app, env=env, log=root / 'flutter.log', report=report) as (process, job):
                     try:
-                        images = exchange(process, job, root, fixture, report)
+                        exchange(process, job, root, fixture, report, images)
                     finally:
                         report['peer'] = fixture.snapshot()  # Before any forced process teardown.
                         stage = read_ui_stage(root)
@@ -390,7 +409,35 @@ def run(app, source, report, base):
     require(not root.exists(), 'windows_direct_fixture_directory_remains')
     report['cleanup'] = {'ownedProcessJobEmpty': True, 'peerListenerReleased': True,
                          'fixturePasswordCleared': True, 'fixtureDirectoryRemoved': True}
-    return images
+
+
+def save_partial_crops(output, frames, report):
+    # At both capture points the Dart driver has already proved that the
+    # password controller is empty. Retain only the confirmed evidence region,
+    # excluding the rest of the desktop image, if a later step fails.
+    for name, section, bounds in (
+        ('terminal', 'terminal', 'terminalBounds'), ('disconnect', 'disconnectOutcome', 'outcomeBounds'),
+    ):
+        png = frames.get(f'ordinary-{name}.png')
+        if png is None:
+            continue
+        evidence = report[section]
+        source_hash = hashlib.sha256(png).hexdigest()
+        require(source_hash == evidence['imageSha256'], 'windows_direct_partial_source_mismatch')
+        with Image.open(io.BytesIO(png)) as frame:
+            size = list(frame.size)
+            require(size == evidence['imageSize'], 'windows_direct_partial_source_mismatch')
+            x, y, width, height = evidence_rect(evidence[bounds], size, minimum=(1, 1))
+            crop = frame.crop((x, y, x + width, y + height))
+            stream = io.BytesIO()
+            crop.save(stream, format='PNG')
+        data = stream.getvalue()
+        filename = f'partial-{name}-crop.png'
+        (output / filename).write_bytes(data)
+        report.setdefault('partialFrames', {})[name] = {
+            'file': filename, 'imageSha256': hashlib.sha256(data).hexdigest(),
+            'sourceImageSha256': source_hash, 'sourceBounds': [x, y, width, height],
+        }
 
 
 def main():
@@ -410,8 +457,10 @@ def main():
     report = {'schemaVersion': 1, 'sourceSHA': args.source_sha, 'platform': 'Windows Flutter debug Win32',
               'authentication': 'password', 'scope': 'native Win32 window, Flutter integration test input and desktop pixels',
               'interactiveDesktop': False, 'physicalImeVerified': False, 'status': 'failed'}
+    images = {}
     try:
-        for name, png in run(app, args.source_sha, report, base).items():
+        run(app, args.source_sha, report, base, images)
+        for name, png in images.items():
             (output / name).write_bytes(png)
         report.update(status='passed', checkpoint='complete')
     except ScreenshotGateError as error:
@@ -421,6 +470,11 @@ def main():
     except Exception as error:  # Tool logs may contain fixture data; do not publish them.
         report['errorCode'] = 'windows_direct_runner_failed'
         report['runnerFailure'] = runner_failure(error)
+    if report['status'] == 'failed':
+        try:
+            save_partial_crops(output, images, report)
+        except (GuiFailure, OSError, ValueError):
+            report['partialCaptureError'] = 'windows_direct_partial_export_failed'
     (output / 'result.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
     if report['status'] == 'failed':
         print(f"Windows ordinary SSH failed at {report['checkpoint']}: {report['errorCode']}", flush=True)

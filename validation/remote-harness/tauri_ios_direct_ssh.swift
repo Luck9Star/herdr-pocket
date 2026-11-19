@@ -1102,9 +1102,16 @@ final class TauriDirectSSHUITests: XCTestCase {
             ready.element.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: clearCount) + text)
             // WebKit's accessibility snapshot can lag behind the one input.
             // Re-read only the same proven field; never repeat the input.
+            var readbackState = "unavailable"
             for sample in 0..<6 {
                 let after = try formControl(name, matching: tapped).live
-                if NativeControlPolicy.valueText(after.snapshot.value) == text { return }
+                let value = NativeControlPolicy.valueText(after.snapshot.value)
+                readbackState = value == text ? "match" : value == nil ? "unavailable" : value!.isEmpty ? "empty" : "different"
+                if readbackState == "match" || sample == 5 {
+                    try post("native_progress", ["nativeCheckpoint": nativePhase,
+                        "inputReadback": ["state": readbackState, "samples": sample + 1]])
+                }
+                if readbackState == "match" { return }
                 if sample < 5 { Thread.sleep(forTimeInterval: 0.2) }
             }
             try require(false, "native_input_value_invalid")
@@ -2456,6 +2463,17 @@ final class TauriDirectSSHUITests: XCTestCase {
                         "native_home_retry_unsafe")
         }
         guard let (item, selection) = navigationElement(member) else { return ("missing", "uniqueLabel", "otherNative") }
+        // Retain the first page witness and its live owner as geometry only.
+        // This records the actual native binding, never a guessed hit point.
+        var binding: [String: Any]?
+        if let witness = pageButtons[member], let live = liveControl(item) {
+            let owner = controlOwner(live.snapshot, try observedNodes())
+            binding = ["witnessFrame": NativeFramePolicy.diagnosticRect(witness.snapshot.frame),
+                "liveFrame": NativeFramePolicy.diagnosticRect(live.snapshot.frame),
+                "ownerFrame": NativeFramePolicy.diagnosticRect(owner?.snapshot.frame),
+                "windowFrame": NativeFramePolicy.diagnosticRect(witness.window),
+                "webFrames": witness.webs.map { NativeFramePolicy.diagnosticRect($0) }]
+        }
         let geometry = try navigationGeometry(item)
         let allowed = geometry["ownerResolved"] as? Bool == true && geometry["centerVisible"] as? Bool == true &&
             geometry["enabled"] as? Bool == true && geometry["hittable"] as? Bool == true
@@ -2475,11 +2493,13 @@ final class TauriDirectSSHUITests: XCTestCase {
             page == "emptyHome" ? "noProgress" : "unexpected"
         let presentAfter = item.exists
         let afterGeometry: Any = presentAfter ? try navigationGeometry(item) : NSNull()
-        try post("native_navigation", ["nativeCheckpoint": nativePhase, "member": member, "selection": selection,
+        var navigation: [String: Any] = ["nativeCheckpoint": nativePhase, "member": member, "selection": selection,
             "method": "elementCenter", "performed": allowed, "geometry": geometry,
             "targetPresentAfter": presentAfter, "afterGeometry": afterGeometry,
             "elapsedMs": min(60000, max(0, Int((ProcessInfo.processInfo.systemUptime - started) * 1000))),
-            "before": before, "after": after, "outcome": outcome])
+            "before": before, "after": after, "outcome": outcome]
+        if let binding = binding { navigation["binding"] = binding }
+        try post("native_navigation", navigation)
         return (page, selection, geometry["role"] as! String)
     }
 

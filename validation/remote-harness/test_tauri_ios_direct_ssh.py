@@ -608,6 +608,18 @@ class GeometryReasonTests(unittest.TestCase):
             self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': phase, 'geometryReason': 'field_outside'})
         self.assertEqual(self.result, before)
 
+    def test_input_readback_is_bounded_and_cannot_publish_text(self):
+        payload = {'stage': 'native_progress', 'nativeCheckpoint': 'ordinary_host',
+                   'inputReadback': {'state': 'empty', 'samples': 6}}
+        self.state.accept(payload)
+        self.assertEqual(self.result['inputReadbacks']['ordinary_host'], {'state': 'empty', 'samples': 6})
+        for detail in ({'state': 'fixture-secret', 'samples': 1}, {'state': 'empty', 'samples': 7},
+                       {'state': 'empty', 'samples': True}, {'state': 'empty', 'samples': 1, 'text': 'secret'}):
+            with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                self.state.accept(payload | {'inputReadback': detail})
+        with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+            self.state.accept(payload | {'nativeCheckpoint': 'ordinary_password'})
+
     def test_key_change_password_preserves_both_attempts(self):
         phase = 'key_change_password'
         first = ['field_outside'] * 9
@@ -1124,6 +1136,23 @@ class HomeDiagnosticsTests(unittest.TestCase):
         record = self.official_r4_record()
         state.accept({'stage': 'native_navigation', 'nativeCheckpoint': 'ordinary_open_add', **record})
         return record
+
+    def test_first_navigation_binding_is_geometry_only_and_bounded(self):
+        binding = {'witnessFrame': [17, 166, 163, 22], 'liveFrame': [17, 166, 163, 22],
+                   'ownerFrame': [17, 166, 163, 22], 'windowFrame': [0, 0, 440, 956],
+                   'webFrames': [[0, 0, 440, 956]]}
+        with tempfile.TemporaryDirectory() as directory:
+            state = self.state_for_navigation(directory)
+            row = self.navigation('emptyAdd', 'emptyHome', 'emptyHome')
+            row['binding'] = binding
+            state.accept(row)
+            self.assertEqual(state.result['navigationTrace']['ordinary'][0]['binding'], binding)
+        for bad in (binding | {'text': 'secret'}, binding | {'webFrames': [[0, 0, 1, 1]] * 9},
+                    binding | {'witnessFrame': [0, 0, 'secret', 2]}):
+            with tempfile.TemporaryDirectory() as directory:
+                state = self.state_for_navigation(directory)
+                with self.assertRaisesRegex(ios.Failure, 'navigation_diagnostic_invalid'):
+                    state.accept(self.navigation('emptyAdd', 'emptyHome', 'emptyHome') | {'binding': bad})
 
     def test_official_r4_one_to_two_window_record_is_preserved_without_rewriting(self):
         with tempfile.TemporaryDirectory() as directory:

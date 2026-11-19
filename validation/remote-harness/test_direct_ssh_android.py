@@ -589,7 +589,7 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
         value.update(status='disabled', rectPt=[16, 500, 358, 48],
                      viewSizePx=[1080, 2400], viewSizePt=[360, 800], insetBottomPx=0)
         self.assertEqual(runner.safe_encrypted_connect_diagnostic(value), value)
-        for status in ('checking', 'missing', 'multiple', 'disabled', 'not_hit', 'unstable', 'ready'):
+        for status in ('checking', 'missing', 'multiple', 'disabled', 'not_hit', 'unstable', 'replaced', 'ready'):
             self.assertEqual(runner.safe_encrypted_connect_diagnostic({**value, 'status': status})['status'], status)
         for bad in ({**value, 'status': 'sensitive-test-key'},
                     {**value, 'privateKeyEmpty': 'sensitive-test-key'},
@@ -643,6 +643,8 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
     def test_app_stage_and_failure_details_are_strictly_allowlisted(self):
         self.assertEqual(runner.safe_encrypted_app_stage({'stage': 'encrypted_waiting_private'}),
                          'encrypted_waiting_private')
+        self.assertEqual(runner.safe_encrypted_app_stage({'stage': 'encrypted_prepare_connect'}),
+                         'encrypted_prepare_connect')
         for value in ({'stage': 'sensitive-test-key'}, {'stage': 'encrypted_home', 'secret': 'x'}):
             with self.subTest(value=value), self.assertRaises(runner.Failure):
                 runner.safe_encrypted_app_stage(value)

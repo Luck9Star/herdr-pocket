@@ -1,10 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../integration_test/android_direct_ssh_test.dart'
     show encryptedFailure, target;
-import '../integration_test/direct_ssh_ui_steps.dart' show tapControl;
+import '../integration_test/direct_ssh_ui_steps.dart'
+    show finishAndroidEncryptedPassphrase, tapControl;
 
 Future<void> expectNotReady(Future<void> Function() action) async {
   var failed = false;
@@ -257,12 +260,85 @@ secret-body (file:///direct_ssh_ui_steps.dart:666:1)
     expect(clicks, 1);
   });
 
-  for (final mutation in ['moved', 'replaced']) {
+  testWidgets(
+    'Android waits for a late keyboard resize before one connect tap',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(393, 851);
+      addTearDown(tester.view.reset);
+      final events = <String>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ListView(
+              children: [
+                const SizedBox(height: 560),
+                const TextField(
+                  key: ValueKey('direct-passphrase'),
+                  obscureText: true,
+                ),
+                const SizedBox(height: 14),
+                FilledButton(
+                  key: const ValueKey('direct-connect'),
+                  onPressed: () => events.add('tap'),
+                  child: const Text('connect'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('direct-passphrase')),
+        'fixture-passphrase',
+      );
+      expect(tester.view.viewInsets.bottom, 0);
+      Timer(const Duration(milliseconds: 250), () {
+        events.add('ime_open');
+        tester.view.viewInsets = const FakeViewPadding(bottom: 312);
+      });
+      final input = tester.testTextInput;
+      input.log.clear();
+      void closeImeAfterEdit(Duration _) {
+        if (!input.log.any((call) => call.method == 'TextInput.clearClient')) {
+          tester.binding.addPostFrameCallback(closeImeAfterEdit);
+          return;
+        }
+        events.add('editing_done');
+        Timer(const Duration(milliseconds: 150), () {
+          events.add('ime_closed');
+          tester.view.viewInsets = const FakeViewPadding();
+        });
+      }
+
+      tester.binding.addPostFrameCallback(closeImeAfterEdit);
+      await finishAndroidEncryptedPassphrase(tester);
+      await tapControl(
+        tester,
+        find.byKey(const ValueKey('direct-connect')),
+        'direct-connect',
+        requireEnabled: true,
+        stableHitPoint: true,
+        onObservation: (status, _) => events.add(status),
+      );
+      expect(events, [
+        'ime_open',
+        'editing_done',
+        'ime_closed',
+        'unstable',
+        'ready',
+        'tap',
+      ]);
+    },
+  );
+
+  for (final mutation in ['moved', 'action replaced', 'element replaced']) {
     testWidgets('stable point never taps a button $mutation between frames', (
       tester,
     ) async {
       var clicks = 0;
       var changed = false;
+      final seen = <String>[];
       late StateSetter update;
       VoidCallback original = () => clicks++;
       VoidCallback replacement = () => clicks += 100;
@@ -273,10 +349,11 @@ secret-body (file:///direct_ssh_ui_steps.dart:666:1)
               builder: (context, setState) {
                 update = setState;
                 return Transform.translate(
+                  key: ValueKey(changed && mutation == 'element replaced'),
                   offset: Offset(changed && mutation == 'moved' ? 300 : 0, 0),
                   child: FilledButton(
                     key: const ValueKey('connect'),
-                    onPressed: changed && mutation == 'replaced'
+                    onPressed: changed && mutation == 'action replaced'
                         ? replacement
                         : original,
                     child: const Text('connect'),
@@ -296,12 +373,18 @@ secret-body (file:///direct_ssh_ui_steps.dart:666:1)
           stableHitPoint: true,
           timeout: const Duration(seconds: 1),
           onObservation: (status, _) {
-            if (status == 'unstable' && !changed) update(() => changed = true);
+            seen.add(status);
+            if (status == 'unstable') {
+              Timer(const Duration(milliseconds: 150), () {
+                update(() => changed = true);
+              });
+            }
           },
         ),
       );
       expect(changed, isTrue);
       expect(clicks, 0);
+      if (mutation == 'element replaced') expect(seen.last, 'replaced');
     });
   }
 

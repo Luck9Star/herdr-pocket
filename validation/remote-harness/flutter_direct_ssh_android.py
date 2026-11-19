@@ -677,7 +677,7 @@ ENCRYPTED_CONNECT_BOOLEAN_FIELDS = {
 def safe_encrypted_connect_diagnostic(value):
     fields = {'status', 'rectPt', 'viewSizePx', 'viewSizePt', 'insetBottomPx'} | ENCRYPTED_CONNECT_BOOLEAN_FIELDS
     if (not isinstance(value, dict) or set(value) != fields
-            or value['status'] not in ('checking', 'missing', 'multiple', 'disabled', 'not_hit', 'unstable', 'ready')
+            or value['status'] not in ('checking', 'missing', 'multiple', 'disabled', 'not_hit', 'unstable', 'replaced', 'ready')
             or any(type(value[key]) is not bool for key in ENCRYPTED_CONNECT_BOOLEAN_FIELDS)
             or type(value['insetBottomPx']) is not int or not 0 <= value['insetBottomPx'] <= 10000
             or any(not isinstance(value[k], list) or len(value[k]) != 2
@@ -765,7 +765,7 @@ def encrypted_device_state():
 ENCRYPTED_APP_STAGES = ENCRYPTED_UI_PHASES | {
     'fixture_validation', 'encrypted_waiting_private', 'encrypted_home',
     'encrypted_probe', 'encrypted_review', 'encrypted_rejected',
-    'encrypted_connect', 'encrypted_disconnect',
+    'encrypted_prepare_connect', 'encrypted_connect', 'encrypted_disconnect',
 }
 
 

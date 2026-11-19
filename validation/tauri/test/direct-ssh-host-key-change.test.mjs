@@ -43,7 +43,7 @@ class Element {
   blur() {}
 }
 
-function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBottom = 130, compact = false, clipboardRead, onBack, failClose = false } = {}) {
+function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBottom = 130, compact = false, clipboardRead, onBack, failClose = false, closeReply = null } = {}) {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const ids = [...html.matchAll(/id="([^"]+)"/g)].map(match => match[1]);
   const nodes = Object.fromEntries(ids.map((id) => [id, new Element()]));
@@ -85,7 +85,11 @@ function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBot
     scrollBy: (x, y) => scrolls.push([x, y]),
     scrollTo: (x, y) => tops.push([x, y]),
   };
-  if (compact) view.matchMedia = () => ({matches:true,addEventListener() {}});
+  const compactLayout = {
+    matches: compact,
+    addEventListener(type, listener) { this[type] = listener; },
+  };
+  view.matchMedia = () => compactLayout;
   globalThis.document = document;
   globalThis.window = view;
   globalThis.requestAnimationFrame = (fn) => { frames.push(fn); return frames.length; };
@@ -123,12 +127,13 @@ function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBot
     }
     if (cmd === "ssh_shell_close") {
       if (failClose) throw Error("fixture_close_failed");
-      return {};
+      return closeReply;
     }
     return {};
   };
   const terminalFactory = () => ({
     textarea: new Element(),
+    options: {},
     modes: { applicationCursorKeysMode: false },
     open() {},
     onData() {},
@@ -161,6 +166,10 @@ function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBot
     view,
     navGroups,
     heading,
+    setCompact(value) {
+      compactLayout.matches = value;
+      compactLayout.change();
+    },
     probe,
     holdProbe: promise => { pendingProbe = promise; },
     connect,
@@ -817,5 +826,78 @@ test("an unconfirmed close is reported without creating a home disconnect notice
     assert.equal(n["ssh-return-home"].hidden,true);
     n["ssh-step-back"].onclick();
     assert.deepEqual(announced,[false]);
+  } finally { h.restore(); }
+});
+
+for (const [outcome, options] of [
+  ["confirmed", {}],
+  ["returned false", { closeReply: false }],
+  ["rejected", { failClose: true }],
+]) {
+  test(`desktop explicit disconnect reports ${outcome} and returns to the dashboard once`, async () => {
+    const announced = [];
+    const h = setup({ ...options, onBack: (...args) => announced.push(args) });
+    const n = h.nodes;
+    const confirmed = outcome === "confirmed";
+    try {
+      h.setAccept(true);
+      await h.probe();
+      await h.connect();
+      assert.equal(n["ssh-live"].hidden, false);
+      n["ssh-disconnect"].onclick();
+      n["ssh-disconnect"].onclick();
+      await flush();
+
+      assert.equal(n["home-ssh"].dataset.sshClose, confirmed ? "confirmed" : "unconfirmed");
+      assert.match(n["ssh-status"].textContent, confirmed ? /^已断开/ : /^远端关闭未确认/);
+      assert.deepEqual(h.tops.at(-1), [0, 0]);
+      assert.equal(n["ssh-live"].hidden, true);
+      assert.equal(n["ssh-return-home"].hidden, false);
+      assert.equal(n["ssh-review"].checked, false);
+      assert.equal(n["ssh-form"].children.every(button => button.disabled), true);
+      assert.ok(["ssh-password", "ssh-key", "ssh-passphrase"].every(id => n[id].value === ""));
+
+      h.setCompact(true);
+      assert.equal(n["ssh-closed-feedback"].hidden, !confirmed);
+      assert.equal(n["ssh-return-home"].hidden, !confirmed);
+      h.setCompact(false);
+      assert.equal(n["ssh-return-home"].hidden, false);
+      assert.equal(n["home-ssh"].dataset.sshClose, confirmed ? "confirmed" : "unconfirmed");
+      n["ssh-return-home"].onclick();
+      n["ssh-return-home"].onclick();
+      assert.deepEqual(announced, [[confirmed, true]]);
+      assert.equal(n["ssh-return-home"].hidden, true);
+      assert.equal(h.openCalls().length, 1);
+      assert.equal(h.calls.filter(call=>call.cmd==="ssh_shell_close").length, 1);
+      assert.equal(h.calls.filter(call=>call.cmd==="ssh_shell_write").length, 0);
+    } finally { h.restore(); }
+  });
+}
+
+test("desktop page visibility cleanup preserves a pending and resolved explicit close outcome", async () => {
+  let resolveClose;
+  const closeReply = new Promise(resolve => { resolveClose = resolve; });
+  const h = setup({ closeReply });
+  const n = h.nodes;
+  function backgroundAndReturn() {
+    h.document.hidden = true;
+    h.document.visibilitychange();
+    h.document.hidden = false;
+    h.document.visibilitychange();
+  }
+  try {
+    h.setAccept(true);
+    await h.probe();
+    await h.connect();
+    n["ssh-disconnect"].onclick();
+    backgroundAndReturn();
+    resolveClose(false);
+    await flush();
+    assert.match(n["ssh-status"].textContent, /^远端关闭未确认/);
+    backgroundAndReturn();
+    await flush();
+    assert.match(n["ssh-status"].textContent, /^远端关闭未确认/);
+    assert.equal(n["ssh-return-home"].hidden, false);
+    assert.equal(h.calls.filter(call=>call.cmd==="ssh_shell_close").length, 1);
   } finally { h.restore(); }
 });

@@ -458,6 +458,8 @@ Future<void> runLinuxOrdinary(
   LinuxTarget target, {
   required void Function(String phase) step,
   required Checkpoint checkpoint,
+  TargetPlatform platform = TargetPlatform.linux,
+  Future<void> Function(Finder home, State homeState)? verifyHome,
 }) async {
   step('home');
   await tester.runAsync(app.main);
@@ -481,7 +483,7 @@ Future<void> runLinuxOrdinary(
   step('form');
   await openDirectSshFromHome(tester);
   final page = find.byType(DirectSshPage);
-  expect(Theme.of(tester.element(page)).platform, TargetPlatform.linux);
+  expect(Theme.of(tester.element(page)).platform, platform);
   final setupHeader = control('direct-page-header');
   expect(
     find.descendant(of: setupHeader, matching: find.text('普通 SSH')),
@@ -675,9 +677,13 @@ Future<void> runLinuxOrdinary(
   expect(outcomePixels(tester, control('direct-closed-feedback')), outcomeGeometry);
 
   step('return_home');
-  await verifyReturnHome(tester);
-  expect(tester.state(home), same(homeState));
-  expect(control('home-ssh-closed').hitTestable(), findsOneWidget);
+  if (verifyHome == null) {
+    await verifyReturnHome(tester);
+    expect(tester.state(home), same(homeState));
+    expect(control('home-ssh-closed').hitTestable(), findsOneWidget);
+  } else {
+    await verifyHome(home, homeState);
+  }
   final homeGeometry = outcomePixels(tester, control('home-ssh-closed'));
   await checkpoint('complete', homeGeometry);
   expect(outcomePixels(tester, control('home-ssh-closed')), homeGeometry);

@@ -98,9 +98,13 @@ def verify_terminal_screenshot(png, *, expected_token, bounds):
     encoded = io.BytesIO()
     gray.save(encoded, format='PNG')
     ocr_env = dict(os.environ, OMP_THREAD_LIMIT='1')
+    failure_stage = 'version_command'
     try:
         version = subprocess.run([executable, '--version'], capture_output=True, timeout=10, check=True, env=ocr_env)
-        match = re.match(rb'tesseract ([0-9.]+)', version.stdout)
+        failure_stage = 'version_banner'
+        banner = version.stdout.split(b'\n', 1)[0].rstrip(b'\r')
+        # The official Windows build can prefix the release with "v".
+        match = re.fullmatch(rb'tesseract v?([0-9]+(?:\.[0-9]+)+)(?:[-+][A-Za-z0-9][-+.A-Za-z0-9]*)?', banner)
         if match is None:
             raise ValueError()
         evidence['ocrEngine'] = 'tesseract ' + match[1].decode('ascii')
@@ -109,9 +113,11 @@ def verify_terminal_screenshot(png, *, expected_token, bounds):
         # Both exact lines must occur in the SAME recognition result.
         for attempt, psm in enumerate((6, 11), start=1):
             evidence['ocrAttempts'] = attempt
+            failure_stage = 'recognition_command'
             result = subprocess.run([executable, 'stdin', 'stdout', '-l', 'eng', '--psm', str(psm),
                                      '-c', 'load_system_dawg=0', '-c', 'load_freq_dawg=0'],
                                     input=encoded.getvalue(), capture_output=True, timeout=30, check=True, env=ocr_env)
+            failure_stage = 'recognition_decode'
             text = result.stdout.decode('utf-8', errors='strict')
             marker_visible = _contains_line(text, ECHO_MARKER)
             token_visible = _contains_adjacent_lines(text, proof_lines)
@@ -122,6 +128,7 @@ def verify_terminal_screenshot(png, *, expected_token, bounds):
             if marker_visible and token_visible and sequence_visible:
                 return evidence
     except (OSError, subprocess.SubprocessError, UnicodeError, ValueError):
+        evidence['ocrFailureStage'] = failure_stage
         raise ScreenshotGateError('terminal_screenshot_ocr_failed', evidence) from None
     if not evidence['markerVisible']:
         raise ScreenshotGateError('terminal_screenshot_echo_not_visible', evidence)

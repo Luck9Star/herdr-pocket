@@ -287,6 +287,29 @@ for start in (lambda: paired_gui.FixtureApproval(None, None, None),
                 (root / 'stage.json').write_text(json.dumps({'phase': phase}), encoding='utf-8')
                 self.assertEqual(windows.read_ui_stage(root), public)
 
+    def test_framework_error_preserves_only_bounded_timing_geometry_and_source(self):
+        before = {'phase': 'form', 'returnTapStarted': False, 'kind': 'FlutterError', 'library': 'rendering',
+                  'viewportPx': [1024, 705], 'dprMilli': 1000, 'overflow': {'pixels': 12.5, 'side': 'bottom'},
+                  'frame': {'source': 'direct_ssh_page', 'line': 699},
+                  'creator': 'Column', 'renderSize': [200, 21], 'anchor': 'direct-form'}
+        after = dict(before, phase='return_home_tap', returnTapStarted=True,
+                     frame={'source': 'host_catalog_page', 'line': 581}, anchor='home-ssh-closed')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertIsNone(windows.read_framework_error(root))
+            for value in (before, after, dict(before, **{'overflow': {'pixels': 0, 'side': 'left'}})):
+                (root / 'framework-error.json').write_text(json.dumps(value), encoding='utf-8')
+                self.assertEqual(windows.read_framework_error(root), value)
+            for private in (dict(before, message='private'), dict(before, phase='private'),
+                            dict(before, kind='private'), dict(before, library=['private']),
+                            dict(before, viewportPx=[1024, True]), dict(before, dprMilli=8001),
+                            dict(before, frame={'source': 'C:/private', 'line': 9}),
+                            dict(before, overflow={'pixels': float('nan'), 'side': 'left'}),
+                            dict(before, anchor='private'), dict(before, creator='private')):
+                (root / 'framework-error.json').write_text(json.dumps(private), encoding='utf-8')
+                with self.assertRaisesRegex(windows.GuiFailure, '^windows_direct_framework_record_invalid$'):
+                    windows.read_framework_error(root)
+
     def test_failure_retains_terminal_and_disconnect_crops_with_original_pixel_mapping(self):
         data = io.BytesIO()
         full = Image.new('RGB', (20, 20), 'red')

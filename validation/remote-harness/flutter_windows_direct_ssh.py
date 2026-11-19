@@ -45,6 +45,14 @@ RETURN_STEPS = frozenset('return_home_' + stage for stage in (
     'button_ready', 'button_enabled', 'tap', 'route', 'catalog', 'entry', 'entry_disabled', 'notice',
     'catalog_identity', 'receipt', 'flutter_exception', 'geometry', 'publish', 'acknowledged',
 ))
+FRAMEWORK_KINDS = {'FlutterError', 'AssertionError', 'StateError', 'TypeError', 'ArgumentError',
+                   'PlatformException', 'MissingPluginException', 'Other'}
+FRAMEWORK_LIBRARIES = {'rendering', 'widgets', 'scheduler', 'services', 'gestures', 'foundation', 'test', 'other'}
+FRAMEWORK_ANCHORS = {'app-sidebar', 'direct-form', 'direct-page-header', 'direct-trust-header',
+                     'direct-closed-feedback', 'direct-active-target', 'host-catalog-list',
+                     'home-empty-card', 'home-ssh-closed'}
+FRAMEWORK_CREATORS = {'Column', 'Row', 'Flex', 'Stack', 'ListView'}
+FRAMEWORK_SOURCES = {'direct_ssh_page', 'host_catalog_page', 'main', 'design_tokens'}
 WINDOW_TITLE = 'herdr_flutter_probe'
 WINDOW_CLASS = 'FLUTTER_RUNNER_WIN32_WINDOW'
 CAPTURE = 'Win32 visible desktop framebuffer, clipped to FLUTTERVIEW client pixels'
@@ -301,6 +309,52 @@ def read_ui_stage(root):
             return phase
 
 
+def read_framework_error(root):
+    value = read_exchange(root, 'framework-error')
+    if value is None:
+        return None
+    # Treat the driver record as untrusted. Every exported dimension, token
+    # and frame is bounded, with no pass-through of text from Flutter.
+    required = {'phase', 'returnTapStarted', 'kind', 'library'}
+    optional = {'viewportPx', 'dprMilli', 'overflow', 'frame', 'creator', 'renderSize', 'anchor'}
+
+    def label(item, choices):
+        return isinstance(item, str) and item in choices
+
+    def dimension(item):
+        return isinstance(item, list) and len(item) == 2 and all(type(n) is int and 0 <= n <= 16384 for n in item)
+
+    def valid(condition):
+        require(condition, 'windows_direct_framework_record_invalid')
+
+    valid(required <= value.keys() <= (required | optional)
+          and label(value['phase'], {*UI_PHASES, *RETURN_STEPS, 'window'})
+          and type(value['returnTapStarted']) is bool
+          and label(value['kind'], FRAMEWORK_KINDS)
+          and label(value['library'], FRAMEWORK_LIBRARIES))
+    for key in ('viewportPx', 'renderSize'):
+        if key in value:
+            valid(dimension(value[key]))
+    if 'dprMilli' in value:
+        valid(type(value['dprMilli']) is int and 1 <= value['dprMilli'] <= 8000)
+    if 'creator' in value:
+        valid(label(value['creator'], FRAMEWORK_CREATORS))
+    if 'anchor' in value:
+        valid(label(value['anchor'], FRAMEWORK_ANCHORS))
+    if 'overflow' in value:
+        overflow = value['overflow']
+        valid(value['kind'] == 'FlutterError' and value['library'] == 'rendering'
+              and isinstance(overflow, dict) and overflow.keys() == {'side', 'pixels'}
+              and label(overflow['side'], {'top', 'bottom', 'left', 'right'})
+              and type(overflow['pixels']) in (int, float) and 0 <= overflow['pixels'] < 100000)
+    if 'frame' in value:
+        frame = value['frame']
+        valid(isinstance(frame, dict) and frame.keys() == {'source', 'line'}
+              and label(frame['source'], FRAMEWORK_SOURCES)
+              and type(frame['line']) is int and 1 <= frame['line'] <= 99999)
+    return value
+
+
 def request(process, root, name, report, *, timeout=45):
     def available():
         value = read_exchange(root, name)
@@ -396,6 +450,12 @@ def run(app, source, report, base, images):
                         stage = read_ui_stage(root)
                         if stage is not None:
                             report['uiStage'] = stage
+                        try:
+                            framework_error = read_framework_error(root)
+                            if framework_error is not None:
+                                report['frameworkError'] = framework_error
+                        except (GuiFailure, OSError, ValueError):
+                            report['frameworkErrorRecord'] = 'invalid'
             finally:
                 if 'peer' not in report:
                     report['peerAfterFailedLaunch'] = fixture.snapshot()

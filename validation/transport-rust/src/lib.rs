@@ -322,6 +322,9 @@ impl Drop for CancelOnDrop {
 struct AbortableStream {
     inner: Box<dyn transport::ByteStream>,
     cancel: Cancellation,
+    // Dropped after the stream itself. The ordinary shell can wait for this
+    // even when KEX was cancelled before russh handed out its task handle.
+    _released: Option<tokio::sync::oneshot::Sender<()>>,
 }
 impl AsyncRead for AbortableStream {
     fn poll_read(
@@ -551,11 +554,12 @@ async fn connect_pinned(
     config: &RemoteConfig, cancel: &Cancellation, audit: Arc<Audit>, expected: PublicKey,
     inactivity_timeout: Option<Duration>, dialer: &dyn transport::Dialer,
 ) -> Result<(client::Handle<Pinned>, Option<transport::OverlayRouteIdentity>)> {
-    connect_pinned_endpoint(&config.host, config.port, cancel, audit, expected, inactivity_timeout, dialer).await
+    connect_pinned_endpoint(&config.host, config.port, cancel, audit, expected, inactivity_timeout, dialer, None).await
 }
 async fn connect_pinned_endpoint(
     host: &str, port: u16, cancel: &Cancellation, audit: Arc<Audit>, expected: PublicKey,
     inactivity_timeout: Option<Duration>, dialer: &dyn transport::Dialer,
+    released: Option<tokio::sync::oneshot::Sender<()>>,
 ) -> Result<(client::Handle<Pinned>, Option<transport::OverlayRouteIdentity>)> {
     let stream = tokio::select! { biased;
         _ = cancel.wait() => return Err("cancelled"),
@@ -579,6 +583,7 @@ async fn connect_pinned_endpoint(
             AbortableStream {
                 inner: stream,
                 cancel: cancel.clone(),
+                _released: released,
             },
             Pinned {
                 expected,
@@ -1513,6 +1518,7 @@ mod tests {
         let mut stream = AbortableStream {
             inner: Box::new(client),
             cancel: cancel.clone(),
+            _released: None,
         };
         let read = tokio::spawn(async move {
             let mut b = [0];

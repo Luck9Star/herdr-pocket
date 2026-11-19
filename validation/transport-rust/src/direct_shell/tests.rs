@@ -214,6 +214,40 @@ impl server::Handler for Peer {
             session.channel_failure(id)?;
             return Ok(());
         }
+        let (report, hold_channel) = self
+            .reject
+            .strip_prefix("hold-")
+            .map_or((self.reject, false), |report| (report, true));
+        if matches!(
+            report,
+            "no-report" | "status-zero" | "TERM" | "USR2" | "fixture-signal" | "unconsumed-status"
+        ) {
+            session.channel_success(id)?;
+            match report {
+                "status-zero" => session.exit_status_request(id, 0)?,
+                "no-report" | "unconsumed-status" => {}
+                signal => session.exit_signal_request(
+                    id,
+                    russh::Sig::Custom(signal.into()),
+                    false,
+                    "fixture detail",
+                    "en",
+                )?,
+            }
+            if hold_channel {
+                // The client delivers this only after consuming prior channel messages.
+                session.data(id, b"report-barrier".as_slice())?;
+                if report == "unconsumed-status" {
+                    session.exit_status_request(id, 0)?;
+                } else if report == "no-report" {
+                    session.eof(id)?;
+                }
+            } else {
+                session.eof(id)?;
+                session.close(id)?;
+            }
+            return Ok(());
+        }
         self.facts.shells.fetch_add(1, Ordering::SeqCst);
         let slave = self.slave.take().unwrap();
         let mut command = Process::new("/bin/sh");
@@ -704,6 +738,175 @@ async fn exact_output_ack_bounds_delivery_and_close_interrupts_pending_ack() {
         Err("cancelled")
     );
     fixture.cleaned().await;
+}
+
+#[tokio::test]
+async fn cancellation_waits_for_the_background_ssh_connection() {
+    let fixture = Fixture::start("").await;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let mut config = fixture.config(true);
+    config.port = listener.local_addr().unwrap().port();
+    let (control, commands) = shell_commands();
+    let mut shell = std::pin::pin!(run_shell(config, commands, |_| Ok(())));
+    let mut peer = tokio::select! {
+        result = &mut shell => panic!("unexpected shell result {result:?}"),
+        peer = timeout(Duration::from_secs(2), async {
+            let (mut peer, _) = listener.accept().await.unwrap();
+            peer.write_all(b"SSH-2.0-local-retirement-test\r\n").await.unwrap();
+            let mut byte = [0];
+            loop {
+                peer.read_exact(&mut byte).await.unwrap();
+                if byte[0] == b'\n' {
+                    break;
+                }
+            }
+            // The background task writes the first KEX packet. This peer never
+            // completes KEX, so the shell worker has not received a Handle.
+            peer.read_exact(&mut byte).await.unwrap();
+            peer
+        }) => peer.unwrap(),
+    };
+    control.close();
+    // Only this task is running until its next Pending poll.
+    assert!(
+        std::future::poll_fn(|cx| Poll::Ready(shell.as_mut().poll(cx)))
+            .await
+            .is_pending(),
+        "cancellation completed before the background task could release the TCP stream"
+    );
+    assert_eq!(
+        timeout(Duration::from_secs(2), shell).await.unwrap(),
+        Err("cancelled")
+    );
+    timeout(Duration::from_secs(2), peer.read_to_end(&mut Vec::new()))
+        .await
+        .unwrap()
+        .unwrap();
+}
+
+#[tokio::test]
+async fn cancellation_waits_for_the_authenticated_ssh_task() {
+    let fixture = Fixture::start("").await;
+    let (control, commands) = shell_commands();
+    let (ready, mut arrived) = oneshot::channel();
+    let mut ready = Some(ready);
+    let mut shell = std::pin::pin!(run_shell(fixture.config(true), commands, move |event| {
+        if event.kind == "ready" {
+            ready.take().unwrap().send(()).unwrap();
+        }
+        Ok(())
+    }));
+    tokio::select! {
+        result = &mut shell => panic!("unexpected shell result {result:?}"),
+        ready = timeout(Duration::from_secs(2), &mut arrived) => ready.unwrap().unwrap(),
+    }
+    control.close();
+    assert!(
+        std::future::poll_fn(|cx| Poll::Ready(shell.as_mut().poll(cx)))
+            .await
+            .is_pending(),
+        "cancellation completed before the authenticated SSH task could stop"
+    );
+    assert_eq!(
+        timeout(Duration::from_secs(2), shell).await.unwrap(),
+        Err("cancelled")
+    );
+    fixture.cleaned().await;
+}
+
+#[tokio::test]
+async fn exit_events_only_include_evidence_sent_by_the_peer() {
+    for (peer, status, signal) in [
+        ("no-report", None, None),
+        ("status-zero", Some(0), None),
+        ("TERM", None, Some("TERM")),
+        ("USR2", None, Some("USR2")),
+        ("fixture-signal", None, Some("other")),
+    ] {
+        let fixture = Fixture::start(peer).await;
+        let mut shell = OpenShell::start(fixture.config(true));
+        shell.ready().await;
+        let event = shell.event().await;
+        assert_eq!(event.kind, "exit");
+        assert_eq!(event.exit_status, status);
+        assert_eq!(event.exit_signal, signal);
+        let json = serde_json::to_value(&event).unwrap();
+        assert_eq!(
+            json.get("exitStatus"),
+            status.map(|s| serde_json::json!(s)).as_ref()
+        );
+        assert_eq!(
+            json.get("exitSignal"),
+            signal.map(|s| serde_json::json!(s)).as_ref()
+        );
+        assert!(!json.to_string().contains("fixture"));
+        assert_eq!(shell.task.await.unwrap(), Ok(()));
+        fixture.cleaned().await;
+    }
+}
+
+#[tokio::test]
+async fn cancelled_shell_reports_only_consumed_exit_evidence_after_retirement() {
+    use std::{
+        future::{Future, poll_fn},
+        pin::pin,
+        task::Poll,
+    };
+
+    for (peer, status, signal) in [
+        ("hold-status-zero", Some(0), None),
+        ("hold-TERM", None, Some("TERM")),
+        ("hold-USR2", None, Some("USR2")),
+        ("hold-fixture-signal", None, Some("other")),
+        ("hold-no-report", None, None),
+        ("hold-unconsumed-status", None, None),
+    ] {
+        let fixture = Fixture::start(peer).await;
+        let (control, commands) = shell_commands();
+        let (send, mut events) = mpsc::unbounded_channel();
+        let mut shell = pin!(run_shell(fixture.config(true), commands, move |event| {
+            send.send(event).map_err(|_| "cancelled")
+        }));
+        let (ready, marker) = tokio::select! {
+            result = &mut shell => panic!("unexpected shell result: {result:?}"),
+            events = timeout(Duration::from_secs(5), async {
+                (events.recv().await.unwrap(), events.recv().await.unwrap())
+            }) => events.unwrap(),
+        };
+        assert_eq!((ready.seq, ready.kind), (1, "ready"));
+        assert_eq!((marker.seq, marker.kind), (2, "data"));
+        assert_eq!(marker.data.as_deref(), Some(b"report-barrier".as_slice()));
+        assert_eq!(fixture.facts.active.load(Ordering::SeqCst), 1);
+
+        // Keep the marker unacknowledged so later reports cannot be consumed.
+        control.close();
+        assert!(
+            poll_fn(|cx| Poll::Ready(shell.as_mut().poll(cx)))
+                .await
+                .is_pending()
+        );
+        assert!(matches!(
+            events.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty)
+        ));
+        assert_eq!(
+            timeout(Duration::from_secs(2), shell).await.unwrap(),
+            Err("cancelled")
+        );
+
+        if status.is_some() || signal.is_some() {
+            let exit = events
+                .try_recv()
+                .unwrap_or_else(|_| panic!("missing exit for {peer}"));
+            assert_eq!((exit.seq, exit.kind), (3, "exit"));
+            assert_eq!((exit.exit_status, exit.exit_signal), (status, signal));
+        }
+        assert!(
+            events.try_recv().is_err(),
+            "unexpected duplicate event for {peer}"
+        );
+        fixture.cleaned().await;
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

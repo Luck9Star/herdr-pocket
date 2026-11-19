@@ -157,16 +157,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
       $('ssh-closed-detail').textContent = detail;
       $('ssh-closed-detail').hidden = !detail;
     }
-    if (!compact()) {
-      delete mobileSection.dataset.sshStep;
-      if (closeResult) mobileSection.dataset.sshClose = closeResult.phase;
-      $('ssh-credentials').hidden = false;
-      $('ssh-reviewed-target').hidden = true;
-      $('ssh-trust-review').hidden = true;
-      $('ssh-probe').textContent = '探测主机指纹';
-      $('ssh-connect').textContent = '连接 / 重新连接';
-      return;
-    }
+    if (closeResult) mobileSection.dataset.sshClose = closeResult.phase;
     const confirmed = evidence && $('ssh-review').checked;
     const step = confirmed ? 'auth' : evidence ? 'trust' : 'target';
     mobileSection.dataset.sshStep = step;
@@ -235,7 +226,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   function usableCredentials() {
     if ($('ssh-auth-method').value !== 'key') return !!$('ssh-password').value;
     const pem = $('ssh-key').value.trim();
-    return compact() ? privateKeyReady(pem, $('ssh-passphrase').value) : !!pem;
+    return privateKeyReady(pem, $('ssh-passphrase').value);
   }
   function applyLock(ready = controller.isReady(), blockedView = !$('ssh-key-change').hidden) {
     const unavailable = !native || ready || blockedView || controller.isActive() || submitting || closeResult?.phase === 'pending';
@@ -270,8 +261,8 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     applyLock();
     revealAuthField();
   });
-  if (compactLayout) {
-    compactLayout.addEventListener('change', () => {
+  {
+    compactLayout?.addEventListener('change', () => {
       if (terminal) Object.assign(terminal.options, terminalAppearance());
       refreshStep();
       applyLock();
@@ -359,7 +350,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     if ($('ssh-paste-key').disabled || !clipboardRead) return;
     const revision = ++pasteRevision;
     const current = () => revision === pasteRevision && !document.hidden && !mobileSection.hidden &&
-      !$('host-home').hidden && compact() && !$('ssh-key-fields').hidden && !$('ssh-paste-key').disabled;
+      !$('host-home').hidden && !$('ssh-key-fields').hidden && !$('ssh-paste-key').disabled;
     try {
       const text = await clipboardRead();
       if (!current()) return;
@@ -418,7 +409,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
         $('ssh-reviewed-fingerprint').textContent = key.fingerprint;
         $('ssh-reviewed-public-key').textContent = key.publicKey;
       }
-      if (compact()) changeMethod(false);
+      changeMethod(false);
       scrollToStep();
     } catch {
       if (revision !== probeRevision) return;

@@ -27,6 +27,25 @@ TYPED_LINE = 'hp-check\ue007'  # WebDriver Enter, sent to the focused xterm.
 RENDER_PENDING = {'terminal_screenshot_echo_not_visible', 'terminal_screenshot_token_not_visible',
                   'terminal_screenshot_proof_not_adjacent'}
 
+REVIEW_WITNESS = r'''const selectors = ['#ssh-step-title', '#ssh-reviewed-target', '#ssh-reviewed-endpoint',
+    '#ssh-reviewed-key', '#ssh-reviewed-algorithm', '#ssh-reviewed-fingerprint', '#ssh-trust-confirm'];
+  if (selectors.some(s => document.querySelectorAll(s).length !== 1)) return false;
+  const title = node(selectors[0]), target = node(selectors[1]), endpoint = node(selectors[2]);
+  const card = node(selectors[3]), algorithm = node(selectors[4]), fingerprint = node(selectors[5]);
+  const confirm = node(selectors[6]), review = node('#ssh-review');
+  const inView = el => { if (!visible(el)) return false; const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; };
+  if (!selectors.every(s => inView(node(s))) || !target.contains(endpoint) || !card.contains(algorithm) ||
+      !card.contains(fingerprint) || title.innerText !== '核对主机密钥' || endpoint.innerText !== arguments[0] ||
+      algorithm.innerText !== arguments[1] || fingerprint.innerText.replace(/\s/g, '') !== arguments[2] ||
+      confirm.innerText !== '指纹一致，确认继续' || confirm.disabled || !review || review.checked || visible(review) ||
+      !node('#ssh-password').disabled || !node('#ssh-connect').disabled) return false;
+  const range = document.createRange(); range.selectNodeContents(fingerprint);
+  const parts = [...range.getClientRects()];
+  return parts.length > 0 && parts.every(r => r.width > 0 && r.height > 0 && r.left >= 0 && r.top >= 0 &&
+    r.right <= innerWidth && r.bottom <= innerHeight &&
+    fingerprint.contains(document.elementFromPoint((r.left+r.right)/2, (r.top+r.bottom)/2)));'''
+
 
 def require(condition, code):
     if not condition:
@@ -165,10 +184,10 @@ def capture_outcome(driver, selector):
 def execute(driver, fixture, report):
     host = '127.0.0.1'
     endpoint = f'{fixture.username}@{host}:{fixture.port}'
-    review = f'主机 {host}:{fixture.port} · {fixture.fingerprint} · {fixture.public_key}'
+    algorithm = fixture.public_key.split(' ', 1)[0]
     report['stage'] = 'form'
     require(driver.observe('return visible(node("#home-dashboard"));'), 'direct_ssh_home_not_visible')
-    driver.click('#host-open-remote')
+    driver.click('#host-empty-add' if driver.observe('return visible(node("#host-empty-add"));') else '#host-open-remote')
     driver.click('#add-ssh')
     for selector, value in (('#ssh-host', host), ('#ssh-port', str(fixture.port)), ('#ssh-user', fixture.username)):
         driver.fill(selector, value)
@@ -177,21 +196,20 @@ def execute(driver, fixture, report):
 
     report['stage'] = 'probe'
     driver.click('#ssh-probe')
-    wait_for(lambda: driver.observe('''const el = node('#ssh-fingerprint'), box = el.getBoundingClientRect();
-                                    return visible(el) && box.top >= 0 && box.bottom <= innerHeight &&
-                                        box.left >= 0 && box.right <= innerWidth && el.innerText === arguments[0] &&
-                                        !node('#ssh-review').disabled;''', review),
+    wait_for(lambda: driver.observe(REVIEW_WITNESS, endpoint, algorithm, fixture.fingerprint),
              'direct_ssh_fingerprint_not_visible_or_mismatched')
     require(fixture.wait_for_connections_closed(1), 'direct_ssh_probe_not_closed')
     probe_evidence(fixture.snapshot(), 1)
-    require(driver.observe('return !node("#ssh-review").checked && node("#ssh-password").disabled && '
-                           'node("#ssh-connect").disabled;'), 'direct_ssh_credentials_ungated_before_review')
-    driver.click('#ssh-review')
-    require(driver.observe('return node("#ssh-review").checked && node("#ssh-auth-method").value === "password" && '
-                           'node("#ssh-password").type === "password" && node("#ssh-connect").disabled;'),
+    driver.click('#ssh-trust-confirm')
+    require(driver.observe('''const endpoint = node('#ssh-reviewed-endpoint'), password = node('#ssh-password');
+        const choice = node('#ssh-auth-password');
+        return visible(node('#ssh-credentials')) && visible(endpoint) && endpoint.innerText === arguments[0] &&
+            node('#ssh-review').checked && node('#ssh-auth-method').value === 'password' &&
+            visible(choice) && choice.getAttribute('aria-pressed') === 'true' && visible(password) &&
+            password.type === 'password' && !password.disabled && node('#ssh-connect').disabled;''', endpoint),
             'direct_ssh_password_review_invalid')
     report['target'] = {'host': host, 'port': fixture.port, 'username': fixture.username,
-                        'algorithm': fixture.public_key.split(' ', 1)[0], 'fingerprint': fixture.fingerprint}
+                        'algorithm': algorithm, 'fingerprint': fixture.fingerprint}
     report['fingerprintReviewed'] = True
 
     report['stage'] = 'connect'
@@ -233,7 +251,8 @@ def execute(driver, fixture, report):
     driver.click('#ssh-return-home')
     wait_for(lambda: driver.observe('''const home = node('#home-dashboard'), result = node('#host-ssh-disconnected');
         return visible(home) && visible(result) && home.contains(result) && result.innerText === '本机已断开' &&
-            visible(node('#host-open-remote')) && !visible(node('#home-ssh'));'''),
+            (visible(node('#host-open-remote')) || visible(node('#host-empty-add'))) &&
+            visible(node('#home-open-ssh')) && !visible(node('#home-ssh'));'''),
              'direct_ssh_home_not_restored')
     home_png, home = capture_outcome(driver, '#host-ssh-disconnected')
     session_evidence(fixture.snapshot(), sent=True, closed=True)

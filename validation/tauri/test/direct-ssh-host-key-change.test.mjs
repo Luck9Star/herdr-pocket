@@ -732,6 +732,30 @@ test("mobile trust requires explicit consent and retains old trust after rejecti
   } finally { h.restore(); }
 });
 
+test("desktop setup requires explicit fingerprint confirmation and cancel retains old trust", async () => {
+  const h = setup({compact:false}), n = h.nodes;
+  try {
+    await h.probe();
+    assert.equal(n["home-ssh"].dataset.sshStep, "trust");
+    n["ssh-trust-cancel"].onclick();
+    assert.equal(n["home-ssh"].dataset.sshStep, "target");
+    assert.equal(h.openCalls().length, 0);
+    await h.probe();
+    n["ssh-trust-confirm"].onclick();
+    assert.equal(n["home-ssh"].dataset.sshStep, "auth");
+    n["ssh-password"].value = "fixture";
+    await n["ssh-form"].onsubmit({preventDefault(){}});
+    await flush();
+    assert.equal(n["ssh-key-change"].hidden, false);
+    n["ssh-key-cancel"].onclick();
+    assert.match(n["ssh-prior-fingerprint"].textContent, /SHA256:reviewedLocalOnly/);
+    await n["ssh-probe"].onclick();
+    n["ssh-trust-cancel"].onclick();
+    assert.match(n["ssh-prior-fingerprint"].textContent, /SHA256:reviewedLocalOnly/);
+    assert.equal(h.openCalls().length, 1);
+  } finally { h.restore(); }
+});
+
 test("mobile target edits retire late probe and private key paste replies", async () => {
   const pending = Promise.withResolvers();
   const clipboard = Promise.withResolvers();

@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:herdr_flutter_probe/direct_ssh_page.dart';
-import 'package:herdr_flutter_probe/host_catalog_page.dart';
 import 'package:terminal_view/terminal_view.dart';
 
 import 'ios_exchange.dart';
@@ -427,29 +426,6 @@ void main() {
           }
         }
 
-        Future<void> returnHome() async {
-          step('return_home');
-          final back = find.bySemanticsIdentifier('direct-back').hitTestable();
-          expect(back, findsOneWidget);
-          await tester.tap(back);
-          final home = find.byType(HostCatalogPage);
-          final shortcut = find.descendant(
-            of: home,
-            matching: find.byKey(const ValueKey('hosts-direct-ssh')),
-          );
-          final ssh = find.byType(DirectSshPage, skipOffstage: false);
-          await until(
-            tester,
-            () =>
-                ssh.evaluate().isEmpty &&
-                home.evaluate().length == 1 &&
-                shortcut.hitTestable().evaluate().length == 1,
-            timeoutReason: 'direct_ssh_ios_return_home_timeout',
-          );
-          expect(tester.takeException(), isNull);
-          step('returned_home');
-        }
-
         if (!encryptedRotation) {
           await runDirectSshRotationUi(
             tester,
@@ -470,7 +446,7 @@ void main() {
             publish: publish,
             capture: capture,
           );
-          await returnHome();
+          step('returned_home');
         }
         if (encrypted != null) {
           step('encrypted_waiting_private');
@@ -531,7 +507,6 @@ void main() {
             },
           );
           if (encryptedRotation) step('report_data_set');
-          await returnHome();
           step('encrypted_returned_home');
         }
       } catch (error, stack) {
@@ -559,10 +534,8 @@ void main() {
               ? 'connect_failed'
               : status == '应用进入后台，连接已关闭；返回后需重新连接，不会重放输入。'
               ? 'background_closed'
-              : status == '已断开；未重放输入。'
+              : status?.startsWith('本机已断开；') == true
               ? 'disconnected'
-              : status?.startsWith('远端 shell 已结束') == true
-              ? 'shell_ended'
               : find.text('已连接 · 输入直接发送到远端 shell').evaluate().isNotEmpty
               ? 'connected'
               : find.byType(DirectSshPage).evaluate().isEmpty

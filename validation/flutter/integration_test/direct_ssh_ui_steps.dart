@@ -25,6 +25,51 @@ Future<void> until(
 
 Finder control(String key) => find.byKey(ValueKey(key));
 
+Future<void> verifyLocalClose(WidgetTester tester, dynamic state) async {
+  await until(
+    tester,
+    () => state.closeLocalConfirmed || state.closeCleanupFailed,
+    timeoutReason: 'direct_ssh_local_close_timeout',
+  );
+  expect(state.closeCleanupFailed, isFalse);
+  expect(state.closeLocalConfirmed, isTrue);
+  expect(state.secret.text, isEmpty);
+  expect(state.passphrase.text, isEmpty);
+  expect(control('direct-secret'), findsNothing);
+  expect(control('direct-passphrase'), findsNothing);
+  final card = control('direct-closed-feedback');
+  expect(card, findsOneWidget);
+  expect(
+    find.descendant(of: card, matching: find.text('本机已断开')),
+    findsOneWidget,
+  );
+  // direct_ssh_fixture closes its transport without sending exit-status or
+  // exit-signal; a remote report here would be fabricated evidence.
+  expect(state.closeRemoteReported, isFalse);
+  expect(
+    find.descendant(of: card, matching: find.text('凭据已清空，重连时请重新填写。')),
+    findsOneWidget,
+  );
+  expect(
+    find.descendant(of: card, matching: find.textContaining('远端已报告结束')),
+    findsNothing,
+  );
+}
+
+Future<void> verifyReturnHome(WidgetTester tester) async {
+  await tap(tester, 'direct-return-home');
+  await until(
+    tester,
+    () =>
+        find.byType(DirectSshPage, skipOffstage: false).evaluate().isEmpty &&
+        control('hosts-direct-ssh').hitTestable().evaluate().length == 1 &&
+        control('home-ssh-closed-title').evaluate().length == 1,
+    timeoutReason: 'direct_ssh_return_home_timeout',
+  );
+  expect(tester.widget<Text>(control('home-ssh-closed-title')).data, '本机已断开');
+  expect(tester.takeException(), isNull);
+}
+
 Future<void> tap(
   WidgetTester tester,
   String key, {
@@ -528,11 +573,7 @@ Future<void> runDirectSshUi(
   expect(state.secret.text, isEmpty);
   expect(state.passphrase.text, isEmpty);
   step('disconnect_status');
-  final disconnectedStatus = find.textContaining('已断开');
-  await until(tester, () => disconnectedStatus.evaluate().length == 1);
-  await tester.ensureVisible(disconnectedStatus);
-  await tester.pump(const Duration(milliseconds: 200));
-  expect(disconnectedStatus, findsOneWidget);
+  await verifyLocalClose(tester, state);
   await capture('disconnected');
   step('disconnect_exception');
   expect(tester.takeException(), isNull);
@@ -562,6 +603,7 @@ Future<void> runDirectSshUi(
     'peerClosedBeforeDriverExit': true,
   });
   step('peer_confirmed');
+  await verifyReturnHome(tester);
   binding.reportData = report;
   step('report_data_set');
 }
@@ -1007,9 +1049,7 @@ Future<void> runEncryptedDirectSshUi(
     reveal: false,
   );
   await until(tester, () => find.byType(TerminalView).evaluate().isEmpty);
-  expect(state.secret.text.isEmpty, isTrue);
-  expect(state.passphrase.text.isEmpty, isTrue);
-  expect(find.textContaining('已断开'), findsOneWidget);
+  await verifyLocalClose(tester, state);
   if (rotating) {
     expect(state.fingerprint, config['rotatedFingerprint']);
     expect(state.hostKeyReviewRequired, isFalse);
@@ -1024,8 +1064,10 @@ Future<void> runEncryptedDirectSshUi(
     'explicitTrustRequired': true,
     'privateKeyPasted': true,
     'passphraseObscured': true,
-    if (rotating) ..._rotationTrustEvidence
-    else 'wrongPassphraseRejectedLocally': true,
+    if (rotating)
+      ..._rotationTrustEvidence
+    else
+      'wrongPassphraseRejectedLocally': true,
     'realTerminalView': true,
     'normalTextInputCommit': true,
     'remoteEchoVisible': true,
@@ -1042,6 +1084,7 @@ Future<void> runEncryptedDirectSshUi(
     'protocolAccepted': true,
     'peerClosedBeforeDriverExit': true,
   });
+  await verifyReturnHome(tester);
   binding.reportData = report;
 }
 
@@ -1237,7 +1280,7 @@ Future<void> runDirectSshRotationUi(
   step('rotation_disconnect');
   await tester.tap(find.widgetWithText(TextButton, '断开'));
   await until(tester, () => find.byType(TerminalView).evaluate().isEmpty);
-  expect(state.secret.text, isEmpty);
+  await verifyLocalClose(tester, state);
   expect(state.fingerprint, config['rotatedFingerprint']);
   expect(state.hostKeyReviewRequired, isFalse);
   expect(tester.takeException(), isNull);
@@ -1256,10 +1299,6 @@ Future<void> runDirectSshRotationUi(
   await checkpoint('complete', 4);
   // Return only after independent approval has released the review lock, so
   // the unchanged ordinary-SSH scenario starts from the real homepage again.
-  await tester.tap(find.byType(BackButton));
-  await until(
-    tester,
-    () => find.byKey(const ValueKey('hosts-direct-ssh')).evaluate().length == 1,
-  );
+  await verifyReturnHome(tester);
   step('rotation_complete');
 }

@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:dartssh2/dartssh2.dart' show SSHClient, SSHSessionExitSignal, SSHSocket;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
@@ -13,10 +16,41 @@ import 'host_catalog_test.dart' show MemoryCatalogStorage;
 import 'ios_layout_diagnostics.dart';
 
 class ClosingShell extends CapturingShell {
+  ClosingShell() {
+    input.stream.listen((bytes) => writes.add(utf8.decode(bytes)), onDone: peerClosed.complete);
+  }
+
+  final input = StreamController<Uint8List>();
+  final peerClosed = Completer<void>();
   int closeCalls = 0;
+
+  @override
+  StreamSink<Uint8List> get stdin => input.sink;
+  @override
+  Future<void> get done => peerClosed.future;
+  @override
+  int? get exitCode => null;
+  @override
+  SSHSessionExitSignal? get exitSignal => null;
   @override
   void close() {
     closeCalls++;
+  }
+}
+
+class ClosingTransport extends Fake implements SSHClient {
+  int closeCalls = 0;
+  @override
+  Future<void> close() async {
+    closeCalls++;
+  }
+}
+
+class ClosingSocket extends Fake implements SSHSocket {
+  int destroyCalls = 0;
+  @override
+  void destroy() {
+    destroyCalls++;
   }
 }
 
@@ -45,7 +79,7 @@ void main() {
       try {
         state.setState(() {
           state.terminal = state.createTerminal(state.epoch);
-          state.shell = ClosingShell();
+          state.shell = CapturingShell();
           state.connected = true;
           state.status = 'synthetic-secret ' * 300;
           state.activeTarget = 'fixture@127.0.0.1:2222';
@@ -149,13 +183,18 @@ void main() {
         );
         final dynamic state = tester.state(find.byType(DirectSshPage));
         final shell = ClosingShell();
+        final transport = ClosingTransport();
+        final socket = ClosingSocket();
         state.setState(() {
           state.terminal = state.createTerminal(state.epoch);
           state.shell = shell;
+          state.client = transport;
+          state.socket = socket;
           state.connected = true;
           state.status = '已连接 · 输入直接发送到远端 shell';
           state.activeTarget = 'fixture@127.0.0.1:2222';
           state.secret.text = 'synthetic-credential';
+          state.passphrase.text = 'synthetic-passphrase';
         });
         await tester.pump();
         await tester.tap(find.byType(TerminalView));
@@ -187,11 +226,15 @@ void main() {
           expect(tester.takeException(), isNull);
         }
         await tester.tap(find.text('断开'));
-        await tester.pump();
+        await tester.pumpAndSettle();
         expect(find.byType(TerminalView), findsNothing);
         expect(state.secret.text, isEmpty);
-        expect(shell.closeCalls, 1);
-        expect(find.textContaining('已断开'), findsOneWidget);
+        expect(state.passphrase.text, isEmpty);
+        expect(shell.input.isClosed, isTrue);
+        expect(shell.peerClosed.isCompleted, isTrue);
+        expect((transport.closeCalls, shell.closeCalls, socket.destroyCalls), (1, 0, 0));
+        expect(find.text('本机已断开'), findsOneWidget);
+        expect(find.textContaining('远端已报告结束'), findsNothing);
         expect(shell.writes.join(), 'hp-check\r');
         expect(tester.takeException(), isNull);
         tester.view.viewInsets = const FakeViewPadding();

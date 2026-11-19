@@ -4,6 +4,10 @@ import Darwin
 
 @available(macOS 15.0, *)
 final class SecureCredentialUITests: XCTestCase {
+    private let addressLabel = "主机地址"
+    private let passphraseLabel = "私钥口令（加密私钥需要）"
+    private let trustConfirmationLabel = "指纹一致，确认继续"
+
     override func tearDown() {
         XCUIApplication().terminate()
         super.tearDown()
@@ -67,7 +71,7 @@ final class SecureCredentialUITests: XCTestCase {
     }
 
     private func secureField(_ app: XCUIApplication, _ identifier: String) -> XCUIElement {
-        let expected = identifier == "direct-secret" ? "密码（仅本次使用）" : "私钥口令（可选）"
+        let expected = identifier == "direct-secret" ? "密码（仅本次使用）" : passphraseLabel
         let phase = identifier == "direct-secret" ? "password" : "passphrase"
         let secure = app.secureTextFields
         let exact = secure.matching(NSPredicate(format: "identifier == %@", identifier))
@@ -93,7 +97,7 @@ final class SecureCredentialUITests: XCTestCase {
         XCTAssertTrue(window.exists && window.isHittable, "form scroll target unavailable")
         let viewport = formScroll(app).map { window.frame.intersection($0.frame) } ?? window.frame
         XCTAssertTrue(viewport.width >= 600 && viewport.height >= 300, "key form viewport too small")
-        let label = app.descendants(matching: .any).matching(identifier: "私钥口令（可选）")
+        let label = app.descendants(matching: .any).matching(identifier: passphraseLabel)
         let before = label.count == 1 ? label.firstMatch.frame : .zero
         let gutter = window.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0)).withOffset(
             CGVector(dx: viewport.minX - window.frame.minX + 12, dy: viewport.midY - window.frame.minY))
@@ -254,14 +258,60 @@ final class SecureCredentialUITests: XCTestCase {
         return bits
     }
 
-    private func ordinaryMetrics(_ app: XCUIApplication, sentinel: String) throws -> Bool {
+    private func ordinaryValues(_ nodes: [any XCUIElementSnapshot]) -> [String] {
+        nodes.filter { $0.elementType == .textField }.compactMap { $0.value as? String }.filter { !$0.isEmpty }
+    }
+
+    private func ordinaryValue(_ address: XCUIElement) throws -> String? {
+        let node = try address.snapshot()
+        guard node.elementType == .textField else { return nil }
+        return node.value as? String
+    }
+
+    private func ordinaryMetrics(_ app: XCUIApplication, sentinelObserved: Bool = false) throws {
         let nodes = try snapshotNodes(app)
-        let values = nodes.compactMap { $0.value as? String }.filter { !$0.isEmpty }
-        let seen = !sentinel.isEmpty && values.contains { $0.contains(sentinel) }
-        print("HP_XCUI_ORDINARY=nodes:\(min(nodes.count,10000)),values:\(min(values.count,10000)),sentinel:\(seen ? 1 : 0)")
+        let values = ordinaryValues(nodes)
+        print("HP_XCUI_ORDINARY=nodes:\(min(nodes.count,10000)),values:\(min(values.count,10000)),sentinel:\(sentinelObserved ? 1 : 0)")
         fflush(stdout)
-        XCTAssertGreaterThan(nodes.count, 5, "system accessibility tree is empty")
-        return seen
+    }
+
+    private func verifyOrdinarySentinel(_ app: XCUIApplication) throws {
+        let window = app.windows.firstMatch
+        let addresses = window.descendants(matching: .any).matching(identifier: addressLabel)
+            .descendants(matching: .textField)
+        let address = addresses.firstMatch
+        XCTAssertTrue(address.waitForExistence(timeout: 15), "named address group or ordinary input missing")
+        let retained = try targetDiagnostics(app, phase: "sentinelRetained", emit: false)
+        XCTAssertTrue(retained?[0] == true && retained?[1] == true && retained?[3] == true && retained?[8] == false,
+                      "ordinary field sentinel not read back: target was not retained")
+        XCTAssertEqual(addresses.count, 1, "named address group or ordinary input missing")
+        XCTAssertTrue(address.isEnabled, "requested control is disabled")
+
+        let nonce = UUID().uuidString.lowercased().filter { $0 != "-" }
+        let sentinel = "hpaddress" + String(nonce.prefix(16))
+        XCTAssertFalse(try ordinaryValue(address) == sentinel, "ordinary field sentinel unexpectedly present before editing")
+        tap(app, address)
+
+        // The retained address is a short, single line. Drag from after its end to before its
+        // start and replace the selection once through the focused system text field.
+        let trailing = address.coordinate(withNormalizedOffset: CGVector(dx: 0.96, dy: 0.5))
+        let leading = address.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.5))
+        XCTAssertTrue(stableHit(address) && window.frame.contains(trailing.screenPoint) &&
+                      window.frame.contains(leading.screenPoint), "requested control is not hittable")
+        trailing.click(forDuration: 0.05, thenDragTo: leading)
+        address.typeText(sentinel)
+
+        let deadline = Date().addingTimeInterval(8)
+        var seen = false
+        repeat {
+            seen = try ordinaryValue(address) == sentinel
+            if seen { break }
+            usleep(100_000)
+        } while Date() < deadline
+        try ordinaryMetrics(app, sentinelObserved: seen)
+        print("HP_XCUI_INPUT=phase:sentinel,target:\(seen ? 1 : 0)")
+        fflush(stdout)
+        XCTAssertTrue(seen, "ordinary field sentinel not read back: system text field value")
     }
 
     private func verifyFingerprint(_ app: XCUIApplication, expected: String, phase: String) throws -> Bool {
@@ -276,11 +326,20 @@ final class SecureCredentialUITests: XCTestCase {
     }
 
     private func confirmFingerprint(_ app: XCUIApplication, phase: String) throws {
-        let matches = app.buttons.matching(NSPredicate(format: "label == %@", "已核对并确认"))
+        let matches = app.buttons.matching(NSPredicate(format: "label == %@", trustConfirmationLabel))
         XCTAssertEqual(matches.count, 1, "fingerprint confirmation is not unique")
+        XCTAssertEqual(app.secureTextFields.count, 0, "secure credentials exposed before fingerprint confirmation")
         let button = matches.firstMatch
         let window = app.windows.firstMatch
         XCTAssertTrue(button.exists && button.isEnabled && window.exists && app.state == .runningForeground, "fingerprint confirmation unavailable")
+        let deadline = Date().addingTimeInterval(5)
+        repeat {
+            let frame = button.frame
+            let windowFrame = window.frame
+            usleep(100_000)
+            if !frame.isEmpty && frame == button.frame && windowFrame == window.frame &&
+                frame.intersection(windowFrame).contains(CGPoint(x: frame.midX, y: frame.midY)) { break }
+        } while Date() < deadline
         let frame = button.frame
         let windowFrame = window.frame
         let center = CGPoint(x: frame.midX, y: frame.midY)
@@ -305,18 +364,78 @@ final class SecureCredentialUITests: XCTestCase {
         XCTAssertTrue(target?.count == 13 && target?[12] == true, "fingerprint confirmation not reflected in form")
     }
 
-    private func typeOrdinaryOnce(_ app: XCUIApplication, field: XCUIElement, value: String, phase: String) throws {
-        tap(app, field);app.typeText(value)
-        var nodes = try snapshotNodes(app)
+    private func probeAndReview(_ app: XCUIApplication, fingerprint: String, phase: String) throws {
+        tap(app, app.buttons["探测并核对主机密钥"])
+        XCTAssertTrue(app.buttons[trustConfirmationLabel].waitForExistence(timeout: 20), "fingerprint confirmation unavailable")
+        XCTAssertTrue(try verifyFingerprint(app, expected: fingerprint, phase: phase), "independently expected host fingerprint missing")
+        try confirmFingerprint(app, phase: phase)
+    }
+
+    private func verifyClearedCredentials(_ app: XCUIApplication, secureEditors: Int = 0) throws {
+        let deadline = Date().addingTimeInterval(10)
+        repeat {
+            let cleared = try snapshotNodes(app).contains {
+                $0.label.contains("HPCLEAR:K1P1") || ($0.value as? String ?? "").contains("HPCLEAR:K1P1")
+            }
+            if cleared && app.secureTextFields.count == secureEditors { return }
+            usleep(100_000)
+        } while Date() < deadline
+        XCTFail("password or passphrase not cleared, or a retired secure field remains in the system tree")
+    }
+
+    private func containsCloseTitle(_ text: [String], title: String) -> Bool {
+        let separators = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "；;，,。•：:"))
+        return text.contains { $0.components(separatedBy: separators).contains(title) }
+    }
+
+    private func verifyLocalDisconnect(_ app: XCUIApplication, secrets: [String]) throws {
+        let returnHome = app.buttons.matching(NSPredicate(format: "label == %@", "返回首页"))
+        let deadline = Date().addingTimeInterval(15)
+        var closeConfirmed = false
+        var systemTitle = false
+        var returnAvailable = false
+        repeat {
+            let text = try snapshotNodes(app).flatMap { [$0.label, $0.value as? String ?? ""] }
+            closeConfirmed = text.contains { $0.contains("HPCLOSE:L1F0") }
+            systemTitle = containsCloseTitle(text, title: "本机已断开")
+            returnAvailable = returnHome.count == 1 && returnHome.firstMatch.isEnabled
+            if closeConfirmed && systemTitle && returnAvailable { break }
+            usleep(100_000)
+        } while Date() < deadline
+        XCTAssertTrue(closeConfirmed, "disconnect did not return to form: local close state")
+        XCTAssertTrue(systemTitle, "disconnect did not return to form: system outcome title")
+        XCTAssertTrue(returnAvailable, "disconnect did not return to form: return action")
+        try verifyClearedCredentials(app)
+        try assertNoSecrets(app, secrets)
+    }
+
+    private func verifyOrdinaryValue(_ app: XCUIApplication, field: XCUIElement, value: String, phase: String,
+                                     controllerBit: Int? = nil) throws {
+        var verified = false
         for _ in 0..<20 {
-            if nodes.contains(where: { ($0.value as? String ?? "") == value }) { break }
-            usleep(100_000);nodes = try snapshotNodes(app)
+            if field.exists && (field.value as? String) == value {
+                verified = true
+                break
+            }
+            // The disposable app independently checks exact fixture target values.
+            if field.exists, let controllerBit {
+                let matching = try targetDiagnostics(app, phase: phase, emit: false)
+                verified = matching?[controllerBit] == true
+                if verified { break }
+            }
+            usleep(100_000)
         }
-        let count = nodes.filter { ($0.value as? String ?? "") == value }.count
-        print("HP_XCUI_INPUT=phase:\(phase),target:\(min(count,10000))")
+        print("HP_XCUI_INPUT=phase:\(phase),target:\(verified ? 1 : 0)")
         fflush(stdout)
-        if count == 0 { try? targetDiagnostics(app, phase: "inputFailure") }
-        XCTAssertGreaterThan(count, 0, "ordinary field target not read back")
+        if !verified { try? targetDiagnostics(app, phase: "inputFailure") }
+        XCTAssertTrue(verified, "ordinary field target not read back")
+    }
+
+    private func typeOrdinaryOnce(_ app: XCUIApplication, field: XCUIElement, value: String, phase: String,
+                                  controllerBit: Int) throws {
+        tap(app, field)
+        app.typeText(value)
+        try verifyOrdinaryValue(app, field: field, value: value, phase: phase, controllerBit: controllerBit)
     }
 
     @discardableResult
@@ -351,10 +470,10 @@ final class SecureCredentialUITests: XCTestCase {
     private func enterTarget(_ app: XCUIApplication, host: String, port: Int, username: String, phase: String) throws {
         try requireFreshForm(app, phase: phase + "Fresh")
         mark(phase + "FreshVerified")
-        let address = element(app, "地址").descendants(matching: .textField).firstMatch
+        let address = element(app, addressLabel).descendants(matching: .textField).firstMatch
         let portField = element(app, "端口").descendants(matching: .textField).firstMatch
         let userField = element(app, "用户名").descendants(matching: .textField).firstMatch
-        try typeOrdinaryOnce(app, field: address, value: host, phase: phase + "Address")
+        try typeOrdinaryOnce(app, field: address, value: host, phase: phase + "Address", controllerBit: 0)
         mark(phase + "AddressTyped")
         tap(app, portField)
         app.typeKey(XCUIKeyboardKey.end, modifierFlags: [])
@@ -369,50 +488,54 @@ final class SecureCredentialUITests: XCTestCase {
         XCTAssertTrue(cleared?.count == 13 && cleared?[11] == true, "default port was not cleared")
         mark(phase + "PortCleared")
         app.typeText(String(port))
-        var nodes = try snapshotNodes(app)
-        for _ in 0..<20 {
-            if nodes.contains(where: { ($0.value as? String ?? "") == String(port) }) { break }
-            usleep(100_000);nodes = try snapshotNodes(app)
-        }
-        let portCount = nodes.filter { ($0.value as? String ?? "") == String(port) }.count
-        print("HP_XCUI_INPUT=phase:\(phase)Port,target:\(min(portCount,10000))");fflush(stdout)
-        XCTAssertGreaterThan(portCount, 0, "ordinary field target not read back")
+        let portBit = phase == "key" ? 2 : 1
+        try verifyOrdinaryValue(app, field: portField, value: String(port), phase: phase + "Port", controllerBit: portBit)
         mark(phase + "PortTyped")
-        try typeOrdinaryOnce(app, field: userField, value: username, phase: phase + "User")
+        try typeOrdinaryOnce(app, field: userField, value: username, phase: phase + "User", controllerBit: 3)
         mark(phase + "UsernameTyped")
     }
 
-    private func reopenSSH(_ app: XCUIApplication, secrets: [String]) throws {
+    private func clickEntryBack(_ app: XCUIApplication, phase: String) {
         let buttons = app.buttons
-        let preferred = buttons.matching(NSPredicate(format: "label == %@", "返回主机列表"))
+        let preferred = buttons.matching(NSPredicate(format: "identifier == %@", "direct-back"))
         let exact = app.descendants(matching: .any).matching(NSPredicate(format: "label IN %@", ["返回主机列表", "Back", "返回", "后退", "上一页"]))
         let hittable = exact.allElementsBoundByIndex.filter { stableHit($0) }
         print("HP_XCUI_BACK=buttons:\(min(buttons.count,10000)),exact:\(min(exact.count,10000)),hittable:\(min(hittable.count,10000))")
         fflush(stdout)
         if preferred.count == 1 && stableHit(preferred.firstMatch) {
-            tap(app, preferred.firstMatch, phase: "returnBack")
-            mark("returnBackTapped");mark("returnButtonUsed")
+            tap(app, preferred.firstMatch, phase: phase)
         } else if hittable.count == 1 {
-            tap(app, hittable[0], phase: "returnBack")
-            mark("returnBackTapped");mark("returnButtonUsed")
+            tap(app, hittable[0], phase: phase)
         } else {
-            app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
-            mark("returnEscapeUsed")
+            XCTFail("back action missing")
         }
+    }
+
+    private func reopenSSH(_ app: XCUIApplication, secrets: [String]) throws {
+        clickEntryBack(app, phase: "returnBack")
+        XCTAssertTrue(element(app, addressLabel).waitForExistence(timeout: 15), "target form did not return after authentication")
+        try verifyClearedCredentials(app)
+        try assertNoSecrets(app, secrets)
+        clickEntryBack(app, phase: "returnBack")
+        mark("returnBackTapped");mark("returnButtonUsed")
         XCTAssertTrue(homeVisible(app), "normal homepage did not return")
         let entry = homeEntry(app)
         XCTAssertTrue(entry.exists, "normal homepage did not return")
         try assertNoSecrets(app, secrets)
-        let matches = app.buttons.matching(NSPredicate(format: "label == %@", "普通 SSH"))
+        let matches = homeEntryButtons(app)
         if matches.count == 1 { clickWindowCenter(app, matches: matches) }
         else { tap(app, entry, phase: "returnReopenEntry") }
         mark("returnReopenEntryTapped")
     }
 
+    private func homeEntryButtons(_ app: XCUIApplication) -> XCUIElementQuery {
+        app.buttons.matching(NSPredicate(format: "label IN %@", ["普通 SSH 终端", "普通 SSH"]))
+    }
+
     private func homeEntry(_ app: XCUIApplication) -> XCUIElement {
-        let button = app.buttons["普通 SSH"]
+        let button = homeEntryButtons(app).firstMatch
         if button.waitForExistence(timeout: 15) && button.isHittable { return button }
-        let matches = app.descendants(matching: .any).matching(identifier: "普通 SSH")
+        let matches = app.descendants(matching: .any).matching(NSPredicate(format: "label IN %@", ["普通 SSH 终端", "普通 SSH"]))
         let labels = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "普通 SSH"))
         print("HP_XCUI_METRIC=windows:\(min(app.windows.count,10000)),nodes:\(min(app.descendants(matching: .any).count,10000)),buttons:\(min(app.buttons.count,10000)),exact:\(min(matches.count,10000)),label:\(min(labels.count,10000))")
         fflush(stdout)
@@ -436,8 +559,23 @@ final class SecureCredentialUITests: XCTestCase {
     }
 
     private func homeVisible(_ app: XCUIApplication) -> Bool {
-        let add = element(app, "配对添加")
-        return add.waitForExistence(timeout: 15) && !element(app, "地址").exists
+        let add = app.buttons.matching(NSPredicate(format: "label IN %@", ["添加主机", "配对添加"])).firstMatch
+        return add.waitForExistence(timeout: 15) && !element(app, addressLabel).exists
+    }
+
+    private func requireDesktopWindow(_ app: XCUIApplication) {
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 15), "desktop window unavailable")
+        if window.frame.width < 700 {
+            app.typeKey("f", modifierFlags: [.control, .command])
+        }
+        let deadline = Date().addingTimeInterval(10)
+        repeat {
+            let frame = window.frame
+            usleep(200_000)
+            if frame.width >= 700 && frame == window.frame { return }
+        } while Date() < deadline
+        XCTFail("staged desktop SSH requires a stable window at least 700 points wide")
     }
 
     private func launchSSH(_ app: XCUIApplication, stage: String) {
@@ -452,12 +590,13 @@ final class SecureCredentialUITests: XCTestCase {
             app.launch()
             XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20), "candidate app did not launch")
         }
+        requireDesktopWindow(app)
         XCTAssertTrue(homeVisible(app), "normal homepage not confirmed")
         mark("homepage");mark(stage)
         let entry = homeEntry(app)
         XCTAssertTrue(entry.exists, "normal homepage SSH entry missing")
         if stage == "returnHomepage" {
-            let matches = app.buttons.matching(NSPredicate(format: "label == %@", "普通 SSH"))
+            let matches = homeEntryButtons(app)
             if matches.count == 1 { clickWindowCenter(app, matches: matches) }
             else { tap(app, entry, phase: "returnEntry") }
             mark("returnEntryTapped")
@@ -473,15 +612,11 @@ final class SecureCredentialUITests: XCTestCase {
             let nodes = try snapshotNodes(app)
             let statusSeen = nodes.contains { node in
                 [node.label, node.value as? String ?? ""].contains {
-                    $0.contains("已连接 · 输入直接发送到远端 shell")
+                    $0 == "已连接" || $0.contains("已连接 · 输入直接发送到远端 shell")
                 }
             }
-            let keysSeen = ["Esc", "Ctrl-C", "Enter"].allSatisfy { name in
-                let button = app.buttons.matching(NSPredicate(format: "label == %@", name))
-                return button.count == 1 && stableHit(button.firstMatch) && button.firstMatch.isEnabled
-            }
-            let connectedPage = statusSeen || (keysSeen && !element(app, "地址").exists)
-            if connectedPage && disconnect.count == 1 && stableHit(disconnect.firstMatch) && disconnect.firstMatch.isEnabled {
+            if statusSeen && !element(app, addressLabel).exists &&
+                disconnect.count == 1 && stableHit(disconnect.firstMatch) && disconnect.firstMatch.isEnabled {
                 return disconnect.firstMatch
             }
             usleep(100_000)
@@ -502,11 +637,16 @@ final class SecureCredentialUITests: XCTestCase {
         let config = try fixture()
         let password = config["password"] as! String
         let phrase = config["passphrase"] as! String
+        let username = config["username"] as! String
+        let port = config["port"] as! Int
+        let fingerprint = config["fingerprint"] as! String
         let app = XCUIApplication()
         launchSSH(app, stage: "maskingHomepage")
-        let address = element(app, "地址").descendants(matching: .textField).firstMatch
+        let address = element(app, addressLabel).descendants(matching: .textField).firstMatch
         XCTAssertTrue(address.waitForExistence(timeout: 15), "named address group or ordinary input missing")
-        _ = try ordinaryMetrics(app, sentinel: "")
+        try ordinaryMetrics(app)
+        try enterTarget(app, host: "127.0.0.1", port: port, username: username, phase: "masking")
+        try probeAndReview(app, fingerprint: fingerprint, phase: "masking")
         let passwordField = secureField(app, "direct-secret")
         mark("passwordSecureField")
         tap(app, passwordField)
@@ -514,11 +654,12 @@ final class SecureCredentialUITests: XCTestCase {
         mark((passwordField.value as? String ?? "").isEmpty ? "passwordValueUnavailable" : "passwordValuePresent")
         try assertNoSecrets(app, [password, phrase])
         mark("passwordHiddenFocused")
-        tap(app, address)
+        app.typeKey(XCUIKeyboardKey.tab, modifierFlags: [])
+        XCTAssertFalse((passwordField.value as? String ?? "").isEmpty, "secure password input has no protected value")
         try assertNoSecrets(app, [password, phrase])
         mark("passwordHiddenBlurred")
 
-        let keyMode = element(app, "使用私钥认证")
+        let keyMode = app.buttons["已有私钥"], passwordMode = app.buttons["密码"]
         tap(app, keyMode)
         let passphraseField = secureField(app, "direct-passphrase")
         mark("passphraseSecureField")
@@ -526,26 +667,30 @@ final class SecureCredentialUITests: XCTestCase {
         app.typeText(phrase)
         mark((passphraseField.value as? String ?? "").isEmpty ? "passphraseValueUnavailable" : "passphraseValuePresent")
         try assertNoSecrets(app, [password, phrase])
-        tap(app, address)
+        app.typeKey(XCUIKeyboardKey.tab, modifierFlags: [])
+        XCTAssertFalse((passphraseField.value as? String ?? "").isEmpty, "secure passphrase input has no protected value")
         try assertNoSecrets(app, [password, phrase])
         tap(app, passphraseField)
         try assertNoSecrets(app, [password, phrase])
         mark("passphraseHiddenAfterFocusChanges")
-        tap(app, keyMode)
+        tap(app, passwordMode)
         XCTAssertTrue((secureField(app, "direct-secret").value as? String ?? "").isEmpty, "password retained after mode switch")
         tap(app, keyMode)
         XCTAssertTrue((secureField(app, "direct-passphrase").value as? String ?? "").isEmpty, "passphrase retained after mode switch")
+        try verifyClearedCredentials(app, secureEditors: 1)
         mark("modeSwitchCleared")
         try assertNoSecrets(app, [password, phrase])
 
-        tap(app, keyMode)
+        tap(app, passwordMode)
         let passwordAgain = secureField(app, "direct-secret")
         tap(app, passwordAgain);app.typeText(password)
         try assertNoSecrets(app, [password, phrase])
         mark("maskingScanCompleted")
 
-        let sentinel = "hp-address-" + UUID().uuidString
-        try typeOrdinaryOnce(app, field: address, value: sentinel, phase: "sentinel")
+        clickEntryBack(app, phase: "maskingBack")
+        try verifyClearedCredentials(app)
+        try verifyOrdinarySentinel(app)
+        try assertNoSecrets(app, [password, phrase])
         mark("ordinarySentinelObserved")
         app.terminate()
     }
@@ -568,7 +713,7 @@ final class SecureCredentialUITests: XCTestCase {
         XCTAssertTrue(passwordTarget?.count == 13 && passwordTarget?[0] == true && passwordTarget?[1] == true && passwordTarget?[3] == true && passwordTarget?[4] == true && passwordTarget?[5] == false && passwordTarget?[6] == true, "password target not confirmed")
         tap(app, probe)
         mark("passwordProbeTapped")
-        let confirm = app.buttons["已核对并确认"]
+        let confirm = app.buttons[trustConfirmationLabel]
         let dialogPresent = confirm.waitForExistence(timeout: 20)
         try targetDiagnostics(app, phase: "passwordAfter")
         XCTAssertTrue(dialogPresent, "fingerprint confirmation unavailable")
@@ -594,7 +739,7 @@ final class SecureCredentialUITests: XCTestCase {
         usleep(3_000_000)
         tap(app, disconnect)
         peerObservationWindow("password")
-        XCTAssertTrue((secureField(app, "direct-secret").value as? String ?? "").isEmpty, "password not cleared after disconnect")
+        try verifyLocalDisconnect(app, secrets: [password, phrase])
         mark("disconnectedAndCleared")
 
         app.terminate()
@@ -618,7 +763,7 @@ final class SecureCredentialUITests: XCTestCase {
         XCTAssertTrue(keyTarget?.count == 13 && keyTarget?[0] == true && keyTarget?[2] == true && keyTarget?[3] == true && keyTarget?[4] == true && keyTarget?[5] == false && keyTarget?[6] == true, "encrypted key target not confirmed")
         tap(app, keyProbe)
         mark("encryptedKeyProbeTapped")
-        let keyConfirm = app.buttons["已核对并确认"]
+        let keyConfirm = app.buttons[trustConfirmationLabel]
         let keyDialogPresent = keyConfirm.waitForExistence(timeout: 20)
         try targetDiagnostics(app, phase: "keyAfter")
         XCTAssertTrue(keyDialogPresent, "fingerprint confirmation unavailable")
@@ -643,7 +788,7 @@ final class SecureCredentialUITests: XCTestCase {
             mark("keyFullscreenRequested")
         }
         mark("keyCredentialAttempt")
-        tap(app, element(app, "使用私钥认证"))
+        tap(app, app.buttons["已有私钥"])
         mark("keyMethodSelected")
         let clipboard = NSPasteboard.general
         clipboard.clearContents()
@@ -655,7 +800,7 @@ final class SecureCredentialUITests: XCTestCase {
         XCTAssertTrue(try inputMatches(app, index: 0), "pasted key controller mismatch")
         mark("pemControllerConfirmed")
         let nativeCount = app.secureTextFields.matching(NSPredicate(format: "identifier == %@", "direct-passphrase")).count
-        print("HP_XCUI_PASSFIELD=native:\(min(nativeCount,9)),groups:\(min(app.descendants(matching: .any).matching(identifier: "私钥口令（可选）").count,9))")
+        print("HP_XCUI_PASSFIELD=native:\(min(nativeCount,9)),groups:\(min(app.descendants(matching: .any).matching(identifier: passphraseLabel).count,9))")
         fflush(stdout)
         clickNativeKeyPassphrase(app)
         app.typeText("q")
@@ -680,7 +825,7 @@ final class SecureCredentialUITests: XCTestCase {
         usleep(3_000_000)
         tap(app, keyDisconnect)
         peerObservationWindow("key")
-        XCTAssertTrue((secureField(app, "direct-passphrase").value as? String ?? "").isEmpty, "passphrase not cleared after disconnect")
+        try verifyLocalDisconnect(app, secrets: [password, phrase])
         mark("encryptedKeyDisconnectedAndCleared")
 
         app.terminate()
@@ -691,8 +836,13 @@ final class SecureCredentialUITests: XCTestCase {
         let config = try fixture()
         let password = config["password"] as! String
         let phrase = config["passphrase"] as! String
+        let username = config["username"] as! String
+        let port = config["port"] as! Int
+        let fingerprint = config["fingerprint"] as! String
         let app = XCUIApplication()
         launchSSH(app, stage: "returnHomepage")
+        try enterTarget(app, host: "127.0.0.1", port: port, username: username, phase: "return")
+        try probeAndReview(app, fingerprint: fingerprint, phase: "return")
         let field = secureField(app, "direct-secret")
         mark("returnSecureSelected")
         field.click();app.typeText(password)
@@ -700,9 +850,12 @@ final class SecureCredentialUITests: XCTestCase {
         XCTAssertFalse((field.value as? String ?? "").isEmpty, "return input state unavailable")
         try assertNoSecrets(app, [password, phrase])
         try reopenSSH(app, secrets: [password, phrase])
+        try enterTarget(app, host: "127.0.0.1", port: port, username: username, phase: "returnReopened")
+        try probeAndReview(app, fingerprint: fingerprint, phase: "returnReopened")
         let reopened = secureField(app, "direct-secret")
         mark("returnReopenedSecureSelected")
         XCTAssertTrue((reopened.value as? String ?? "").isEmpty, "prior credential retained")
+        try verifyClearedCredentials(app, secureEditors: 1)
         try assertNoSecrets(app, [password, phrase])
         mark("returnAndReopenCleared")
         app.terminate()

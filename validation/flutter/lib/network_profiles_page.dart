@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'design_tokens.dart';
 import 'host_catalog.dart';
 import 'network_profiles.dart';
 import 'network_identity.dart';
@@ -12,7 +13,7 @@ import 'zerotier_device_dialog.dart';
 
 class NetworkProfilesPage extends StatefulWidget {
   const NetworkProfilesPage({super.key,required this.catalog,required this.closeTabs,this.identityStore,this.runtime,
-    this.zeroTierDeviceStore,this.beforeZeroTierForget,this.closeTabsAndWait});
+    this.zeroTierDeviceStore,this.beforeZeroTierForget,this.closeTabsAndWait,this.desktopSshSession});
   final HostCatalog catalog;
   final void Function(Set<String>) closeTabs;
   final Future<bool> Function(Set<String>)? closeTabsAndWait;
@@ -20,6 +21,7 @@ class NetworkProfilesPage extends StatefulWidget {
   final NativeNetworkRuntime? runtime;
   final ZeroTierDeviceStore? zeroTierDeviceStore;
   final BeforeZeroTierForget? beforeZeroTierForget;
+  final ({DesignTokens tokens, Widget notice})? desktopSshSession;
   @override
   State<NetworkProfilesPage> createState() => _NetworkProfilesPageState();
 }
@@ -246,22 +248,61 @@ class _NetworkProfilesPageState extends State<NetworkProfilesPage> with WidgetsB
     if (hosts.isEmpty) return '未绑定主机';
     return hosts.length == 1 ? '主机：${hosts.first.label}' : '主机：${hosts.first.label} 等 ${hosts.length} 台';
   }
+  VoidCallback? get addNetwork => available && catalog.networkProfiles.length < maxNetworkProfiles ? () => edit() : null;
+
+  Widget desktopEmptyCard(DesignTokens tokens) {
+    final large = MediaQuery.textScalerOf(context).scale(1) > 1;
+    return Container(key: const ValueKey('network-empty-card'),
+    height: large ? null : 204, padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(color: tokens.color('card'), borderRadius: BorderRadius.circular(16)),
+    foregroundDecoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: tokens.color('border'))),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Align(alignment: Alignment.centerLeft, child: Container(width: 44, height: 44,
+        decoration: BoxDecoration(color: tokens.color('cardSubtle'), borderRadius: BorderRadius.circular(10)),
+        child: Icon(Icons.language, color: tokens.color('textSecondary')))),
+      const SizedBox(height: 12),
+      const Text('还没有网络配置', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 4),
+      Text('配置 ZeroTier、Tailscale 或 EasyTier 后，在这里管理网络。',
+        style: TextStyle(fontSize: 13, color: tokens.color('textSecondary'))),
+      if (large) const SizedBox(height: 16) else const Spacer(),
+      SizedBox(height: large ? null : 48, child: OutlinedButton(key: const ValueKey('networks-add'),
+        style: OutlinedButton.styleFrom(foregroundColor: tokens.color('textPrimary'),
+          side: BorderSide(color: tokens.color('borderStrong')), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+        onPressed: addNetwork, child: const Text('添加网络配置'))),
+    ]));
+  }
+
   @override
-  Widget build(BuildContext context) => Scaffold(appBar:AppBar(title:const Text('网络配置')),
-    body:SafeArea(child:ListView(padding:const EdgeInsets.all(16),children:[
+  Widget build(BuildContext context) {
+    final desktop = widget.desktopSshSession;
+    final desktopEmpty = desktop != null && catalog.ready && catalog.networkProfiles.isEmpty;
+    final content = <Widget>[
+      if (desktop != null) ...[
+        const SizedBox(height: 30, child: Text('网络', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, height: 1))),
+        const SizedBox(height: 16),
+        desktop.notice,
+        const SizedBox(height: 16),
+      ],
+      if (desktopEmpty) ...[desktopEmptyCard(desktop.tokens), const SizedBox(height: 12)],
+      if (!catalog.ready) ...[
+        Semantics(liveRegion: true, child: Text(catalog.reading ? '正在重新读取本机网络配置' : catalog.status,
+          key: const ValueKey('networks-catalog-status'))),
+        const SizedBox(height: 12),
+      ],
       Text('网络配置可供多台主机复用。保存不代表已入网或 SSH 可用。',
         style:Theme.of(context).textTheme.bodySmall),
       const SizedBox(height:12),
       Wrap(spacing:8,runSpacing:8,children:[
-        FilledButton.icon(key:const ValueKey('networks-add'),
-          onPressed:available && catalog.networkProfiles.length < maxNetworkProfiles ? () => edit() : null,
+        if (!desktopEmpty) FilledButton.icon(key:const ValueKey('networks-add'),
+          onPressed:addNetwork,
           icon:const Icon(Icons.add),label:const Text('新增网络')),
         OutlinedButton.icon(key:const ValueKey('networks-zerotier-device'),
           onPressed:available ? sharedZeroTierDevice : null,
           icon:const Icon(Icons.devices),label:const Text('ZeroTier 共享身份')),
       ]),
       if (notice != null) Padding(padding:const EdgeInsets.symmetric(vertical:12),child:Text(notice!,key:const ValueKey('networks-notice'))),
-      if (catalog.networkProfiles.isEmpty) const Padding(padding:EdgeInsets.symmetric(vertical:24),
+      if (desktop == null && catalog.ready && catalog.networkProfiles.isEmpty) const Padding(padding:EdgeInsets.symmetric(vertical:24),
         child:Text('暂无网络配置 · 本地配对仍可继续')),
       const SizedBox(height:8),
       for (final profile in catalog.networkProfiles) Card(key:ValueKey('network-card-${profile.id}'),color:Theme.of(context).colorScheme.surface,elevation:0,clipBehavior:Clip.antiAlias,
@@ -304,7 +345,15 @@ class _NetworkProfilesPageState extends State<NetworkProfilesPage> with WidgetsB
       const SizedBox(height:12),
       Text('入网身份保存在本机。网络组件暂不可用时，已绑定的主机会保持断开；组件恢复后可重新审查并连接。',
         style:Theme.of(context).textTheme.bodySmall),
-    ])));
+    ];
+    return Scaffold(appBar: desktop == null ? AppBar(title: const Text('网络配置')) : null,
+      body: SafeArea(child: ListView(padding: EdgeInsets.fromLTRB(desktop == null ? 16 : 40, 16, desktop == null ? 16 : 40, 16),
+        children: desktop == null ? content : [
+          Align(alignment: Alignment.topLeft, child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 560),
+            child: SizedBox(width: double.infinity, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: content)))),
+        ])));
+  }
 
 }
 

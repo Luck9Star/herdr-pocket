@@ -19,7 +19,8 @@ CHECKS = {'channelRetired', 'clearDoesNotChangeOtherField', 'clearIsEmpty',
     'clippedFieldExcluded', 'detachedFieldExcluded', 'reattachedFieldExposed',
     'preexistingSecureChildDeduplicated', 'retiredFieldNotExposed',
     'rebuiltPasswordIsOnlySecureChild', 'closedWindowNoRegisteredSecureChild',
-    'closedWindowClearsNativeValue', 'closedWindowRetiresChannel'}
+    'closedWindowClearsNativeValue', 'closedWindowRetiresChannel',
+    'stagedPassphraseIsNative', 'invalidPairsHaveNoEditorOrChannel'}
 
 
 def main():

@@ -187,7 +187,8 @@ final class HerdrSecureCredentialFactory: NSObject, FlutterPlatformViewFactory {
         guard let args = args as? [String: Any], let label = args["label"] as? String,
               let identifier = args["identifier"] as? String,
               (identifier == "direct-secret" && label == "密码（仅本次使用）") ||
-              (identifier == "direct-passphrase" && label == "私钥口令（可选）") else { return NSView() }
+              (identifier == "direct-passphrase" &&
+                (label == "私钥口令（可选）" || label == "私钥口令（加密私钥需要）")) else { return NSView() }
         return HerdrSecureTextField(viewId: viewId, label: label, identifier: identifier, messenger: messenger)
     }
 }

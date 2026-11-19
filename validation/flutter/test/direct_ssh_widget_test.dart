@@ -534,7 +534,10 @@ void main() {
     expect(state.hostKeyReviewRequired, isTrue);
     expect(state.hostKeyChange.oldFingerprint, oldFingerprint);
     expect(state.hostKeyChange.newFingerprint, isNot(oldFingerprint));
-    await tester.tap(find.byKey(const ValueKey('direct-host-key-cancel'))); await tester.pumpAndSettle();
+    final cancel = find.byKey(const ValueKey('direct-host-key-cancel'));
+    await tester.ensureVisible(cancel); await tester.pumpAndSettle();
+    expect(cancel.hitTestable(), findsOneWidget);
+    await tester.tap(cancel); await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('direct-form')), findsOneWidget);
     expect(state.fingerprint, oldFingerprint);
     expect(tester.widget<TextField>(find.byKey(const ValueKey('direct-secret'))).enabled, isFalse);

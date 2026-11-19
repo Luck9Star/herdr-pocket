@@ -92,6 +92,9 @@ DRIVER_STAGES = frozenset({'device_preflight', 'reverse_setup', 'install_app', '
     'webview_socket', 'webview_forward', 'webview_ready', 'rotation_ui', 'open_remote',
     'open_ssh_form', 'enter_host', 'enter_port', 'enter_user', 'probe_host',
     'await_fingerprint', 'review_fingerprint', 'select_key_auth', 'enter_private_key',
+    'active_initial', 'active_keyboard_opened', 'active_keyboard_closed', 'active_board',
+    'active_terminal_from_board', 'active_network', 'active_terminal_from_network',
+    'active_settings', 'active_terminal_from_settings',
     'enter_passphrase', 'enter_password', 'connect', 'terminal_input', 'disconnect', 'return_home', 'cleanup'})
 
 
@@ -608,8 +611,41 @@ def active_peer(fixture, input_bytes=0):
         raise GuiFailure('direct_active_peer_changed')
 
 
+ACTIVE_FACTS = frozenset(('route','live','title','badge','target','control','disconnect',
+                          'keyboardState','sectionContent','navSelected'))
+
+
+def active_diagnostic(browser, fixture):
+    """Bounded geometry and peer counters only; never collect text or identifiers."""
+    result={}
+    try:
+        value=browser.evaluate(r"""(()=>{
+          const rect=id=>{const e=id==='ssh-connected-badge'?document.querySelector('.ssh-connected-badge'):document.getElementById(id);const r=e?.getBoundingClientRect();
+            return r?[r.x,r.y,r.width,r.height].map(Math.round):null;};
+          const v=visualViewport;return {viewport:[innerWidth,innerHeight,v?.offsetTop,v?.height].map(Math.round),
+            title:rect('ssh-active-title'),badge:rect('ssh-connected-badge'),focus:rect('ssh-focus'),
+            hide:rect('ssh-hide-keyboard'),disconnect:rect('ssh-disconnect')};
+        })()""")
+        keys=('viewport','title','badge','focus','hide','disconnect')
+        if (isinstance(value,dict) and set(value)==set(keys) and
+            all((key!='viewport' and item is None) or
+                (isinstance(item,list) and len(item)==4 and all(type(x) is int and -100000<=x<=100000 for x in item))
+                for key,item in value.items())):
+            result['geometry']=value
+    except (GuiFailure,ValueError,TypeError): pass
+    try:
+        peer=fixture.snapshot();events=peer.get('connectionEvents'); keys=('authAttempts','authSuccesses','ptyRequests','shellRequests','inputBytes')
+        if (type(peer.get('connections')) is int and 0<=peer['connections']<=100 and
+                isinstance(events,list) and len(events)==2 and isinstance(events[1],dict) and
+                all(type(events[1].get(k)) is int and 0<=events[1][k]<=100000 for k in keys) and
+                type(events[1].get('closed')) is bool):
+            result['peer']={'connections':peer['connections'],**{k:events[1][k] for k in keys},'closed':events[1]['closed']}
+    except (AttributeError,KeyError,TypeError,ValueError): pass
+    return result
+
+
 def active_view(browser, fixture, section, keyboard=False):
-    """Check actual visible route and hit-tested controls without changing UI state."""
+    """Check the actual route, endpoint and controls; expose only fixed booleans."""
     expected=f'{fixture.username}@127.0.0.1:{fixture.port}'
     expression=r"""(function ordinaryActive(){
       const spec=%s,one=id=>document.getElementById(id);
@@ -620,40 +656,64 @@ def active_view(browser, fixture, section, keyboard=False):
         if(!v||!Number.isFinite(bottomInset)||bottomInset<0||r.width<=0||r.height<=0||r.left<0||r.top<v.offsetTop||r.right>innerWidth||r.bottom>v.offsetTop+v.height-bottomInset)return false;
         const h=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return h===e||e.contains(h);};
       const route=one('home-'+spec.section),live=one('ssh-live'),target=one('ssh-live-endpoint');
-      if(!shown(route)||!live||live.hidden)return false;
-      if(spec.section==='ssh') {
-        const title=one('ssh-active-title'),badge=document.querySelector('.ssh-connected-badge');
-        const control=one(spec.keyboard?'ssh-hide-keyboard':'ssh-focus');
-        return shown(title)&&title.textContent.trim()==='普通 SSH'&&hit(badge)&&badge.textContent.trim()==='已连接'
-          &&shown(target)&&target.textContent.trim()===spec.target&&hit(control)&&hit(one('ssh-disconnect'))
-          &&(spec.keyboard?!shown(document.querySelector('.route-tabs')):
-            document.activeElement!==document.querySelector('#ssh-terminal .xterm-helper-textarea'));
-      }
-      return one('nav-'+spec.section)?.getAttribute('aria-pressed')==='true'||
-        spec.section==='dashboard'&&one('show-remote').getAttribute('aria-pressed')==='true';
+      const ssh=spec.section==='ssh',title=one('ssh-active-title'),badge=document.querySelector('.ssh-connected-badge');
+      const control=one(spec.keyboard?'ssh-hide-keyboard':'ssh-focus');
+      const focused=document.activeElement===document.querySelector('#ssh-terminal .xterm-helper-textarea');
+      const panel=one('network-panel'),heading=panel?.querySelector(':scope > h2');
+      const networkButton=[...(panel?.querySelectorAll(':scope > button')||[])].find(e=>e.textContent.trim()==='新增网络配置');
+      const sectionContent=ssh || (spec.section==='dashboard'?shown(one('home-dashboard')):
+        spec.section==='network'?shown(panel)&&shown(heading)&&heading.textContent.trim()==='网络配置'&&shown(networkButton):
+        spec.section==='settings'?shown(one('ssh-settings-active'))&&one('ssh-settings-active').textContent.trim()==='普通 SSH 会话保持连接'&&
+          shown(one('ssh-settings-endpoint'))&&one('ssh-settings-endpoint').textContent.trim()===spec.target:false);
+      return {route:shown(route),live:!!live&&!live.hidden,
+        title:!ssh||shown(title)&&title.textContent.trim()==='普通 SSH',
+        badge:!ssh||hit(badge)&&badge.textContent.trim()==='已连接',
+        target:!ssh||shown(target)&&target.textContent.trim()===spec.target,
+        control:!ssh||hit(control),disconnect:!ssh||hit(one('ssh-disconnect')),
+        keyboardState:!ssh||(spec.keyboard?focused&&!shown(tabs):!focused),
+        sectionContent,navSelected:ssh||one('nav-'+spec.section)?.getAttribute('aria-pressed')==='true'||
+          spec.section==='dashboard'&&one('show-remote').getAttribute('aria-pressed')==='true'};
     })()""" % json.dumps({'section':section,'target':expected,'keyboard':keyboard})
-    wait_for(lambda:browser.evaluate(expression) is True,'direct_active_ui_invalid',timeout=60)
+    last={}
+    def inspect():
+        value=browser.evaluate(expression)
+        if isinstance(value,dict) and set(value)==ACTIVE_FACTS and all(type(v) is bool for v in value.values()):
+            last.update(value)
+            return all(value.values())
+        return False
+    try:
+        wait_for(inspect,'direct_active_ui_invalid',timeout=60)
+    except GuiFailure as error:
+        error.active_diagnostic=dict(last)
+        raise
 
 
-def exercise_active_navigation(browser, fixture):
+def exercise_active_navigation(browser, fixture, *, progress=None):
     """Native IME observations plus bounded peer facts across actual route clicks."""
-    active_view(browser,fixture,'ssh')
-    active_peer(fixture)
+    def observe(stage,section,keyboard=False):
+        if progress is not None: progress['stage']=stage
+        try:
+            active_view(browser,fixture,section,keyboard=keyboard)
+            active_peer(fixture)
+        except GuiFailure as error:
+            error.active_context=active_diagnostic(browser,fixture)
+            raise
+    observe('active_initial','ssh')
+    if progress is not None: progress['stage']='active_keyboard_opened'
     browser.click('#ssh-focus')
     system_keyboard(True)
-    active_view(browser,fixture,'ssh',keyboard=True)
-    active_peer(fixture)
+    observe('active_keyboard_opened','ssh',True)
+    if progress is not None: progress['stage']='active_keyboard_closed'
     browser.click('#ssh-hide-keyboard')
     system_keyboard(False)
-    active_view(browser,fixture,'ssh')
-    active_peer(fixture)
-    for section,selector in (('dashboard','#show-remote'),('network','#nav-network'),('settings','#nav-settings')):
+    observe('active_keyboard_closed','ssh')
+    for section,selector,label in (('dashboard','#show-remote','board'),('network','#nav-network','network'),('settings','#nav-settings','settings')):
+        if progress is not None: progress['stage']='active_'+label
         browser.click(selector)
-        active_view(browser,fixture,section)
-        active_peer(fixture)
+        observe('active_'+label,section)
+        if progress is not None: progress['stage']='active_terminal_from_'+label
         browser.click('#nav-terminal')
-        active_view(browser,fixture,'ssh')
-        active_peer(fixture)
+        observe('active_terminal_from_'+label,'ssh')
     return {'keyboardOpened':True,'keyboardClosed':True,'board':True,'terminalFromBoard':True,
             'network':True,'terminalFromNetwork':True,'settings':True,'terminalFromSettings':True,
             'singleAuthenticatedShellWithoutInput':True}
@@ -715,7 +775,13 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
              '已连接' in (browser.read('#ssh-status') or ''), 'direct_ready_missing', timeout=60)
     if browser.evaluate("!!document.querySelector('#ssh-password').value || !!document.querySelector('#ssh-key').value || !!document.querySelector('#ssh-passphrase').value"):
         raise GuiFailure('direct_credentials_retained')
-    active_navigation = exercise_active_navigation(browser,fixture) if staged and not encrypted_key else None
+    active_navigation = None
+    if staged and not encrypted_key:
+        try:
+            active_navigation = exercise_active_navigation(browser,fixture,progress=progress)
+        except GuiFailure as error:
+            if not hasattr(error,'active_context'): error.active_context=active_diagnostic(browser,fixture)
+            raise
     if progress is not None: progress['stage']='terminal_input'
     browser.click('#ssh-focus')
     wait_for(lambda: browser.evaluate("document.activeElement === document.querySelector('#ssh-terminal .xterm-helper-textarea')"),
@@ -1061,6 +1127,11 @@ def main():
         report['phase']='complete'
         report['status']='passed'
     except GuiFailure as error:
+        diagnostic=getattr(error,'active_diagnostic',None)
+        if isinstance(diagnostic,dict) and set(diagnostic)==ACTIVE_FACTS and all(type(v) is bool for v in diagnostic.values()):
+            report['activeDiagnostic']=diagnostic
+        context=getattr(error,'active_context',None)
+        if isinstance(context,dict): report['activeContext']=context
         report['errorCode']=public_driver_error(error)
         if progress.get('stage') in DRIVER_STAGES: report['failureStage']=progress['stage']
     except Exception:

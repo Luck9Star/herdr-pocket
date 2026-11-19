@@ -646,6 +646,41 @@ class ActiveNavigationTests(unittest.TestCase):
         fixture.snapshot.return_value=changed;driver.active_peer(fixture,input_bytes=9)
         with self.assertRaisesRegex(driver.GuiFailure,'direct_active_peer_changed'): driver.active_peer(fixture)
 
+    def test_active_view_fails_closed_for_each_false_fact_and_malformed_evidence(self):
+        fixture=Fixture(); good=dict.fromkeys(driver.ACTIVE_FACTS,True);browser=Mock()
+        with patch.object(driver,'wait_for',side_effect=lambda probe,code,timeout: probe() or (_ for _ in ()).throw(driver.GuiFailure(code))):
+            browser.evaluate.return_value=good;driver.active_view(browser,fixture,'ssh')
+            for key in driver.ACTIVE_FACTS:
+                browser.evaluate.return_value={**good,key:False}
+                with self.subTest(key=key),self.assertRaises(driver.GuiFailure) as caught:
+                    driver.active_view(browser,fixture,'ssh')
+                self.assertIs(caught.exception.active_diagnostic[key],False)
+            browser.evaluate.return_value={**good,'unexpected':'private text'}
+            with self.assertRaises(driver.GuiFailure) as caught: driver.active_view(browser,fixture,'ssh')
+            self.assertEqual(caught.exception.active_diagnostic,{})
+
+    def test_diagnostic_keeps_only_bounded_geometry_and_peer_counts(self):
+        fixture=Mock();fixture.snapshot.return_value=self.peer();browser=Mock()
+        geometry={key:[1,2,3,4] for key in ('viewport','title','badge','focus','hide','disconnect')}
+        browser.evaluate.return_value=geometry
+        result=driver.active_diagnostic(browser,fixture)
+        self.assertEqual(result['geometry'],geometry)
+        self.assertEqual(result['peer']['connections'],2)
+        self.assertNotIn('hostKey',result['peer'])
+        browser.evaluate.return_value={**geometry,'secret':'do not export'}
+        self.assertNotIn('geometry',driver.active_diagnostic(browser,fixture))
+        fixture.snapshot.return_value={**self.peer(),'connections':999999}
+        self.assertNotIn('peer',driver.active_diagnostic(browser,fixture))
+
+    def test_failure_records_exact_active_stage(self):
+        browser=Mock();fixture=Mock();progress={}
+        def view(b,f,section,keyboard=False):
+            if section=='network': raise driver.GuiFailure('direct_active_ui_invalid')
+        with patch.object(driver,'active_view',side_effect=view),patch.object(driver,'active_peer'), \
+             patch.object(driver,'system_keyboard'),patch.object(driver,'active_diagnostic',return_value={}):
+            with self.assertRaises(driver.GuiFailure): driver.exercise_active_navigation(browser,fixture,progress=progress)
+        self.assertEqual(progress['stage'],'active_network')
+
     def test_navigation_checks_each_route_and_native_keyboard_before_peer(self):
         browser=Mock();fixture=Mock();calls=[]
         with patch.object(driver,'active_view',side_effect=lambda b,f,s,keyboard=False:calls.append((s,keyboard))), \

@@ -433,6 +433,82 @@
           }
         }
       }
+    },
+    "R9": {
+      "runId": 44628431596,
+      "jobId": 135928338818,
+      "sourceSHA": "3bf931305cf6808fb783130bea8b52a146ec7aa2",
+      "jobConclusion": "failure",
+      "artifact": {
+        "id": 14580874796,
+        "expiresAtUtc": "2027-02-17T22:25:09Z",
+        "zipSha256": "d06af272bf164c1971e5260b6d802cbc958383bbaf7fef1df56dab2c424c0ce7",
+        "memberSha256": {
+          "result.json": "598f916ee04228cc2f202f26999bb68c692adc42f319ab9bef5217deff661155"
+        }
+      },
+      "facts": {
+        "platform": "ios-simulator",
+        "scope": "owned_loopback_ordinary_ssh_encrypted_key_manual",
+        "status": "failed",
+        "lastCompletedStage": "encrypted_key_form",
+        "nativeCheckpoint": "encrypted_key_open_add",
+        "nativeFailureCode": "native_encrypted_key_home_shortcut_unproven",
+        "cleanup": {
+          "simulatorDeleted": true,
+          "fixturesClosed": true,
+          "privateFilesRemoved": true,
+          "encryptedSecretsCleared": true,
+          "rawLogsUploaded": false
+        },
+        "cases": {
+          "ordinary": "not_run",
+          "keyChange": "not_run",
+          "encryptedKey": "failed"
+        },
+        "homeReadiness": {
+          "outcome": "ready",
+          "strictSamples": 3,
+          "waitCalls": 2
+        },
+        "homeDiagnostics": {
+          "appForeground": true,
+          "compactEmptyHome": true,
+          "inputCount": 0,
+          "memberClassifications": {
+            "ordinaryShortcut": {
+              "count": 0,
+              "roles": []
+            },
+            "compactShortcut": {
+              "count": 1,
+              "roles": [
+                "button"
+              ]
+            },
+            "sshOption": {
+              "count": 1,
+              "roles": [
+                "button"
+              ]
+            }
+          }
+        },
+        "navigationTraceReported": false,
+        "homeEntryReported": false,
+        "manualHostEntryReported": false,
+        "inputReadbackReported": false,
+        "peerBeforeAndAfterCleanup": {
+          "beforeCleanup": {
+            "connections": 0,
+            "connectionsClosed": true
+          },
+          "afterCleanup": {
+            "connections": 0,
+            "connectionsClosed": true
+          }
+        }
+      }
     }
   }
 }

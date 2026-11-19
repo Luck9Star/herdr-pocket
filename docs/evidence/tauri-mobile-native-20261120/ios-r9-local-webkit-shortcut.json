@@ -1,0 +1,72 @@
+{
+  "engine": "26.5",
+  "scope": "exact product WebKit with an empty-list bridge fixture",
+  "before": {
+    "card": "host-empty",
+    "button": "home-open-ssh",
+    "label": "普通 SSH 终端",
+    "buttonFrame": [
+      40,
+      346,
+      360,
+      48
+    ],
+    "addFrame": [
+      40,
+      286,
+      360,
+      48
+    ],
+    "descriptionFrame": [
+      40,
+      244,
+      360,
+      18
+    ],
+    "centerHit": "home-open-ssh",
+    "activeHome": true,
+    "emptyList": true,
+    "addPageHidden": true,
+    "addOptionFrame": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "addOptionLabel": "普通 SSH 终端",
+    "shortcutEnabled": true,
+    "directFormHidden": true
+  },
+  "after": {
+    "dashHidden": true,
+    "addPageHidden": true,
+    "fields": [
+      [
+        "ssh-host",
+        true
+      ],
+      [
+        "ssh-port",
+        true
+      ],
+      [
+        "ssh-user",
+        true
+      ],
+      [
+        "ssh-probe",
+        true
+      ]
+    ],
+    "noSSH": true,
+    "clicks": [
+      [
+        "home-open-ssh",
+        true
+      ]
+    ],
+    "addVisibilityWrites": [
+      ""
+    ]
+  }
+}

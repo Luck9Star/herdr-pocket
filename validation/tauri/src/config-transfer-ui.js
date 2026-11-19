@@ -15,7 +15,12 @@ export function buildImportChoices(entries, selections) {
 export function reviewedImportLeases(event, snapshot, selected) {
   if(!Array.isArray(snapshot) || !Array.isArray(event?.hostIds) || !Array.isArray(event?.tabs))return [];
   const ids=new Set(event.hostIds.filter(id=>selected.includes(id)));
-  return snapshot.filter(lease=>ids.has(lease.hostId) && (lease.nativeGeneration===null || event.tabs.some(row=>Array.isArray(row) && row[0]===lease.tabId && row[1]===lease.clientGeneration && row[2]===lease.nativeGeneration && row[3]===lease.hostId)));
+  return snapshot.flatMap(lease=>{
+    if(!ids.has(lease.hostId))return [];
+    const row=event.tabs.find(row=>Array.isArray(row) && row[0]===lease.tabId && row[1]===lease.clientGeneration && row[3]===lease.hostId);
+    if(lease.nativeGeneration!==null && (!row || row[2]!==lease.nativeGeneration))return [];
+    return [{...lease,nativeGeneration:row ? row[2] : null}];
+  });
 }
 export function reviewedImportLegacy(event, reviewed, current) {
   const lease=event?.legacy;

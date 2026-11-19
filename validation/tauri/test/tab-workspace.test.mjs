@@ -1371,3 +1371,74 @@ test('lease retirement ignores tabs connected after the preview and includes unc
     assert.equal(ui.tabImpacts([b.hostId])[0].state,'配置已变更');
   } finally {globalThis.document=oldDocument;}
 });
+
+for(const reconnect of [false,true])test(`late revoked lease after observe ends ${reconnect?'does not retire a new attempt':'retires the ended tab'}`,async()=>{
+  const oldDocument=globalThis.document;
+  const nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content'].map(id=>[id,new Element('div')]));
+  globalThis.document={hidden:false,activeElement:null,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};
+  const calls=[],resolvers=[];
+  const invoke=(name,args)=>{calls.push({name,args});if(name==='remote_tab_reserve')return Promise.resolve(9);if(name==='remote_tab_observe')return new Promise(resolve=>resolvers.push(resolve));return Promise.resolve();};
+  try {
+    const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{username:'u',host:id,port:22},hostFingerprint:'key',deviceFingerprint:'device'}),channelFactory:()=>({}),terminalFactory:()=>{}});
+    const a=target('direct-pane-a');ui.create(a.hostId,a);
+    const find=label=>nodes['view-content'].all().find(n=>n.textContent===label);
+    const connect=async()=>{const review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();find('连接').onclick();await flush();await flush();};
+    await connect();const snapshot=ui.tabLeaseSnapshot();assert.equal(resolvers.length,1);
+    resolvers[0]();await flush();await flush();
+    if(reconnect){await connect();assert.equal(resolvers.length,2);assert.notEqual(ui.tabLeaseSnapshot()[0].clientGeneration,snapshot[0].clientGeneration);}
+    ui.prepareLeases(snapshot);
+    if(reconnect){assert.notEqual(ui.tabImpacts([a.hostId])[0].state,'配置已变更');assert.equal(ui.tabLeaseSnapshot()[0].nativeGeneration,9);}
+    else {
+      assert.equal(ui.tabImpacts([a.hostId])[0].state,'配置已变更');
+      const review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();
+      assert.equal(find('连接').disabled,true);assert.match(ui.tabImpacts([a.hostId])[0].input,/输入已关闭/);
+      const before=calls.filter(c=>c.name==='remote_tab_reserve').length;find('连接').onclick();await flush();assert.equal(calls.filter(c=>c.name==='remote_tab_reserve').length,before);
+    }
+  } finally {globalThis.document=oldDocument;}
+});
+
+test('lease retirement requires the native identity and accepts an event while reserve is pending',async()=>{
+  const oldDocument=globalThis.document;
+  const nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content'].map(id=>[id,new Element('div')]));
+  globalThis.document={hidden:false,activeElement:null,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};
+  let resolveReserve;const calls=[];
+  const invoke=(name,args)=>{calls.push({name,args});if(name==='remote_tab_reserve')return new Promise(resolve=>{resolveReserve=resolve;});return Promise.resolve();};
+  try {
+    const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{username:'u',host:id,port:22},hostFingerprint:'key',deviceFingerprint:'device'}),channelFactory:()=>({}),terminalFactory:()=>{}});
+    const a=target('direct-pane-a');ui.create(a.hostId,a);const review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();nodes['view-content'].all().find(n=>n.textContent==='连接').onclick();await flush();
+    const lease=ui.tabLeaseSnapshot()[0];assert.equal(lease.nativeGeneration,null);
+    ui.prepareLeases([lease]);assert.notEqual(ui.tabImpacts([a.hostId])[0].state,'配置已变更');
+    ui.prepareLeases([{...lease,nativeGeneration:9}]);assert.equal(ui.tabImpacts([a.hostId])[0].state,'配置已变更');
+    resolveReserve(9);await flush();await flush();assert.equal(calls.filter(c=>c.name==='remote_tab_observe').length,0);
+  } finally {globalThis.document=oldDocument;}
+});
+
+test('an ended lease cannot be retired by a different native generation',async()=>{
+  const oldDocument=globalThis.document;
+  const nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content'].map(id=>[id,new Element('div')]));
+  globalThis.document={hidden:false,activeElement:null,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};
+  let finish;const invoke=name=>name==='remote_tab_reserve'?Promise.resolve(9):name==='remote_tab_observe'?new Promise(resolve=>{finish=resolve;}):Promise.resolve();
+  try {
+    const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{username:'u',host:id,port:22},hostFingerprint:'key',deviceFingerprint:'device'}),channelFactory:()=>({}),terminalFactory:()=>{}});
+    const a=target('direct-pane-a');ui.create(a.hostId,a);const review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();nodes['view-content'].all().find(n=>n.textContent==='连接').onclick();await flush();await flush();
+    const lease=ui.tabLeaseSnapshot()[0];finish();await flush();await flush();
+    ui.prepareLeases([{...lease,nativeGeneration:10}]);assert.notEqual(ui.tabImpacts([a.hostId])[0].state,'配置已变更');
+    ui.prepareLeases([lease]);assert.equal(ui.tabImpacts([a.hostId])[0].state,'配置已变更');
+  } finally {globalThis.document=oldDocument;}
+});
+
+test('network preparation retires the tab while its reservation is pending',async()=>{
+  const oldDocument=globalThis.document;
+  const nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content'].map(id=>[id,new Element('div')]));
+  globalThis.document={hidden:false,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};
+  let resolveReserve;const calls=[];
+  const invoke=(name,args)=>{calls.push({name,args});if(name==='remote_tab_reserve')return new Promise(resolve=>{resolveReserve=resolve;});return Promise.resolve();};
+  try {
+    const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{username:'u',host:id,port:22},hostFingerprint:'key',deviceFingerprint:'device'}),channelFactory:()=>({}),terminalFactory:()=>{throw Error('unexpected terminal');}});
+    const id=ui.create('host',{paneId:'w1:p1',terminalId:'term_a001'});const review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();
+    nodes['view-content'].all().find(n=>n.textContent==='连接').onclick();await flush();ui.prepareAffected(['host']);resolveReserve(17);await flush();await flush();
+    assert.equal(calls.filter(c=>c.name==='remote_tab_cancel' && c.args.tabId===id && c.args.generation===17).length,1);
+    assert.equal(calls.filter(c=>c.name==='remote_tab_observe').length,0);
+    assert.equal(nodes['view-content'].all().find(n=>n.textContent==='连接').disabled,true);
+  } finally {globalThis.document=oldDocument;}
+});

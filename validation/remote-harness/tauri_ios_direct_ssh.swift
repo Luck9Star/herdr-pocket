@@ -1100,9 +1100,15 @@ final class TauriDirectSSHUITests: XCTestCase {
                 throw NSError(domain: "native_unexpected_existing_input", code: 1)
             }
             ready.element.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: clearCount) + text)
-            let after = try formControl(name, matching: tapped).live
-            try require(NativeControlPolicy.valueText(after.snapshot.value) == text, "native_input_value_invalid")
-            return
+            // WebKit's accessibility snapshot can lag behind the one input.
+            // Re-read only the same proven field; never repeat the input.
+            for sample in 0..<6 {
+                let after = try formControl(name, matching: tapped).live
+                if NativeControlPolicy.valueText(after.snapshot.value) == text { return }
+                if sample < 5 { Thread.sleep(forTimeInterval: 0.2) }
+            }
+            try require(false, "native_input_value_invalid")
+            throw NSError(domain: "native_input_value_invalid", code: 1)
         }
         try failControlGeometry(lastFailure)
     }

@@ -711,6 +711,99 @@ class DeviceCleanupEvidenceTest(unittest.TestCase):
         self.assertNotIn('synthetic private', json.dumps(report))
 
 
+class ApkBuildFailureTest(unittest.TestCase):
+    def test_classifies_only_known_diagnostics_from_the_final_bounded_attempt(self):
+        import io
+        from flutter_android_dual_overlay import classify_apk_build_failure
+
+        samples = (
+            (b'java.io.IOException: No space left on device\n', 'disk_space'),
+            (b"  > Could not GET 'https://example.invalid/?secret=fake'. Received 504\n", 'dependency_download'),
+            (b'\x1b[31m[!] No Android SDK found. Try setting the ANDROID_HOME environment variable.\x1b[0m\n', 'android_sdk'),
+            (b'   > Android Gradle plugin requires Java 17 to run. You are currently using Java 11.\n', 'jdk'),
+            (b'Gradle build daemon disappeared unexpectedly (it may have been killed or may have crashed)\n', 'gradle'),
+            (b'/private/app/source.dart:12:3: Error: synthetic private content\n', 'dart_compile'),
+            (b"Execution failed for task ':app:mergeDebugNativeLibs'.\n", 'native_packaging'),
+            (b"Execution failed for task ':app:packageDebug'.\n", 'apk_packaging'),
+            (b"Running Gradle task 'assembleDebug'...\nGradle task assembleDebug failed with exit code 1\n", 'unknown'),
+            (b"> Could not resolve all files for configuration ':classpath'.\n", 'unknown'),
+            (b"Missing asset '/tmp/No space left on device/logo.png'\n", 'unknown'),
+            (b"SDK location not found.\n> Could not GET 'https://example.invalid'\n", 'unknown'),
+            (b"  > Could not GET 'https://example.invalid'\nRetrying Gradle Build: #1, wait time: 100ms\n"
+             b'/private/app/source.dart:12:3: Error: synthetic private content\n', 'dart_compile'),
+            (b'java.io.IOException: Disk quota exceeded\n' + b'x\n' * (256 * 1024), 'unknown'),
+        )
+        for raw, expected in samples:
+            with self.subTest(expected=expected):
+                self.assertEqual(classify_apk_build_failure(io.BytesIO(raw)), expected)
+
+    def test_shared_build_failures_preserve_cleanup_and_publish_no_log(self):
+        import errno
+        import json
+        from pathlib import Path
+        import subprocess
+        import tempfile
+        from types import SimpleNamespace
+
+        import android_dual_overlay_session as host
+        import flutter_android_dual_overlay as driver
+        import flutter_direct_ssh_android as device
+
+        device_properties = {('devices',): 'List of devices attached\nemulator-5554 device',
+            ('shell', 'getprop', 'ro.kernel.qemu'): '1', ('shell', 'getprop', 'ro.build.version.sdk'): '35',
+            ('shell', 'getprop', 'ro.product.cpu.abi'): 'x86_64', ('shell', 'am', 'get-current-user'): '0'}
+        for mode, code, expected in (('nonzero', 'device_apk_build_failed', 'dependency_download'),
+                                     ('timeout', 'device_runner_failed', 'timeout'),
+                                     ('disk', 'device_runner_failed', 'disk_space')):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                output = root / 'evidence'
+                app = Path(driver.__file__).resolve().parents[1] / 'flutter'
+                args = SimpleNamespace(project=app, output=output, qa_bundle=root, host_bundle=root,
+                    host_checkout=root, host_source=driver.HOST_SOURCE_SHA, native_source=driver.NATIVE_SOURCE_SHA,
+                    scenario=driver.SHARED_SCENARIO)
+                env = {'RUNNER_TEMP': tmp, 'ANDROID_AVD_HOME': str(root / 'avd'),
+                       'GITHUB_SHA': 'a' * 40, 'GITHUB_RUN_ID': '1'}
+                logs = []
+
+                def run(command, **kwargs):
+                    self.assertIn('--dart-define=HERDR_ANDROID_SHARED_EASYTIER=true', command)
+                    self.assertEqual(kwargs['stderr'], subprocess.STDOUT)
+                    log = kwargs['stdout']
+                    logs.append(Path(log.name))
+                    log.write(b"  > Could not GET 'https://example.invalid/private?token=placeholder'\n"
+                              b'/tmp/private-config USER=account PRIVATE_KEY=synthetic\n')
+                    if mode == 'timeout':
+                        raise subprocess.TimeoutExpired(command, kwargs['timeout'], stderr=b'private buffer')
+                    if mode == 'disk':
+                        raise OSError(errno.ENOSPC, 'synthetic disk detail')
+                    return subprocess.CompletedProcess(command, 1)
+
+                with patch.object(device, 'checked_paths', return_value=(app, output)), \
+                     patch.object(device, 'verify_prepared'), \
+                     patch.object(device, 'text', side_effect=lambda *key: device_properties[key]), \
+                     patch.object(device, 'package_present', return_value=False), \
+                     patch.object(device, 'forward_set', return_value=set()), patch.object(device, 'adb') as adb, \
+                     patch.object(host, 'AndroidDualOverlaySession') as session, \
+                     patch.object(subprocess, 'run', side_effect=run):
+                    report = driver.run_device(args, env)
+                case, = report['cases']
+                self.assertEqual(case, {'status': 'failed', 'stage': 'build', 'scenario': driver.SHARED_SCENARIO,
+                                       'errorCode': code, 'apkBuildFailure': expected,
+                                       'packageRemoved': True, 'forwardsRestored': True})
+                session.assert_not_called()
+                adb.assert_not_called()
+                self.assertEqual(len(logs), 1)
+                self.assertFalse(logs[0].exists())
+                evidence = output / 'manifest.json'
+                self.assertEqual(list(output.iterdir()), [evidence])
+                manifest = evidence.read_text()
+                self.assertEqual(json.loads(manifest), report)
+                self.assertFalse(report['rawLogsUploaded'])
+                for private in ('example.invalid', 'token', '/tmp/', 'PRIVATE_KEY', 'account', 'private buffer'):
+                    self.assertNotIn(private, manifest)
+
+
 class WorkflowFallbackTest(unittest.TestCase):
     def test_missing_report_records_failure_and_existing_report_is_preserved(self):
         import json

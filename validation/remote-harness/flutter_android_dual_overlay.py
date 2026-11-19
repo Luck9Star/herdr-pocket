@@ -4,6 +4,8 @@
 The caller supplies only an owned helper process and synthetic expected input.
 No request, authorization URL, or raw bytes are written to public evidence.
 """
+import errno
+import re
 import subprocess
 import shlex
 
@@ -707,11 +709,47 @@ def stop_flutter_process(process):
     return process.poll() is not None
 
 
+def classify_apk_build_failure(log):
+    """Classify known markers in the last build attempt without exporting log text."""
+    limit = 256 * 1024
+    try:
+        start = max(0, log.seek(0, 2) - limit)
+        log.seek(start)
+        tail = log.read(limit)
+    except OSError:
+        return 'unknown'
+    tail = re.sub(rb'\x1b\[[0-9;]*m', b'', tail).replace(b'\r', b'\n')
+    if start:
+        tail = tail.partition(b'\n')[2]
+    # Flutter can retry Gradle. A previous attempt is not evidence about the final failure.
+    tail = re.split(rb'^Retrying Gradle Build: #[0-9]+, wait time: [0-9]+ms$', tail, flags=re.M)[-1]
+    causes = {
+        'disk_space': rb'(?:^|: )(?:No space left on device|Disk quota exceeded)(?:[ \t]*$|, errno = \d+|\))',
+        'dependency_download': rb"^[ \t>]*Could not (?:GET|HEAD|get resource) ['\"]?https?://|"
+                               rb'^[ \t>]*Could not download \S',
+        'android_sdk': rb'No Android SDK found\.|SDK location not found\.|'
+                       rb'You have not accepted the license agreements of the following SDK components|'
+                       rb'Failed to (?:find|install) the following Android SDK packages',
+        'jdk': rb'Android Gradle plugin requires Java \d+(?:\.\d+)? to run|'
+               rb'Unsupported class file major version \d+|Could not create the Java Virtual Machine\.',
+    }
+    failed_steps = {
+        'gradle': rb'Gradle build daemon disappeared unexpectedly|Minimum supported Gradle version is \d',
+        'dart_compile': rb'^[^\n]+\.dart:\d+:\d+: Error:|^Target kernel_snapshot_program failed:',
+        'native_packaging': rb"Execution failed for task ':app:(?:mergeDebugNativeLibs|stripDebugDebugSymbols)'\.",
+        'apk_packaging': rb"Execution failed for task ':app:packageDebug'\.|Gradle build failed to produce an \.apk file\.",
+    }
+    for patterns in (causes, failed_steps):
+        matched = [category for category, pattern in patterns.items() if re.search(pattern, tail, re.M)]
+        if matched:
+            return matched[0] if len(matched) == 1 else 'unknown'
+    return 'unknown'
+
+
 def run_device(args, env):
     """Run the explicitly selected fresh owned-device cases."""
     import json
     from pathlib import Path
-    import re
     import sys
     import tempfile
 
@@ -765,14 +803,23 @@ def run_device(args, env):
                          '--dart-define=HERDR_ANDROID_DUAL_RUN_ID=' + env['GITHUB_RUN_ID'],
                          ('--dart-define=HERDR_ANDROID_SHARED_EASYTIER=true' if shared else
                           '--dart-define=HERDR_ANDROID_DUAL_FIRST_STOP=' + first_stop)]
-                with (private / (case_name + '-build.log')).open('wb') as log:
-                    command = ['flutter', 'build', 'apk', '--debug', '--target-platform', 'android-x64',
-                               '-t', 'integration_test/android_dual_overlay_test.dart', *flags]
-                    result = subprocess.run(command, cwd=app, stdout=log, stderr=subprocess.STDOUT,
-                                            timeout=600, check=False)
-                if result.returncode != 0:
-                    raise DualOverlayDeviceFailure('device_apk_build_failed')
+                try:
+                    with (private / (case_name + '-build.log')).open('w+b') as log:
+                        command = ['flutter', 'build', 'apk', '--debug', '--target-platform', 'android-x64',
+                                   '-t', 'integration_test/android_dual_overlay_test.dart', *flags]
+                        result = subprocess.run(command, cwd=app, stdout=log, stderr=subprocess.STDOUT,
+                                                timeout=600, check=False)
+                        if result.returncode != 0:
+                            case['apkBuildFailure'] = classify_apk_build_failure(log)
+                            raise DualOverlayDeviceFailure('device_apk_build_failed')
+                except subprocess.TimeoutExpired:
+                    case['apkBuildFailure'] = 'timeout'
+                    raise
+                except OSError as error:
+                    case['apkBuildFailure'] = 'disk_space' if error.errno in (errno.ENOSPC, errno.EDQUOT) else 'unknown'
+                    raise
                 built = app / 'build/app/outputs/flutter-apk/app-debug.apk'
+                case['stage'] = 'apk_verification'
                 apk_evidence = dual_overlay_apk.verify(args.qa_bundle, built)
                 case['instrumentationApkSha256'] = apk_evidence['apkSha256']
                 case['stage'] = 'install'

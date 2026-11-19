@@ -1,0 +1,1004 @@
+{
+  "syntheticArchiveSha256": "bbe4410496f051fabc7dc5659e744f29a470c1014cd1f42028d8ca91db0ab56e",
+  "fontSha256": "876af2cd4854644e7f3e7feb2f688997fdb3343c6df6693611209c9dfb47ccec",
+  "fontName": "Arial Unicode.ttf",
+  "materialIconsSha256": "d9865b671a09d683d13a863089d8825e0f61a37696ce5d7d448bc8023aa62453",
+  "flutterFramework": "c197ca5199e9ee5661e865596c9c07294dfab51c",
+  "flutterEngine": "89c39edfdfae2949f6806e4a315c0c08522238b7",
+  "before": {
+    "variant": "before",
+    "source": "8a38ada164fbaa631a61cc1c78cfb849222ff61f",
+    "viewport": {
+      "width": 320.0,
+      "height": 740.0,
+      "dpr": 1
+    },
+    "capture": "Flutter WidgetTester RenderRepaintBoundary.toImage; not native device or simulator",
+    "fixture": {
+      "systemFileCompletion": "test channel",
+      "encryptionAndDecryption": "real synthetic fixture",
+      "systemOpenCalls": 1,
+      "catalogWritesDuringReview": 0,
+      "deviceSignCalls": 0
+    },
+    "interactions": [
+      {
+        "picker": "A",
+        "option": "replace",
+        "scrollGestures": 2,
+        "pickerGeometryAtTap": {
+          "count": 1,
+          "bounds": [
+            32.0,
+            424.72,
+            288.0,
+            480.72
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "tapTarget": "arrow",
+        "arrowGeometryAtTap": {
+          "count": 1,
+          "bounds": [
+            252.0,
+            440.72,
+            276.0,
+            464.72
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "optionGeometryAtTap": {
+          "count": 1,
+          "bounds": [
+            32.0,
+            524.72,
+            296.0,
+            572.72
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "choicesAfterTap": [
+          "replace",
+          null
+        ],
+        "selectedRendering": {
+          "text": "替换全部所列冲突（原身份停用保留）",
+          "intrinsicTextWidth": 274.54998779296875,
+          "paragraphWidth": 274.54998779296875,
+          "textGeometry": {
+            "count": 1,
+            "bounds": [
+              48.0,
+              440.72,
+              322.54998779296875,
+              464.72
+            ],
+            "visible": true,
+            "fullyVisible": false,
+            "hitTestable": true
+          },
+          "glyphBounds": [
+            [
+              48.07500000298023,
+              442.00125,
+              322.625,
+              463.43875
+            ]
+          ],
+          "allGlyphsVisible": false,
+          "arrowGeometry": {
+            "count": 1,
+            "bounds": [
+              252.0,
+              440.72,
+              276.0,
+              464.72
+            ],
+            "visible": true,
+            "fullyVisible": true,
+            "hitTestable": true
+          },
+          "arrowFitsInsidePicker": true
+        },
+        "controlFrame": {
+          "png": "a-replace-control.png",
+          "pngSizePx": [
+            320,
+            740
+          ],
+          "pngSha256": "42ed8e11754549df4140cf31441a9435dfaed521f9a8e5926db35d24a83b0768"
+        }
+      },
+      {
+        "picker": "A",
+        "option": "keep",
+        "scrollGestures": 1,
+        "pickerGeometryAtTap": {
+          "count": 1,
+          "bounds": [
+            32.0,
+            424.72,
+            288.0,
+            480.72
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "tapTarget": "arrow",
+        "arrowGeometryAtTap": {
+          "count": 1,
+          "bounds": [
+            252.0,
+            440.72,
+            276.0,
+            464.72
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "optionGeometryAtTap": {
+          "count": 1,
+          "bounds": [
+            32.0,
+            392.72,
+            177.35000610351562,
+            416.72
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "choicesAfterTap": [
+          "keep",
+          null
+        ],
+        "selectedRendering": {
+          "text": "保留本机／跳过此条",
+          "intrinsicTextWidth": 145.35000610351562,
+          "paragraphWidth": 145.35000610351562,
+          "textGeometry": {
+            "count": 1,
+            "bounds": [
+              48.0,
+              440.72,
+              193.35000610351562,
+              464.72
+            ],
+            "visible": true,
+            "fullyVisible": true,
+            "hitTestable": true
+          },
+          "glyphBounds": [
+            [
+              48.07500000298023,
+              442.00125,
+              193.4250030517578,
+              463.43875
+            ]
+          ],
+          "allGlyphsVisible": true,
+          "arrowGeometry": {
+            "count": 1,
+            "bounds": [
+              252.0,
+              440.72,
+              276.0,
+              464.72
+            ],
+            "visible": true,
+            "fullyVisible": true,
+            "hitTestable": true
+          },
+          "arrowFitsInsidePicker": true
+        }
+      },
+      {
+        "picker": "B",
+        "option": "replace",
+        "scrollGestures": 1,
+        "pickerGeometryAtTap": {
+          "count": 1,
+          "bounds": [
+            32.0,
+            444.0,
+            288.0,
+            500.0
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "tapTarget": "arrow",
+        "arrowGeometryAtTap": {
+          "count": 1,
+          "bounds": [
+            252.0,
+            460.0,
+            276.0,
+            484.0
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "optionGeometryAtTap": {
+          "count": 1,
+          "bounds": [
+            32.0,
+            544.0,
+            296.0,
+            592.0
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "choicesAfterTap": [
+          "keep",
+          "replace"
+        ],
+        "selectedRendering": {
+          "text": "替换全部所列冲突（原身份停用保留）",
+          "intrinsicTextWidth": 274.54998779296875,
+          "paragraphWidth": 274.54998779296875,
+          "textGeometry": {
+            "count": 1,
+            "bounds": [
+              48.0,
+              460.0,
+              322.54998779296875,
+              484.0
+            ],
+            "visible": true,
+            "fullyVisible": false,
+            "hitTestable": true
+          },
+          "glyphBounds": [
+            [
+              48.07500000298023,
+              461.28125,
+              322.625,
+              482.71875
+            ]
+          ],
+          "allGlyphsVisible": false,
+          "arrowGeometry": {
+            "count": 1,
+            "bounds": [
+              252.0,
+              460.0,
+              276.0,
+              484.0
+            ],
+            "visible": true,
+            "fullyVisible": true,
+            "hitTestable": true
+          },
+          "arrowFitsInsidePicker": true
+        }
+      }
+    ],
+    "states": {
+      "a-replace": {
+        "png": "a-replace.png",
+        "choices": [
+          "replace",
+          null
+        ],
+        "bodyViewport": [
+          0.0,
+          56.0,
+          320.0,
+          740.0
+        ],
+        "scrollGesturesToReview": 1,
+        "offsetBeforeReviewScroll": 815.28,
+        "offsetAtCapture": 1125.44,
+        "review": {
+          "count": 1,
+          "bounds": [
+            16.0,
+            574.56,
+            304.0,
+            686.56
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "impactCard": {
+          "count": 0,
+          "visible": false,
+          "hitTestable": false
+        },
+        "visibleAffectedTabs": [],
+        "localInputMessage": {
+          "count": 0,
+          "visible": false,
+          "hitTestable": false
+        },
+        "apply": {
+          "count": 1,
+          "bounds": [
+            16.0,
+            734.56,
+            304.0,
+            782.56
+          ],
+          "visible": true,
+          "fullyVisible": false,
+          "hitTestable": false
+        },
+        "pngSizePx": [
+          320,
+          740
+        ],
+        "pngSha256": "d58039afdf9068da6b4dbcde57ad2bf88e9ed6ed4b602300f7f17190ce7525f5"
+      },
+      "a-keep": {
+        "png": "a-keep.png",
+        "choices": [
+          "keep",
+          null
+        ],
+        "bodyViewport": [
+          0.0,
+          56.0,
+          320.0,
+          740.0
+        ],
+        "scrollGesturesToReview": 1,
+        "offsetBeforeReviewScroll": 815.28,
+        "offsetAtCapture": 1125.44,
+        "review": {
+          "count": 1,
+          "bounds": [
+            16.0,
+            574.56,
+            304.0,
+            686.56
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "impactCard": {
+          "count": 0,
+          "visible": false,
+          "hitTestable": false
+        },
+        "visibleAffectedTabs": [],
+        "localInputMessage": {
+          "count": 0,
+          "visible": false,
+          "hitTestable": false
+        },
+        "apply": {
+          "count": 1,
+          "bounds": [
+            16.0,
+            734.56,
+            304.0,
+            782.56
+          ],
+          "visible": true,
+          "fullyVisible": false,
+          "hitTestable": false
+        },
+        "pngSizePx": [
+          320,
+          740
+        ],
+        "pngSha256": "00cd96a072a5bb0c1cc7fdbfc652779895b328e7c6fac5ee254158aa8d85d52c"
+      },
+      "b-replace": {
+        "png": "b-replace.png",
+        "choices": [
+          "keep",
+          "replace"
+        ],
+        "bodyViewport": [
+          0.0,
+          56.0,
+          320.0,
+          740.0
+        ],
+        "scrollGesturesToReview": 1,
+        "offsetBeforeReviewScroll": 1184.0,
+        "offsetAtCapture": 1125.44,
+        "review": {
+          "count": 1,
+          "bounds": [
+            16.0,
+            574.56,
+            304.0,
+            686.56
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "impactCard": {
+          "count": 0,
+          "visible": false,
+          "hitTestable": false
+        },
+        "visibleAffectedTabs": [],
+        "localInputMessage": {
+          "count": 0,
+          "visible": false,
+          "hitTestable": false
+        },
+        "apply": {
+          "count": 1,
+          "bounds": [
+            16.0,
+            734.56,
+            304.0,
+            782.56
+          ],
+          "visible": true,
+          "fullyVisible": false,
+          "hitTestable": false
+        },
+        "pngSizePx": [
+          320,
+          740
+        ],
+        "pngSha256": "475e0a7b9527f89d431cd744aff295a05e98c2a901e0a542ca212bb80c6a3232"
+      }
+    },
+    "flutterExitCode": 1,
+    "layoutDiagnostics": [
+      {
+        "phase": "a-replace",
+        "control": "transfer-choice-0",
+        "rightOverflowPx": 75.0
+      },
+      {
+        "phase": "b-replace",
+        "control": "transfer-choice-1",
+        "rightOverflowPx": 75.0
+      }
+    ],
+    "syntheticArchiveSha256": "bbe4410496f051fabc7dc5659e744f29a470c1014cd1f42028d8ca91db0ab56e"
+  },
+  "after": {
+    "variant": "after",
+    "source": "bf84aebf535daab7860747acc482b43165617044",
+    "viewport": {
+      "width": 320.0,
+      "height": 740.0,
+      "dpr": 1
+    },
+    "capture": "Flutter WidgetTester RenderRepaintBoundary.toImage; not native device or simulator",
+    "fixture": {
+      "systemFileCompletion": "test channel",
+      "encryptionAndDecryption": "real synthetic fixture",
+      "systemOpenCalls": 1,
+      "catalogWritesDuringReview": 0,
+      "deviceSignCalls": 0
+    },
+    "interactions": [
+      {
+        "picker": "A",
+        "option": "replace",
+        "scrollGestures": 2,
+        "pickerGeometryAtTap": {
+          "count": 1,
+          "bounds": [
+            32.0,
+            424.72,
+            288.0,
+            480.72
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "tapTarget": "arrow",
+        "arrowGeometryAtTap": {
+          "count": 1,
+          "bounds": [
+            252.0,
+            440.72,
+            276.0,
+            464.72
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "optionGeometryAtTap": {
+          "count": 1,
+          "bounds": [
+            32.0,
+            536.72,
+            128.9000015258789,
+            560.72
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "choicesAfterTap": [
+          "replace",
+          null
+        ],
+        "selectedRendering": {
+          "text": "替换全部冲突",
+          "intrinsicTextWidth": 96.9000015258789,
+          "paragraphWidth": 96.9000015258789,
+          "textGeometry": {
+            "count": 1,
+            "bounds": [
+              48.0,
+              440.72,
+              144.9000015258789,
+              464.72
+            ],
+            "visible": true,
+            "fullyVisible": true,
+            "hitTestable": true
+          },
+          "glyphBounds": [
+            [
+              48.07500000298023,
+              442.00125,
+              144.9749984741211,
+              463.43875
+            ]
+          ],
+          "allGlyphsVisible": true,
+          "arrowGeometry": {
+            "count": 1,
+            "bounds": [
+              252.0,
+              440.72,
+              276.0,
+              464.72
+            ],
+            "visible": true,
+            "fullyVisible": true,
+            "hitTestable": true
+          },
+          "arrowFitsInsidePicker": true
+        },
+        "controlFrame": {
+          "png": "a-replace-control.png",
+          "pngSizePx": [
+            320,
+            740
+          ],
+          "pngSha256": "e5adbd6fa9d329545bf47c288c32cb162f75241544dfab33ada14e2b8469650c"
+        }
+      },
+      {
+        "picker": "A",
+        "option": "keep",
+        "scrollGestures": 2,
+        "pickerGeometryAtTap": {
+          "count": 1,
+          "bounds": [
+            32.0,
+            424.72,
+            288.0,
+            480.72
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "tapTarget": "arrow",
+        "arrowGeometryAtTap": {
+          "count": 1,
+          "bounds": [
+            252.0,
+            440.72,
+            276.0,
+            464.72
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "optionGeometryAtTap": {
+          "count": 1,
+          "bounds": [
+            32.0,
+            392.72,
+            177.35000610351562,
+            416.72
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "choicesAfterTap": [
+          "keep",
+          null
+        ],
+        "selectedRendering": {
+          "text": "保留本机／跳过此条",
+          "intrinsicTextWidth": 145.35000610351562,
+          "paragraphWidth": 145.35000610351562,
+          "textGeometry": {
+            "count": 1,
+            "bounds": [
+              48.0,
+              440.72,
+              193.35000610351562,
+              464.72
+            ],
+            "visible": true,
+            "fullyVisible": true,
+            "hitTestable": true
+          },
+          "glyphBounds": [
+            [
+              48.07500000298023,
+              442.00125,
+              193.4250030517578,
+              463.43875
+            ]
+          ],
+          "allGlyphsVisible": true,
+          "arrowGeometry": {
+            "count": 1,
+            "bounds": [
+              252.0,
+              440.72,
+              276.0,
+              464.72
+            ],
+            "visible": true,
+            "fullyVisible": true,
+            "hitTestable": true
+          },
+          "arrowFitsInsidePicker": true
+        }
+      },
+      {
+        "picker": "B",
+        "option": "replace",
+        "scrollGestures": 1,
+        "pickerGeometryAtTap": {
+          "count": 1,
+          "bounds": [
+            32.0,
+            444.0,
+            288.0,
+            500.0
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "tapTarget": "arrow",
+        "arrowGeometryAtTap": {
+          "count": 1,
+          "bounds": [
+            252.0,
+            460.0,
+            276.0,
+            484.0
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "optionGeometryAtTap": {
+          "count": 1,
+          "bounds": [
+            32.0,
+            556.0,
+            128.9000015258789,
+            580.0
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "choicesAfterTap": [
+          "keep",
+          "replace"
+        ],
+        "selectedRendering": {
+          "text": "替换全部冲突",
+          "intrinsicTextWidth": 96.9000015258789,
+          "paragraphWidth": 96.9000015258789,
+          "textGeometry": {
+            "count": 1,
+            "bounds": [
+              48.0,
+              460.0,
+              144.9000015258789,
+              484.0
+            ],
+            "visible": true,
+            "fullyVisible": true,
+            "hitTestable": true
+          },
+          "glyphBounds": [
+            [
+              48.07500000298023,
+              461.28125,
+              144.9749984741211,
+              482.71875
+            ]
+          ],
+          "allGlyphsVisible": true,
+          "arrowGeometry": {
+            "count": 1,
+            "bounds": [
+              252.0,
+              460.0,
+              276.0,
+              484.0
+            ],
+            "visible": true,
+            "fullyVisible": true,
+            "hitTestable": true
+          },
+          "arrowFitsInsidePicker": true
+        }
+      }
+    ],
+    "states": {
+      "a-replace": {
+        "png": "a-replace.png",
+        "choices": [
+          "replace",
+          null
+        ],
+        "bodyViewport": [
+          0.0,
+          56.0,
+          320.0,
+          740.0
+        ],
+        "scrollGesturesToReview": 2,
+        "offsetBeforeReviewScroll": 855.28,
+        "offsetAtCapture": 1355.44,
+        "review": {
+          "count": 1,
+          "bounds": [
+            16.0,
+            574.56,
+            304.0,
+            686.56
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "impactCard": {
+          "count": 1,
+          "bounds": [
+            16.0,
+            404.55999999999995,
+            304.0,
+            574.56
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "visibleAffectedTabs": [
+          {
+            "label": "标签 1 · 开发主机 · pane-dev-a · terminal-dev-a",
+            "geometry": {
+              "count": 1,
+              "bounds": [
+                32.0,
+                440.55999999999995,
+                288.0,
+                486.55999999999995
+              ],
+              "visible": true,
+              "fullyVisible": true,
+              "hitTestable": true
+            }
+          },
+          {
+            "label": "标签 2 · 开发主机 · pane-dev-b · terminal-dev-b",
+            "geometry": {
+              "count": 1,
+              "bounds": [
+                32.0,
+                486.55999999999995,
+                288.0,
+                532.56
+              ],
+              "visible": true,
+              "fullyVisible": true,
+              "hitTestable": true
+            }
+          }
+        ],
+        "localInputMessage": {
+          "count": 1,
+          "bounds": [
+            32.0,
+            538.56,
+            245.75,
+            558.56
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "apply": {
+          "count": 1,
+          "bounds": [
+            16.0,
+            734.56,
+            304.0,
+            782.56
+          ],
+          "visible": true,
+          "fullyVisible": false,
+          "hitTestable": false
+        },
+        "pngSizePx": [
+          320,
+          740
+        ],
+        "pngSha256": "5d7a53200156ad3f092382120811c74cc7fec8ef784a207ae11e12c9172c0e2b"
+      },
+      "a-keep": {
+        "png": "a-keep.png",
+        "choices": [
+          "keep",
+          null
+        ],
+        "bodyViewport": [
+          0.0,
+          56.0,
+          320.0,
+          740.0
+        ],
+        "scrollGesturesToReview": 1,
+        "offsetBeforeReviewScroll": 855.28,
+        "offsetAtCapture": 1185.44,
+        "review": {
+          "count": 1,
+          "bounds": [
+            16.0,
+            574.56,
+            304.0,
+            686.56
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "impactCard": {
+          "count": 0,
+          "visible": false,
+          "hitTestable": false
+        },
+        "visibleAffectedTabs": [],
+        "localInputMessage": {
+          "count": 0,
+          "visible": false,
+          "hitTestable": false
+        },
+        "apply": {
+          "count": 1,
+          "bounds": [
+            16.0,
+            734.56,
+            304.0,
+            782.56
+          ],
+          "visible": true,
+          "fullyVisible": false,
+          "hitTestable": false
+        },
+        "pngSizePx": [
+          320,
+          740
+        ],
+        "pngSha256": "0f2bc8d92fdf62b0dfad3c05a3723196473a72016a4a72f8fa933e4f7de0c430"
+      },
+      "b-replace": {
+        "png": "b-replace.png",
+        "choices": [
+          "keep",
+          "replace"
+        ],
+        "bodyViewport": [
+          0.0,
+          56.0,
+          320.0,
+          740.0
+        ],
+        "scrollGesturesToReview": 1,
+        "offsetBeforeReviewScroll": 1244.0,
+        "offsetAtCapture": 1309.44,
+        "review": {
+          "count": 1,
+          "bounds": [
+            16.0,
+            574.56,
+            304.0,
+            686.56
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "impactCard": {
+          "count": 1,
+          "bounds": [
+            16.0,
+            450.55999999999995,
+            304.0,
+            574.56
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "visibleAffectedTabs": [
+          {
+            "label": "标签 3 · 验证主机 · pane-qa · terminal-qa",
+            "geometry": {
+              "count": 1,
+              "bounds": [
+                32.0,
+                486.55999999999995,
+                288.0,
+                532.56
+              ],
+              "visible": true,
+              "fullyVisible": true,
+              "hitTestable": true
+            }
+          }
+        ],
+        "localInputMessage": {
+          "count": 1,
+          "bounds": [
+            32.0,
+            538.56,
+            245.75,
+            558.56
+          ],
+          "visible": true,
+          "fullyVisible": true,
+          "hitTestable": true
+        },
+        "apply": {
+          "count": 1,
+          "bounds": [
+            16.0,
+            734.56,
+            304.0,
+            782.56
+          ],
+          "visible": true,
+          "fullyVisible": false,
+          "hitTestable": false
+        },
+        "pngSizePx": [
+          320,
+          740
+        ],
+        "pngSha256": "515568d3cd9576cc34adb8d9c8a42a5ad974a35f9af8efe551af3a62f1f0eeb4"
+      }
+    },
+    "flutterExitCode": 0,
+    "layoutDiagnostics": [],
+    "syntheticArchiveSha256": "bbe4410496f051fabc7dc5659e744f29a470c1014cd1f42028d8ca91db0ab56e"
+  }
+}

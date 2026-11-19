@@ -130,7 +130,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   Future<void> transfer() async {
     if (busy || !catalog.ready || catalog.writing || catalog.pendingCreation != null) return;
     tabs.select(null);
-    await Navigator.push<void>(context,MaterialPageRoute(builder:(_) => ConfigTransferPage(catalog:catalog,
+    await Navigator.push<void>(context,MaterialPageRoute(builder:(_) => ConfigTransferPage(catalog:catalog,tabs:tabs,
       closeTabs:(ids) { for (final id in ids) { tabs.closeHost(id); } })));
     if (mounted) setState(() {});
   }
@@ -379,6 +379,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       builder: (_) => DirectSshPage(
         tokens: widget.tokens,
         catalog: catalog,
+        catalogTabs: tabs,
         sessionVisible: sshVisible,
         desktopDestination: sshDesktopDestination,
         desktopFlowShell: desktopSshFlowShell,

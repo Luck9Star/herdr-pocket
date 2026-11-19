@@ -10,6 +10,7 @@ import 'package:terminal_view/terminal_view.dart';
 import 'design_tokens.dart';
 import 'macos_secure_credential_field.dart';
 import 'host_catalog.dart';
+import 'host_tabs.dart';
 import 'config_transfer_page.dart';
 
 String formatDirectSshTarget(String username, String host, int port) {
@@ -28,6 +29,7 @@ class DirectSshPage extends StatefulWidget {
     required this.tokens,
     this.onReturnAfterDisconnect,
     this.catalog,
+    this.catalogTabs,
     this.closeCatalogTabs,
     this.sessionVisible,
     this.onSelectDestination,
@@ -38,6 +40,7 @@ class DirectSshPage extends StatefulWidget {
   final DesignTokens tokens;
   final ValueChanged<bool>? onReturnAfterDisconnect;
   final HostCatalog? catalog;
+  final HostTabs? catalogTabs;
   final void Function(Set<String>)? closeCatalogTabs;
   final ValueListenable<bool>? sessionVisible;
   final ValueChanged<int>? onSelectDestination;
@@ -1453,6 +1456,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
                     MaterialPageRoute(
                       builder: (_) => ConfigTransferPage(
                         catalog: catalog!,
+                        tabs: widget.catalogTabs,
                         closeTabs: widget.closeCatalogTabs!,
                       ),
                     ),

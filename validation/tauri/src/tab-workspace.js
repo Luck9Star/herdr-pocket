@@ -49,7 +49,8 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   // S11（docs/08 切片 11）：被收纳副面板的“观察已暂停”标注直接落在 nav button 上——
   // 整页 render 会被焦点面板的输入守卫跳过，paused 快照到达时必须可靠更新（display 条件不含 pausing）。
   function navPausedSuffix(tab) {return splitOn && !isWide() && splitPartnerId===tab.id && tabs.activeId!==tab.id && tab.state==='paused' ? ' · 观察已暂停':'';}
-  function updateTabButton(tab) {if(tab.navButton)tab.navButton.textContent=`${hostName(tab.hostId)} · ${tab.target?.paneId || '选择终端'}${navPausedSuffix(tab)}`;}
+  function tabLabel(tab) {return `${hostName(tab.hostId)} · ${tab.target?.paneId || '选择终端'}`;}
+  function updateTabButton(tab) {if(tab.navButton)tab.navButton.textContent=tabLabel(tab)+navPausedSuffix(tab);}
   // 副面板的状态文本直接落 DOM：整页 render 可能被焦点面板的输入守卫跳过（走局部刷新），不能依赖重建。
   function status(tab,message) {tab.message=message;tab.diagnosticView?.update(tab.diagnostics);const partner=splitPartner()===tab;if(tabs.activeId===tab.id || partner){if(partner && tab.messageElement)tab.messageElement.textContent=message;render();}}
   function clearReceipt(tab) {tab.receipt=null;if(tab.receiptDetails)tab.receiptDetails.hidden=true;if(tab.receiptTextElement)tab.receiptTextElement.textContent='';}
@@ -762,6 +763,22 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     finally {if(tabs.get(tab.id)===tab && tab.token===token){tab.diagnostics?.finish();tab.diagnosticView?.update(tab.diagnostics);tab.board.invalidate('disconnected');boardEvent(tab,'stale');tab.selectionReady=false;tabs.invalidate(tab.id);tab.state='disconnected';tab.reviewed=false;tab.closing=false;tab.nativeGeneration=null;tab.inputEpoch=null;render();}}
   }
   function setFont(size) {for(const tab of tabs.list())if(tab.terminal){tab.localViewport.capture();tab.terminal.options.fontSize=size;}}
+  function tabImpacts(ids) {
+    const ordered = tabs.list();
+    const states = {
+      disconnected: '未连接', connecting: '正在连接', starting: '正在开始观察', active: '正在观察',
+      pausing: '正在暂停观察', paused: '观察已暂停', resuming: '正在恢复观察', closed: '连接已关闭',
+    };
+    return tabs.affected(ids).map(tab => {
+      const hasInputLease = workspaceVisible() && !switching && !tab.wantsPause && !tab.closing && !tab.invalidated &&
+        tabs.activeId === tab.id && current(tab, tab.token) && Number.isSafeInteger(tab.inputEpoch) && tab.inputEpoch > 0;
+      return {
+        label: `标签 ${ordered.indexOf(tab) + 1} · ${tabLabel(tab)}`,
+        state: tab.invalidated ? '配置已变更' : (states[tab.state] || '观察未运行'),
+        input: tab.unknown || hasInputLease ? inputModeMessage(tab) : '输入已关闭。',
+      };
+    });
+  }
   function prepareAffected(ids) {const affected=tabs.affected(ids);for(const tab of affected){retireSplitPause(tab);tab.controlRevision++;if(tab.inputBusy && tab.inflightReview){tab.unknown=true;tab.unknownReview=tab.inflightReview;}tab.diagnostics?.finish('host_selection_changed');retireDirectPending(tab);tab.board.invalidate('configuration_changed');boardEvent(tab,'stale');tab.selectionReady=false;tab.suppressBlur=true;tab.invalidated=true;tab.reviewed=false;tab.message='目标或网络配置已变更，请关闭此标签并新建。';tab.inputRevision++;tab.inputBusy=false;tab.inputEpoch=null;tab.mode='observe';tab.queue.clear();if(tab.terminal)tab.terminal.options.disableStdin=true;tabs.invalidate(tab.id);tab.closing=true;tab.state='disconnected';}render();for(const tab of affected)tab.suppressBlur=false;}
   function affected(ids) {for(const tab of tabs.affected(ids)){tab.diagnostics?.finish('host_selection_changed');tab.invalidated=true;tab.reviewed=false;tab.message='目标或网络配置已变更，请关闭此标签并新建。';void cancel(tab);}}
   function systemOffline(message) {
@@ -819,5 +836,5 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       void pause(partner);
     } else render();
   });
-  render();return {hasTabs:()=>tabs.list().length>0,create,createBlocked,select,prepareAffected,affected,systemOffline,background,prepareHide,cancelPrepareHide,hide,setFont};
+  render();return {hasTabs:()=>tabs.list().length>0,create,createBlocked,select,tabImpacts,prepareAffected,affected,systemOffline,background,prepareHide,cancelPrepareHide,hide,setFont};
 }

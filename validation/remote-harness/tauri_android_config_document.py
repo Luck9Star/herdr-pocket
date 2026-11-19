@@ -224,51 +224,121 @@ def android_id(node, package, name):
         f'{package}:id/{name}', f'com.android.documentsui:id/{name}'}
 
 
+def exposed_nodes(root):
+    if root.get('visible-to-user') == 'false':
+        return
+    if root.tag == 'node':
+        yield root
+    for child in root:
+        yield from exposed_nodes(child)
+
+
 def in_picker_scope(root, package, scope, **attributes):
-    return [node for surface in root.iter('node') if android_id(surface, package, scope)
-            for node in surface.iter('node') if node.get('package') == package
+    return [node for surface in exposed_nodes(root) if android_id(surface, package, scope)
+            for node in exposed_nodes(surface) if node.get('package') == package
             and all(node.get(key) == value for key, value in attributes.items())]
 
 
-def native_hit(xml, package, size, *, ancestor, label=None, resource=None, description=None,
-               folder=None, save_name=None):
-    """Find exactly one visible, enabled target in the current DocumentsUI surface."""
-    root = picker_tree(xml)
-    if folder and len(in_picker_scope(root, package, 'horizontal_breadcrumb', text=folder)) != 1:
+def native_bounds(node, size):
+    if node.get('visible-to-user') == 'false':
         return None
-    if save_name and len(in_picker_scope(root, package, 'container_save', **{
-        'class': 'android.widget.EditText', 'resource-id': 'android:id/title', 'text': save_name
-    })) != 1:
-        return None
-
-    def match(node, lineage):
-        return (node.get('package') == package and
-                (label is None or node.get('text') == label) and
-                (resource is None or node.get('resource-id') == resource) and
-                (description is None or node.get('content-desc') == description) and
-                any(android_id(item, package, ancestor) for item in lineage))
-
-    def candidates(node, lineage=()):
-        path = (*lineage, node)
-        if match(node, path):
-            for item in reversed(path):
-                if item.get('package') != package or android_id(item, package, ancestor):
-                    break
-                if item.get('clickable') == 'true' and item.get('enabled') == 'true':
-                    yield item
-                    break
-        for child in node:
-            yield from candidates(child, path)
-
-    targets = list(candidates(root))
-    if len(targets) != 1:
-        return None
-    bounds = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', targets[0].get('bounds', ''))
+    bounds = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', node.get('bounds', ''))
     if bounds:
         left, top, right, bottom = map(int, bounds.groups())
         if 0 <= left < right <= size[0] and 0 <= top < bottom <= size[1]:
             return left, top, right, bottom
     return None
+
+
+def enabled_breadcrumbs(root, package, size):
+    # DocumentsUI enables just the current segment, even if older segments are visible.
+    return [node.get('text') for node in in_picker_scope(root, package, 'horizontal_breadcrumb')
+            if android_id(node, package, 'breadcrumb_text') and node.get('enabled') == 'true'
+            and native_bounds(node, size)]
+
+
+def picker_drawers(root, package, size):
+    roots = [node for node in root.iter('node') if android_id(node, package, 'roots_list')]
+    visible = [node for node in exposed_nodes(root) if android_id(node, package, 'roots_list')
+               and native_bounds(node, size)]
+    return roots, visible
+
+
+def native_target(root, package, size, *, ancestor, label=None, resource=None, description=None,
+                  folder=None, save_name=None):
+    """Resolve one exact visible label and its clickable ancestor, or a fixed reason."""
+    if folder and (enabled_breadcrumbs(root, package, size) != [folder]
+                   or picker_drawers(root, package, size)[1]):
+        return 'wrong_surface', None
+    if save_name and len(in_picker_scope(root, package, 'container_save', **{
+        'class': 'android.widget.EditText', 'resource-id': 'android:id/title', 'text': save_name
+    })) != 1:
+        return 'save_name_unconfirmed', None
+
+    def matches(node, path):
+        return (node.get('package') == package and (label is None or node.get('text') == label)
+                and (resource is None or node.get('resource-id') == resource)
+                and (description is None or node.get('content-desc') == description)
+                and any(android_id(item, package, ancestor) for item in path))
+
+    def candidates(node, parents=()):
+        if node.get('visible-to-user') == 'false':
+            return
+        path = (*parents, node)
+        if matches(node, path):
+            yield path
+        for child in node:
+            yield from candidates(child, path)
+
+    targets = list(candidates(root))
+    if len(targets) != 1:
+        return ('ambiguous' if targets else 'missing'), None
+    for item in reversed(targets[0]):
+        if item.get('package') != package or android_id(item, package, ancestor):
+            break
+        if item.get('clickable') == 'true' and item.get('enabled') == 'true':
+            bounds = native_bounds(item, size)
+            return ('ready', bounds) if bounds else ('bounds_unconfirmed', None)
+    return 'not_clickable', None
+
+
+PICKER_PATH = ('show_roots', 'downloads_root', 'owned_download_folder', 'owned_directory')
+
+
+def picker_navigation(root, package, size, folder):
+    crumbs = enabled_breadcrumbs(root, package, size)
+    downloads_titles = [node for node in in_picker_scope(root, package, 'toolbar', text='Downloads')
+                        if node.get('class') == 'android.widget.TextView' and native_bounds(node, size)]
+    if crumbs == [folder]:
+        surface = 'owned_directory'
+    elif crumbs == ['Downloads'] or (not crumbs and len(downloads_titles) == 1):
+        surface = 'downloads_directory'
+    elif len(crumbs) > 1:
+        surface = 'ambiguous'
+    else:
+        surface = 'unproven'
+    roots, visible = picker_drawers(root, package, size)
+    drawer = 'inactive' if roots else 'absent'
+    if visible:
+        drawer = 'visible' if len(visible) == 1 else 'ambiguous'
+    root_target, root_bounds = ('not_visible', None)
+    if drawer == 'visible':
+        root_target, root_bounds = native_target(visible[0], package, size, ancestor='roots_list',
+                                                 label='Downloads', resource='android:id/title')
+    toolbar_target, toolbar_bounds = native_target(root, package, size, ancestor='toolbar',
+                                                   description='Show roots')
+    folder_target, folder_bounds = native_target(root, package, size, ancestor='dir_list',
+                                                 label=folder, resource='android:id/title')
+    facts = {'surface': surface, 'drawer': drawer, 'downloadsTarget': root_target,
+             'toolbarTarget': toolbar_target, 'ownedFolderTarget': folder_target}
+
+    if drawer in ('visible', 'ambiguous'):
+        return 'downloads_root', root_bounds, facts
+    if surface == 'owned_directory':
+        return 'owned_directory', None, facts
+    if surface == 'downloads_directory':
+        return 'owned_download_folder', folder_bounds, facts
+    return 'show_roots', toolbar_bounds if surface == 'unproven' else None, facts
 
 
 class Picker:
@@ -283,6 +353,7 @@ class Picker:
 
     def enter(self):
         self.report['pickerStep'] = 'foreground'
+        self.report.pop('pickerNavigation', None)
         self.window = wait_for(lambda: target if picker_activity(target := foreground()) else None,
                                'documents_ui_unconfirmed')
         self.package = self.window.split('/')[0]
@@ -312,37 +383,67 @@ class Picker:
         require(result, 'picker_hierarchy_unavailable')
         return result if foreground() == self.window else None
 
-    def tap(self, **expected):
-        def sample():
-            xml = self.hierarchy()
-            return xml and native_hit(xml, self.package, self.size, **expected)
+    def stable(self, probe):
+        def twice():
+            first = self.hierarchy()
+            first = probe(picker_tree(first)) if first else None
+            if first:
+                second = self.hierarchy()
+                if second and probe(picker_tree(second)) == first:
+                    self.report.setdefault('pickerNavigation', {})['stability'] = 'matched'
+                    return first
+            self.report.setdefault('pickerNavigation', {})['stability'] = 'changed' if first else 'unproven'
+            return None
 
-        def stable():
-            before = sample()
-            return before if before and sample() == before else None
+        return wait_for(twice, 'picker_target_unconfirmed', timeout=30)
 
-        left, top, right, bottom = wait_for(stable, 'picker_target_unconfirmed', timeout=30)
+    def tap_bounds(self, bounds):
+        left, top, right, bottom = bounds
         require(self.window and foreground() == self.window, 'documents_ui_unconfirmed')
         adb('shell', 'input', 'tap', (left + right) // 2, (top + bottom) // 2)
 
+    def tap(self, *, diagnostic=None, **expected):
+        def probe(root):
+            state, bounds = native_target(root, self.package, self.size, **expected)
+            if diagnostic:
+                self.report.setdefault('pickerNavigation', {})[diagnostic] = state
+            return bounds
+
+        self.tap_bounds(self.stable(probe))
+
     def directory(self, folder):
-        self.report['pickerStep'] = 'show_roots'
-        xml = wait_for(self.hierarchy, 'picker_directory_unconfirmed')
-        if not in_picker_scope(picker_tree(xml), self.package, 'roots_list'):
-            self.tap(ancestor='toolbar', description='Show roots')
-        self.report['pickerStep'] = 'downloads_root'
-        self.tap(ancestor='roots_list', label='Downloads', resource='android:id/title')
-        self.report['pickerStep'] = 'owned_download_folder'
-        self.tap(ancestor='dir_list', label=folder, resource='android:id/title')
+        minimum = 0
+
+        def next_step(root):
+            step, bounds, facts = picker_navigation(root, self.package, self.size, folder)
+            self.report['pickerNavigation'] = facts
+            self.report['pickerStep'] = step
+            rank = PICKER_PATH.index(step)
+            if rank < minimum:
+                facts['transition'] = 'not_observed'
+                return None
+            return (step, bounds) if bounds or step == 'owned_directory' else None
+
+        # The only navigation is forward through observed surfaces. A failed
+        # transition is polled, never sent again or replaced with another tap.
+        for _ in PICKER_PATH:
+            step, bounds = self.stable(next_step)
+            if step == 'owned_directory':
+                require(self.window and foreground() == self.window, 'documents_ui_unconfirmed')
+                return
+            self.tap_bounds(bounds)
+            minimum = PICKER_PATH.index(step) + 1
+        raise GuiFailure('picker_target_unconfirmed')
 
     def save(self, folder):
         self.report['pickerStep'] = 'save_action'
-        self.tap(ancestor='container_save', resource='android:id/button1', folder=folder,
-                 save_name=ARCHIVE)
+        self.tap(diagnostic='saveTarget', ancestor='container_save', resource='android:id/button1',
+                 folder=folder, save_name=ARCHIVE)
 
     def open(self, folder, filename):
         self.report['pickerStep'] = 'open_file_row'
-        self.tap(ancestor='dir_list', label=filename, resource='android:id/title', folder=folder)
+        self.tap(diagnostic='fileTarget', ancestor='dir_list', label=filename,
+                 resource='android:id/title', folder=folder)
 
     def cancel(self):
         self.report['pickerStep'] = 'cancel'

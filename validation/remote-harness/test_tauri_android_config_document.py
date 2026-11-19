@@ -30,6 +30,17 @@ def chooser(*content):
     return '<hierarchy rotation="0">' + ''.join(content) + '</hierarchy>'
 
 
+def breadcrumb(*parts):
+    return node('com.android.documentsui:id/horizontal_breadcrumb', ''.join(
+        node(f'{PROVIDER}:id/breadcrumb_text', text=name, bounds=f'[{20 + 170 * i},80][{180 + 170 * i},132]',
+             enabled='true' if i == len(parts) - 1 else 'false') for i, name in enumerate(parts)))
+
+
+def picker_row(label, bounds='[20,150][400,250]', **attributes):
+    return node(f'{PROVIDER}:id/item_root', node('android:id/title', text=label),
+                bounds=bounds, **{'clickable': 'true', **attributes})
+
+
 def catalog_bytes(font):
     return json.dumps({'version': 1, 'hosts': [], 'networkProfiles': [],
                        'preferences': {'terminalFontSize': font}}, separators=(',', ':')).encode()
@@ -183,19 +194,47 @@ class ForegroundTests(unittest.TestCase):
 
 class PickerTests(unittest.TestCase):
     def hit(self, xml, **options):
-        return config.native_hit(xml, PROVIDER, (1080, 2000), **options)
+        return config.native_target(config.picker_tree(xml), PROVIDER, (1080, 2000), **options)[1]
+
+    def test_reopened_in_owned_folder_taps_only_the_exact_file(self):
+        crumb = node(f'{PROVIDER}:id/horizontal_breadcrumb',
+                     node(f'{PROVIDER}:id/breadcrumb_text', text='Downloads', enabled='false',
+                          bounds='[20,80][180,132]') +
+                     node(f'{PROVIDER}:id/breadcrumb_text', text=FOLDER, bounds='[200,80][500,132]'))
+        file = node(f'{PROVIDER}:id/dir_list',
+                    node(f'{PROVIDER}:id/item_root', node('android:id/title', text=config.ARCHIVE),
+                         clickable='true', bounds='[20,150][400,250]'))
+        toolbar = node(f'{PROVIDER}:id/toolbar',
+                       node('', clickable='true', bounds='[16,16][72,72]',
+                            **{'content-desc': 'Show roots'}))
+        # An inactive drawer container can still be represented in the tree.
+        inactive_drawer = node(f'{PROVIDER}:id/roots_list', bounds='[0,0][0,0]')
+        xml = chooser(toolbar, crumb, file, inactive_drawer)
+        with patch.object(config, 'owned_display', return_value=(1080, 2000)):
+            picker = config.Picker({})
+        picker.package, picker.window = PROVIDER, SYSTEM_PICKER
+
+        def one_sample(probe, error, **kwargs):
+            return probe() or config.require(False, error)
+
+        with patch.object(picker, 'hierarchy', return_value=xml), \
+                patch.object(config, 'foreground', return_value=SYSTEM_PICKER), \
+                patch.object(config, 'wait_for', side_effect=one_sample), patch.object(config, 'adb') as adb:
+            picker.directory(FOLDER)
+            picker.open(FOLDER, config.ARCHIVE)
+        adb.assert_called_once_with('shell', 'input', 'tap', 210, 200)
 
     def test_file_requires_exact_owned_breadcrumb_and_directory_scope(self):
         row = node('', node('android:id/title', text=config.ARCHIVE), clickable='true',
                    bounds='[20,40][400,140]')
         listing = node(f'{PROVIDER}:id/dir_list', row)
-        breadcrumb = node('com.android.documentsui:id/horizontal_breadcrumb',
-                          node('', text=FOLDER))
+        trail = breadcrumb('Downloads', FOLDER)
         options = {'ancestor': 'dir_list', 'label': config.ARCHIVE,
                    'resource': 'android:id/title', 'folder': FOLDER}
         self.assertIsNone(self.hit(chooser(listing), **options))
-        self.assertIsNone(self.hit(chooser(breadcrumb, row), **options))
-        self.assertEqual(self.hit(chooser(breadcrumb, listing), **options), (20, 40, 400, 140))
+        self.assertIsNone(self.hit(chooser(trail, row), **options))
+        self.assertIsNone(self.hit(chooser(breadcrumb('Downloads', FOLDER, 'other'), listing), **options))
+        self.assertEqual(self.hit(chooser(trail, listing), **options), (20, 40, 400, 140))
 
     def test_duplicate_foreign_and_offscreen_rows_are_rejected(self):
         options = {'ancestor': 'roots_list', 'label': 'Downloads', 'resource': 'android:id/title'}
@@ -214,15 +253,125 @@ class PickerTests(unittest.TestCase):
 
     def test_save_requires_the_default_name_in_the_system_save_form(self):
         button = node('android:id/button1', clickable='true', bounds='[10,20][100,60]')
-        breadcrumb = node(f'{PROVIDER}:id/horizontal_breadcrumb', node('', text=FOLDER))
+        trail = breadcrumb('Downloads', FOLDER)
         title = node('android:id/title', **{'class': 'android.widget.EditText', 'text': config.ARCHIVE})
         options = {'ancestor': 'container_save', 'resource': 'android:id/button1',
                    'folder': FOLDER, 'save_name': config.ARCHIVE}
-        self.assertIsNone(self.hit(chooser(breadcrumb, title,
+        self.assertIsNone(self.hit(chooser(trail, title,
                                          node(f'{PROVIDER}:id/container_save', button)), **options))
-        self.assertEqual(self.hit(chooser(breadcrumb,
+        self.assertEqual(self.hit(chooser(trail,
                                          node(f'{PROVIDER}:id/container_save', title + button)),
                                   **options), (10, 20, 100, 60))
+
+    def run_path(self, initial, moves, *, save=False, expected_error=None):
+        with patch.object(config, 'owned_display', return_value=(1080, 2000)):
+            picker = config.Picker({})
+        picker.package, picker.window = PROVIDER, SYSTEM_PICKER
+        current, taps = initial, []
+
+        def adb(*args):
+            nonlocal current
+            self.assertEqual(args[:3], ('shell', 'input', 'tap'))
+            point = args[3:]
+            taps.append(point)
+            self.assertIn(point, moves)
+            current = moves[point]
+
+        def one_sample(probe, error, **kwargs):
+            return probe() or config.require(False, error)
+
+        def select():
+            picker.directory(FOLDER)
+            picker.save(FOLDER) if save else picker.open(FOLDER, config.ARCHIVE)
+
+        with patch.object(picker, 'hierarchy', side_effect=lambda: current), \
+                patch.object(config, 'foreground', return_value=SYSTEM_PICKER), \
+                patch.object(config, 'wait_for', side_effect=one_sample), patch.object(config, 'adb', side_effect=adb):
+            if expected_error:
+                with self.assertRaisesRegex(GuiFailure, '^' + expected_error + '$'):
+                    select()
+            else:
+                select()
+        return taps, picker.report
+
+    def test_downloads_current_title_and_exact_folder_skip_drawer(self):
+        title = node(f'{PROVIDER}:id/toolbar',
+                     node('', text='Downloads', bounds='[80,10][320,58]',
+                          **{'class': 'android.widget.TextView'}))
+        inactive_drawer = node(f'{PROVIDER}:id/drawer_roots',
+                               node(f'{PROVIDER}:id/roots_list', bounds='[0,50][360,1000]'),
+                               **{'visible-to-user': 'false'})
+        listing = node(f'{PROVIDER}:id/dir_list', picker_row(FOLDER))
+        owned = chooser(breadcrumb('Downloads', FOLDER),
+                        node(f'{PROVIDER}:id/dir_list', picker_row(config.ARCHIVE, '[450,150][800,250]')))
+        taps, report = self.run_path(chooser(title, listing, inactive_drawer),
+                                     {(210, 200): owned, (625, 200): None})
+        self.assertEqual(taps, [(210, 200), (625, 200)])
+        self.assertEqual(report['pickerNavigation']['fileTarget'], 'ready')
+
+    def test_create_can_still_open_drawer_select_downloads_enter_folder_and_save(self):
+        toolbar = node(f'{PROVIDER}:id/toolbar',
+                       node('', clickable='true', bounds='[16,16][72,72]',
+                            **{'content-desc': 'Show roots'}))
+        drawer = chooser(toolbar, node(f'{PROVIDER}:id/roots_list', picker_row('Downloads', '[20,80][300,130]'),
+                                       bounds='[0,50][360,1000]'))
+        downloads = chooser(toolbar, breadcrumb('Downloads'),
+                             node(f'{PROVIDER}:id/dir_list', picker_row(FOLDER)))
+        owned = chooser(breadcrumb('Downloads', FOLDER), node(f'{PROVIDER}:id/container_save',
+                       node('android:id/title', text=config.ARCHIVE, **{'class': 'android.widget.EditText'}) +
+                       node('android:id/button1', clickable='true', bounds='[700,800][900,860]')))
+        taps, report = self.run_path(chooser(toolbar),
+                                     {(44, 44): drawer, (160, 105): downloads,
+                                      (210, 200): owned, (800, 830): None}, save=True)
+        self.assertEqual(taps, [(44, 44), (160, 105), (210, 200), (800, 830)])
+        self.assertEqual(report['pickerNavigation']['saveTarget'], 'ready')
+
+    def test_missing_downloads_in_visible_drawer_never_taps_through_or_reopens(self):
+        toolbar = node(f'{PROVIDER}:id/toolbar',
+                       node('', clickable='true', bounds='[16,16][72,72]',
+                            **{'content-desc': 'Show roots'}))
+        drawer = node(f'{PROVIDER}:id/roots_list', picker_row('local untrusted label', '[20,80][300,130]'),
+                      bounds='[0,50][360,1000]')
+        taps, report = self.run_path(chooser(toolbar, drawer), {}, expected_error='picker_target_unconfirmed')
+        self.assertEqual(taps, [])
+        self.assertEqual(report['pickerNavigation']['drawer'], 'visible')
+        self.assertEqual(report['pickerNavigation']['downloadsTarget'], 'missing')
+        self.assertNotIn('local untrusted label', json.dumps(report))
+        taps, report = self.run_path(chooser(toolbar), {(44, 44): chooser(toolbar)},
+                                     expected_error='picker_target_unconfirmed')
+        self.assertEqual(taps, [(44, 44)])
+        self.assertEqual(report['pickerNavigation']['transition'], 'not_observed')
+
+    def test_current_known_folder_needs_one_clickable_file_and_no_fallback(self):
+        file = picker_row(config.ARCHIVE)
+        for rows, reason in ((picker_row('untrusted private filename'), 'missing'),
+                             (file + file, 'ambiguous'),
+                             (picker_row(config.ARCHIVE, clickable='false'), 'not_clickable')):
+            with self.subTest(reason=reason):
+                initial = chooser(breadcrumb('Downloads', FOLDER), node(f'{PROVIDER}:id/dir_list', rows))
+                taps, report = self.run_path(initial, {}, expected_error='picker_target_unconfirmed')
+                self.assertEqual(taps, [])
+                self.assertEqual(report['pickerNavigation']['surface'], 'owned_directory')
+                self.assertEqual(report['pickerNavigation']['fileTarget'], reason)
+                self.assertNotIn('untrusted private filename', json.dumps(report))
+
+    def test_exact_file_must_keep_the_same_bounds_across_fresh_samples(self):
+        with patch.object(config, 'owned_display', return_value=(1080, 2000)):
+            picker = config.Picker({})
+        picker.package, picker.window = PROVIDER, SYSTEM_PICKER
+        trail = breadcrumb('Downloads', FOLDER)
+        frames = [chooser(trail, node(f'{PROVIDER}:id/dir_list', picker_row(config.ARCHIVE, bounds)))
+                  for bounds in ('[20,150][400,250]', '[20,170][400,270]')]
+
+        def one_sample(probe, error, **kwargs):
+            return probe() or config.require(False, error)
+
+        with patch.object(picker, 'hierarchy', side_effect=frames), \
+                patch.object(config, 'wait_for', side_effect=one_sample), patch.object(config, 'adb') as adb:
+            with self.assertRaisesRegex(GuiFailure, '^picker_target_unconfirmed$'):
+                picker.open(FOLDER, config.ARCHIVE)
+        adb.assert_not_called()
+        self.assertEqual(picker.report['pickerNavigation']['stability'], 'changed')
 
     def test_no_tap_if_foreground_changes_after_bounds_are_stable(self):
         with patch.object(config, 'owned_display', return_value=(1080, 2000)):

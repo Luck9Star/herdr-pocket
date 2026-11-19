@@ -41,6 +41,8 @@ R6 在 iPhone 17 Pro Max、iOS 26.2 模拟器编译并运行 XCTest 驱动，经
 
 普通案失败，换钥未运行。回环服务端在清理前后均记录 1 条已关闭的 A 探测连接，认证、PTY、Shell、输入和输出均为 0。模拟器、夹具和临时文件均已清理。工件仅含 `result.json`，ZIP SHA256 为 `304e6e1a8cb34c470fc7622b5df69c833a49d0798a49857bdf48c0ac1ce3f98d`。[运行 44429685294](https://github.com/Luck9Star/herdr-pocket/actions/runs/44429685294/job/135243553257) · [证据 ZIP](https://github.com/Luck9Star/herdr-pocket/actions/runs/44429685294/artifacts/14487242429)
 
+PR #6 保留为草稿。下一次原生复验先在同一已核验 WebView 的认证页采集脱敏 AX 诊断。记录候选的角色枚举、预期标识与预期标签各自的匹配计数、同窗同 WebView 归属、矩形有效性及命中结果。公开工件只保留计数、枚举和布尔值，省略原始 AX 名称、字段值和凭据。用这些证据区分原生树未暴露预期角色或名称，与原生节点已存在但驱动映射未匹配的情况。继续保留唯一归属和命中门槛。Tauri iOS 普通 SSH 与换钥均完成回环验收后再评估合并。
+
 ## R22 Android 设备证据
 
 两次作业使用受控 API 35 x86_64 模拟器与回环 SSH，均完成普通连接、主机密钥变化、终端回显和断开。两次使用不同源码，原始 ZIP 已完整重新下载并计算 SHA256。[可复核的运行、工件及内部结果索引](evidence/mobile-ssh-auth-r23/r22-actions.json)

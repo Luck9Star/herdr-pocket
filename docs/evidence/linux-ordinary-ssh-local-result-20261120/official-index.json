@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "verifiedOn": "2026-11-20",
+  "artifacts": [
+    {
+      "shell": "flutter",
+      "sourceSha": "c5aa64a0c9703d0494f5694ec0028018f7f2a0b8",
+      "runId": 44583976852,
+      "runAttempt": 1,
+      "jobId": 135771839335,
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44583976852/job/135771839335",
+      "githubArtifactId": 14560117102,
+      "githubArtifactName": "flutter-linux-direct-ssh-password-c5aa64a0c9703d0494f5694ec0028018f7f2a0b8",
+      "githubArtifactDigest": "sha256:81808f17cf9c7333d6c1ac01d77144d5ebf147a5fba506660ecca6c523b8abb9",
+      "githubArtifactExpiresAt": "2026-12-03T18:06:57Z",
+      "githubArtifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44583976852/artifacts/14560117102",
+      "zip": "44583976852-14560117102.zip",
+      "zipSizeBytes": 95858,
+      "sha256": "81808f17cf9c7333d6c1ac01d77144d5ebf147a5fba506660ecca6c523b8abb9",
+      "ocrEngine": "tesseract 5.3.4",
+      "freshMarkerAndAdjacentTokenVisible": true,
+      "returnedHome": true,
+      "credentialFieldsCleared": true,
+      "cleanup": {
+        "ownedFlutterProcessStopped": true,
+        "peerListenerReleased": true,
+        "fixturePasswordCleared": true,
+        "fixtureDirectoryRemoved": true
+      },
+      "members": {
+        "ordinary-disconnect.png": {
+          "sizeBytes": 33503,
+          "sha256": "f324256c21cbb5a61991405f40266f48b106d205b58fb5f38a1f60924605c05b",
+          "imageSize": [
+            1920,
+            1080
+          ],
+          "bounds": [
+            264,
+            76,
+            560,
+            66
+          ],
+          "windowBounds": [
+            0,
+            0,
+            1280,
+            720
+          ],
+          "capture": "unscaled X11 Xvfb framebuffer PNG"
+        },
+        "ordinary-home.png": {
+          "sizeBytes": 40788,
+          "sha256": "c776f2616015b5d1433f57a8a7711a7e352c1cca86c51f45166a3b7667e0fddf",
+          "imageSize": [
+            1920,
+            1080
+          ],
+          "bounds": [
+            240,
+            101,
+            1024,
+            44
+          ],
+          "windowBounds": [
+            0,
+            0,
+            1280,
+            720
+          ],
+          "capture": "unscaled X11 Xvfb framebuffer PNG"
+        },
+        "ordinary-terminal.png": {
+          "sizeBytes": 41828,
+          "sha256": "400cd7123ae6a24b3fbbe810ea0c71a07e2fa16c54a50c19d239298f443b0ec6",
+          "imageSize": [
+            1920,
+            1080
+          ],
+          "terminalBounds": [
+            264,
+            120,
+            976,
+            584
+          ],
+          "targetBounds": [
+            336,
+            82,
+            171,
+            16
+          ],
+          "windowBounds": [
+            0,
+            0,
+            1280,
+            720
+          ],
+          "capture": "unscaled X11 Xvfb framebuffer PNG"
+        },
+        "result.json": {
+          "sizeBytes": 4884,
+          "sha256": "da549bc5c17a90eac81f18ca29583dca0d8501fa2da2e113024456b52b62e315"
+        }
+      }
+    },
+    {
+      "shell": "tauri",
+      "sourceSha": "c5aa64a0c9703d0494f5694ec0028018f7f2a0b8",
+      "runId": 44584102171,
+      "runAttempt": 1,
+      "jobId": 135772264557,
+      "jobUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44584102171/job/135772264557",
+      "githubArtifactId": 14560117602,
+      "githubArtifactName": "tauri-linux-direct-ssh-password-c5aa64a0c9703d0494f5694ec0028018f7f2a0b8",
+      "githubArtifactDigest": "sha256:691737c0b40cfdd25c61fff19d24c57f13b7bf6e49aeff8b668f2705bc6b4a08",
+      "githubArtifactExpiresAt": "2026-12-03T18:10:50Z",
+      "githubArtifactUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44584102171/artifacts/14560117602",
+      "zip": "44584102171-14560117602.zip",
+      "zipSizeBytes": 87984,
+      "sha256": "691737c0b40cfdd25c61fff19d24c57f13b7bf6e49aeff8b668f2705bc6b4a08",
+      "ocrEngine": "tesseract 5.3.4",
+      "freshMarkerAndAdjacentTokenVisible": true,
+      "returnedHome": true,
+      "credentialFieldsCleared": true,
+      "cleanup": {
+        "peerListenerReleased": true,
+        "fixturePasswordCleared": true,
+        "webdriverProcessStopped": true,
+        "webdriverPortsReleased": true,
+        "privateDirectoryRemoved": true
+      },
+      "members": {
+        "ordinary-disconnect.png": {
+          "sizeBytes": 43893,
+          "sha256": "22a2968773f8d588200611742344a7c2856b924ec3a2494c52cb9c155aea2e89",
+          "imageSize": [
+            1440,
+            1200
+          ],
+          "bounds": [
+            264,
+            76,
+            560,
+            66
+          ],
+          "capture": "native WebKitGTK WebDriver viewport"
+        },
+        "ordinary-home.png": {
+          "sizeBytes": 32912,
+          "sha256": "d0fbc04b60a63c9d787da5d8e3b3f3a9115923a79aaea106b6ee79bf19e1da85",
+          "imageSize": [
+            1440,
+            1200
+          ],
+          "bounds": [
+            264,
+            62,
+            560,
+            44
+          ],
+          "capture": "native WebKitGTK WebDriver viewport"
+        },
+        "ordinary-terminal.png": {
+          "sizeBytes": 29818,
+          "sha256": "4ccf9ab200cbf8ce56eda4f16a8c5a78770523224f7b21394fef33e8131f3357",
+          "imageSize": [
+            1440,
+            1200
+          ],
+          "terminalBounds": [
+            276,
+            132,
+            1112,
+            1040
+          ],
+          "targetBounds": [
+            336,
+            83,
+            161,
+            14
+          ],
+          "capture": "native WebKitGTK WebDriver viewport"
+        },
+        "result.json": {
+          "sizeBytes": 3743,
+          "sha256": "8c62ce8cabc8ad0825df1e38b032ac2cbe49eec5ddad979dcb31cf1b7d40efa6"
+        }
+      }
+    }
+  ]
+}

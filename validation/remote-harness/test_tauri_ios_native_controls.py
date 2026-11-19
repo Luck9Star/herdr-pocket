@@ -538,17 +538,32 @@ final class Observations {
                            element: fallback.element)
     }
 }
-struct Adapter {
+// Match the XCTestCase driver's reference semantics so the Swift compiler
+// checks escaping instance captures in the extracted production methods.
+final class Adapter {
     let app: App
     let current: LiveControl
     let rows: [Observed]
     let blockers: [CGRect]
-    var observations: Observations? = nil
-    var formControls: [String: LiveControl] = [:]
-    var nativePhase = "ordinary_port"
-    var pathControls: [[Int]: LiveControl] = [:]
+    let observations: Observations?
+    let formControls: [String: LiveControl]
+    var nativePhase: String
+    let pathControls: [[Int]: LiveControl]
     let config: [String: Any] = ["fingerprintA": "SHA256:fixture-complete-old", "fingerprintB": "SHA256:fixture-complete-new"]
     var mobileFlow = false
+
+    init(app: App, current: LiveControl, rows: [Observed], blockers: [CGRect], observations: Observations? = nil,
+         formControls: [String: LiveControl] = [:], nativePhase: String = "ordinary_port", pathControls: [[Int]: LiveControl] = [:]) {
+        self.app = app
+        self.current = current
+        self.rows = rows
+        self.blockers = blockers
+        self.observations = observations
+        self.formControls = formControls
+        self.nativePhase = nativePhase
+        self.pathControls = pathControls
+    }
+
     func require(_ condition: Bool, _ reason: String) throws {
         if !condition { throw Rejected(reason: reason) }
     }
@@ -940,7 +955,7 @@ for insetKeyboard in insetKeyboards {
         (field.label, LiveControl(snapshot: field, hittable: true, element: Element()))
     })
     let samples = Observations([], occlusionSamples: [[statusBar]])
-    var candidate = Adapter(app: App(frame: screen), current: controls[host.label]!,
+    let candidate = Adapter(app: App(frame: screen), current: controls[host.label]!,
                             rows: formRows(moved, host: host, user: user, probe: probe),
                             blockers: [statusBar, insetKeyboard], observations: samples, formControls: controls)
     var succeeded = true

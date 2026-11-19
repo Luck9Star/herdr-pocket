@@ -2,7 +2,7 @@
 
 2026-11-19，本地验证通过两壳的活动终端、模拟键盘开合和设置往返。用户约定是从活动终端切到看板、网络或设置的实际页面后，保留原 SSH 会话和回显。切走时禁止终端输入，从底栏返回终端时保持键盘收起。主动断开才关闭本轮测试会话。
 
-两壳修前使用 `0705b9b70ac1cda2b58b20e0ebaf7596cbd8ebcb`。Flutter 修后为 `b6f89a3bcf317bdf69211d6a3c11ce7c7f491b71`，包含 `e47b593`。Tauri 修后为 `ea1694c29e3d9f5a12fca35875d54c3b9396ea55`。画板来自 `c063e785da173ad41bc740cf0dc64eaa8ccce3fb` 的[冻结设计](../design/penpot/direct-ssh-mobile.md)。Flutter Android、Flutter iOS 与 Tauri iOS 模拟器均通过本批导航验收。Tauri Android R3 已复现系统键盘可见、网页状态未同步的问题。[普通 SSH 原生证据](72-mobile-ssh-auth-snapshot.md)
+两壳修前使用 `0705b9b70ac1cda2b58b20e0ebaf7596cbd8ebcb`。Flutter 修后为 `b6f89a3bcf317bdf69211d6a3c11ce7c7f491b71`，包含 `e47b593`。Tauri 修后为 `ea1694c29e3d9f5a12fca35875d54c3b9396ea55`。画板来自 `c063e785da173ad41bc740cf0dc64eaa8ccce3fb` 的[冻结设计](../design/penpot/direct-ssh-mobile.md)。Flutter Android、Flutter iOS 与 Tauri iOS 模拟器均通过本批导航验收。Tauri Android R3 已复现系统键盘可见、网页状态未同步的问题。修复已通过本地回归，修后原生 Android 仍待复验。[普通 SSH 原生证据](72-mobile-ssh-auth-snapshot.md)
 
 ## 同尺寸画面与测量
 
@@ -83,6 +83,36 @@ Tauri Android R1 在连接阶段报告 `direct_active_ui_invalid`。Tauri iOS R1
 
 ## Tauri Android 原生模拟器 R2 与 R3
 
-两轮在 `active_keyboard_opened` 报 `direct_active_ui_invalid`。R2 记录连接、终端和断开按钮均在，WebView 仍显示「打开键盘」，「收起键盘」的矩形为零。R2 驱动检查过本应用键盘可见，失败工件没有保留点击前后的 IME 样本，无法排除键盘是从表单阶段残留的。R3 改用原生触摸，并在触摸前后分别独立确认应用自有 IME 从 `owned_hidden` 到 `owned_visible`。此时 WebView 仍显示「打开键盘」，「收起键盘」的矩形仍为零，CSS 视口维持 393 × 851。R3 因此复现了系统键盘可见但网页状态没有同步的问题，修复和原生复验待完成。
+两轮在 `active_keyboard_opened` 报 `direct_active_ui_invalid`。R2 记录连接、终端和断开按钮均在，WebView 仍显示「打开键盘」，「收起键盘」的矩形为零。R2 驱动检查过本应用键盘可见，失败工件没有保留点击前后的 IME 样本，无法排除键盘是从表单阶段残留的。R3 改用原生触摸，并在触摸前后分别独立确认应用自有 IME 从 `owned_hidden` 到 `owned_visible`。此时 WebView 仍显示「打开键盘」，「收起键盘」的矩形仍为零，CSS 视口维持 393 × 851。R3 因此复现了系统键盘可见但网页状态没有同步的问题。修订版的本地证据见下节，原生复验仍待完成。
 
 两轮失败时均记录两条连接，其中活动会话有一次认证、一次 PTY、一次 Shell，零输入，仍打开。普通案八步未完成，未取得换钥结果。作业确认移除其创建的模拟器，公开摘要没有主动断开回执或失败画面。R3 的输入法证据仅证明可见性和所属应用。[R2 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44460008448/job/135344209659) · [R2 工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44460008448/artifacts/14499952750) · [R3 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44461890953/job/135350418144) · [R3 工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44461890953/artifacts/14500966515) · [失败差异与哈希](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r2-r3/official-index.json)
+
+## Tauri Android 键盘修复的本地对照
+
+修前使用 `9825bffdf8d6be0dadb6655a2ab22964812dd248`，修后使用 `b11e2b94c18ca5b11e876fc93fc71c9c806b6e7d`。隔离构建在 Chromium 157 运行实际产品页面，CSS 安全区和原生 IME 状态由测试提供。页面的点击与命中来自浏览器，SSH 经临时 IPC 桥使用实际 Rust 传输和独立 Paramiko 回环。图片为 DPR 1 的浏览器原图，系统键盘未绘制。
+
+| 开键盘后的试验尺寸 | 布局视口不缩时的修前原图 | 布局视口不缩时的修后原图 |
+| --- | --- | --- |
+| 320 × 640 | [修前](evidence/mobile-ssh-terminal-navigation-20261119/android-ime-browser/before-320x640-unchanged-opened.png) | [修后](evidence/mobile-ssh-terminal-navigation-20261119/android-ime-browser/after-320x640-unchanged-opened.png) |
+| 390 × 844 | [修前](evidence/mobile-ssh-terminal-navigation-20261119/android-ime-browser/before-390x844-unchanged-opened.png) | [修后](evidence/mobile-ssh-terminal-navigation-20261119/android-ime-browser/after-390x844-unchanged-opened.png) |
+| 393 × 851 | [修前](evidence/mobile-ssh-terminal-navigation-20261119/android-ime-browser/before-393x851-unchanged-opened.png) | [修后](evidence/mobile-ssh-terminal-navigation-20261119/android-ime-browser/after-393x851-unchanged-opened.png) |
+
+修前三档仍显示且可命中「打开键盘」，底栏维持可见。修后三档显示且命中「收起键盘」，隐藏底栏，标题、端点、收起和断开控件均在有效可见区内并可命中。三档有效高度依次为 402、553 和 551 pt。393 × 851 使用与 R3 一致的起始视口，测试设置的键盘遮挡量为 300 pt。
+
+| 393 × 851 的键盘响应 | 布局／可视视口高度 | 原生观测剩余覆盖 | 应用有效高度 | 底部留量 |
+| --- | ---: | ---: | ---: | ---: |
+| 修前均不缩 | 851／851 | 300 | 851 | 0 |
+| 修后均不缩 | 851／851 | 300 | 551 | 300 |
+| 修后只缩 VisualViewport | 851／551 | 300 | 551 | 300 |
+| 修后原生 WebView 已缩 | 551／551 | 0 | 551 | 0 |
+
+只缩 VisualViewport 与原生 WebView 已缩时，有效高度同为 551 pt。后一种情况没有二次扣减。[只缩 VisualViewport](evidence/mobile-ssh-terminal-navigation-20261119/android-ime-browser/after-393x851-visual-opened.png) · [原生 WebView 缩高模拟，图为 393 × 551](evidence/mobile-ssh-terminal-navigation-20261119/android-ime-browser/after-393x851-native-opened.png)
+
+修后点击「收起键盘」和模拟系统 Back 都恢复底栏可用状态。Back 仅改变受控的系统 IME 观测，用来验证 DOM 焦点可能保留时页面仍会复位。返回看板清除键盘状态，再进终端保留同一目标。修前 3 条与修后 5 条真实回环轨迹均记录一次探测，第二条连接认证、PTY 和 Shell 各一次，未向服务器提交输入。主动断开后服务端确认会话 #2 关闭，桥和夹具退出。系统 Back、原生 Android 键盘消息和输入法像素仍需同机验证。
+
+从仓库根目录运行以下命令，分别复跑产品的视口逻辑回归，并检查归档像素尺寸、哈希、控件命中、键盘恢复和服务端计数。浏览器采图批次的原始探针与数据摘要见[来源索引](evidence/mobile-ssh-terminal-navigation-20261119/android-ime-browser/index.json)。
+
+```sh
+node --test validation/tauri/test/mobile-viewport.test.mjs
+node docs/evidence/mobile-ssh-terminal-navigation-20261119/android-ime-browser/verify.mjs
+```

@@ -35,6 +35,73 @@ void main() {
     expect(b.visible.value,isFalse); expect(b.inputEligible.value,isFalse);
     tabs.dispose();
   });
+  test('D2 stows only the secondary lease and can restore its original side', () {
+    final tabs = HostTabs();
+    addTearDown(tabs.dispose);
+    tabs.open(profile('A', 'tailscale'));
+    final a = tabs.active!;
+    tabs.open(profile('B', 'easytier'));
+    final b = tabs.active!;
+    tabs.splitWith(a.id);
+    tabs.select(a.id);
+    final events = <String>[];
+    a.inputEligible.addListener(() => events.add('A input: ${a.inputEligible.value}'));
+    b.inputEligible.addListener(() => events.add('B input: ${b.inputEligible.value}'));
+    b.visible.addListener(() => events.add('B visible: ${b.visible.value}'));
+
+    tabs.setSplitAvailable(false);
+    tabs.setSplitAvailable(false);
+    expect(tabs.splitId, b.id);
+    expect(tabs.splitLeftId, b.id);
+    expect(tabs.active, same(a));
+    expect(a.visible.value, isTrue);
+    expect(a.inputEligible.value, isTrue);
+    expect(b.visible.value, isFalse);
+    expect(b.inputEligible.value, isFalse);
+    tabs.setSplitAvailable(true);
+    expect(events, ['B visible: false', 'B visible: true']);
+    expect(tabs.active, same(a));
+    expect(tabs.splitLeftId, b.id);
+    expect(b.inputEligible.value, isFalse);
+  });
+  test('D2 does not revive a stowed split after selection, close or reconciliation', () {
+    final tabs = HostTabs();
+    addTearDown(tabs.dispose);
+    final first = profile('A', 'tailscale');
+    final second = profile('B', 'easytier');
+    tabs.open(first);
+    final a = tabs.active!;
+    tabs.open(second);
+    final b = tabs.active!;
+    tabs.setSplitAvailable(false);
+    tabs.splitWith(a.id);
+    expect(tabs.splitId, isNull);
+    tabs.setSplitAvailable(true);
+    tabs.splitWith(a.id);
+    tabs.setSplitAvailable(false);
+    tabs.select(a.id);
+    tabs.setSplitAvailable(true);
+    expect(tabs.splitId, isNull);
+    expect(tabs.active, same(a));
+    expect(b.visible.value, isFalse);
+    expect(b.inputEligible.value, isFalse);
+
+    tabs.splitWith(b.id);
+    tabs.setSplitAvailable(false);
+    tabs.closeSplit();
+    tabs.setSplitAvailable(true);
+    expect(tabs.splitId, isNull);
+    expect(b.visible.value, isFalse);
+
+    tabs.splitWith(b.id);
+    tabs.setSplitAvailable(false);
+    tabs.reconcile([first, second.change(enabled: false, now: 1000)]);
+    tabs.setSplitAvailable(true);
+    expect(tabs.tabs, [a]);
+    expect(tabs.active, same(a));
+    expect(tabs.splitId, isNull);
+    expect(tabs.splitLeftId, isNull);
+  });
   test('MT01 MT06 same host has independent views; disabling it closes only its views',() {
     final p = profile('A','zerotier'), tabs = HostTabs(); tabs.open(p); final old = tabs.active;
     tabs.select(null); tabs.open(p); expect(identical(tabs.active,old),isFalse); expect(tabs.tabs.length,2);

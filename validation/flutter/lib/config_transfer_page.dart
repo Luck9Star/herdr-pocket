@@ -96,6 +96,8 @@ class _ConfigTransferPageState extends State<ConfigTransferPage> {
           ? '受影响的标签已变化 · 请重新核对确认。'
           : error is RemoteFailure && error.code == 'catalog_transfer_close_unconfirmed'
           ? '受影响的标签已停用，但连接关闭未确认 · 本次未保存，请先核验原连接。'
+          : error is RemoteFailure && error.code == 'catalog_conflict'
+          ? '目录版本冲突 · 本次未保存，请返回重新读取核验。'
           : error is RemoteFailure && widget.catalog.ready
           ? '导入选择冲突、容量不足或审查计划已过期 · 尚未保存，请修正并重新审查。'
           : '操作未确认或目录版本冲突 · 文件或本机保存可能已生效，请返回重新读取核验；不会重放。'; });

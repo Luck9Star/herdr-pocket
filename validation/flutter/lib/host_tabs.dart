@@ -38,19 +38,28 @@ class HostTab {
   RetainedHostScreen? Function()? _takeScreen;
   RetainedHostScreen? _retainedScreen;
   RetainedHostScreen? get retainedScreen => _retainedScreen;
+  final _routeClosures = <Future<void>>{};
   bool _retired = false;
   bool get retired => _retired;
-  VoidCallback registerTransport(Future<void> Function() close,{RetainedHostScreen? Function()? takeScreen}) {
+  ReleaseHostTransport registerTransport(Future<void> Function() close,{RetainedHostScreen? Function()? takeScreen}) {
     _closeTransport = close;
     _takeScreen = takeScreen;
-    return () {
-      if (identical(_closeTransport,close)) { _closeTransport = null; _takeScreen = null; }
+    return (closing,screen) {
+      if (_disposed || _retired || !identical(_closeTransport,close)) { screen?.terminal.dispose(); return; }
+      _closeTransport = null; _takeScreen = null;
+      if (screen != null) { _retainedScreen?.terminal.dispose(); _retainedScreen = screen; }
+      _routeClosures.add(closing);
+      unawaited(closing.then<void>((_) { _routeClosures.remove(closing); },onError:(Object _,StackTrace __) {}));
     };
   }
-  Future<void> closeTransport() => _closeTransport?.call() ?? Future<void>.value();
+  Future<void> closeTransport() async {
+    final close = _closeTransport;
+    await Future.wait({..._routeClosures,if (close != null) Future<void>.sync(close)});
+  }
   void _retainScreen() {
     _retired = true;
-    _retainedScreen = _takeScreen?.call();
+    final screen = _takeScreen?.call();
+    if (screen != null) { _retainedScreen?.terminal.dispose(); _retainedScreen = screen; }
     _reportRetirement('retiring');
   }
   void _reportRetirement(String state) {
@@ -63,6 +72,7 @@ class HostTab {
     visible.value = false; layoutHidden.value = false;
     summaryLease?.close(); summaryLease = null;
     _closeTransport = null; _takeScreen = null;
+    _routeClosures.clear();
     _binding = null; _adapter = null; authorization = null; consumed = false;
   }
   bool _disposed = false;

@@ -142,11 +142,13 @@ class NetworkProfile {
 /// A connection freezes one explicit provider revision. Readiness must come
 /// from the native provider and exact local identity, never a GUI label.
 class NetworkConnectionBinding {
-  const NetworkConnectionBinding(this.profile,this.stillCurrent,{this.changes,this.fontSize});
+  const NetworkConnectionBinding(this.profile,this.stillCurrent,{this.changes,this.fontSize,this.commandsAllowed});
   final NetworkProfile? profile;
   final bool Function() stillCurrent;
   final Listenable? changes;
   final int Function()? fontSize;
+  final bool Function()? commandsAllowed;
+  bool get canUseCommands => commandsAllowed?.call() ?? true;
   int get terminalFontSize => fontSize?.call() ?? 14;
   String get label => profile == null ? '系统直连（沿用系统路由）' : '${profile!.label} · ${profile!.provider}';
   void requireTransport({bool overlayReady=false}) {

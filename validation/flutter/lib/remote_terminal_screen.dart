@@ -1,7 +1,8 @@
 import 'package:terminal_view/core.dart';
 import 'remote_frame_geometry.dart';
 
-typedef RegisterHostTransport = void Function() Function(Future<void> Function(),{
+typedef ReleaseHostTransport = void Function(Future<void> closing, RetainedHostScreen? screen);
+typedef RegisterHostTransport = ReleaseHostTransport Function(Future<void> Function(),{
   RetainedHostScreen? Function()? takeScreen,
 });
 

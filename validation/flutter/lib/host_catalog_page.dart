@@ -72,7 +72,10 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
     unawaited(catalog.load());
   }
   @override void didChangeAppLifecycleState(AppLifecycleState state) => summaries.setForeground(state == AppLifecycleState.resumed);
-  void changed() { tabs.reconcile(catalog.ready ? catalog.profiles : const [],catalog.networkProfiles); if (mounted) setState(() {}); }
+  void changed() {
+    if (!catalog.recoveringConfigImport) tabs.reconcile(catalog.ready ? catalog.profiles : const [],catalog.networkProfiles);
+    if (mounted) setState(() {});
+  }
   void tabChanged() { if (mounted) setState(() { if (destination == 1 && tabs.active == null && tabs.tabs.isEmpty) destination = 0; }); }
   @override
   void dispose() {

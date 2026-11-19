@@ -1,18 +1,23 @@
-.ssh-mobile-only { display:none; }
+.ssh-mobile-only, #sidebar-toggle { display:none; }
 
 @media (min-width:600px) {
-  body:has(#host-home:not([hidden]) #home-ssh[data-ssh-close]:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-ssh-disconnected:not([hidden]) ~ #host-empty:not([hidden])) {
+  body:has(#host-home:not([hidden]) #home-ssh[data-ssh-close]:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) {
     --outcome-sidebar:224px;
     .app-header { display:none; }
     .route-tabs { position:fixed; z-index:4; inset:0 auto 0 0; display:flex; flex-direction:column; align-items:stretch; width:var(--outcome-sidebar); max-width:none; margin:0; padding:68px 8px 0; gap:8px; background:var(--hp-card); border-right:1px solid var(--hp-border); }
+    .route-tabs #sidebar-toggle { display:grid; place-items:center; border:0; background:transparent; position:absolute; top:8px; left:8px; width:44px; height:44px; padding:10px; }
     .route-tabs button { display:flex; align-items:center; justify-content:flex-start; flex:none; min-height:44px; padding:10px; text-align:left; font-size:0.875rem; }
+    .route-tabs #sidebar-toggle svg { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; }
     .route-tabs button span { display:none; }
     .route-tabs .empty-route-icon { display:block; flex:none; width:24px; height:24px; margin-right:10px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
     #host-home { max-width:none; margin:0 0 0 var(--outcome-sidebar); padding:0 40px 40px; }
     #host-home-status { display:none; }
-    #home-dashboard { position:relative; padding-top:62px; }
-    #host-board-intro { position:absolute; top:326px; left:16px; width:min(528px,calc(100% - 32px)); }
-    #host-board-intro h2 { display:none; }
+    #home-dashboard { position:relative; padding-top:78px; }
+    #home-dashboard:has(#host-ssh-disconnected:not([hidden])) { padding-top:62px; }
+    #host-board-intro { position:absolute; top:282px; left:16px; width:min(528px,calc(100% - 32px)); }
+    #home-dashboard:has(#host-ssh-disconnected:not([hidden])) #host-board-intro { top:326px; }
+    #host-board-intro h2 { position:absolute; top:-258px; left:-16px; margin:0; font-size:22px; line-height:26px; }
+    #home-dashboard:has(#host-ssh-disconnected:not([hidden])) #host-board-intro h2 { top:-302px; }
     #host-board-intro #home-open-ssh { width:100%; min-height:48px; font-size:14px; }
     #host-empty { max-width:560px; min-height:268px; padding:15px; text-align:start; border-radius:var(--hp-radius-card); }
     #host-empty .empty-terminal-icon { display:grid; place-items:center; width:44px; height:44px; border-radius:10px; color:var(--hp-brand); background:var(--hp-brandSoft); }
@@ -22,13 +27,40 @@
     #host-empty button { display:block; width:100%; min-height:48px; font-size:14px; }
     #host-empty #home-open-ssh { margin-top:12px; }
   }
-  @media (max-width:899px) {
-    body:has(#host-home:not([hidden]) #home-ssh[data-ssh-close]:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-ssh-disconnected:not([hidden]) ~ #host-empty:not([hidden])) {
+  @media (max-width:959px) {
+    body:has(#host-home:not([hidden]) #home-ssh[data-ssh-close]:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) {
       --outcome-sidebar:64px;
       .route-tabs { padding-inline:10px; }
+      .route-tabs #sidebar-toggle { left:10px; }
       .route-tabs button { justify-content:center; font-size:0; padding:10px; }
       .route-tabs .empty-route-icon { margin:0; }
     }
+  }
+  body[data-entry-sidebar="expanded"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-close]:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) { --outcome-sidebar:224px !important; }
+  body[data-entry-sidebar="expanded"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-close]:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs #sidebar-toggle { left:8px; }
+  body[data-entry-sidebar="expanded"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-close]:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs { padding-inline:8px; }
+  body[data-entry-sidebar="expanded"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-close]:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs button:not(#sidebar-toggle) { justify-content:flex-start; font-size:0.875rem; }
+  body[data-entry-sidebar="expanded"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-close]:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs .empty-route-icon { margin-right:10px; }
+  body[data-entry-sidebar="collapsed"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-close]:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) { --outcome-sidebar:64px !important; }
+  body[data-entry-sidebar="collapsed"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-close]:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs { padding-inline:10px; }
+  body[data-entry-sidebar="collapsed"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-close]:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs #sidebar-toggle { left:10px; }
+  body[data-entry-sidebar="collapsed"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-close]:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs button:not(#sidebar-toggle) { justify-content:center; font-size:0; }
+  body[data-entry-sidebar="collapsed"]:has(#host-home:not([hidden]) #home-ssh[data-ssh-close]:not([hidden]), #host-home:not([hidden]) #home-add:not([hidden]), #host-home:not([hidden]) #home-dashboard:not([hidden]) #host-empty:not([hidden])) .route-tabs .empty-route-icon { margin:0; }
+  body:has(#host-home:not([hidden]) #home-add:not([hidden])) {
+    .connection-choice-header { display:flex; align-items:center; height:56px; margin:0 -32px; gap:8px; font-size:18px; font-weight:600; }
+    #add-back { display:grid; place-items:center; width:44px; height:44px; padding:0; border:0; background:transparent; }
+    .connection-icon { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linejoin:round; stroke-linecap:round; }
+    .connection-choice-body { max-width:560px; padding-top:24px; }
+    .connection-choice-desktop { display:none; }
+    #add-choice-heading { display:block; margin:0 0 18px; font-size:22px; line-height:26px; font-weight:600; }
+    #home-add .ssh-options { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; margin:0; }
+    .connection-choice { display:flex; flex-direction:column; gap:8px; align-items:stretch; width:100%; min-height:100px; padding:13px; text-align:start; border-radius:var(--hp-radius-card); border-color:var(--hp-border); }
+    #add-ssh { border-color:var(--hp-brandBorder); }
+    .connection-choice-row { display:grid; grid-template-columns:40px minmax(0,1fr) 24px; align-items:center; gap:12px; color:var(--hp-textPrimary); font-size:16px; line-height:20px; }
+    .connection-choice-icon { display:grid; place-items:center; width:40px; height:40px; border-radius:10px; color:var(--hp-textSecondary); background:var(--hp-cardSubtle); }
+    #add-ssh .connection-choice-icon { color:var(--hp-brand); background:var(--hp-brandSoft); }
+    .connection-choice-arrow { display:block; color:var(--hp-textSecondary); }
+    .connection-choice-detail { display:block; color:var(--hp-textSecondary); font-size:13px; line-height:18px; font-weight:400; }
   }
   #home-ssh[data-ssh-close] #ssh-page-heading { display:none; }
   #home-ssh[data-ssh-close] #ssh-setup .ssh-step-header { display:flex; align-items:center; height:56px; margin:0 -32px; gap:8px; }

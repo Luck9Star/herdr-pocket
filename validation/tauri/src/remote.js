@@ -900,6 +900,21 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     setHomeSection(section);
     if(section==='network' && $('network-panel').hidden && !$('network-open').disabled) $('network-open').click();
   }
+  const sidebarToggle = $('sidebar-toggle');
+  if (sidebarToggle) {
+    const updateSidebarToggle = () => {
+      const expanded = document.body.dataset.entrySidebar
+        ? document.body.dataset.entrySidebar === 'expanded' : globalThis.innerWidth >= 960;
+      sidebarToggle.setAttribute('aria-expanded', String(expanded));
+      sidebarToggle.setAttribute('aria-label', expanded ? '收起侧栏' : '展开侧栏');
+    };
+    sidebarToggle.onclick = () => {
+      document.body.dataset.entrySidebar = sidebarToggle.getAttribute('aria-expanded') === 'true' ? 'collapsed' : 'expanded';
+      updateSidebarToggle();
+    };
+    globalThis.window?.addEventListener('resize', updateSidebarToggle);
+    updateSidebarToggle();
+  }
   $('nav-terminal').onclick=()=>{ if(ssh.isActive()) {navigateHome('ssh');return;} if (!$('remote-page').hidden) {setHomeSection('terminal');return;} if(workspace.hasTabs()) {onLeaveFixture();showRemotePage();return;} navigateHome('terminal'); };
   $('nav-network').onclick=()=>navigateHome('network');
   $('nav-settings').onclick=()=>navigateHome('settings');

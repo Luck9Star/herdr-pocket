@@ -27,6 +27,7 @@ class Element {
   close() { this.open=false; this.previousFocus?.focus(); }
   replaceChildren(...nodes) { this.children = [...nodes]; }
   setAttribute(key, value) { this.attrs[key] = value; }
+  getAttribute(key) { return this.attrs[key] ?? null; }
   addEventListener(name, fn) { (this.events[name] ??= []).push(fn); }
   dispatch(name, event = {}) {
     for (const fn of this.events[name] || []) {
@@ -1986,6 +1987,19 @@ async function openOrdinary(h, id, host = 'fixture.invalid') {
   assert.equal(n['ssh-disconnect'].disabled, false);
   return channel;
 }
+
+test('entry sidebar toggle changes and restores its real expanded state', async () => {
+  const h = await setup(), button = h.nodes['sidebar-toggle'];
+  try {
+    const initial = button.getAttribute('aria-expanded');
+    button.click();
+    assert.notEqual(button.getAttribute('aria-expanded'), initial);
+    assert.equal(document.body.dataset.entrySidebar, initial === 'true' ? 'collapsed' : 'expanded');
+    button.click();
+    assert.equal(button.getAttribute('aria-expanded'), initial);
+    assert.equal(document.body.dataset.entrySidebar, initial === 'true' ? 'expanded' : 'collapsed');
+  } finally { h.restore(); }
+});
 
 test('ordinary SSH natural exit shows confirmed local retirement and genuine remote evidence', async () => {
   let finishClose;

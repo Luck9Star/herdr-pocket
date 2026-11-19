@@ -200,7 +200,8 @@ class ScaffoldTests(unittest.TestCase):
         self.assertIn('encryptedKeyConnected',swift)
         self.assertIn('clickFormButton(app, label: "粘贴私钥")',swift)
         self.assertIn('XCUIKeyboardKey.end',swift)
-        self.assertEqual(swift.count('app.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])'),2)
+        port = swift[swift.index('private func enterTarget'):swift.index('private func clickEntryBack')]
+        self.assertEqual(port.count('app.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])'),2)
         self.assertIn('cleared?[11] == true',swift)
         scanner=swift[swift.index('private func snapshotNodes'):swift.index('private func stableHit')]
         self.assertIn('try app.snapshot()',scanner)
@@ -245,9 +246,13 @@ class ScaffoldTests(unittest.TestCase):
         result=swift[swift.index('private func verifyClearedCredentials'):swift.index('private func typeOrdinaryOnce')]
         self.assertIn('HPCLEAR:K1P1',result)
         self.assertIn('app.secureTextFields.count == secureEditors',result)
-        self.assertIn('let title = "本机已断开"',result)
+        self.assertIn('containsCloseTitle(text, title: "本机已断开")',result)
         self.assertIn('[$0.label, $0.value as? String ?? ""]',result)
-        self.assertIn('closed = titlePublished && text.contains { $0.contains("HPCLOSE:L1F0") }',result)
+        self.assertIn('closeConfirmed = text.contains { $0.contains("HPCLOSE:L1F0") }',result)
+        self.assertIn('if closeConfirmed && systemTitle && returnAvailable { break }',result)
+        for gate in ('closeConfirmed', 'systemTitle', 'returnAvailable'):
+            self.assertIn('XCTAssertTrue(' + gate + ',', result)
+        self.assertIn('$0.components(separatedBy: separators).contains(title)',result)
         self.assertIn('returnHome.count == 1 && returnHome.firstMatch.isEnabled',result)
         self.assertIn('try assertNoSecrets(app, secrets)',result)
         masking=swift[swift.index('func testSystemMasking'):swift.index('func testPasswordSSH')]
@@ -267,7 +272,24 @@ class ScaffoldTests(unittest.TestCase):
         self.assertIn('(field.value as? String) == value', helper)
         self.assertIn('matching?[controllerBit] == true', helper)
         self.assertEqual(helper.count('app.typeText(value)'), 1)
-        self.assertIn('value: sentinel, phase: "sentinel", replace: true)', swift)
+        self.assertNotIn('phase: "sentinel"', helper)
+
+    def test_ordinary_sentinel_requires_exact_system_text_field_value_after_real_edit(self):
+        swift = (Path(__file__).parent / 'macos_secure_xcuitest.swift').read_text()
+        helper = swift[swift.index('private func ordinaryValues'):swift.index('private func verifyFingerprint')]
+        self.assertIn('$0.elementType == .textField', helper)
+        self.assertIn('$0.value as? String', helper)
+        self.assertIn('values.contains(sentinel)', helper)
+        self.assertLess(helper.index('tap(app, address)'), helper.index('app.typeKey("a"'))
+        self.assertLess(helper.index('app.typeKey(XCUIKeyboardKey.delete'), helper.index('XCTAssertTrue(addressCleared,'))
+        self.assertLess(helper.index('XCTAssertTrue(addressCleared,'), helper.index('app.typeText(sentinel)'))
+        self.assertEqual(helper.count('app.typeText(sentinel)'), 1)
+        after_type = helper[helper.index('app.typeText(sentinel)'):]
+        self.assertNotIn('targetDiagnostics(', after_type)
+        self.assertIn('ordinaryValues(try snapshotNodes(app))', after_type)
+        self.assertIn('XCTAssertTrue(seen,', after_type)
+        masking = swift[swift.index('func testSystemMasking'):swift.index('func testPasswordSSH')]
+        self.assertLess(masking.index('try verifyOrdinarySentinel('), masking.index('mark("ordinarySentinelObserved")'))
 
     def test_fingerprint_mouse_fallback_requires_unique_visible_target_and_actual_confirmation(self):
         swift=(Path(__file__).parent/'macos_secure_xcuitest.swift').read_text()

@@ -1064,6 +1064,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
           syncSplitAvailability(canSplit);
           final split = canSplit && tabs.splitAvailable && tabs.active != null && tabs.splitId != null;
           final showingTab = destination == 1 && tabs.active != null;
+          bool showFocusControl(HostTab tab) => split || (tab.id == tabs.activeId && !tab.inputEligible.value);
           return Row(children: [
           if (desktop) desktopSidebar(canSplit: canSplit),
           Expanded(child: Column(
@@ -1145,13 +1146,13 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
                         child: DecoratedBox(key: ValueKey('workspace-frame-${tab.id}'), decoration: BoxDecoration(border: Border.all(
                           color: split && tab.id == tabs.activeId ? widget.tokens.color('brand') : Colors.transparent,
                           width: split ? 2 : 0)), child: Column(children: [
-                          SizedBox(height: split ? 44 : 0, child: split ? Row(children: [
+                          SizedBox(height: showFocusControl(tab) ? 44 : 0, child: showFocusControl(tab) ? Row(children: [
                             Expanded(child: TextButton(key: ValueKey('workspace-focus-${tab.id}'),
                               onPressed: () => tabs.select(tab.id),
                               child: ValueListenableBuilder<HostTabView>(
                                 valueListenable: tab.view,
                                 builder: (context, view, _) => Text(
-                                  '${tab.label} · ${tab.id == tabs.activeId ? '输入焦点' : view.label}',
+                                  '${tab.label} · ${tab.inputEligible.value ? '输入焦点' : view.label}${split ? '' : ' · 获取输入焦点'}',
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ))),

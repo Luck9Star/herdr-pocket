@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:dartssh2/dartssh2.dart';
@@ -66,8 +67,18 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);
     addTearDown(() async {
-      await tester.runAsync(() async { for (final adapter in adapters) { await adapter.cancel(); } });
-      tabs.dispose(); catalog.dispose();
+      Object? cleanupError;
+      try {
+        await tester.runAsync(() async {
+          for (final adapter in adapters) {
+            try { await adapter.cancel(); }
+            catch (error) { cleanupError ??= error; }
+          }
+        });
+      } finally {
+        tabs.dispose(); catalog.dispose();
+      }
+      if (cleanupError != null) throw cleanupError!;
     });
     void stage(String value) => File('${exchange.path}/stage').writeAsStringSync(value, flush: true);
     Future<void> until(bool Function() check) async {
@@ -86,6 +97,16 @@ void main() {
       final hit = control.hitTestable();
       expect(hit, findsOneWidget);
       await tester.tap(hit); await tester.pump();
+    }
+    Future<void> confirmCancelled(int side, {File? peerAck}) async {
+      var settled = false;
+      Object? failure;
+      // Join the cancellation already started by the UI. Keep pumping until
+      // its local result is known as well as the independent stock peer ACK.
+      unawaited(adapters[side].cancel().then<void>((_) { settled = true; },
+        onError: (Object error, StackTrace _) { failure = error; settled = true; }));
+      await until(() => settled && (failure != null || (peerAck?.existsSync() ?? true)));
+      if (failure != null) throw failure!;
     }
     stage('s06_homepage');
     await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: HostCatalogPage(
@@ -201,14 +222,85 @@ void main() {
     expect(journals.every((j) => j.prepares == (guarded ? 1 : 0)), isTrue);
     final after = adapters.map((a) => a.evidence.deltaFrames).toList();
     await until(() => adapters[0].evidence.deltaFrames > after[0] && adapters[1].evidence.deltaFrames > after[1]);
+    if (!guarded) {
+      stage('s06_close_focused_tab');
+      await tap('workspace-focus-${tabIds[0]}');
+      expect(tabs.activeId, tabIds[0]);
+      expect(tabs.find(tabIds[0])!.inputEligible.value, isTrue);
+      expect(adapters[0].inputTarget, same(targets[0]));
+      final peer = tabs.find(tabIds[1])!;
+      expect(peer.visible.value, isTrue);
+      expect(peer.inputEligible.value, isFalse);
+      final b = adapters[1];
+      final originalGeneration = b.generation;
+      final originalTarget = b.inputTarget!;
+      expect(originalTarget, same(targets[1]));
+      final aGeneration = adapters[0].generation;
+      await tap('host-tab-close-${tabIds[0]}');
+      expect(adapters[0].generation, aGeneration + 1);
+      expect(tabs.find(tabIds[0]), isNull);
+      expect(tabs.splitId, isNull);
+      expect(views[0], findsNothing);
+      expect(tabs.find(tabIds[1]), same(peer));
+      expect(peer.visible.value, isTrue);
+      expect(peer.inputEligible.value, isFalse);
+      final bTerminal = find.descendant(of: views[1], matching: find.byType(TerminalView));
+      expect(tester.widget<TerminalView>(bTerminal).terminal, same(terminals[1]));
+      File('${exchange.path}/focused-close-request').createSync();
+      // The host acknowledges one closed A peer and the original still-open B
+      // before taking a baseline for the next displayed B frame.
+      await confirmCancelled(0, peerAck: File('${exchange.path}/focused-close-ack'));
+      expect(adapters[0].generation, aGeneration + 1);
+      final tickPattern = RegExp(r'^S06 B tick ([0-9]{6})$');
+      final buffer = terminals[1].buffer;
+      int? visibleTick() {
+        const tickRow = 22; // The receiver writes to VT row 23 (one-based).
+        if (buffer.viewHeight <= tickRow) return null;
+        final row = buffer.lines[buffer.scrollBack + tickRow].getText().trimRight();
+        return int.tryParse(tickPattern.firstMatch(row)?.group(1) ?? '');
+      }
+      await until(() => visibleTick() != null);
+      final tick = visibleTick()!;
+      final delta = b.evidence.deltaFrames;
+      await until(() => b.evidence.deltaFrames > delta && (visibleTick() ?? -1) > tick);
+      expect(tester.widget<TerminalView>(bTerminal).terminal, same(terminals[1]));
+      expect(b.inputTarget, same(originalTarget));
+      expect(b.generation, originalGeneration);
+      expect(b.evidence.connectionCount, 1);
+      expect(peer.visible.value, isTrue);
+      expect(peer.inputEligible.value, isFalse);
+      terminals[1].textInput('stock-after-close');
+      await tester.pump();
+      expect(journals.every((j) => j.prepares == 0), isTrue);
+    }
     stage('s06_stop_both');
-    for (final view in views) { await tap('remote-cancel', owner: view); }
+    if (guarded) {
+      for (var side = 0; side < views.length; side++) {
+        final beforeStop = adapters[side].generation;
+        await tap('remote-cancel', owner: views[side]);
+        expect(adapters[side].generation, beforeStop + 1);
+        await confirmCancelled(side);
+        expect(adapters[side].generation, beforeStop + 1);
+      }
+    } else {
+      final beforeStop = adapters[1].generation;
+      final survivor = views[1];
+      await tap('remote-cancel', owner: survivor);
+      expect(find.descendant(of: survivor, matching: find.byKey(const ValueKey('remote-cancel'))), findsNothing);
+      expect(adapters[1].generation, beforeStop + 1);
+      stage('s06_confirm_final_close');
+      File('${exchange.path}/final-close-request').createSync(exclusive: true);
+      await confirmCancelled(1, peerAck: File('${exchange.path}/final-close-ack'));
+      expect(adapters[1].generation, beforeStop + 1);
+    }
     expect(adapters.every((a) => a.evidence.connectionCount == 1), isTrue);
     expect(tester.takeException(), isNull);
     final result = <String, dynamic>{
       for (final name in ['normalHomepage', 'twoReviewedIdentities', 'samePaneDifferentTerminal',
         'bothVisible', 'independentFrames', 'bothAdvanced', 'singleInputFocus',
         'focusDoesNotRestoreInput', 'lateInputRejected', 'stoppedBoth']) name: true,
+      if (!guarded) 'focusedTabClosedPeerAdvanced': true,
+      if (!guarded) 'stockPeersClosedBeforeDriverExit': true,
       'sides': [for (final adapter in adapters) {'connectionCount': adapter.evidence.connectionCount,
         'frameCount': adapter.evidence.frameCount, 'deltaFrames': adapter.evidence.deltaFrames,
         'inputAccepted': guarded}],

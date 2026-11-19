@@ -4,10 +4,54 @@ import io
 import os
 import shutil
 import unittest
+from unittest.mock import Mock
 
 
 @unittest.skipUnless(importlib.util.find_spec('paramiko') and shutil.which('ssh-keygen'), 'Paramiko and ssh-keygen required')
 class EncryptedKeyFixtureTests(unittest.TestCase):
+    def test_key_selection_cannot_record_success_before_authenticated_channel(self):
+        import paramiko
+        from tauri_encrypted_key_fixture import EncryptedKeyFixture
+
+        peer = EncryptedKeyFixture()
+        peer._expected = 'fixture-public-key-id'
+        peer._facts['publicKeyAccepted'] = False
+        transport = Mock(spec=paramiko.Transport)
+        transport.accept.return_value = None
+        transport.is_authenticated.return_value = False
+        event = {'authAttempts': 0, 'authSuccesses': 0, 'authAccepted': False}
+        peer._events_by_transport[transport] = event
+        peer._connection_events.append(event)
+        offered = Mock(spec=paramiko.PKey)
+        offered.get_base64.return_value = peer._expected
+
+        def assert_observation(attempts, authenticated):
+            facts = peer.snapshot()
+            row = facts['connectionEvents'][0]
+            self.assertEqual(row['authAttempts'], attempts)
+            self.assertEqual(row['authSuccesses'], int(authenticated))
+            for name in ('authAccepted', 'publicKeyAccepted'):
+                self.assertIs(facts[name], authenticated)
+                self.assertIs(row.get(name, False), authenticated)
+
+        def simulate_callbacks(*, server):
+            # A permitted key lookup says only that the server would verify its signature.
+            self.assertEqual(server.check_auth_publickey(peer.username, offered), paramiko.AUTH_SUCCESSFUL)
+            assert_observation(1, False)
+            self.assertEqual(server.check_channel_request('session', 0), paramiko.OPEN_SUCCEEDED)
+            assert_observation(1, False)
+            self.assertEqual(server.check_auth_publickey(peer.username, offered), paramiko.AUTH_SUCCESSFUL)
+            assert_observation(2, False)
+            transport.is_authenticated.return_value = True
+            self.assertEqual(server.check_channel_request('unknown', 1), paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED)
+            assert_observation(2, False)
+            for channel in (2, 3):
+                self.assertEqual(server.check_channel_request('session', channel), paramiko.OPEN_SUCCEEDED)
+                assert_observation(2, True)
+
+        transport.start_server.side_effect = simulate_callbacks
+        peer._handle(transport)
+
     def test_observes_probe_and_rejected_authentication_as_distinct_connections(self):
         import paramiko
         from tauri_encrypted_key_fixture import EncryptedKeyFixture
@@ -53,6 +97,11 @@ class EncryptedKeyFixtureTests(unittest.TestCase):
                 while peer.echo_marker.encode() not in output and len(output)<4096:
                     output+=channel.recv(4096)
                 self.assertIn(peer.echo_marker.encode(),output)
+                with client.get_transport().open_session(timeout=5):
+                    event = peer.snapshot()['connectionEvents'][-1]
+                    self.assertEqual(event['authAttempts'], 1)
+                    self.assertEqual(event['authSuccesses'], 1)
+                    self.assertIs(event['publicKeyAccepted'], True)
                 channel.close();self.assertTrue(peer.wait_for('sessionClosed'))
                 self.assertTrue(all(peer.snapshot()[k] for k in ('authAccepted','ptyRequested','shellRequested')))
             finally:

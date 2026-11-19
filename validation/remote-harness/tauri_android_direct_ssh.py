@@ -36,7 +36,8 @@ DIRECT_ERROR_CODES = frozenset('''
     direct_rotation_cancel_credentials_live direct_rotation_cancel_entries_live direct_rotation_cancel_navigation_missing
     direct_rotation_cancel_old_key_missing direct_rotation_cancel_reconnected direct_rotation_cancel_review_stale
     direct_rotation_cancel_submit_live direct_rotation_credentials_retained direct_rotation_disconnect_ui_missing
-    direct_rotation_evidence_invalid direct_rotation_navigation_available direct_rotation_peer_input_missing
+    direct_rotation_evidence_invalid direct_rotation_encrypted_key_evidence_invalid
+    direct_rotation_navigation_available direct_rotation_peer_input_missing
     direct_rotation_probe_missing direct_rotation_ready_missing direct_rotation_reprobe_credentials_stale
     direct_rotation_reprobe_missing direct_rotation_reprobe_old_key_stale direct_rotation_reprobe_review_stale
     direct_rotation_review_content_missing direct_rotation_review_invalidated direct_rotation_review_missing
@@ -761,6 +762,32 @@ def exercise_active_navigation(browser, fixture, *, progress=None, ime_checks=No
             'network':True,'terminalFromNetwork':True,'settings':True,'terminalFromSettings':True,
             'singleAuthenticatedShellWithoutInput':True}
 
+CREDENTIAL_VALUES_EXPR = ("!!document.querySelector('#ssh-password').value || "
+                          "!!document.querySelector('#ssh-key').value || "
+                          "!!document.querySelector('#ssh-passphrase').value")
+PUBLIC_KEY_EVIDENCE_FIELDS = frozenset({'stage','connections','publicKeyAccepted','authAttempts',
+                                        'authSuccesses','ptyRequests','shellRequests','inputBytes','outputBytes'})
+PUBLIC_KEY_EVIDENCE_COUNTS = PUBLIC_KEY_EVIDENCE_FIELDS - {'publicKeyAccepted'}
+
+
+def fill_credentials(browser, fixture, *, encrypted_key, staged, progress=None):
+    if encrypted_key:
+        if progress is not None: progress['stage']='select_key_auth'
+        if staged:
+            browser.click('#ssh-auth-key')
+            mobile_setup(browser, fixture, 'auth', method='key')
+        else:
+            browser.select_option('#ssh-auth-method', 'key')
+        if progress is not None: progress['stage']='enter_private_key'
+        browser.fill('#ssh-key', fixture.private_key)
+        if staged:
+            mobile_setup(browser, fixture, 'auth', method='key', input_state='pem')
+        if progress is not None: progress['stage']='enter_passphrase'
+        browser.fill('#ssh-passphrase', fixture.passphrase)
+    else:
+        if progress is not None: progress['stage']='enter_password'
+        browser.fill('#ssh-password', fixture.password)
+
 
 def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, progress=None):
     """Use actual CDP click/keyboard events and independently check the peer."""
@@ -791,22 +818,8 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
     browser.click('#ssh-trust-confirm' if staged else '#ssh-review')
     if staged:
         mobile_setup(browser, fixture, 'auth')
-    if encrypted_key:
-        if progress is not None: progress['stage']='select_key_auth'
-        if staged:
-            browser.click('#ssh-auth-key')
-            mobile_setup(browser, fixture, 'auth', method='key')
-        else:
-            browser.select_option('#ssh-auth-method', 'key')
-        if progress is not None: progress['stage']='enter_private_key'
-        browser.fill('#ssh-key', fixture.private_key)
-        if staged:
-            mobile_setup(browser, fixture, 'auth', method='key', input_state='pem')
-        if progress is not None: progress['stage']='enter_passphrase'
-        browser.fill('#ssh-passphrase', fixture.passphrase)
-    else:
-        if progress is not None: progress['stage']='enter_password'
-        browser.fill('#ssh-password', fixture.password)
+    fill_credentials(browser, fixture, encrypted_key=encrypted_key, staged=staged, progress=progress)
+
     if staged:
         mobile_setup(browser, fixture, 'auth', method='key' if encrypted_key else 'password', input_state='ready')
         require_first_probe(fixture)
@@ -816,7 +829,7 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
     browser.click('#ssh-connect' if staged else '#ssh-form button[type=submit]')
     wait_for(lambda: browser.evaluate("!document.querySelector('#ssh-live').hidden") and
              '已连接' in (browser.read('#ssh-status') or ''), 'direct_ready_missing', timeout=60)
-    if browser.evaluate("!!document.querySelector('#ssh-password').value || !!document.querySelector('#ssh-key').value || !!document.querySelector('#ssh-passphrase').value"):
+    if browser.evaluate(CREDENTIAL_VALUES_EXPR):
         raise GuiFailure('direct_credentials_retained')
     active_navigation = None
     ime_checks=[]
@@ -893,7 +906,7 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
             'peer':{k:True for k in ('authAccepted','ptyRequested','shellRequested','markerReceived','sessionClosed')}}
 
 
-def exercise_key_change_ui(browser, fixture, *, evidence_dir=None):
+def exercise_key_change_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, progress=None):
     """Same host:port A→B: refuse, review with no exits, cancel, re-probe, approve."""
     browser.click(dashboard_add_selector(browser))
     browser.click('#add-ssh')
@@ -913,9 +926,9 @@ def exercise_key_change_ui(browser, fixture, *, evidence_dir=None):
     browser.click('#ssh-trust-confirm' if staged else '#ssh-review')
     if staged:
         mobile_setup(browser, fixture, 'auth')
-    browser.fill('#ssh-password', fixture.password)
+    fill_credentials(browser, fixture, encrypted_key=encrypted_key, staged=staged, progress=progress)
     if staged:
-        mobile_setup(browser, fixture, 'auth', input_state='ready')
+        mobile_setup(browser, fixture, 'auth', method='key' if encrypted_key else 'password', input_state='ready')
         require_first_probe(fixture)
     elif browser.evaluate("document.querySelector('#ssh-review').checked") is not True:
         raise GuiFailure('direct_rotation_review_invalidated')
@@ -956,7 +969,8 @@ def exercise_key_change_ui(browser, fixture, *, evidence_dir=None):
             raise GuiFailure('direct_rotation_cancel_review_stale')
         if browser.evaluate("!document.querySelector('#ssh-review').disabled") is not False:
             raise GuiFailure('direct_rotation_cancel_entries_live')
-        if browser.evaluate("!!document.querySelector('#ssh-password').value || !document.querySelector('#ssh-password').disabled"):
+        if (browser.evaluate("!!document.querySelector('#ssh-password').value || !document.querySelector('#ssh-password').disabled") or
+                (encrypted_key and browser.evaluate(CREDENTIAL_VALUES_EXPR))):
             raise GuiFailure('direct_rotation_cancel_credentials_live')
         if browser.evaluate("!document.querySelector('#ssh-form button[type=submit]').disabled") is not False:
             raise GuiFailure('direct_rotation_cancel_submit_live')
@@ -974,23 +988,24 @@ def exercise_key_change_ui(browser, fixture, *, evidence_dir=None):
             raise GuiFailure('direct_rotation_reprobe_old_key_stale')
         if browser.evaluate("document.querySelector('#ssh-review').checked") is not False:
             raise GuiFailure('direct_rotation_reprobe_review_stale')
-        if browser.evaluate("!!document.querySelector('#ssh-password').value"):
+        if (browser.evaluate("!!document.querySelector('#ssh-password').value") or
+                (encrypted_key and browser.evaluate(CREDENTIAL_VALUES_EXPR))):
             raise GuiFailure('direct_rotation_reprobe_credentials_stale')
     fixture.wait_for_connections_closed(minimum=3, timeout=30)
     evidence_3 = _rotation_stage(fixture, 3)
     browser.click('#ssh-trust-confirm' if staged else '#ssh-review')
     if staged:
         mobile_setup(browser, fixture, 'auth')
-    browser.fill('#ssh-password', fixture.password)
+    fill_credentials(browser, fixture, encrypted_key=encrypted_key, staged=staged, progress=progress)
     if staged:
-        mobile_setup(browser, fixture, 'auth', input_state='ready')
+        mobile_setup(browser, fixture, 'auth', method='key' if encrypted_key else 'password', input_state='ready')
         _rotation_stage(fixture, 3)
     elif browser.evaluate("document.querySelector('#ssh-review').checked") is not True:
         raise GuiFailure('direct_rotation_review_invalidated')
     browser.click('#ssh-connect' if staged else '#ssh-form button[type=submit]')
     wait_for(lambda: browser.evaluate("!document.querySelector('#ssh-live').hidden") and
              '已连接' in (browser.read('#ssh-status') or ''), 'direct_rotation_ready_missing', timeout=60)
-    if browser.evaluate("!!document.querySelector('#ssh-password').value"):
+    if browser.evaluate(CREDENTIAL_VALUES_EXPR if encrypted_key else "!!document.querySelector('#ssh-password').value"):
         raise GuiFailure('direct_rotation_credentials_retained')
     browser.click('#ssh-focus')
     wait_for(lambda: browser.evaluate("document.activeElement === document.querySelector('#ssh-terminal .xterm-helper-textarea')"),
@@ -1011,11 +1026,30 @@ def exercise_key_change_ui(browser, fixture, *, evidence_dir=None):
         wait_for(lambda: '已断开' in (browser.read('#ssh-status') or ''), 'direct_rotation_disconnect_ui_missing', timeout=60)
     fixture.wait_for_connections_closed(minimum=4, timeout=30)
     evidence_4 = _rotation_stage(fixture, 4)
-    return {'probeReviewed':True,'refusalBlocked':True,'reviewNoExits':True,'cancelKeptTrust':True,
-            'reprobePresented':True,'connected':True,'terminalInputReceived':True,'terminalEchoRendered':True,
-            'disconnected':True,'passwordCleared':True,
-            'rotationEvidence':[evidence_2,evidence_3,evidence_4],
-            **({'terminalScreenshot':terminal_proof} if terminal_proof else {})}
+    result = {'probeReviewed':True,'refusalBlocked':True,'reviewNoExits':True,'cancelKeptTrust':True,
+              'reprobePresented':True,'connected':True,'terminalInputReceived':True,'terminalEchoRendered':True,
+              'disconnected':True,'passwordCleared':True,
+              'rotationEvidence':[evidence_2,evidence_3,evidence_4],
+              **({'terminalScreenshot':terminal_proof} if terminal_proof else {})}
+    if encrypted_key:
+        try:
+            public_evidence = fixture.public_key_auth_evidence()
+        except (AttributeError, TypeError, ValueError):
+            raise GuiFailure('direct_rotation_encrypted_key_evidence_invalid')
+        if (not isinstance(public_evidence,dict) or set(public_evidence)!=PUBLIC_KEY_EVIDENCE_FIELDS or
+                public_evidence.get('publicKeyAccepted') is not True or
+                any(type(public_evidence.get(field)) is not int for field in PUBLIC_KEY_EVIDENCE_COUNTS) or
+                public_evidence['stage']!=4 or public_evidence['connections']!=4 or
+                public_evidence['authAttempts']<1 or public_evidence['authSuccesses']!=1 or
+                public_evidence['ptyRequests']!=1 or public_evidence['shellRequests']!=1 or
+                public_evidence['inputBytes']<=0 or public_evidence['outputBytes']<=0):
+            raise GuiFailure('direct_rotation_encrypted_key_evidence_invalid')
+        result['publicKeyEvidence']=public_evidence
+        result['credentialsCleared']=True
+        secrets=(getattr(fixture,'private_key',None),getattr(fixture,'passphrase',None),getattr(fixture,'password',None))
+        if any(isinstance(secret,str) and secret and secret in json.dumps(result,default=str) for secret in secrets):
+            raise GuiFailure('direct_rotation_encrypted_key_evidence_invalid')
+    return result
 
 
 def _save_review_screenshot(browser, evidence_dir):
@@ -1087,8 +1121,11 @@ def run_device(apk, fixture, *, encrypted_key=False, key_change=False, evidence_
         if progress is not None: progress['stage']='webview_ready'
         browser=wait_for(lambda:_connect_ready(int(port)),'direct_webview_not_ready',timeout=60)
         if progress is not None: progress['stage']='rotation_ui' if key_change else 'open_remote'
-        result=(exercise_key_change_ui(browser,fixture,evidence_dir=evidence_dir) if key_change
-                else exercise_ui(browser,fixture,encrypted_key=encrypted_key,evidence_dir=evidence_dir,progress=progress))
+        if key_change:
+            result=exercise_key_change_ui(browser,fixture,encrypted_key=encrypted_key,
+                                          evidence_dir=evidence_dir,progress=progress)
+        else:
+            result=exercise_ui(browser,fixture,encrypted_key=encrypted_key,evidence_dir=evidence_dir,progress=progress)
     finally:
         if browser:
             try: browser.close()
@@ -1125,6 +1162,7 @@ def probe_evidence(fixture):
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--apk',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--scenario', choices=('default','encrypted-key-rotation'), default='default')
     args=parser.parse_args()
     root=Path(os.environ.get('RUNNER_TEMP','/nonexistent')).resolve()
     output=args.output.absolute()
@@ -1133,49 +1171,43 @@ def main():
     output.mkdir(parents=True,exist_ok=True)
     sha=os.environ.get('GITHUB_SHA','')
     report={'schemaVersion':1,'sourceSHA':sha if re.fullmatch(r'[0-9a-f]{40}',sha) else None,
-            'status':'failed','scope':'synthetic loopback SSH and owned API35 Android WebView; CDP input is not real IME composition'}
+            'scenario':args.scenario,'status':'failed',
+            'scope':'synthetic loopback SSH and owned API35 Android WebView; CDP input is not real IME composition',
+            'commandPath':'native Tauri ssh commands in Android WebView'}
     progress={}
+
+    def run_case(fixture, *, encrypted_key=False, key_change=False, evidence_dir=None):
+        progress.clear()
+        with fixture as peer:
+            try:
+                result=run_device(args.apk,peer,encrypted_key=encrypted_key,key_change=key_change,
+                                  evidence_dir=evidence_dir,progress=progress)
+            except GuiFailure:
+                report['probeEvidence']=probe_evidence(peer)
+                raise
+        if peer.snapshot().get('connectionsClosed') is not True:
+            raise GuiFailure('direct_fixture_cleanup_failed')
+        result['cleanup']['fixtureConnections']=True
+        progress.clear()
+        return result
+
     try:
-        from direct_ssh_fixture import DirectSshFixture
         report['apkSha256']=hashlib.sha256(args.apk.read_bytes()).hexdigest()
-        with DirectSshFixture(observe_helper_keys=True,screen_proof=True) as fixture:
-            try:
-                report.update(run_device(args.apk,fixture,evidence_dir=output,progress=progress))
-                progress.clear()
-            except GuiFailure:
-                report['probeEvidence'] = probe_evidence(fixture)
-                raise
-        if fixture.snapshot().get('connectionsClosed') is not True:
-            raise GuiFailure('direct_fixture_cleanup_failed')
-        report['cleanup']['fixtureConnections']=True
-        progress.clear()
-        with DirectSshFixture(rotate_after_probe=True, observe_helper_keys=True,screen_proof=True) as rotation:
+        if args.scenario=='encrypted-key-rotation':
+            from tauri_encrypted_key_fixture import RotatingEncryptedKeyFixture
+            report['phase']='encrypted_key_rotation'
+            report['rotationEncryptedKey']=run_case(RotatingEncryptedKeyFixture(),encrypted_key=True,
+                                                    key_change=True,evidence_dir=output)
+        else:
+            from direct_ssh_fixture import DirectSshFixture
+            from tauri_encrypted_key_fixture import EncryptedKeyFixture
+            report.update(run_case(DirectSshFixture(observe_helper_keys=True,screen_proof=True),evidence_dir=output))
             report['phase']='host_key_rotation'
-            try:
-                rotation_result=run_device(args.apk,rotation,key_change=True,evidence_dir=output,progress=progress)
-                progress.clear()
-                rotation_result['s10Screenshot']=(output/'s10-host-key-change-android.png').exists()
-            except GuiFailure:
-                report['probeEvidence'] = probe_evidence(rotation)
-                raise
-        if rotation.snapshot().get('connectionsClosed') is not True:
-            raise GuiFailure('direct_fixture_cleanup_failed')
-        rotation_result['cleanup']['fixtureConnections']=True
-        report['rotation']=rotation_result
-        from tauri_encrypted_key_fixture import EncryptedKeyFixture
-        report['phase']='encrypted_key'
-        progress.clear()
-        with EncryptedKeyFixture() as key_fixture:
-            try:
-                key_result=run_device(args.apk,key_fixture,encrypted_key=True,progress=progress)
-                progress.clear()
-            except GuiFailure:
-                report['probeEvidence'] = probe_evidence(key_fixture)
-                raise
-        if key_fixture.snapshot().get('connectionsClosed') is not True:
-            raise GuiFailure('direct_fixture_cleanup_failed')
-        key_result['cleanup']['fixtureConnections']=True
-        report['encryptedKey']=key_result
+            rotation=DirectSshFixture(rotate_after_probe=True,observe_helper_keys=True,screen_proof=True)
+            report['rotation']=run_case(rotation,key_change=True,evidence_dir=output)
+            report['rotation']['s10Screenshot']=(output/'s10-host-key-change-android.png').exists()
+            report['phase']='encrypted_key'
+            report['encryptedKey']=run_case(EncryptedKeyFixture(),encrypted_key=True)
         report['phase']='complete'
         report['status']='passed'
     except GuiFailure as error:

@@ -181,6 +181,32 @@ test('Ctrl+Tab / Ctrl+Shift+Tab 相对当前标签循环切换；单标签时无
   } finally { single.restore(); }
 });
 
+test('桌面标签快捷键接受浏览器的非数组 children，普通 Tab 保持原样', () => {
+  const s=setupRouter();
+  try {
+    for(const id of ['view-tabs','host-tabs']) {
+      const nav=s.nodes[id], children=[new Element('span'),...nav.children];
+      nav.children={length:children.length,[Symbol.iterator]:()=>children.values()};
+    }
+    s.nodes['host-return-home'].focus();
+    for(const [event,target] of [
+      [{key:'1',ctrlKey:true},'view-tab-1'],
+      [{key:'Tab',ctrlKey:true},'view-tab-2'],
+      [{key:'Tab',ctrlKey:true,shiftKey:true},'view-tab-1'],
+      [{key:'1',altKey:true},'host-tab-1'],
+    ]) {
+      const before=s.clicks.length;
+      assert.equal(s.key(event).consumed,true);
+      assert.deepEqual(s.clicks.slice(before),[target]);
+      for (const button of s.viewTabButtons) {
+        if(target.startsWith('view-'))button.setAttribute('aria-pressed',String(button.textContent===target));
+      }
+    }
+    assert.equal(s.key({key:'Tab'}).consumed,undefined);
+    assert.equal(s.clicks.length,4);
+  } finally { s.restore(); }
+});
+
 test('Ctrl+Shift+\\ 开关分屏：宽窗触发既有按钮，窄窗拒绝', () => {
   const wide=setupRouter({innerWidth:1280});
   try {
@@ -346,11 +372,13 @@ test('逐键输入聚焦终端时，路由层对任何按键零副作用：无 i
     const bTerm=s.terminals.find(t=>t.options.disableStdin===false);
     assert.equal(globalThis.document.activeElement,bTerm.textarea,'逐键输入后焦点在终端 textarea');
     const callsBefore=s.calls.length;
-    for(const over of [{key:'x'},{key:'1',ctrlKey:true},{key:'c',ctrlKey:true},{key:'Tab',ctrlKey:true},{key:'\\',ctrlKey:true,shiftKey:true}]) {
+    for(const over of [{key:'x'},{key:'1',ctrlKey:true},{key:'1',altKey:true},{key:'c',ctrlKey:true},
+        {key:'Tab'},{key:'Tab',ctrlKey:true},{key:'Tab',ctrlKey:true,shiftKey:true},{key:'\\',ctrlKey:true,shiftKey:true}]) {
       const ev=s.key(over);
       assert.equal(ev.consumed,undefined,`终端聚焦时 ${JSON.stringify(over)} 必须原样放行`);
     }
     assert.equal(s.calls.length,callsBefore,'路由层不得产生任何 invoke/发送（docs/05:143 红线）');
+    assert.equal(globalThis.document.activeElement,bTerm.textarea,'应用快捷键不抢逐键输入的 DOM 焦点');
     assert.equal(s.panelOf(b).dataset.focus,'true','焦点面板不被快捷键切换');
     const ev=s.key({key:'F6',ctrlKey:true,shiftKey:true});
     assert.ok(ev.consumed,'Ctrl+Shift+F6 可从终端聚焦状态离开输入区');

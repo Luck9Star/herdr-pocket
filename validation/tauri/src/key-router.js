@@ -112,7 +112,7 @@ function rotate(backward) {
 
 function navButtons(id) {
   const nav = byId(id);
-  return nav ? (nav.children || []).filter(node => tag(node) === BUTTON) : [];
+  return nav ? Array.from(nav.children || []).filter(node => tag(node) === BUTTON) : [];
 }
 
 function selectByNumber(id, number) {

@@ -4,7 +4,7 @@ import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 if importlib.util.find_spec('paramiko') is None or importlib.util.find_spec('PIL') is None:
     raise unittest.SkipTest('ordinary SSH and screenshot test dependencies are missing')
@@ -14,6 +14,7 @@ from flutter_linux_direct_ssh import (
     ScreenshotGateError,
     capture,
     capture_geometry,
+    key_rejection_evidence,
     locked_dependencies,
     read_exchange,
     window_geometry,
@@ -92,6 +93,33 @@ class PrivateExchangeTests(unittest.TestCase):
             (root / 'probe.json').write_text(' ' * 1025)
             with self.assertRaisesRegex(GuiFailure, 'invalid_exchange'):
                 read_exchange(root, 'probe')
+
+    def test_key_negative_checkpoints_require_consumed_material_and_zero_new_connections(self):
+        probe = {'id': 1, 'hostKey': 'A', 'closed': True, 'authAttempts': 0,
+                 'authSuccesses': 0, 'ptyRequests': 0, 'shellRequests': 0,
+                 'inputBytes': 0, 'outputBytes': 0}
+        facts = {'connections': 1, 'connectionsClosed': True, 'connectionEvents': [probe]}
+        fixture = Mock()
+        fixture.snapshot.return_value = facts
+        modes = {'passwordToKeyCleared': True, 'keyToPasswordCleared': True, 'sameTrust': True}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(key_rejection_evidence(fixture, root, 'mode-switch', modes),
+                             dict(modes, connections=1, authenticationAttempts=0))
+            rejected = {'rejectedLocally': True}
+            self.assertEqual(key_rejection_evidence(fixture, root, 'wrong-passphrase', rejected),
+                             dict(rejected, connections=1, authenticationAttempts=0))
+            for unsafe in [{'rejectedLocally': 1}, {'rejectedLocally': False}, dict(rejected, extra=True)]:
+                with self.assertRaisesRegex(GuiFailure, 'key_checkpoint_invalid'):
+                    key_rejection_evidence(fixture, root, 'wrong-passphrase', unsafe)
+            target = root / 'target.json'
+            target.touch()
+            with self.assertRaisesRegex(GuiFailure, 'key_material_not_consumed'):
+                key_rejection_evidence(fixture, root, 'wrong-passphrase', rejected)
+            target.unlink()
+            fixture.snapshot.return_value = dict(facts, connections=2, connectionEvents=[probe, probe])
+            with self.assertRaisesRegex(GuiFailure, 'connection_count_invalid'):
+                key_rejection_evidence(fixture, root, 'wrong-passphrase', rejected)
 
     def test_only_the_existing_sdk_lock_extension_is_accepted(self):
         block = '    source: sdk\n    version: "0.0.0"\n'

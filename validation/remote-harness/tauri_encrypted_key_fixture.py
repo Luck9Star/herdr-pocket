@@ -47,16 +47,19 @@ class EncryptedKeyFixture(DirectSshFixture):
             def check_auth_publickey(self, username, offered):
                 owner._connection_increment(transport, 'authAttempts')
                 accepted = username == owner.username and secrets.compare_digest(offered.get_base64(), owner._expected)
-                if accepted:
-                    with owner._lock:
-                        already = owner._events_by_transport[transport].get('publicKeyAccepted') is True
-                    if not already:
-                        owner._record('authAccepted')
-                        owner._record('publicKeyAccepted')
-                        owner._connection_record(transport, 'authAccepted')
-                        owner._connection_record(transport, 'publicKeyAccepted')
-                        owner._connection_increment(transport, 'authSuccesses')
                 return paramiko.AUTH_SUCCESSFUL if accepted else paramiko.AUTH_FAILED
+
+            def check_channel_request(self, kind, channel_id):
+                action = super().check_channel_request(kind, channel_id)
+                # Key selection also runs for unsigned offers. Count success only
+                # when Paramiko confirms authentication on an accepted session.
+                if action == paramiko.OPEN_SUCCEEDED and transport.is_authenticated():
+                    with owner._lock:
+                        event = owner._events_by_transport[transport]
+                        if event.get('publicKeyAccepted') is not True:
+                            event.update(authAccepted=True, publicKeyAccepted=True, authSuccesses=1)
+                            owner._facts.update(authAccepted=True, publicKeyAccepted=True)
+                return action
 
             def get_allowed_auths(self, username):
                 return 'publickey'

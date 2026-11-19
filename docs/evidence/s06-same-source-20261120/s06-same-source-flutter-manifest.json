@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 1,
+  "milestone": "S06-two-real-ssh-herdr-targets",
+  "sourceSHA": "c5aa64a0c9703d0494f5694ec0028018f7f2a0b8",
+  "runUrl": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44583986909",
+  "platform": "Ubuntu 24.04 x86_64 loopback OpenSSH",
+  "runnerImage": {
+    "imageOS": "ubuntu24",
+    "imageVersion": "20261111.127.1"
+  },
+  "herdr": {
+    "sourceSHA": "c5aa64a0c9703d0494f5694ec0028018f7f2a0b8",
+    "upstreamSHA": "2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01",
+    "patchSHA256": "7f89a79677a456f024bd73555130861cd1b0b47e9d4d69f98d4e18ffc7f1ed8a",
+    "buildProfile": "dev",
+    "configDirectory": "herdr",
+    "scope": "isolated validation fixture",
+    "binarySHA256": "8cb39663b4e466006ffb0d68b5efe5be61701446b6c9877bf84cce2c0f762dbc",
+    "binaryDebugAssertions": false,
+    "readinessAndCapabilitySmokePassed": true
+  },
+  "status": "passed",
+  "checks": [
+    {
+      "adapter": "flutter",
+      "testId": "S06-two-real-ssh-herdr-targets",
+      "status": "passed",
+      "normalHomepage": true,
+      "twoReviewedIdentities": true,
+      "samePaneDifferentTerminal": true,
+      "bothVisible": true,
+      "independentFrames": true,
+      "bothAdvanced": true,
+      "singleInputFocus": true,
+      "focusDoesNotRestoreInput": true,
+      "lateInputRejected": true,
+      "stoppedBoth": true,
+      "sides": [
+        {
+          "connectionCount": 1,
+          "frameCount": 12,
+          "deltaFrames": 10,
+          "inputAccepted": true
+        },
+        {
+          "connectionCount": 1,
+          "frameCount": 16,
+          "deltaFrames": 15,
+          "inputAccepted": true
+        }
+      ],
+      "matchedDeviceKeyInSshd": true,
+      "receivedInputBytes": 9,
+      "peerInputBytes": [
+        9,
+        1
+      ],
+      "exactRemoteBytes": true,
+      "distinctAuthenticatedDeviceKeys": true,
+      "targetBindingsPreserved": true,
+      "physicalImeVerified": false,
+      "scope": "real Flutter widget, two real SSH/herdr sessions; explicit test signers and memory journals",
+      "revokedFixtureKeys": true,
+      "secondSharedPty": {
+        "noObservedResize": true,
+        "numericRecord": {
+          "captureErrors": 0,
+          "changes": 0,
+          "columns": 119,
+          "elapsedMs": 31256,
+          "endReason": 1,
+          "initialColumns": 119,
+          "initialRows": 40,
+          "maxSampleGapMs": 75,
+          "readErrors": 0,
+          "rows": 40,
+          "sampleIntervalMs": 50,
+          "samples": 623,
+          "schemaVersion": 1,
+          "signalAvailable": 1,
+          "signalSamples": 0,
+          "signalsMayCoalesce": 1,
+          "state": 2,
+          "terminationSignal": 0,
+          "winchHandlers": 0
+        }
+      }
+    }
+  ],
+  "scope": "Flutter widget with explicit test signer, catalog and input journal",
+  "unverified": [
+    "physical phone",
+    "camera",
+    "real IME",
+    "overlay networks",
+    "pixel rendering",
+    "hardware key protection",
+    "production deployment",
+    "protected system-store runtime"
+  ],
+  "openSshVersion": "OpenSSH_9.6p1 Ubuntu-3ubuntu13.20, OpenSSL 3.0.13 30 Jan 2024",
+  "readinessSnapshot": {
+    "pocket-probe": {
+      "resultType": "session_snapshot",
+      "flatKnownFields": {
+        "version": {
+          "present": false,
+          "type": "NoneType",
+          "value": null
+        },
+        "protocol": {
+          "present": false,
+          "type": "NoneType",
+          "value": null
+        }
+      },
+      "snapshotPresent": true,
+      "snapshotType": "dict",
+      "nestedKnownFields": {
+        "version": {
+          "present": true,
+          "type": "str",
+          "value": "0.9.5"
+        },
+        "protocol": {
+          "present": true,
+          "type": "int",
+          "value": 22
+        }
+      }
+    },
+    "pocket-other": {
+      "resultType": "session_snapshot",
+      "flatKnownFields": {
+        "version": {
+          "present": false,
+          "type": "NoneType",
+          "value": null
+        },
+        "protocol": {
+          "present": false,
+          "type": "NoneType",
+          "value": null
+        }
+      },
+      "snapshotPresent": true,
+      "snapshotType": "dict",
+      "nestedKnownFields": {
+        "version": {
+          "present": true,
+          "type": "str",
+          "value": "0.9.5"
+        },
+        "protocol": {
+          "present": true,
+          "type": "int",
+          "value": 22
+        }
+      }
+    }
+  },
+  "crossSessionFixture": {
+    "bothSessionsExist": true,
+    "samePaneId": true,
+    "expected": "reject mismatched socket/session before publishing full"
+  },
+  "frameEvidence": "widget state after Terminal.write",
+  "receivedInputBytes": 9,
+  "fixtureSharedBetweenAdapters": false,
+  "observeFixture": {
+    "syntheticTickIntervalMs": 200,
+    "changedTerminalRow": 23,
+    "selection": "GUI chooses a pane button from the current snapshot",
+    "backpressureScope": "decoded single-frame byte high-water only, not JSON line, SSH buffers or whole-process memory"
+  },
+  "sharedPty": {
+    "noObservedResize": true,
+    "numericRecord": {
+      "captureErrors": 0,
+      "changes": 0,
+      "columns": 119,
+      "elapsedMs": 31596,
+      "endReason": 1,
+      "initialColumns": 119,
+      "initialRows": 40,
+      "maxSampleGapMs": 61,
+      "readErrors": 0,
+      "rows": 40,
+      "sampleIntervalMs": 50,
+      "samples": 630,
+      "schemaVersion": 1,
+      "signalAvailable": 1,
+      "signalSamples": 0,
+      "signalsMayCoalesce": 1,
+      "state": 2,
+      "terminationSignal": 0,
+      "winchHandlers": 0
+    }
+  },
+  "cleanup": {
+    "ownedProcessesStopped": true,
+    "ephemeralKeysRemoved": true,
+    "userAuthorizationFilesTouched": false,
+    "rawLogsUploaded": false
+  }
+}

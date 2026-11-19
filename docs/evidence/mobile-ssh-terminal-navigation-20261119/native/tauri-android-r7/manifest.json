@@ -1,0 +1,946 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "1ceab7c84a6c8ed87e55586e5d0640e2b1b364ca",
+  "status": "passed",
+  "scope": "synthetic loopback SSH and owned API35 Android WebView; CDP input is not real IME composition",
+  "apkSha256": "d760ffaadf6fc9af650d8f838fd6332c1ed19587a569023e87b743f36b0e28e2",
+  "fingerprintReviewed": true,
+  "credentialReviewPreserved": true,
+  "connected": true,
+  "terminalInputReceived": true,
+  "terminalEchoRendered": true,
+  "disconnected": true,
+  "passwordCleared": true,
+  "returnedHome": true,
+  "helperKeysExact": true,
+  "ordinaryActive": {
+    "keyboardOpened": true,
+    "keyboardClosed": true,
+    "board": true,
+    "terminalFromBoard": true,
+    "network": true,
+    "terminalFromNetwork": true,
+    "settings": true,
+    "terminalFromSettings": true,
+    "singleAuthenticatedShellWithoutInput": true
+  },
+  "activeImeChecks": [
+    {
+      "formatVersion": 1,
+      "serviceCount": 1,
+      "displayCount": 1,
+      "focusCount": 1,
+      "editorBlockCount": 1,
+      "editorPackageCount": 1,
+      "imeInsetsCount": 1,
+      "attempts": 2,
+      "expectedVisible": false,
+      "reason": "owned_hidden",
+      "focusOwner": "owned",
+      "editorOwner": "owned",
+      "imeInsetsState": "hidden",
+      "visibility": "hidden"
+    },
+    {
+      "formatVersion": 1,
+      "serviceCount": 1,
+      "displayCount": 1,
+      "focusCount": 1,
+      "editorBlockCount": 1,
+      "editorPackageCount": 1,
+      "imeInsetsCount": 1,
+      "attempts": 3,
+      "expectedVisible": true,
+      "reason": "owned_visible",
+      "focusOwner": "owned",
+      "editorOwner": "owned",
+      "imeInsetsState": "visible",
+      "visibility": "visible"
+    },
+    {
+      "formatVersion": 1,
+      "serviceCount": 1,
+      "displayCount": 1,
+      "focusCount": 1,
+      "editorBlockCount": 1,
+      "editorPackageCount": 1,
+      "imeInsetsCount": 1,
+      "attempts": 2,
+      "expectedVisible": true,
+      "reason": "owned_visible",
+      "focusOwner": "owned",
+      "editorOwner": "owned",
+      "imeInsetsState": "visible",
+      "visibility": "visible"
+    },
+    {
+      "formatVersion": 1,
+      "serviceCount": 1,
+      "displayCount": 1,
+      "focusCount": 1,
+      "editorBlockCount": 1,
+      "editorPackageCount": 1,
+      "imeInsetsCount": 1,
+      "attempts": 3,
+      "expectedVisible": false,
+      "reason": "owned_hidden",
+      "focusOwner": "owned",
+      "editorOwner": "owned",
+      "imeInsetsState": "hidden",
+      "visibility": "hidden"
+    },
+    {
+      "formatVersion": 1,
+      "serviceCount": 1,
+      "displayCount": 1,
+      "focusCount": 1,
+      "editorBlockCount": 1,
+      "editorPackageCount": 1,
+      "imeInsetsCount": 1,
+      "attempts": 2,
+      "expectedVisible": false,
+      "reason": "owned_hidden",
+      "focusOwner": "owned",
+      "editorOwner": "owned",
+      "imeInsetsState": "hidden",
+      "visibility": "hidden"
+    }
+  ],
+  "secondOpenFacts": [
+    {
+      "peerCounts": {
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 0
+      },
+      "peerClosed": false,
+      "ime": {
+        "formatVersion": 1,
+        "serviceCount": 1,
+        "displayCount": 1,
+        "focusCount": 1,
+        "editorBlockCount": 1,
+        "editorPackageCount": 1,
+        "imeInsetsCount": 1,
+        "reason": "owned_hidden",
+        "focusOwner": "owned",
+        "editorOwner": "owned",
+        "imeInsetsState": "hidden",
+        "visibility": "hidden"
+      },
+      "editorFocus": {
+        "editorPresent": true,
+        "editorActive": false,
+        "documentFocused": true,
+        "imeKnown": true,
+        "imeVisible": false
+      },
+      "geometry": {
+        "viewport": [
+          393,
+          851,
+          0,
+          851
+        ],
+        "title": [
+          24,
+          64,
+          75,
+          26
+        ],
+        "badge": [
+          24,
+          128,
+          62,
+          24
+        ],
+        "focus": [
+          325,
+          118,
+          44,
+          44
+        ],
+        "hide": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "disconnect": [
+          309,
+          55,
+          60,
+          44
+        ]
+      },
+      "peerUnchanged": true
+    },
+    {
+      "peerCounts": {
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 0
+      },
+      "peerClosed": false,
+      "ime": {
+        "formatVersion": 1,
+        "serviceCount": 1,
+        "displayCount": 1,
+        "focusCount": 1,
+        "editorBlockCount": 1,
+        "editorPackageCount": 1,
+        "imeInsetsCount": 1,
+        "reason": "owned_visible",
+        "focusOwner": "owned",
+        "editorOwner": "owned",
+        "imeInsetsState": "visible",
+        "visibility": "visible"
+      },
+      "editorFocus": {
+        "editorPresent": true,
+        "editorActive": true,
+        "documentFocused": true,
+        "imeKnown": true,
+        "imeVisible": true
+      },
+      "geometry": {
+        "viewport": [
+          393,
+          851,
+          0,
+          851
+        ],
+        "title": [
+          24,
+          64,
+          75,
+          26
+        ],
+        "badge": [
+          24,
+          128,
+          62,
+          24
+        ],
+        "focus": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hide": [
+          325,
+          118,
+          44,
+          44
+        ],
+        "disconnect": [
+          309,
+          55,
+          60,
+          44
+        ]
+      },
+      "peerUnchanged": true
+    }
+  ],
+  "terminalScreenshot": {
+    "schemaVersion": 1,
+    "status": "passed",
+    "expectedTarget": "fixture@127.0.0.1:55379",
+    "expectedToken": "CAVE HAVE LAMP EAST LEFT HUNT PAST SEAT",
+    "expectedMarker": "POCKET-ANDROID-SSH-OK",
+    "captureEngine": "adb exec-out screencap -p",
+    "coordinateEngine": "measured WebView frame or exact CDP/framebuffer pixel registration",
+    "captureAttempts": 1,
+    "geometryBefore": {
+      "viewport": [
+        393,
+        851
+      ],
+      "targetRect": [
+        96,
+        132.90908813476562,
+        165.6306915283203,
+        14.181818962097168
+      ],
+      "terminal": [
+        35.727272033691406,
+        181.72727966308594,
+        319,
+        280
+      ],
+      "visualViewport": [
+        0,
+        0,
+        1
+      ],
+      "dpr": 2.75,
+      "targetVisible": true,
+      "targetMatched": true,
+      "terminalVisible": true,
+      "webViewCandidateBounds": [
+        [
+          0,
+          0,
+          1080,
+          2340
+        ]
+      ],
+      "webViewCandidateCount": 1
+    },
+    "webViewBeforeSha256": "2ba02f0ffc6ee734ff084dbd03ecf6437902f55929c06e43d540f3dfcbdebd4e",
+    "imageSha256": "ae15bd579418d150ee4463f0fc1450a210ba04575a88b89a995230e21ab7fe72",
+    "imageSize": [
+      1080,
+      2340
+    ],
+    "image": "ssh-terminal-android.png",
+    "imageCaptureAttempt": 1,
+    "geometryAfter": {
+      "viewport": [
+        393,
+        851
+      ],
+      "targetRect": [
+        96,
+        132.90908813476562,
+        165.6306915283203,
+        14.181818962097168
+      ],
+      "terminal": [
+        35.727272033691406,
+        181.72727966308594,
+        319,
+        280
+      ],
+      "visualViewport": [
+        0,
+        0,
+        1
+      ],
+      "dpr": 2.75,
+      "targetVisible": true,
+      "targetMatched": true,
+      "terminalVisible": true,
+      "webViewCandidateBounds": [
+        [
+          0,
+          0,
+          1080,
+          2340
+        ]
+      ],
+      "webViewCandidateCount": 1
+    },
+    "coordinateMethod": "uiautomator_full_frame",
+    "terminalBounds": [
+      99,
+      500,
+      875,
+      769
+    ],
+    "headerGeometry": {
+      "nativePx": {
+        "overlapPx": 136,
+        "systemBottomPx": 136,
+        "viewY": 0,
+        "statusPx": 136,
+        "stableStatusPx": 136,
+        "windowTopPx": 0,
+        "cutoutPx": 136,
+        "captionPx": 0,
+        "stableCaptionPx": 0
+      },
+      "viewportCss": [
+        393,
+        851
+      ],
+      "visualViewport": [
+        0,
+        0,
+        1
+      ],
+      "devicePixelRatio": 2.75,
+      "scrollYCss": 0,
+      "appliedTopCss": 49.45454545454545,
+      "webViewOriginPx": [
+        0,
+        0
+      ],
+      "imageSizePx": [
+        1080,
+        2340
+      ],
+      "header": {
+        "rectCss": [
+          0,
+          50,
+          393.0909118652344,
+          56
+        ],
+        "visible": true,
+        "inViewport": true
+      },
+      "title": {
+        "rectCss": [
+          24,
+          64.2272720336914,
+          75.40341186523438,
+          25.81818199157715
+        ],
+        "visible": true,
+        "inViewport": true,
+        "boundsPx": [
+          66,
+          176,
+          208,
+          72
+        ]
+      },
+      "button": {
+        "rectCss": [
+          309.0909118652344,
+          55.1363639831543,
+          60,
+          44
+        ],
+        "visible": true,
+        "inViewport": true,
+        "boundsPx": [
+          850,
+          151,
+          166,
+          122
+        ]
+      },
+      "sshTitle": {
+        "rectCss": [
+          24,
+          64.2272720336914,
+          75.40341186523438,
+          25.81818199157715
+        ],
+        "visible": true,
+        "inViewport": true
+      },
+      "target": {
+        "rectCss": [
+          96,
+          132.90908813476562,
+          165.6306915283203,
+          14.181818962097168
+        ],
+        "visible": true,
+        "inViewport": true,
+        "boundsPx": [
+          264,
+          365,
+          456,
+          40
+        ]
+      },
+      "terminal": {
+        "rectCss": [
+          24,
+          170,
+          345.0909118652344,
+          314
+        ],
+        "visible": true,
+        "inViewport": true
+      },
+      "xterm": {
+        "rectCss": [
+          35.727272033691406,
+          181.72727966308594,
+          319,
+          280
+        ],
+        "visible": true,
+        "inViewport": true
+      }
+    },
+    "markerVisible": true,
+    "tokenVisible": true,
+    "ocrEngine": "tesseract 5.3.4",
+    "ocrAttempts": 1,
+    "ocrPageSegmentationMode": 6,
+    "proofSequenceVisible": true
+  },
+  "peer": {
+    "authAccepted": true,
+    "ptyRequested": true,
+    "shellRequested": true,
+    "markerReceived": true,
+    "sessionClosed": true
+  },
+  "cleanupDiagnostic": {
+    "status": "passed",
+    "steps": {
+      "browserClose": "returned",
+      "browserSocket": "absent",
+      "forceStop": "returned",
+      "uninstall": "returned",
+      "appProcess": "absent",
+      "appPackage": "absent",
+      "forwardRemove": "returned",
+      "forwardList": "absent",
+      "reverseRemove": "returned",
+      "reverseList": "absent"
+    }
+  },
+  "cleanup": {
+    "browser": true,
+    "application": true,
+    "forward": true,
+    "reverse": true,
+    "fixtureConnections": true
+  },
+  "phase": "complete",
+  "rotation": {
+    "probeReviewed": true,
+    "refusalBlocked": true,
+    "reviewNoExits": true,
+    "cancelKeptTrust": true,
+    "reprobePresented": true,
+    "connected": true,
+    "terminalInputReceived": true,
+    "terminalEchoRendered": true,
+    "disconnected": true,
+    "passwordCleared": true,
+    "rotationEvidence": [
+      {
+        "stage": 2,
+        "connections": 2,
+        "connectionsClosed": true,
+        "initialProbe": {
+          "id": 1,
+          "hostKey": "A",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "rejectedTransport": {
+          "id": 2,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        }
+      },
+      {
+        "stage": 3,
+        "connections": 3,
+        "connectionsClosed": true,
+        "initialProbe": {
+          "id": 1,
+          "hostKey": "A",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "rejectedTransport": {
+          "id": 2,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "freshProbe": {
+          "id": 3,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        }
+      },
+      {
+        "stage": 4,
+        "connections": 4,
+        "connectionsClosed": true,
+        "initialProbe": {
+          "id": 1,
+          "hostKey": "A",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "rejectedTransport": {
+          "id": 2,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "freshProbe": {
+          "id": 3,
+          "hostKey": "B",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "authAccepted": false,
+          "markerReceived": false,
+          "sessionClosed": false,
+          "closed": true
+        },
+        "acceptedSession": {
+          "id": 4,
+          "hostKey": "B",
+          "authAttempts": 1,
+          "authSuccesses": 1,
+          "ptyRequests": 1,
+          "shellRequests": 1,
+          "inputBytes": 9,
+          "outputBytes": 102,
+          "authAccepted": true,
+          "markerReceived": true,
+          "sessionClosed": true,
+          "closed": true
+        }
+      }
+    ],
+    "terminalScreenshot": {
+      "schemaVersion": 1,
+      "status": "passed",
+      "expectedTarget": "fixture@127.0.0.1:48289",
+      "expectedToken": "HAVE ARCH LAMP RACE PATH FACT DUSK HEAD",
+      "expectedMarker": "POCKET-ANDROID-SSH-OK",
+      "captureEngine": "adb exec-out screencap -p",
+      "coordinateEngine": "measured WebView frame or exact CDP/framebuffer pixel registration",
+      "captureAttempts": 1,
+      "geometryBefore": {
+        "viewport": [
+          393,
+          851
+        ],
+        "targetRect": [
+          96,
+          132.90908813476562,
+          165.6306915283203,
+          14.181818962097168
+        ],
+        "terminal": [
+          35.727272033691406,
+          181.72727966308594,
+          319,
+          280
+        ],
+        "visualViewport": [
+          0,
+          0,
+          1
+        ],
+        "dpr": 2.75,
+        "targetVisible": true,
+        "targetMatched": true,
+        "terminalVisible": true,
+        "webViewCandidateBounds": [
+          [
+            0,
+            0,
+            1080,
+            2340
+          ]
+        ],
+        "webViewCandidateCount": 1
+      },
+      "webViewBeforeSha256": "4936cce6731b12b478a6ccfa50b6d9573c0d7257cc5f06e7800af356d7157b7b",
+      "imageSha256": "0acfb662ee87e15556429f81379fd6390a5876c6c56b0d14d0696f5764317167",
+      "imageSize": [
+        1080,
+        2340
+      ],
+      "image": "ssh-rotation-terminal-android.png",
+      "imageCaptureAttempt": 1,
+      "geometryAfter": {
+        "viewport": [
+          393,
+          851
+        ],
+        "targetRect": [
+          96,
+          132.90908813476562,
+          165.6306915283203,
+          14.181818962097168
+        ],
+        "terminal": [
+          35.727272033691406,
+          181.72727966308594,
+          319,
+          280
+        ],
+        "visualViewport": [
+          0,
+          0,
+          1
+        ],
+        "dpr": 2.75,
+        "targetVisible": true,
+        "targetMatched": true,
+        "terminalVisible": true,
+        "webViewCandidateBounds": [
+          [
+            0,
+            0,
+            1080,
+            2340
+          ]
+        ],
+        "webViewCandidateCount": 1
+      },
+      "coordinateMethod": "uiautomator_full_frame",
+      "terminalBounds": [
+        99,
+        500,
+        875,
+        769
+      ],
+      "headerGeometry": {
+        "nativePx": {
+          "overlapPx": 136,
+          "systemBottomPx": 136,
+          "viewY": 0,
+          "statusPx": 136,
+          "stableStatusPx": 136,
+          "windowTopPx": 0,
+          "cutoutPx": 136,
+          "captionPx": 0,
+          "stableCaptionPx": 0
+        },
+        "viewportCss": [
+          393,
+          851
+        ],
+        "visualViewport": [
+          0,
+          0,
+          1
+        ],
+        "devicePixelRatio": 2.75,
+        "scrollYCss": 0,
+        "appliedTopCss": 49.45454545454545,
+        "webViewOriginPx": [
+          0,
+          0
+        ],
+        "imageSizePx": [
+          1080,
+          2340
+        ],
+        "header": {
+          "rectCss": [
+            0,
+            50,
+            393.0909118652344,
+            56
+          ],
+          "visible": true,
+          "inViewport": true
+        },
+        "title": {
+          "rectCss": [
+            24,
+            64.2272720336914,
+            75.40341186523438,
+            25.81818199157715
+          ],
+          "visible": true,
+          "inViewport": true,
+          "boundsPx": [
+            66,
+            176,
+            208,
+            72
+          ]
+        },
+        "button": {
+          "rectCss": [
+            309.0909118652344,
+            55.1363639831543,
+            60,
+            44
+          ],
+          "visible": true,
+          "inViewport": true,
+          "boundsPx": [
+            850,
+            151,
+            166,
+            122
+          ]
+        },
+        "sshTitle": {
+          "rectCss": [
+            24,
+            64.2272720336914,
+            75.40341186523438,
+            25.81818199157715
+          ],
+          "visible": true,
+          "inViewport": true
+        },
+        "target": {
+          "rectCss": [
+            96,
+            132.90908813476562,
+            165.6306915283203,
+            14.181818962097168
+          ],
+          "visible": true,
+          "inViewport": true,
+          "boundsPx": [
+            264,
+            365,
+            456,
+            40
+          ]
+        },
+        "terminal": {
+          "rectCss": [
+            24,
+            170,
+            345.0909118652344,
+            314
+          ],
+          "visible": true,
+          "inViewport": true
+        },
+        "xterm": {
+          "rectCss": [
+            35.727272033691406,
+            181.72727966308594,
+            319,
+            280
+          ],
+          "visible": true,
+          "inViewport": true
+        }
+      },
+      "markerVisible": true,
+      "tokenVisible": true,
+      "ocrEngine": "tesseract 5.3.4",
+      "ocrAttempts": 1,
+      "ocrPageSegmentationMode": 6,
+      "proofSequenceVisible": true
+    },
+    "cleanupDiagnostic": {
+      "status": "passed",
+      "steps": {
+        "browserClose": "returned",
+        "browserSocket": "absent",
+        "forceStop": "returned",
+        "uninstall": "returned",
+        "appProcess": "absent",
+        "appPackage": "absent",
+        "forwardRemove": "returned",
+        "forwardList": "absent",
+        "reverseRemove": "returned",
+        "reverseList": "absent"
+      }
+    },
+    "cleanup": {
+      "browser": true,
+      "application": true,
+      "forward": true,
+      "reverse": true,
+      "fixtureConnections": true
+    },
+    "s10Screenshot": true
+  },
+  "encryptedKey": {
+    "fingerprintReviewed": true,
+    "credentialReviewPreserved": true,
+    "connected": true,
+    "terminalInputReceived": true,
+    "terminalEchoRendered": true,
+    "disconnected": true,
+    "passwordCleared": true,
+    "returnedHome": true,
+    "peer": {
+      "authAccepted": true,
+      "ptyRequested": true,
+      "shellRequested": true,
+      "markerReceived": true,
+      "sessionClosed": true
+    },
+    "cleanupDiagnostic": {
+      "status": "passed",
+      "steps": {
+        "browserClose": "returned",
+        "browserSocket": "absent",
+        "forceStop": "returned",
+        "uninstall": "returned",
+        "appProcess": "absent",
+        "appPackage": "absent",
+        "forwardRemove": "returned",
+        "forwardList": "absent",
+        "reverseRemove": "returned",
+        "reverseList": "absent"
+      }
+    },
+    "cleanup": {
+      "browser": true,
+      "application": true,
+      "forward": true,
+      "reverse": true,
+      "fixtureConnections": true
+    }
+  }
+}

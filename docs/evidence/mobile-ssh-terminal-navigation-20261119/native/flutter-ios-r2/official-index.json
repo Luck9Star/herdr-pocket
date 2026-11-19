@@ -1,0 +1,275 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "2861a0b685b747d71a9d11cdf44eebf5d1d792c3",
+  "sourceResultSha256": "a5b0e228be668f25fb8f85cf61c00a26c7669d6cb434a511b8df16dc14ef48be",
+  "status": "passed",
+  "run": 44458501334,
+  "job": 135339294777,
+  "artifact": 14498459988,
+  "zipSha256": "3f6c42a9d899acab1ee4bf1f6207bd91e767e8d2c8544aa7c95077a877095ec0",
+  "simulator": {
+    "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-26-2",
+    "runtimeVersion": "26.2",
+    "deviceType": "iPhone 11"
+  },
+  "ordinary": {
+    "checkpoints": {
+      "keyboard_shown": {
+        "id": 2,
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 0,
+        "markerReceived": false,
+        "closed": false
+      },
+      "keyboard_hidden": {
+        "id": 2,
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 0,
+        "markerReceived": false,
+        "closed": false
+      },
+      "board_visible": {
+        "id": 2,
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 0,
+        "markerReceived": false,
+        "closed": false
+      },
+      "board_returned": {
+        "id": 2,
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 0,
+        "markerReceived": false,
+        "closed": false
+      },
+      "network_visible": {
+        "id": 2,
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 0,
+        "markerReceived": false,
+        "closed": false
+      },
+      "network_returned": {
+        "id": 2,
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 0,
+        "markerReceived": false,
+        "closed": false
+      },
+      "settings_visible": {
+        "id": 2,
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 0,
+        "markerReceived": false,
+        "closed": false
+      },
+      "settings_returned": {
+        "id": 2,
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 0,
+        "markerReceived": false,
+        "closed": false
+      }
+    },
+    "connections": [
+      {
+        "id": 1,
+        "hostKey": "A",
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "closed": true,
+        "markerReceived": false,
+        "sessionClosed": false
+      },
+      {
+        "id": 2,
+        "hostKey": "A",
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 9,
+        "outputBytes": 102,
+        "closed": true,
+        "markerReceived": true,
+        "sessionClosed": true
+      }
+    ],
+    "explicitDisconnect": true,
+    "credentialsCleared": true
+  },
+  "keyChange": {
+    "checkpoints": [
+      "rejected",
+      "cancelled",
+      "reprobed",
+      "complete"
+    ],
+    "connections": [
+      {
+        "id": 1,
+        "hostKey": "A",
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "closed": true,
+        "markerReceived": false,
+        "sessionClosed": false
+      },
+      {
+        "id": 2,
+        "hostKey": "B",
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "closed": true,
+        "markerReceived": false,
+        "sessionClosed": false
+      },
+      {
+        "id": 3,
+        "hostKey": "B",
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "closed": true,
+        "markerReceived": false,
+        "sessionClosed": false
+      },
+      {
+        "id": 4,
+        "hostKey": "B",
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 9,
+        "outputBytes": 102,
+        "closed": true,
+        "markerReceived": true,
+        "sessionClosed": true
+      }
+    ],
+    "cancelKeptTrust": true,
+    "freshFingerprintConfirmed": true,
+    "explicitDisconnect": true,
+    "navigationCheckpointsCaptured": false
+  },
+  "screens": {
+    "ordinary": {
+      "imageFile": "ordinary-terminal.png",
+      "imageSha256": "6d10fdb4a727aa210b4d1355d3bbcf6656d1b109b8be008dcbeabc5c0d4302e1",
+      "criteriaFile": "ordinary-terminal-ocr.json",
+      "criteriaSha256": "8da5a3127f1781eda003ef64ec1bee150d6a4260c811ee55656bae39c322e9dd",
+      "archiveSha256": "bf0fad7e5e53ca56b3317e0860c37a86fa0bc3a79a2a5fe546183a0c3a79c0de",
+      "pixelSha256": "354b490a0950fc0e1686011c4e2c4401163c55affe061aab204a52b08fec6c8e",
+      "removedChunks": [
+        "eXIf"
+      ],
+      "framebufferPixels": [
+        828,
+        1792
+      ],
+      "terminalBounds": [
+        48,
+        336,
+        732,
+        1148
+      ],
+      "ocrEngine": "tesseract 5.5.4",
+      "markerVisible": true,
+      "tokenVisible": true,
+      "proofSequenceVisible": true
+    },
+    "keyChange": {
+      "imageFile": "key-change-terminal.png",
+      "imageSha256": "a3479ad7491e3db6eaf340559be3c11e3ff0bd2998dde8522754dd494554c8d2",
+      "criteriaFile": "key-change-terminal-ocr.json",
+      "criteriaSha256": "0d9a593ad0c0ef6132f25fc84294ede3810873496e67549c1577e3c99fb4f72f",
+      "archiveSha256": "5b67437587d77bf937271f8bce33f7f66c095e545def7c5d6698aeaf57db403a",
+      "pixelSha256": "7709e9672e56634f8b84b71a8e3b801e9e75ebaa0b2296074c20cc2557038edd",
+      "removedChunks": [
+        "eXIf"
+      ],
+      "framebufferPixels": [
+        828,
+        1792
+      ],
+      "terminalBounds": [
+        48,
+        336,
+        732,
+        726
+      ],
+      "ocrEngine": "tesseract 5.5.4",
+      "markerVisible": true,
+      "tokenVisible": true,
+      "proofSequenceVisible": true
+    }
+  },
+  "cleanup": {
+    "simulatorDeleted": true,
+    "fixtureClosed": true,
+    "flutterToolStopped": true,
+    "appRemoved": true,
+    "privateRemoved": true,
+    "rawLogsUploaded": false
+  },
+  "physicalImeVerified": false,
+  "scope": "iOS 26.2 iPhone 11 模拟器、回环密码认证、驱动输入",
+  "previousPassComparison": {
+    "sourceSHA": "bda3c59c7f6b4e5a4da119f26838bf511fbda780",
+    "artifact": 14479109985,
+    "framebufferPixels": [
+      828,
+      1792
+    ],
+    "sameSimulatorModel": true,
+    "sameKeyboardState": false,
+    "usedAsMatchedComparison": false
+  },
+  "openGaps": [
+    "实体设备",
+    "系统输入法组词",
+    "真实跨网",
+    "换钥案中的八项导航检查点",
+    "原生画面逐锚 2 pt 验收"
+  ]
+}

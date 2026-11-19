@@ -40,10 +40,12 @@ STAGES = ('ordinary_form', 'ordinary_probe', 'ordinary_password', 'ordinary_inpu
           'key_change_review', 'key_change_cancelled', 'key_change_probe_b',
           'key_change_password_b', 'key_change_input', 'key_change_terminal',
           'key_change_disconnect_attempt', 'key_change_disconnected', 'complete')
+ORDINARY_ACTIVE_STEPS = ('keyboard_opened', 'keyboard_closed', 'board', 'terminal_from_board',
+                         'network', 'terminal_from_network', 'settings', 'terminal_from_settings')
 NATIVE_PHASES = frozenset(prefix + '_' + phase for prefix in ('ordinary', 'key_change') for phase in (
     'launch', 'open_add', 'open_ssh', 'host', 'port', 'username', 'probe', 'fingerprint',
     'password', 'connect', 'terminal_focus', 'terminal_input', 'terminal_capture', 'disconnect',
-    'review_capture', 'cancel', 'cancel_check', 'reprobe', 'new_fingerprint')) | {'ordinary_return_home'}
+    'review_capture', 'cancel', 'cancel_check', 'reprobe', 'new_fingerprint')) | {'ordinary_return_home', 'ordinary_active_flow'}
 GEOMETRY_PHASES = frozenset(
     prefix + '_' + phase for prefix in ('ordinary', 'key_change')
     for phase in ('host', 'port', 'username', 'probe', 'password')
@@ -81,7 +83,8 @@ NATIVE_FAILURES = frozenset((
     'native_home_identity_unproven', 'native_home_retry_unsafe', 'native_ssh_form_unproven',
     'native_home_navigation_failed', 'native_control_owner_unproven', 'native_scroll_owner_unproven',
     'native_form_control_unproven', 'native_form_control_changed', 'native_terminal_keyboard_visible',
-    'native_terminal_header_unproven', 'native_mobile_setup_unproven',
+    'native_terminal_header_unproven', 'native_mobile_setup_unproven', 'native_active_page_unproven',
+    'native_active_action_unproven', 'native_active_owner_unproven',
     'native_mobile_confirmation_owner_unproven', 'native_mobile_password_owner_unproven',
     'native_mobile_submit_owner_unproven', 'native_mobile_return_owner_unproven')) | MOBILE_PASSWORD_FAILURES
 HOME_MEMBERS = frozenset(('brand', 'headerAdd', 'emptyAdd', 'homeHeading', 'emptyHeading',
@@ -126,7 +129,7 @@ def public_capture_diagnostic(value, *, review=False):
     require(isinstance(value, dict) and set(value) == keys, 'tauri_ios_capture_diagnostic_invalid')
     anchors = (('review_title', 'review_blocked', 'review_old_fingerprint', 'review_new_fingerprint',
                 'review_target', 'review_recheck', 'review_cancel') if review else
-               ('target', 'terminal', 'keyboard', 'header_brand', 'header_add', 'terminal_heading', 'status_bar'))
+               ('target', 'terminal', 'keyboard', 'header_brand', 'header_add', 'header_disconnect', 'terminal_heading', 'status_bar'))
     require((not review or (type(value['sample']) is str and value['sample'] in ('before', 'after')))
             and type(value['anchor']) is str and value['anchor'] in anchors
             and type(value['reason']) is str and value['reason'] in (
@@ -152,6 +155,36 @@ def public_capture_diagnostic(value, *, review=False):
     if review:
         result['sample'] = value['sample']
     return result
+
+
+def public_active_diagnostic(value):
+    codes = {'page_witness_unproven', 'owner_unproven', 'page_clipped', 'page_conflict', 'action_unbound',
+             'action_live_unproven', 'route_tabs_occluded', 'status_bar_action_invalid', 'window_invalid',
+             'screen_invalid', 'web_ancestor_invalid', 'viewport_empty', 'status_bar_viewport_invalid',
+             'keyboard_frame_unproven', 'keyboard_covers_viewport', 'keyboard_state_changed', 'keyboard_missing',
+             'field_invalid', 'field_outside', 'field_unhittable'}
+    contexts = ('connect', 'disconnect', 'route_before', 'route_after', 'keyboard_open_before',
+                'keyboard_open_after', 'keyboard_close_before', 'keyboard_close_after')
+    scalar_rects = ('screen', 'viewport', 'visible')
+    arrays = {'statusBars': 4, 'keyboards': 4, 'frames': 5}
+    invalid = 'tauri_ios_active_diagnostic_invalid'
+
+    def rectangle(rect):
+        return rect is None or (isinstance(rect, list) and len(rect) == 4
+                                and all(type(n) is int and -10000 <= n <= 10000 for n in rect)
+                                and rect[2] >= 0 and rect[3] >= 0)
+
+    require(isinstance(value, dict)
+            and set(value) == {'context', 'page', 'reason', 'keyboardVisible', *scalar_rects, *arrays}
+            and type(value['context']) is str and value['context'] in contexts
+            and type(value['reason']) is str and value['reason'] in codes
+            and type(value['page']) is str and value['page'] in ('terminal', 'board', 'network', 'settings')
+            and (value['context'].startswith('route_') or value['page'] == 'terminal')
+            and type(value['keyboardVisible']) is bool
+            and all(rectangle(value[key]) for key in scalar_rects)
+            and all(isinstance(value[key], list) and len(value[key]) <= limit
+                    and all(rectangle(frame) for frame in value[key]) for key, limit in arrays.items()), invalid)
+    return json.loads(json.dumps(value))
 
 
 def public_connect_diagnostic(value):
@@ -384,7 +417,7 @@ def public_navigation_state(value):
     return dict(value)
 
 
-def public_navigation_geometry(value):
+def public_navigation_geometry(value, *, require_action=False):
     flags = {'enabled', 'hittable', 'ownerResolved', 'centerVisible', 'fullyVisible'}
     frames = {'frame', 'visibleFrame', 'screenFrame'}
     require(isinstance(value, dict) and set(value) == flags | frames | {'role', 'statusBarFrames'}
@@ -397,6 +430,18 @@ def public_navigation_geometry(value):
     require(all(rectangle(value[k]) for k in frames) and isinstance(value['statusBarFrames'], list)
             and len(value['statusBarFrames']) <= 8 and all(rectangle(r) for r in value['statusBarFrames']),
             'tauri_ios_navigation_diagnostic_invalid')
+    if require_action:
+        def inside(rect, outer):
+            x, y, w, h = rect
+            a, b, aw, ah = outer
+            return w > 0 and h > 0 and x >= a and y >= b and x + w <= a + aw and y + h <= b + ah
+        barriers = value['statusBarFrames']
+        require(value['role'] in ('button', 'otherNative') and all(value[key] for key in flags)
+                and value['screenFrame'][:2] == [0, 0] and inside(value['visibleFrame'], value['screenFrame'])
+                and inside(value['frame'], value['visibleFrame']) and 1 <= len(barriers) <= 4
+                and len({tuple(bar) for bar in barriers}) == len(barriers)
+                and all(inside(bar, value['screenFrame']) and bar[1] + bar[3] <= value['frame'][1] for bar in barriers),
+                'tauri_ios_active_action_invalid')
     return json.loads(json.dumps(value))
 
 
@@ -685,7 +730,7 @@ def measured_bounds(payload, image_size, *, require_terminal_heading=False):
         left, top = math.ceil(x * sx), math.ceil(y * sy)
         return [left, top, math.floor((x + w) * sx) - left, math.floor((y + h) * sy) - top]
     if 'reviewFrames' in payload:
-        require(not require_terminal_heading, 'tauri_ios_capture_header_invalid')
+        require(not require_terminal_heading and 'activeHeaderBounds' not in payload, 'tauri_ios_capture_header_invalid')
         frames = payload['reviewFrames']
         require(isinstance(frames, list) and len(frames) == 7, 'tauri_ios_review_geometry_invalid')
         for frame in frames:
@@ -694,10 +739,31 @@ def measured_bounds(payload, image_size, *, require_terminal_heading=False):
                     and inside(frame, safe), 'tauri_ios_review_geometry_invalid')
         return {'reviewBounds': [pixels(f) for f in frames], 'nativeScale': sx, **ownership}
     header = payload.get('headerBounds')
+    active = payload.get('activeHeaderBounds')
     heading = None
+    active_bottom = None
     if require_terminal_heading:
-        require(isinstance(header, dict) and {'headingFrame', 'headerBottom'} <= header.keys(),
-                'tauri_ios_capture_header_invalid')
+        if screen[0] <= 599:
+            require(active is not None and header is None, 'tauri_ios_capture_header_invalid')
+        else:
+            require(isinstance(header, dict) and {'headingFrame', 'headerBottom'} <= header.keys(),
+                    'tauri_ios_capture_header_invalid')
+    if active is not None:
+        code = 'tauri_ios_capture_header_invalid'
+        require(header is None and screen[0] <= 599 and isinstance(active, dict)
+                and set(active) == {'titleFrame', 'disconnectFrame', 'statusBarFrames', 'sameOwner', 'disconnectHittable'}
+                and active['sameOwner'] is True and active['disconnectHittable'] is True
+                and isinstance(active['statusBarFrames'], list) and 1 <= len(active['statusBarFrames']) <= 4, code)
+        title, disconnect, *bars = [active['titleFrame'], active['disconnectFrame'], *active['statusBarFrames']]
+        require(all(isinstance(f, list) and len(f) == 4 and all(type(n) in (int, float) and math.isfinite(n) for n in f)
+                    and inside(f, [0, 0, *screen]) for f in (title, disconnect, *bars)), code)
+        require(inside(title, safe) and inside(disconnect, safe)
+                and len({tuple(f) for f in bars}) == len(bars)
+                and all(bar[1] + bar[3] <= min(title[1], disconnect[1]) for bar in bars)
+                and title[0] + title[2] <= disconnect[0]
+                and max(title[1], disconnect[1]) < min(title[1] + title[3], disconnect[1] + disconnect[3]), code)
+        active_bottom = max(title[1] + title[3], disconnect[1] + disconnect[3])
+        ownership['activeHeaderBounds'] = json.loads(json.dumps(active))
     if header is not None:
         original_fields = {'brandFrame', 'addFrame', 'statusBarFrames', 'sameOwner'}
         heading_fields = {'headingFrame', 'headerBottom'}
@@ -726,16 +792,19 @@ def measured_bounds(payload, image_size, *, require_terminal_heading=False):
     require(inside(terminal, safe) and inside(target, safe), 'tauri_ios_terminal_or_target_clipped')
     tx, ty, tw, th = terminal
     x, y, w, h = target
+    if active_bottom is not None:
+        require(active_bottom <= y and y + h <= ty, 'tauri_ios_capture_header_invalid')
     require(tx + tw <= x or x + w <= tx or ty + th <= y or y + h <= ty,
             'tauri_ios_terminal_target_overlap')
     source = payload.get('boundSource', 'native_region')
     require(source in ('native_region', 'terminal_control_bounds'), 'tauri_ios_capture_bounds_source_invalid')
     if source == 'terminal_control_bounds':
         controls = payload.get('controlBounds')
-        require(isinstance(controls, dict) and set(controls) == {'dismissFrame', 'helperFrames', 'sameOwner'}
+        keyboard_key = 'keyboardFrame' if active is not None else 'dismissFrame'
+        require(isinstance(controls, dict) and set(controls) == {keyboard_key, 'helperFrames', 'sameOwner'}
                 and controls['sameOwner'] is True and isinstance(controls['helperFrames'], list)
                 and len(controls['helperFrames']) == 4, 'tauri_ios_capture_controls_invalid')
-        frames = [controls['dismissFrame'], *controls['helperFrames']]
+        frames = [controls[keyboard_key], *controls['helperFrames']]
         require(all(isinstance(f, list) and len(f) == 4 and
                     all(type(n) in (float, int) and math.isfinite(n) for n in f) and inside(f, safe)
                     for f in frames), 'tauri_ios_capture_controls_invalid')
@@ -744,6 +813,9 @@ def measured_bounds(payload, image_size, *, require_terminal_heading=False):
                 and max(f[1] for f in helpers) < min(f[1] + f[3] for f in helpers)
                 and all(abs(f[1]-helpers[0][1]) <= 1 and abs(f[1]+f[3]-helpers[0][1]-helpers[0][3]) <= 1 for f in helpers)
                 and dismiss[1] + dismiss[3] < min(f[1] for f in helpers), 'tauri_ios_capture_controls_invalid')
+        if active is not None:
+            require(x + w <= dismiss[0] and max(y, dismiss[1]) < min(y + h, dismiss[1] + dismiss[3]),
+                    'tauri_ios_capture_controls_invalid')
         expected = [safe[0], dismiss[1] + dismiss[3], safe[2],
                     min(f[1] for f in helpers) - dismiss[1] - dismiss[3]]
         require(all(abs(a-b) <= .01 for a,b in zip(terminal, expected)), 'tauri_ios_capture_controls_invalid')
@@ -834,21 +906,27 @@ def wait_peer(fixture, predicate, code, timeout=30):
     raise Failure(code)
 
 
-def ordinary_evidence(fixture, *, closed):
+def ordinary_transport(fixture):
     facts = fixture.snapshot()
     events = facts['connectionEvents']
     require(facts['connections'] == 2 and len(events) == 2, 'tauri_ios_ordinary_connection_count_invalid')
     probe, session = events
     counters = ('authAttempts', 'authSuccesses', 'ptyRequests', 'shellRequests', 'inputBytes', 'outputBytes')
-    require(probe['hostKey'] == 'A' and probe['closed'] is True
+    require(probe['id'] == 1 and probe['hostKey'] == 'A' and probe['closed'] is True
             and all(probe[k] == 0 for k in counters), 'tauri_ios_ordinary_probe_not_empty')
-    require(session['hostKey'] == 'A' and session['authSuccesses'] == 1 and session['authAttempts'] == 1
-            and session['ptyRequests'] == 1 and session['shellRequests'] == 1
-            and session['markerReceived'] is True and session['outputBytes'] > 0
-            and session.get('singleMarkerLineExact') is True
-            and session['inputBytes'] in (len(fixture.marker) + 1, len(fixture.marker) + 2),
+    require(session['id'] == 2 and session['hostKey'] == 'A' and session['authSuccesses'] == 1 and session['authAttempts'] == 1
+            and session['ptyRequests'] == 1 and session['shellRequests'] == 1 and session['outputBytes'] > 0,
             'tauri_ios_ordinary_session_incomplete')
-    require(session['sessionClosed'] is closed and session['closed'] is closed,
+    return facts, session
+
+
+def ordinary_evidence(fixture, *, closed):
+    facts, session = ordinary_transport(fixture)
+    require(session['markerReceived'] is True
+            and session.get('singleMarkerLineExact') is True
+            and session['inputBytes'] == len(fixture.marker) + 1,
+            'tauri_ios_ordinary_session_incomplete')
+    require(session['sessionClosed'] is closed and session['closed'] is closed and facts['connectionsClosed'] is closed,
             'tauri_ios_ordinary_close_order_invalid')
     return facts
 
@@ -950,6 +1028,42 @@ class Checkpoints:
     def accept(self, payload):
         stage = payload.get('stage')
         require('passwordObservation' not in payload or stage == 'native_failure', 'tauri_ios_native_diagnostic_invalid')
+        if stage == 'native_active_diagnostic':
+            invalid = 'tauri_ios_active_diagnostic_invalid'
+            require(set(payload) == {'stage', 'nativeCheckpoint', 'detail'} and self.failure is None
+                    and 'activeDiagnostic' not in self.result, invalid)
+            detail = public_active_diagnostic(payload['detail'])
+            phase, context = payload['nativeCheckpoint'], detail['context']
+            require(isinstance(phase, str) and phase == self.result.get('nativeCheckpoint'), invalid)
+            scenario = 'ordinary' if phase.startswith('ordinary_') else 'key_change'
+            if context.startswith('route_'):
+                allowed = {'ordinary_active_flow': 'ordinary_input'}
+            elif context.startswith('keyboard_'):
+                allowed = {'ordinary_active_flow': 'ordinary_input', scenario + '_terminal_focus': scenario + '_input',
+                           scenario + '_terminal_capture': scenario + '_terminal'}
+            else:
+                target = 'input' if context == 'connect' else 'disconnected'
+                allowed = {scenario + '_' + context: scenario + '_' + target}
+            require(phase in allowed and self.index == STAGES.index(allowed[phase]), invalid)
+            self.result['activeDiagnostic'] = {'nativeCheckpoint': phase, **detail}
+            return
+        if stage == 'ordinary_active':
+            case = self.result['cases']['ordinary']
+            trace = case.get('activeFlow', [])
+            require(self.failure is None and self.index == STAGES.index('ordinary_input')
+                    and set(payload) == {'stage', 'step', 'keyboardVisible', 'action'}
+                    and len(trace) < len(ORDINARY_ACTIVE_STEPS) and payload['step'] == ORDINARY_ACTIVE_STEPS[len(trace)]
+                    and payload['keyboardVisible'] is (payload['step'] == 'keyboard_opened'), 'tauri_ios_active_order_invalid')
+            action = public_navigation_geometry(payload['action'], require_action=True)
+            require(not payload['step'].startswith('keyboard_') or action['role'] == 'button', 'tauri_ios_active_action_invalid')
+            facts, session = ordinary_transport(self.ordinary)
+            require(facts['connectionsClosed'] is False and session['sessionClosed'] is False and session['closed'] is False
+                    and session['markerReceived'] is False and session['inputBytes'] == 0, 'tauri_ios_active_peer_changed')
+            peer = {key: session[key] for key in ('id', 'hostKey', 'authAttempts', 'authSuccesses', 'ptyRequests',
+                                                   'shellRequests', 'inputBytes', 'closed')}
+            case.setdefault('activeFlow', []).append({'step': payload['step'], 'keyboardVisible': payload['keyboardVisible'],
+                                                       'action': action, 'peer': peer})
+            return
         if stage in ('native_home', 'native_home_entry', 'native_navigation', 'native_navigation_arrival'):
             phase = payload.get('nativeCheckpoint')
             require(self.failure is None and phase in ('ordinary_open_add', 'key_change_open_add', 'ordinary_open_ssh', 'key_change_open_ssh'),
@@ -1170,10 +1284,15 @@ class Checkpoints:
             else:
                 self.result['cases']['keyChange']['cancelKeptTrust'] = True
         if stage.endswith('_input'):
+            if stage == 'ordinary_input':
+                require(tuple(step['step'] for step in self.result['cases']['ordinary'].get('activeFlow', [])) == ORDINARY_ACTIVE_STEPS,
+                        'tauri_ios_active_flow_incomplete')
             count = 4 if fixture is rotation else 2
             wait_peer(fixture, lambda f: f['connections'] == count and len(f['connectionEvents']) == count
                       and f['connectionEvents'][-1]['markerReceived'] is True,
                       'tauri_ios_peer_input_missing')
+            if stage == 'ordinary_input':
+                ordinary_evidence(ordinary, closed=False)
             self.result['cases']['keyChange' if fixture is rotation else 'ordinary']['terminalInputReceived'] = True
         if stage in ('ordinary_terminal', 'key_change_terminal') or stage.endswith('_disconnect_attempt'):
             if fixture is ordinary:

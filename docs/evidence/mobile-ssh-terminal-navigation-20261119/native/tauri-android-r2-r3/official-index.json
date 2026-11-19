@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "status": "failed",
+  "runs": [
+    {
+      "round": "R2",
+      "sourceSHA": "629245fc2cc98086979530b18ca14c8599028587",
+      "run": 44460008448,
+      "job": 135344209659,
+      "artifact": 14499952750,
+      "zipSha256": "c8cd880c4fd8cfdd2485e8846c5d6a611f86898d9d8b57a4d486f7b58df35208",
+      "sourceManifestSha256": "9a7bc89d949e0d694a5bf9b76aaa50f633ded3494663aba0049920206adc0983",
+      "status": "failed",
+      "failureStage": "active_keyboard_opened",
+      "errorCode": "direct_active_ui_invalid",
+      "activeDiagnostic": {
+        "route": true,
+        "live": true,
+        "title": true,
+        "badge": true,
+        "target": true,
+        "control": false,
+        "disconnect": true,
+        "keyboardState": false,
+        "sectionContent": true,
+        "navSelected": true
+      },
+      "activeGeometryCss": {
+        "viewport": [
+          393,
+          851,
+          0,
+          851
+        ],
+        "title": [
+          24,
+          64,
+          75,
+          26
+        ],
+        "badge": [
+          24,
+          128,
+          62,
+          24
+        ],
+        "focus": [
+          325,
+          118,
+          44,
+          44
+        ],
+        "hide": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "disconnect": [
+          309,
+          55,
+          60,
+          44
+        ]
+      },
+      "peerAtFailure": {
+        "connections": 2,
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 0,
+        "closed": false
+      },
+      "emulatorRemoved": true,
+      "screensArchivedByJob": false,
+      "imeEvidence": {
+        "ownedVisibleCheckedByDriver": true,
+        "clickBeforeAndAfterSamplesArchived": false,
+        "couldExcludeKeyboardCarryOverFromForm": false
+      }
+    },
+    {
+      "round": "R3",
+      "sourceSHA": "5c2be103cb4d2ba16bc66a34a2a683d521227ae8",
+      "run": 44461890953,
+      "job": 135350418144,
+      "artifact": 14500966515,
+      "zipSha256": "0dd9a3e4777405d35e284f937f4f48e491cc131790ed0c18a05511b67141a5dd",
+      "sourceManifestSha256": "f6c6394ee1221ae96f01def4707e4e62248ecc72fe02f9b7f6cf8b90a1c3853f",
+      "status": "failed",
+      "failureStage": "active_keyboard_opened",
+      "errorCode": "direct_active_ui_invalid",
+      "activeDiagnostic": {
+        "route": true,
+        "live": true,
+        "title": true,
+        "badge": true,
+        "target": true,
+        "control": false,
+        "disconnect": true,
+        "keyboardState": false,
+        "sectionContent": true,
+        "navSelected": true
+      },
+      "activeGeometryCss": {
+        "viewport": [
+          393,
+          851,
+          0,
+          851
+        ],
+        "title": [
+          24,
+          64,
+          75,
+          26
+        ],
+        "badge": [
+          24,
+          128,
+          62,
+          24
+        ],
+        "focus": [
+          325,
+          118,
+          44,
+          44
+        ],
+        "hide": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "disconnect": [
+          309,
+          55,
+          60,
+          44
+        ]
+      },
+      "peerAtFailure": {
+        "connections": 2,
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 0,
+        "closed": false
+      },
+      "emulatorRemoved": true,
+      "screensArchivedByJob": false,
+      "activeImeChecks": [
+        {
+          "formatVersion": 1,
+          "serviceCount": 1,
+          "displayCount": 1,
+          "focusCount": 1,
+          "editorBlockCount": 1,
+          "editorPackageCount": 1,
+          "imeInsetsCount": 1,
+          "attempts": 2,
+          "expectedVisible": false,
+          "reason": "owned_hidden",
+          "focusOwner": "owned",
+          "editorOwner": "owned",
+          "imeInsetsState": "hidden",
+          "visibility": "hidden"
+        },
+        {
+          "formatVersion": 1,
+          "serviceCount": 1,
+          "displayCount": 1,
+          "focusCount": 1,
+          "editorBlockCount": 1,
+          "editorPackageCount": 1,
+          "imeInsetsCount": 1,
+          "attempts": 3,
+          "expectedVisible": true,
+          "reason": "owned_visible",
+          "focusOwner": "owned",
+          "editorOwner": "owned",
+          "imeInsetsState": "visible",
+          "visibility": "visible"
+        }
+      ]
+    }
+  ]
+}

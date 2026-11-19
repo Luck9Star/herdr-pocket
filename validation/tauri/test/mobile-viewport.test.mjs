@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {observeAndroidSshHeader, observeIosSshActions, observeMobileViewport} from '../src/mobile-viewport.js';
+import {observeAndroidSshHeader, observeAndroidSshIme, observeMobileViewport} from '../src/mobile-viewport.js';
 import {readFileSync} from 'node:fs';
 
 test('header and SSH target union native and CSS safe-area insets without adding them',()=>{
@@ -17,18 +17,13 @@ test('S10 keeps its top safe area when the header is hidden',()=>{
   assert.match(css, /#host-home:has\(#home-ssh:not\(\[hidden\]\) #ssh-key-change:not\(\[hidden\]\)\)\s*\{\s*padding-top:calc\(12px \+ max\(var\(--hp-system-top-inset,0px\),env\(safe-area-inset-top,0px\),var\(--hp-ios-status-bar-fallback,0px\)\)\)/);
 });
 
-test('the active ordinary SSH header uses the shared status bar inset on compact portrait iOS',()=>{
-  const css=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
-  const activeHeader='.ios-edge-to-edge:has(#host-home:not([hidden]) #home-ssh:not([hidden]) #ssh-live:not([hidden])) .app-header';
-  const inset='max(var(--hp-system-top-inset,0px),env(safe-area-inset-top,0px),var(--hp-ios-status-bar-fallback))';
-  assert.ok(css.includes(`@media (max-width:599px) and (orientation:portrait) {
-  /* A native iOS WebView can extend behind the status bar with a zero CSS top inset. */
-  .ios-edge-to-edge { --hp-ios-status-bar-fallback:64px; }
-  ${activeHeader} {
-    position:sticky; top:0; z-index:10; background:var(--hp-canvas);
-    padding-top:calc(16px + ${inset});
-  }
-}`));
+test('the compact SSH terminal and settings use the shared top inset and the visual viewport',()=>{
+  const css=readFileSync(new URL('../src/direct-ssh-live.css',import.meta.url),'utf8');
+  assert.ok(css.includes('#host-home { padding:var(--hp-connection-top) 0 0; }'));
+  assert.ok(css.includes('top:var(--hp-connection-top)'));
+  assert.ok(css.includes('height:calc(var(--hp-ssh-ime-height,var(--hp-visual-height,100dvh)) - var(--hp-connection-top) - var(--ssh-tabs-space))'));
+  assert.ok(css.includes('--ssh-tabs-space:calc(56px + env(safe-area-inset-bottom,0px))'));
+  assert.match(css,/body:is\(\.ssh-ime-visible,\.keyboard-visible:not\(\.ssh-ime-known\)\)[^{]*\{\s*--ssh-tabs-space:0px;[\s\S]*?\.route-tabs \{ display:none; \}/);
 });
 
 function fixture() {
@@ -36,7 +31,7 @@ function fixture() {
   const viewport={height:800,offsetTop:0,addEventListener:(name,fn)=>callbacks.set('v:'+name,fn),removeEventListener:name=>callbacks.delete('v:'+name)};
   const view={innerWidth:390,innerHeight:800,devicePixelRatio:2.75,visualViewport:viewport,addEventListener:(name,fn)=>callbacks.set('w:'+name,fn),removeEventListener:name=>callbacks.delete('w:'+name)};
   const root={style:{setProperty:(key,value)=>props.set(key,value),removeProperty:key=>props.delete(key)}};
-  const body={classList:{toggle:(key,on)=>on?classes.add(key):classes.delete(key),remove:key=>classes.delete(key)}};
+  const body={classList:{toggle:(key,on)=>on?classes.add(key):classes.delete(key),remove:(...keys)=>keys.forEach(key=>classes.delete(key))}};
   return {viewport,view,root,body,callbacks,props,classes};
 }
 test('fixed controls follow visual keyboard inset and reset after close',()=>{
@@ -95,13 +90,247 @@ test('iOS entry stores scoped CSS points and distinguishes measured zero from un
 
 test('Android overlap uses window bounds and WebView screen position',()=>{
   const source=readFileSync(new URL('../android/TerminalKeyboardPlugin.kt',import.meta.url),'utf8');
-  assert.match(source, /currentWindowMetrics\.bounds\.top/);
+  assert.match(source, /currentWindowMetrics\.bounds/);
   assert.match(source, /windowTop \+ top/);
   assert.match(source, /\(safeTop - location\[1\]\)\.coerceAtLeast\(0\)/);
   const overlap=(root,top,view)=>Math.max(0,root+top-view);
   assert.equal(overlap(100,28,100),28);
   assert.equal(overlap(100,28,128),0);
 });
+test('native Android SSH IME covers unchanged and already reduced viewports, then clears on Back and exit', async t=>{
+  const f = fixture(), timers = new Map(), nodes = ['host-home', 'home-ssh', 'ssh-live'].map(()=>({hidden:false}));
+  const ids = Object.fromEntries(['host-home', 'home-ssh', 'ssh-live'].map((id,index)=>[id,nodes[index]]));
+  let mutation, now = 0, focused = true, nextTimer = 0, reads = 0;
+  let next = {imeVisible:false};
+  const old = globalThis.MutationObserver;
+  globalThis.MutationObserver = class {constructor(fn) {mutation=fn;} observe() {} disconnect() {}};
+  t.after(()=> {globalThis.MutationObserver=old;});
+  const doc = {documentElement:f.root, body:f.body, hidden:false, hasFocus:()=>focused,
+    getElementById:id=>ids[id], addEventListener:(name,fn)=>f.callbacks.set('d:'+name,fn),
+    removeEventListener:name=>f.callbacks.delete('d:'+name)};
+  Object.assign(f.view, {innerWidth:393,innerHeight:851,devicePixelRatio:2,performance:{now:()=>now},
+    setTimeout:fn=>{timers.set(++nextTimer,fn);return nextTimer;},clearTimeout:id=>timers.delete(id)});
+  Object.assign(f.viewport, {height:851,offsetTop:0,scale:1});
+  const settle = async()=>{await Promise.resolve(); await Promise.resolve();};
+  const tick = async(delta=160)=>{
+    now+=delta; const [id,fn] = timers.entries().next().value;
+    timers.delete(id); fn(); await settle();
+  };
+  const stop = observeAndroidSshIme(f.view,doc,()=>{reads++;return next;});
+  t.after(stop);
+  await settle();
+  assert.equal(f.classes.has('ssh-ime-known'),true);
+  assert.equal(f.classes.has('ssh-ime-visible'),false);
+  assert.equal(reads,1);
+  await tick(2200);
+  assert.equal(timers.size,0,'idle closed terminal stops requesting Insets');
+  const hit = {target:{closest:()=>true}};
+  next = {imeVisible:true,viewHeightPx:1702,imeOverlapPx:600};
+  f.callbacks.get('d:pointerdown')(hit);
+  await settle();
+  assert.equal(f.classes.has('ssh-ime-visible'),true);
+  assert.equal(f.props.get('--hp-ssh-ime-height'),'551px');
+  assert.equal(f.props.get('--hp-ssh-ime-inset'),'300px');
+  f.viewport.height=551;
+  f.callbacks.get('v:resize')();
+  assert.equal(f.props.get('--hp-ssh-ime-inset'),'300px','already reduced VisualViewport is not subtracted twice');
+  next = {imeVisible:true,viewHeightPx:1102,imeOverlapPx:0};
+  f.view.innerHeight=551;
+  await tick();
+  assert.equal(f.props.get('--hp-ssh-ime-height'),'551px');
+  assert.equal(f.props.get('--hp-ssh-ime-inset'),'0px','already resized layout needs no padding');
+  next = {imeVisible:true,viewHeightPx:1102,imeOverlapPx:1102};
+  await tick();
+  assert.equal(f.props.get('--hp-ssh-ime-height'),'0px','a fully covered WebView has no visible height');
+  next = {imeVisible:false};
+  await tick();
+  assert.equal(f.classes.has('ssh-ime-known'),true);
+  assert.equal(f.classes.has('ssh-ime-visible'),false);
+  assert.equal(f.props.has('--hp-ssh-ime-height'),false);
+  assert.equal(f.props.has('--hp-ssh-ime-inset'),false);
+
+  let resolveOld;
+  next = new Promise(resolve=>{resolveOld=resolve;});
+  await tick();
+  nodes[2].hidden=true;
+  mutation();
+  assert.equal(timers.size,0);
+  assert.equal(f.classes.has('ssh-ime-known'),false);
+  next={imeVisible:false};
+  nodes[2].hidden=false;
+  mutation(); await settle();
+  resolveOld({imeVisible:true,viewHeightPx:1702,imeOverlapPx:740});
+  await settle();
+  assert.equal(f.classes.has('ssh-ime-visible'),false,'late result from prior terminal cannot override current');
+  focused=false;
+  f.callbacks.get('w:blur')();
+  assert.equal(timers.size,0);
+  assert.equal(f.classes.has('ssh-ime-known'),false);
+  assert.equal(f.props.has('--hp-ssh-ime-inset'),false);
+});
+
+test('late Android IME confirmation after the wake window still updates the page', async t=>{
+  // R5 second-open shape: tap wakes sampling, insets report imeVisible:false for
+  // longer than the 2s window, then the IME becomes visible with no further
+  // viewport event on a fixed WebView. The page must still adopt the state.
+  const f = fixture(), timers = new Map(), nodes = ['host-home', 'home-ssh', 'ssh-live'].map(()=>({hidden:false}));
+  const ids = Object.fromEntries(['host-home', 'home-ssh', 'ssh-live'].map((id,index)=>[id,nodes[index]]));
+  let mutation, now = 0, focused = true, nextTimer = 0;
+  let next = {imeVisible:false};
+  const old = globalThis.MutationObserver;
+  globalThis.MutationObserver = class {constructor(fn) {mutation=fn;} observe() {} disconnect() {}};
+  t.after(()=> {globalThis.MutationObserver=old;});
+  const editor = {isConnected:true};
+  const doc = {documentElement:f.root, body:f.body, hidden:false, hasFocus:()=>focused, activeElement:editor,
+    getElementById:id=>ids[id], addEventListener:(name,fn)=>f.callbacks.set('d:'+name,fn),
+    removeEventListener:name=>f.callbacks.delete('d:'+name)};
+  Object.assign(f.view, {innerWidth:393,innerHeight:851,devicePixelRatio:2,performance:{now:()=>now},
+    setTimeout:fn=>{timers.set(++nextTimer,fn);return nextTimer;},clearTimeout:id=>timers.delete(id)});
+  Object.assign(f.viewport, {height:851,offsetTop:0,scale:1});
+  const settle = async()=>{await Promise.resolve(); await Promise.resolve();};
+  const tick = async(delta=160)=>{
+    now+=delta; const [id,fn] = timers.entries().next().value;
+    timers.delete(id); fn(); await settle();
+  };
+  const stop = observeAndroidSshIme(f.view,doc,()=>next,{getEditor:()=>editor});
+  t.after(stop);
+  await settle();
+  const hit = {target:{closest:sel=>sel.includes('#ssh-focus')?{}:null}};
+  f.callbacks.get('d:pointerdown')(hit);
+  await settle();
+  // 2s window expires with IME still closed; editor keeps focus
+  await tick(2000);
+  assert.equal(f.classes.has('ssh-ime-visible'),false,'window expired with IME still closed');
+  next = {imeVisible:true,viewHeightPx:1702,imeOverlapPx:600};
+  // late IME confirmation arrives with no further viewport event
+  await tick(600);
+  assert.equal(f.classes.has('ssh-ime-visible'),true,'late IME confirmation adopted');
+  assert.equal(f.props.get('--hp-ssh-ime-height'),'551px');
+  assert.equal(f.props.get('--hp-ssh-ime-inset'),'300px');
+  // confirmed visible for THIS intent: cycle closes with focus retained —
+  // system Back shape — and must not keep a 500ms watch alive
+  doc.activeElement = editor;
+  next = {imeVisible:false};
+  await tick(600);
+  assert.equal(f.classes.has('ssh-ime-visible'),false);
+  assert.equal(timers.size,0,'watch ends once this open cycle proved closed');
+  // a new explicit open intent may hold the slow watch again
+  next = {imeVisible:false};
+  f.callbacks.get('d:pointerdown')({target:{closest:sel=>sel.includes('#ssh-focus')?{}:null}});
+  await settle();
+  next = {imeVisible:true,viewHeightPx:1702,imeOverlapPx:600};
+  await tick(2100);
+  assert.equal(f.classes.has('ssh-ime-visible'),true,'second intent adopted late');
+});
+
+test('wake treats DOM Event objects and inactive pages as plain wakes', async t=>{
+  // Regression for the fresh-flag trap: DOM listeners pass a truthy Event and
+  // must not reset scope as if a new open intent arrived.
+  const f = fixture(), timers = new Map(), nodes = ['host-home', 'home-ssh', 'ssh-live'].map(()=>({hidden:false}));
+  const ids = Object.fromEntries(['host-home', 'home-ssh', 'ssh-live'].map((id,index)=>[id,nodes[index]]));
+  let now = 0, focused = true, nextTimer = 0, reads = 0;
+  let next = {imeVisible:false};
+  const old = globalThis.MutationObserver;
+  globalThis.MutationObserver = class {observe() {} disconnect() {}};
+  t.after(()=> {globalThis.MutationObserver=old;});
+  const editor = {isConnected:true};
+  const doc = {documentElement:f.root, body:f.body, hidden:false, hasFocus:()=>focused, activeElement:editor,
+    getElementById:id=>ids[id], addEventListener:(name,fn)=>f.callbacks.set('d:'+name,fn),
+    removeEventListener:name=>f.callbacks.delete('d:'+name)};
+  Object.assign(f.view, {innerWidth:393,innerHeight:851,devicePixelRatio:2,performance:{now:()=>now},
+    setTimeout:fn=>{timers.set(++nextTimer,fn);return nextTimer;},clearTimeout:id=>timers.delete(id)});
+  Object.assign(f.viewport, {height:851,offsetTop:0,scale:1});
+  const settle = async()=>{await Promise.resolve(); await Promise.resolve();};
+  const tick = async(delta=160)=>{
+    now+=delta; const entry = timers.entries().next();
+    if (entry.done) return;
+    const [id,fn] = entry.value;
+    timers.delete(id); fn(); await settle();
+  };
+  const stop = observeAndroidSshIme(f.view,doc,()=>{reads++;return next;},{getEditor:()=>editor});
+  t.after(stop);
+  await settle();
+  // open intent, then the 2s window expires closed: slow watch holds
+  f.callbacks.get('d:pointerdown')({target:{closest:sel=>sel.includes('#ssh-focus')?{}:null}});
+  await settle();
+  await tick(2200);
+  assert.equal(timers.size,1,'awaitingOpen keeps exactly the slow watch');
+  // a resize Event (truthy object) must extend the same scope, not reset it
+  f.callbacks.get('w:resize')({type:'resize'});
+  await settle();
+  await tick(2200);
+  assert.equal(timers.size,1,'truthy Event does not restart the watch as a new intent');
+  // page loses focus: reset clears state; a resize while inactive must not
+  // touch scope.awaitingOpen (the old code read it after an early return)
+  focused = false;
+  f.callbacks.get('w:blur')({type:'blur'});
+  assert.equal(f.classes.has('ssh-ime-known'),false);
+  f.callbacks.get('w:resize')({type:'resize'});
+  assert.equal(timers.size,0,'inactive resize neither throws nor restarts sampling');
+  // wide Android window: no wake at all
+  focused = true; f.view.innerWidth = 900;
+  f.callbacks.get('w:resize')({type:'resize'});
+  assert.equal(timers.size,0,'wide viewport ignores resize wakes');
+  f.view.innerWidth = 393;
+  // open intent on an inactive-focus page still must not throw
+  focused = false;
+  f.callbacks.get('d:pointerdown')({target:{closest:sel=>sel.includes('#ssh-focus')?{}:null}});
+  assert.equal(timers.size,0,'inactive open intent resets without sampling');
+  assert.equal(f.classes.has('ssh-ime-known'),false);
+});
+
+test('a settled watch still answers later real DOM focus and resize wakes', async t=>{
+  // Regression for the dropped `current.pending = false`: after a cycle ends
+  // naturally, a plain wake() (focus/resize/pageshow) must sample again.
+  const f = fixture(), timers = new Map(), nodes = ['host-home', 'home-ssh', 'ssh-live'].map(()=>({hidden:false}));
+  const ids = Object.fromEntries(['host-home', 'home-ssh', 'ssh-live'].map((id,index)=>[id,nodes[index]]));
+  let now = 0, focused = true, nextTimer = 0, reads = 0;
+  let next = {imeVisible:false};
+  const old = globalThis.MutationObserver;
+  globalThis.MutationObserver = class {observe() {} disconnect() {}};
+  t.after(()=> {globalThis.MutationObserver=old;});
+  const editor = {isConnected:true};
+  const doc = {documentElement:f.root, body:f.body, hidden:false, hasFocus:()=>focused, activeElement:editor,
+    getElementById:id=>ids[id], addEventListener:(name,fn)=>f.callbacks.set('d:'+name,fn),
+    removeEventListener:name=>f.callbacks.delete('d:'+name)};
+  Object.assign(f.view, {innerWidth:393,innerHeight:851,devicePixelRatio:2,performance:{now:()=>now},
+    setTimeout:fn=>{timers.set(++nextTimer,fn);return nextTimer;},clearTimeout:id=>timers.delete(id)});
+  Object.assign(f.viewport, {height:851,offsetTop:0,scale:1});
+  const settle = async()=>{await Promise.resolve(); await Promise.resolve();};
+  const tick = async(delta=160)=>{
+    now+=delta; const entry = timers.entries().next();
+    if (entry.done) return;
+    const [id,fn] = entry.value;
+    timers.delete(id); fn(); await settle();
+  };
+  const stop = observeAndroidSshIme(f.view,doc,()=>{reads++;return next;},{getEditor:()=>editor});
+  t.after(stop);
+  await settle();
+  // open intent; window expires closed; slow watch holds until answered
+  f.callbacks.get('d:pointerdown')({target:{closest:sel=>sel.includes('#ssh-focus')?{}:null}});
+  await settle();
+  await tick(2200);
+  assert.equal(timers.size,1,'slow watch scheduled');
+  // answer this intent: IME becomes visible, then closes — watch settles
+  next = {imeVisible:true,viewHeightPx:1702,imeOverlapPx:600};
+  await tick(600);
+  assert.equal(f.classes.has('ssh-ime-visible'),true);
+  next = {imeVisible:false};
+  await tick(200);
+  assert.equal(timers.size,0,'answered intent settles into quiet');
+  // plain wake via real-DOM-shaped Event must sample again
+  const readsBefore = reads;
+  f.callbacks.get('w:focus')({type:'focus'});
+  await settle();
+  assert.equal(reads,readsBefore+1,'focus wake re-samples after settle');
+  await tick(2200);
+  assert.equal(timers.size,0,'window expired into quiet');
+  const secondReads = reads;
+  f.callbacks.get('w:resize')({type:'resize'});
+  await settle();
+  assert.equal(reads,secondReads+1,'resize wake re-samples too');
+});
+
 test('Android SSH header scroll tracking stops during review and outside the route',()=>{
   const f=fixture(), nodes={'host-home':{hidden:false},'home-ssh':{hidden:false},'ssh-key-change':{hidden:true}};
   const previous={ResizeObserver:globalThis.ResizeObserver,MutationObserver:globalThis.MutationObserver};
@@ -122,56 +351,4 @@ test('Android SSH header scroll tracking stops during review and outside the rou
     nodes['home-ssh'].hidden=true; mutation(); assert.equal(f.callbacks.has('w:scroll'),false);
     stop();
   } finally { Object.assign(globalThis,previous); }
-});
-
-test('iOS SSH viewport leaves space for fixed navigation and the entire action row', () => {
-  const f = fixture();
-  const property = '--hp-ssh-terminal-max-height';
-  let terminalHeight = 430, actionsEnd = 865, navHeight = 98, position = 'fixed';
-  let resize, frame;
-  const actions = {getBoundingClientRect: () => ({bottom:actionsEnd})};
-  const nav = {getBoundingClientRect: () => ({height:navHeight})};
-  const terminal = {getBoundingClientRect: () => ({height:terminalHeight}), style:f.root.style};
-  const doc = {
-    getElementById: id => ({'host-home':{}, 'ssh-terminal-output':terminal, 'ssh-disconnect':{parentElement:actions}})[id],
-    querySelector: selector => selector === '.route-tabs' ? nav : {},
-  };
-  Object.assign(f.view, {
-    innerHeight:956, scrollY:0,
-    getComputedStyle: () => ({position}),
-    requestAnimationFrame: update => { frame = update; return 1; },
-    cancelAnimationFrame: () => { frame = undefined; },
-  });
-  const oldResizeObserver = globalThis.ResizeObserver;
-  globalThis.ResizeObserver = class {
-    constructor(callback) { resize = callback; }
-    observe() {}
-    disconnect() {}
-  };
-  try {
-    const stop = observeIosSshActions(f.view, doc);
-    frame();
-    assert.equal(f.props.get(property), '415px');
-    // Shrinking the terminal and scrolling the document don't change the available budget.
-    f.view.scrollY = 28;
-    terminalHeight -= 15;
-    actionsEnd -= 15 + f.view.scrollY;
-    resize(); frame();
-    assert.equal(f.props.get(property), '415px');
-    navHeight -= 10;
-    resize(); frame();
-    assert.equal(f.props.get(property), '425px');
-    position = 'static';
-    resize(); frame();
-    assert.equal(f.props.has(property), false);
-    position = 'fixed';
-    resize(); frame();
-    terminalHeight = 0;
-    resize(); frame();
-    assert.equal(f.props.has(property), false);
-    stop();
-    assert.equal(f.callbacks.size, 0);
-  } finally {
-    globalThis.ResizeObserver = oldResizeObserver;
-  }
 });

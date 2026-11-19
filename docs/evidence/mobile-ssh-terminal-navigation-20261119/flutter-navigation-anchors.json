@@ -1,0 +1,201 @@
+{
+  "sourceCommit": "6075d7f2fd884e38af6f8e80152ec24b8507ab75",
+  "designSourceBlob": "a1bebc83f488a673077ee64f0613d36c0ef27dca",
+  "units": "logical pixels",
+  "safeArea": {
+    "320": [
+      24,
+      24
+    ],
+    "390": [
+      47,
+      34
+    ]
+  },
+  "anchors": [
+    {
+      "board": "terminal-closed-320",
+      "anchor": "tab-board",
+      "actual": [
+        0.0,
+        560.0,
+        80.0,
+        56.0
+      ],
+      "expected": [
+        0.0,
+        560.0,
+        80.0,
+        56.0
+      ],
+      "centerHit": true,
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "board": "terminal-closed-320",
+      "anchor": "tab-network",
+      "actual": [
+        160.0,
+        560.0,
+        80.0,
+        56.0
+      ],
+      "expected": [
+        160.0,
+        560.0,
+        80.0,
+        56.0
+      ],
+      "centerHit": true,
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "board": "settings-active-320",
+      "anchor": "tab-board",
+      "actual": [
+        0.0,
+        560.0,
+        80.0,
+        56.0
+      ],
+      "expected": [
+        0.0,
+        560.0,
+        80.0,
+        56.0
+      ],
+      "centerHit": true,
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "board": "settings-active-320",
+      "anchor": "tab-network",
+      "actual": [
+        160.0,
+        560.0,
+        80.0,
+        56.0
+      ],
+      "expected": [
+        160.0,
+        560.0,
+        80.0,
+        56.0
+      ],
+      "centerHit": true,
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "board": "terminal-closed-390",
+      "anchor": "tab-board",
+      "actual": [
+        0.0,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "expected": [
+        0.0,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "centerHit": true,
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "board": "terminal-closed-390",
+      "anchor": "tab-network",
+      "actual": [
+        195.0,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "expected": [
+        195.0,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "centerHit": true,
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "board": "settings-active-390",
+      "anchor": "tab-board",
+      "actual": [
+        0.0,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "expected": [
+        0.0,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "centerHit": true,
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "board": "settings-active-390",
+      "anchor": "tab-network",
+      "actual": [
+        195.0,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "expected": [
+        195.0,
+        754.0,
+        97.5,
+        56.0
+      ],
+      "centerHit": true,
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  ]
+}

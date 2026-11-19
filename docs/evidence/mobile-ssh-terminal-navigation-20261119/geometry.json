@@ -1,0 +1,7899 @@
+{
+  "schemaVersion": 1,
+  "unit": "logical-point",
+  "maxAbsDeltaPt": 2,
+  "minimumHitSizePt": [
+    44,
+    44
+  ],
+  "commits": {
+    "productBaseline": "0705b9b70ac1cda2b58b20e0ebaf7596cbd8ebcb",
+    "flutter": "b6f89a3bcf317bdf69211d6a3c11ce7c7f491b71",
+    "tauri": "ea1694c29e3d9f5a12fca35875d54c3b9396ea55",
+    "design": "c063e785da173ad41bc740cf0dc64eaa8ccce3fb"
+  },
+  "designGeometrySha256": "7577391ebeb70e1c50a388a478dacd4eb2834b1b1cee248361860c7ef3bec848",
+  "views": [
+    {
+      "shell": "flutter",
+      "phase": "before",
+      "board": "terminal-closed-320",
+      "captureState": "terminal-closed",
+      "viewport": [
+        320,
+        640
+      ],
+      "safeArea": [
+        24,
+        24
+      ],
+      "simulatedKeyboardTop": null,
+      "sourceGeometrySha256": "dbb8e8e0081b54554fa2aebc67722510e2e61b676b0bce79212edaba103e2397",
+      "image": {
+        "file": "screens/flutter-before-320-terminal-closed.png",
+        "pixels": [
+          320,
+          640
+        ],
+        "sourceSha256": "a41b6aee4b22864956158a4daa12926de4cc6f7370d7038cc406e3c65cc62379",
+        "archiveSha256": "a41b6aee4b22864956158a4daa12926de4cc6f7370d7038cc406e3c65cc62379",
+        "pixelSha256": "f93634aaefb71ac3fec0564d8e28163924864b49a69e20e3d95afcef8698f6f4",
+        "removedChunks": []
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            24,
+            320,
+            56
+          ],
+          "actual": [
+            0.0,
+            24.0,
+            320.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "disconnect": {
+          "role": "hit",
+          "target": [
+            244,
+            30,
+            60,
+            44
+          ],
+          "actual": [
+            267.79999923706055,
+            28.0,
+            52.20000076293945,
+            48.0
+          ],
+          "delta": [
+            23.799999,
+            -2.0,
+            -7.799999,
+            4.0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "terminal-status": {
+          "role": "geometry",
+          "target": [
+            16,
+            92,
+            288,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "keyboard-toggle": {
+          "role": "hit",
+          "target": [
+            260,
+            92,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "terminal-panel": {
+          "role": "geometry",
+          "target": [
+            16,
+            144,
+            288,
+            304
+          ],
+          "actual": [
+            0.0,
+            144.0,
+            320.0,
+            424.0
+          ],
+          "delta": [
+            -16.0,
+            0.0,
+            32.0,
+            120.0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "terminal-keys": {
+          "role": "geometry",
+          "target": [
+            16,
+            456,
+            288,
+            92
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "key-esc": {
+          "role": "hit",
+          "target": [
+            16,
+            456,
+            44,
+            44
+          ],
+          "actual": [
+            0.0,
+            568.0,
+            48.0,
+            48.0
+          ],
+          "delta": [
+            -16.0,
+            112.0,
+            4.0,
+            4.0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-tab": {
+          "role": "hit",
+          "target": [
+            64,
+            456,
+            44,
+            44
+          ],
+          "actual": [
+            48.0,
+            568.0,
+            48.06171798706055,
+            48.0
+          ],
+          "delta": [
+            -16.0,
+            112.0,
+            4.061718,
+            4.0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-up": {
+          "role": "hit",
+          "target": [
+            112,
+            456,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "key-down": {
+          "role": "hit",
+          "target": [
+            160,
+            456,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "key-left": {
+          "role": "hit",
+          "target": [
+            16,
+            504,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "key-right": {
+          "role": "hit",
+          "target": [
+            64,
+            504,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "key-ctrl-c": {
+          "role": "hit",
+          "target": [
+            112,
+            504,
+            54,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "terminal-tabs": {
+          "role": "geometry",
+          "target": [
+            0,
+            560,
+            320,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "tab-board": {
+          "role": "hit",
+          "target": [
+            0,
+            560,
+            80,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "target": [
+            80,
+            560,
+            80,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "tab-network": {
+          "role": "hit",
+          "target": [
+            160,
+            560,
+            80,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "target": [
+            240,
+            560,
+            80,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        }
+      },
+      "counts": {
+        "pass": 1,
+        "over-2pt": 4,
+        "missing": 13
+      }
+    },
+    {
+      "shell": "flutter",
+      "phase": "before",
+      "board": "terminal-open-320",
+      "captureState": "terminal-open",
+      "viewport": [
+        320,
+        640
+      ],
+      "safeArea": [
+        24,
+        24
+      ],
+      "simulatedKeyboardTop": 402,
+      "sourceGeometrySha256": "dbb8e8e0081b54554fa2aebc67722510e2e61b676b0bce79212edaba103e2397",
+      "image": {
+        "file": "screens/flutter-before-320-terminal-open.png",
+        "pixels": [
+          320,
+          640
+        ],
+        "sourceSha256": "5cb18c9caf13106917548c015fc3e7df3a94b4533218df0aa2eeaf72255df1f2",
+        "archiveSha256": "5cb18c9caf13106917548c015fc3e7df3a94b4533218df0aa2eeaf72255df1f2",
+        "pixelSha256": "9d7a841b30633ce647ab480e8296c29ac0edd7ccfad49e48b704fd1938a3435c",
+        "removedChunks": []
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            24,
+            320,
+            56
+          ],
+          "actual": [
+            0.0,
+            24.0,
+            320.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "disconnect": {
+          "role": "hit",
+          "target": [
+            244,
+            30,
+            60,
+            44
+          ],
+          "actual": [
+            267.79999923706055,
+            28.0,
+            52.20000076293945,
+            48.0
+          ],
+          "delta": [
+            23.799999,
+            -2.0,
+            -7.799999,
+            4.0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "terminal-status": {
+          "role": "geometry",
+          "target": [
+            16,
+            92,
+            288,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "keyboard-toggle": {
+          "role": "hit",
+          "target": [
+            260,
+            92,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "terminal-panel": {
+          "role": "geometry",
+          "target": [
+            16,
+            144,
+            288,
+            146
+          ],
+          "actual": [
+            0.0,
+            144.0,
+            320.0,
+            210.0
+          ],
+          "delta": [
+            -16.0,
+            0.0,
+            32.0,
+            64.0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "terminal-keys": {
+          "role": "geometry",
+          "target": [
+            16,
+            298,
+            288,
+            92
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "key-esc": {
+          "role": "hit",
+          "target": [
+            16,
+            298,
+            44,
+            44
+          ],
+          "actual": [
+            0.0,
+            354.0,
+            48.0,
+            48.0
+          ],
+          "delta": [
+            -16.0,
+            56.0,
+            4.0,
+            4.0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-tab": {
+          "role": "hit",
+          "target": [
+            64,
+            298,
+            44,
+            44
+          ],
+          "actual": [
+            48.0,
+            354.0,
+            48.06171798706055,
+            48.0
+          ],
+          "delta": [
+            -16.0,
+            56.0,
+            4.061718,
+            4.0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-up": {
+          "role": "hit",
+          "target": [
+            112,
+            298,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "key-down": {
+          "role": "hit",
+          "target": [
+            160,
+            298,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "key-left": {
+          "role": "hit",
+          "target": [
+            16,
+            346,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "key-right": {
+          "role": "hit",
+          "target": [
+            64,
+            346,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "key-ctrl-c": {
+          "role": "hit",
+          "target": [
+            112,
+            346,
+            54,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        }
+      },
+      "counts": {
+        "pass": 1,
+        "over-2pt": 4,
+        "missing": 8
+      }
+    },
+    {
+      "shell": "flutter",
+      "phase": "before",
+      "board": "settings-active-320",
+      "captureState": "terminal-echo",
+      "viewport": [
+        320,
+        640
+      ],
+      "safeArea": [
+        24,
+        24
+      ],
+      "simulatedKeyboardTop": null,
+      "sourceGeometrySha256": "dbb8e8e0081b54554fa2aebc67722510e2e61b676b0bce79212edaba103e2397",
+      "image": {
+        "file": "screens/flutter-before-320-terminal-echo.png",
+        "pixels": [
+          320,
+          640
+        ],
+        "sourceSha256": "5767fb0a3212a239f8c06b6ecab06c005826a4571f304eecef78b2d94e2a7d54",
+        "archiveSha256": "5767fb0a3212a239f8c06b6ecab06c005826a4571f304eecef78b2d94e2a7d54",
+        "pixelSha256": "ad174ee329e7b8515dbbf4d44db66e2db994623a1891a5eb7c47720dff1980fb",
+        "removedChunks": []
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            24,
+            320,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "active-ssh": {
+          "role": "geometry",
+          "target": [
+            16,
+            100,
+            288,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "target-card": {
+          "role": "geometry",
+          "target": [
+            16,
+            154,
+            288,
+            52
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "font-size": {
+          "role": "hit",
+          "target": [
+            16,
+            244,
+            288,
+            48
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "save-font-size": {
+          "role": "hit",
+          "target": [
+            16,
+            304,
+            288,
+            48
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "transfer-settings": {
+          "role": "hit",
+          "target": [
+            16,
+            368,
+            288,
+            48
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "settings-tabs": {
+          "role": "geometry",
+          "target": [
+            0,
+            560,
+            320,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "tab-board": {
+          "role": "hit",
+          "target": [
+            0,
+            560,
+            80,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "target": [
+            80,
+            560,
+            80,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "tab-network": {
+          "role": "hit",
+          "target": [
+            160,
+            560,
+            80,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "target": [
+            240,
+            560,
+            80,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        }
+      },
+      "counts": {
+        "missing": 11
+      }
+    },
+    {
+      "shell": "flutter",
+      "phase": "after",
+      "board": "terminal-closed-320",
+      "captureState": "terminal-closed",
+      "viewport": [
+        320,
+        640
+      ],
+      "safeArea": [
+        24,
+        24
+      ],
+      "simulatedKeyboardTop": null,
+      "sourceGeometrySha256": "d8582e63b07c477c4c9e56fca8a6359b7f789f38eb2ebe14a789f267baf88643",
+      "image": {
+        "file": "screens/flutter-after-320-terminal-closed.png",
+        "pixels": [
+          320,
+          640
+        ],
+        "sourceSha256": "95fa7ac44a4aac2d2f71b7b71c6c6f00c6eceb630090e91bf6651fc5e39b6b29",
+        "archiveSha256": "95fa7ac44a4aac2d2f71b7b71c6c6f00c6eceb630090e91bf6651fc5e39b6b29",
+        "pixelSha256": "5d27ac344f6500b5c1259b5863eff2d44cc887f069b4b5a592be25473c0f77b0",
+        "removedChunks": []
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            24,
+            320,
+            56
+          ],
+          "actual": [
+            0.0,
+            24.0,
+            320.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "disconnect": {
+          "role": "hit",
+          "target": [
+            244,
+            30,
+            60,
+            44
+          ],
+          "actual": [
+            244.0,
+            30.0,
+            60.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-status": {
+          "role": "geometry",
+          "target": [
+            16,
+            92,
+            288,
+            44
+          ],
+          "actual": [
+            16.0,
+            92.0,
+            288.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "keyboard-toggle": {
+          "role": "hit",
+          "target": [
+            260,
+            92,
+            44,
+            44
+          ],
+          "actual": [
+            260.0,
+            92.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-panel": {
+          "role": "geometry",
+          "target": [
+            16,
+            144,
+            288,
+            304
+          ],
+          "actual": [
+            16.0,
+            144.0,
+            288.0,
+            304.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-keys": {
+          "role": "geometry",
+          "target": [
+            16,
+            456,
+            288,
+            92
+          ],
+          "actual": [
+            16.0,
+            456.0,
+            288.0,
+            92.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": false,
+          "result": "pass"
+        },
+        "key-esc": {
+          "role": "hit",
+          "target": [
+            16,
+            456,
+            44,
+            44
+          ],
+          "actual": [
+            16.0,
+            456.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-tab": {
+          "role": "hit",
+          "target": [
+            64,
+            456,
+            44,
+            44
+          ],
+          "actual": [
+            64.0,
+            456.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-up": {
+          "role": "hit",
+          "target": [
+            112,
+            456,
+            44,
+            44
+          ],
+          "actual": [
+            112.0,
+            456.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-down": {
+          "role": "hit",
+          "target": [
+            160,
+            456,
+            44,
+            44
+          ],
+          "actual": [
+            160.0,
+            456.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-left": {
+          "role": "hit",
+          "target": [
+            16,
+            504,
+            44,
+            44
+          ],
+          "actual": [
+            16.0,
+            504.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-right": {
+          "role": "hit",
+          "target": [
+            64,
+            504,
+            44,
+            44
+          ],
+          "actual": [
+            64.0,
+            504.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-ctrl-c": {
+          "role": "hit",
+          "target": [
+            112,
+            504,
+            54,
+            44
+          ],
+          "actual": [
+            112.0,
+            504.0,
+            54.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-tabs": {
+          "role": "geometry",
+          "target": [
+            0,
+            560,
+            320,
+            56
+          ],
+          "actual": [
+            0.0,
+            560.0,
+            320.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-board": {
+          "role": "hit",
+          "target": [
+            0,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            0.0,
+            560.0,
+            80.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass",
+          "measurementSource": "flutterNavigationTapTargets"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "target": [
+            80,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            80.0,
+            560.0,
+            80.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-network": {
+          "role": "hit",
+          "target": [
+            160,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            160.0,
+            560.0,
+            80.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass",
+          "measurementSource": "flutterNavigationTapTargets"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "target": [
+            240,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            240.0,
+            560.0,
+            80.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        }
+      },
+      "counts": {
+        "pass": 18
+      }
+    },
+    {
+      "shell": "flutter",
+      "phase": "after",
+      "board": "terminal-open-320",
+      "captureState": "terminal-open",
+      "viewport": [
+        320,
+        640
+      ],
+      "safeArea": [
+        24,
+        24
+      ],
+      "simulatedKeyboardTop": 402,
+      "sourceGeometrySha256": "d8582e63b07c477c4c9e56fca8a6359b7f789f38eb2ebe14a789f267baf88643",
+      "image": {
+        "file": "screens/flutter-after-320-terminal-open.png",
+        "pixels": [
+          320,
+          640
+        ],
+        "sourceSha256": "1392710b0da342f5615f55072c19837aefdc3ba010d7f95bf0523989e144a33e",
+        "archiveSha256": "1392710b0da342f5615f55072c19837aefdc3ba010d7f95bf0523989e144a33e",
+        "pixelSha256": "ef46f8bfd0bd0fbf65490417a25b533acb5f4b1a18d169f536e3fd3a4ba59680",
+        "removedChunks": []
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            24,
+            320,
+            56
+          ],
+          "actual": [
+            0.0,
+            24.0,
+            320.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "disconnect": {
+          "role": "hit",
+          "target": [
+            244,
+            30,
+            60,
+            44
+          ],
+          "actual": [
+            244.0,
+            30.0,
+            60.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-status": {
+          "role": "geometry",
+          "target": [
+            16,
+            92,
+            288,
+            44
+          ],
+          "actual": [
+            16.0,
+            92.0,
+            288.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "keyboard-toggle": {
+          "role": "hit",
+          "target": [
+            260,
+            92,
+            44,
+            44
+          ],
+          "actual": [
+            260.0,
+            92.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-panel": {
+          "role": "geometry",
+          "target": [
+            16,
+            144,
+            288,
+            146
+          ],
+          "actual": [
+            16.0,
+            144.0,
+            288.0,
+            146.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-keys": {
+          "role": "geometry",
+          "target": [
+            16,
+            298,
+            288,
+            92
+          ],
+          "actual": [
+            16.0,
+            298.0,
+            288.0,
+            92.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": false,
+          "result": "pass"
+        },
+        "key-esc": {
+          "role": "hit",
+          "target": [
+            16,
+            298,
+            44,
+            44
+          ],
+          "actual": [
+            16.0,
+            298.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-tab": {
+          "role": "hit",
+          "target": [
+            64,
+            298,
+            44,
+            44
+          ],
+          "actual": [
+            64.0,
+            298.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-up": {
+          "role": "hit",
+          "target": [
+            112,
+            298,
+            44,
+            44
+          ],
+          "actual": [
+            112.0,
+            298.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-down": {
+          "role": "hit",
+          "target": [
+            160,
+            298,
+            44,
+            44
+          ],
+          "actual": [
+            160.0,
+            298.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-left": {
+          "role": "hit",
+          "target": [
+            16,
+            346,
+            44,
+            44
+          ],
+          "actual": [
+            16.0,
+            346.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-right": {
+          "role": "hit",
+          "target": [
+            64,
+            346,
+            44,
+            44
+          ],
+          "actual": [
+            64.0,
+            346.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-ctrl-c": {
+          "role": "hit",
+          "target": [
+            112,
+            346,
+            54,
+            44
+          ],
+          "actual": [
+            112.0,
+            346.0,
+            54.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        }
+      },
+      "counts": {
+        "pass": 13
+      }
+    },
+    {
+      "shell": "flutter",
+      "phase": "after",
+      "board": "settings-active-320",
+      "captureState": "settings-active",
+      "viewport": [
+        320,
+        640
+      ],
+      "safeArea": [
+        24,
+        24
+      ],
+      "simulatedKeyboardTop": null,
+      "sourceGeometrySha256": "d8582e63b07c477c4c9e56fca8a6359b7f789f38eb2ebe14a789f267baf88643",
+      "image": {
+        "file": "screens/flutter-after-320-settings-active.png",
+        "pixels": [
+          320,
+          640
+        ],
+        "sourceSha256": "dce77f1d86a6afea3d2c2099bf79d0a268786047ce303a84c93dc4f5f3c8c8ee",
+        "archiveSha256": "dce77f1d86a6afea3d2c2099bf79d0a268786047ce303a84c93dc4f5f3c8c8ee",
+        "pixelSha256": "8e30c2201b94a5e8bb50d304476f6dd70b3a9f17d6f8b073ee619651990c120a",
+        "removedChunks": []
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            24,
+            320,
+            56
+          ],
+          "actual": [
+            0.0,
+            24.0,
+            320.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "active-ssh": {
+          "role": "geometry",
+          "target": [
+            16,
+            100,
+            288,
+            44
+          ],
+          "actual": [
+            16.0,
+            100.0,
+            288.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "target-card": {
+          "role": "geometry",
+          "target": [
+            16,
+            154,
+            288,
+            52
+          ],
+          "actual": [
+            16.0,
+            154.0,
+            288.0,
+            52.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "font-size": {
+          "role": "hit",
+          "target": [
+            16,
+            244,
+            288,
+            48
+          ],
+          "actual": [
+            16.0,
+            244.0,
+            288.0,
+            48.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "save-font-size": {
+          "role": "hit",
+          "target": [
+            16,
+            304,
+            288,
+            48
+          ],
+          "actual": [
+            16.0,
+            304.0,
+            288.0,
+            48.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "transfer-settings": {
+          "role": "hit",
+          "target": [
+            16,
+            368,
+            288,
+            48
+          ],
+          "actual": [
+            16.0,
+            368.0,
+            288.0,
+            48.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "settings-tabs": {
+          "role": "geometry",
+          "target": [
+            0,
+            560,
+            320,
+            56
+          ],
+          "actual": [
+            0.0,
+            560.0,
+            320.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-board": {
+          "role": "hit",
+          "target": [
+            0,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            0.0,
+            560.0,
+            80.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass",
+          "measurementSource": "flutterNavigationTapTargets"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "target": [
+            80,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            80.0,
+            560.0,
+            80.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-network": {
+          "role": "hit",
+          "target": [
+            160,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            160.0,
+            560.0,
+            80.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass",
+          "measurementSource": "flutterNavigationTapTargets"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "target": [
+            240,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            240.0,
+            560.0,
+            80.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        }
+      },
+      "counts": {
+        "pass": 11
+      }
+    },
+    {
+      "shell": "tauri",
+      "phase": "before",
+      "board": "terminal-closed-320",
+      "captureState": "terminal-closed",
+      "viewport": [
+        320,
+        640
+      ],
+      "safeArea": [
+        24,
+        24
+      ],
+      "simulatedKeyboardTop": null,
+      "sourceGeometrySha256": "53777467163c7436558a408edb7a5cda544be77a4ead8ec18c5bafa6dbbe0561",
+      "image": {
+        "file": "screens/tauri-before-320-terminal-closed.png",
+        "pixels": [
+          320,
+          640
+        ],
+        "sourceSha256": "0846879c4a2dc631c5caa8bf872104ebe78b84e3adb0a8b6dd030e33b3c8829f",
+        "archiveSha256": "41ac4c4ce445c9aefac6044b07ffcb644f25d5d627a7239d26e6efa848fd8b07",
+        "pixelSha256": "b752576aa15b4688dd20ffc4a20e0979e1d02738ba800f33f6ee6556d7fc4516",
+        "removedChunks": [
+          "eXIf"
+        ]
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            24,
+            320,
+            56
+          ],
+          "actual": [
+            0,
+            0,
+            320,
+            130
+          ],
+          "delta": [
+            0,
+            -24,
+            0,
+            74
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "disconnect": {
+          "role": "hit",
+          "target": [
+            244,
+            30,
+            60,
+            44
+          ],
+          "actual": [
+            164,
+            578.8125,
+            140,
+            44
+          ],
+          "delta": [
+            -80,
+            548.8125,
+            80,
+            0
+          ],
+          "centerHit": false,
+          "result": "over-2pt"
+        },
+        "terminal-status": {
+          "role": "geometry",
+          "target": [
+            16,
+            92,
+            288,
+            44
+          ],
+          "actual": [
+            16,
+            243.8125,
+            288,
+            19
+          ],
+          "delta": [
+            0,
+            151.8125,
+            0,
+            -25
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "keyboard-toggle": {
+          "role": "hit",
+          "target": [
+            260,
+            92,
+            44,
+            44
+          ],
+          "actual": [
+            16,
+            578.8125,
+            140,
+            44
+          ],
+          "delta": [
+            -244,
+            486.8125,
+            96,
+            0
+          ],
+          "centerHit": false,
+          "result": "over-2pt"
+        },
+        "terminal-panel": {
+          "role": "geometry",
+          "target": [
+            16,
+            144,
+            288,
+            304
+          ],
+          "actual": [
+            16,
+            322.8125,
+            288,
+            192
+          ],
+          "delta": [
+            0,
+            178.8125,
+            0,
+            -112
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "terminal-keys": {
+          "role": "geometry",
+          "target": [
+            16,
+            456,
+            288,
+            92
+          ],
+          "actual": [
+            16,
+            522.8125,
+            288,
+            44
+          ],
+          "delta": [
+            0,
+            66.8125,
+            0,
+            -48
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-esc": {
+          "role": "hit",
+          "target": [
+            16,
+            456,
+            44,
+            44
+          ],
+          "actual": [
+            16,
+            522.8125,
+            44.4375,
+            44
+          ],
+          "delta": [
+            0,
+            66.8125,
+            0.4375,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-tab": {
+          "role": "hit",
+          "target": [
+            64,
+            456,
+            44,
+            44
+          ],
+          "actual": [
+            64.4375,
+            522.8125,
+            44.8125,
+            44
+          ],
+          "delta": [
+            0.4375,
+            66.8125,
+            0.8125,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-up": {
+          "role": "hit",
+          "target": [
+            112,
+            456,
+            44,
+            44
+          ],
+          "actual": [
+            113.25,
+            522.8125,
+            44,
+            44
+          ],
+          "delta": [
+            1.25,
+            66.8125,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-down": {
+          "role": "hit",
+          "target": [
+            160,
+            456,
+            44,
+            44
+          ],
+          "actual": [
+            161.25,
+            522.8125,
+            44,
+            44
+          ],
+          "delta": [
+            1.25,
+            66.8125,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-left": {
+          "role": "hit",
+          "target": [
+            16,
+            504,
+            44,
+            44
+          ],
+          "actual": [
+            209.25,
+            522.8125,
+            44,
+            44
+          ],
+          "delta": [
+            193.25,
+            18.8125,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-right": {
+          "role": "hit",
+          "target": [
+            64,
+            504,
+            44,
+            44
+          ],
+          "actual": [
+            257.25,
+            522.8125,
+            44,
+            44
+          ],
+          "delta": [
+            193.25,
+            18.8125,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-ctrl-c": {
+          "role": "hit",
+          "target": [
+            112,
+            504,
+            54,
+            44
+          ],
+          "actual": [
+            305.25,
+            522.8125,
+            61.0625,
+            44
+          ],
+          "delta": [
+            193.25,
+            18.8125,
+            7.0625,
+            0
+          ],
+          "centerHit": false,
+          "result": "over-2pt"
+        },
+        "terminal-tabs": {
+          "role": "geometry",
+          "target": [
+            0,
+            560,
+            320,
+            56
+          ],
+          "actual": [
+            0,
+            551,
+            320,
+            65
+          ],
+          "delta": [
+            0,
+            -9,
+            0,
+            9
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "tab-board": {
+          "role": "hit",
+          "target": [
+            0,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            8,
+            556,
+            71.5,
+            60
+          ],
+          "delta": [
+            8,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "target": [
+            80,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            85.5,
+            556,
+            71.5,
+            60
+          ],
+          "delta": [
+            5.5,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "tab-network": {
+          "role": "hit",
+          "target": [
+            160,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            163,
+            556,
+            71.5,
+            60
+          ],
+          "delta": [
+            3,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "target": [
+            240,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            240.5,
+            556,
+            71.5,
+            60
+          ],
+          "delta": [
+            0.5,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        }
+      },
+      "counts": {
+        "over-2pt": 18
+      }
+    },
+    {
+      "shell": "tauri",
+      "phase": "before",
+      "board": "terminal-open-320",
+      "captureState": "terminal-open",
+      "viewport": [
+        320,
+        640
+      ],
+      "safeArea": [
+        24,
+        24
+      ],
+      "simulatedKeyboardTop": 402,
+      "sourceGeometrySha256": "53777467163c7436558a408edb7a5cda544be77a4ead8ec18c5bafa6dbbe0561",
+      "image": {
+        "file": "screens/tauri-before-320-terminal-open.png",
+        "pixels": [
+          320,
+          640
+        ],
+        "sourceSha256": "ab1034d48c968dceade43b960a83e3fbeac44ed348f365bd9995448336bdb170",
+        "archiveSha256": "396b70acf421f6c9ec381fa240dd3ed4c8e3e39c6e0c3813c9283abd69d5f616",
+        "pixelSha256": "b22e5fb9da946b14b12396c5e8f4a80d7b7447ecfd1d5130bbb43489d3a2d450",
+        "removedChunks": [
+          "eXIf"
+        ]
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            24,
+            320,
+            56
+          ],
+          "actual": [
+            0,
+            0,
+            320,
+            130
+          ],
+          "delta": [
+            0,
+            -24,
+            0,
+            74
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "disconnect": {
+          "role": "hit",
+          "target": [
+            244,
+            30,
+            60,
+            44
+          ],
+          "actual": [
+            164,
+            487.8125,
+            140,
+            44
+          ],
+          "delta": [
+            -80,
+            457.8125,
+            80,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "terminal-status": {
+          "role": "geometry",
+          "target": [
+            16,
+            92,
+            288,
+            44
+          ],
+          "actual": [
+            16,
+            122.8125,
+            288,
+            19
+          ],
+          "delta": [
+            0,
+            30.8125,
+            0,
+            -25
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "keyboard-toggle": {
+          "role": "hit",
+          "target": [
+            260,
+            92,
+            44,
+            44
+          ],
+          "actual": [
+            16,
+            157.8125,
+            81.609375,
+            44
+          ],
+          "delta": [
+            -244,
+            65.8125,
+            37.609375,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "terminal-panel": {
+          "role": "geometry",
+          "target": [
+            16,
+            144,
+            288,
+            146
+          ],
+          "actual": [
+            16,
+            201.8125,
+            288,
+            222
+          ],
+          "delta": [
+            0,
+            57.8125,
+            0,
+            76
+          ],
+          "centerHit": false,
+          "result": "over-2pt"
+        },
+        "terminal-keys": {
+          "role": "geometry",
+          "target": [
+            16,
+            298,
+            288,
+            92
+          ],
+          "actual": [
+            16,
+            431.8125,
+            288,
+            44
+          ],
+          "delta": [
+            0,
+            133.8125,
+            0,
+            -48
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-esc": {
+          "role": "hit",
+          "target": [
+            16,
+            298,
+            44,
+            44
+          ],
+          "actual": [
+            16,
+            431.8125,
+            44.4375,
+            44
+          ],
+          "delta": [
+            0,
+            133.8125,
+            0.4375,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-tab": {
+          "role": "hit",
+          "target": [
+            64,
+            298,
+            44,
+            44
+          ],
+          "actual": [
+            64.4375,
+            431.8125,
+            44.8125,
+            44
+          ],
+          "delta": [
+            0.4375,
+            133.8125,
+            0.8125,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-up": {
+          "role": "hit",
+          "target": [
+            112,
+            298,
+            44,
+            44
+          ],
+          "actual": [
+            113.25,
+            431.8125,
+            44,
+            44
+          ],
+          "delta": [
+            1.25,
+            133.8125,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-down": {
+          "role": "hit",
+          "target": [
+            160,
+            298,
+            44,
+            44
+          ],
+          "actual": [
+            161.25,
+            431.8125,
+            44,
+            44
+          ],
+          "delta": [
+            1.25,
+            133.8125,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-left": {
+          "role": "hit",
+          "target": [
+            16,
+            346,
+            44,
+            44
+          ],
+          "actual": [
+            209.25,
+            431.8125,
+            44,
+            44
+          ],
+          "delta": [
+            193.25,
+            85.8125,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-right": {
+          "role": "hit",
+          "target": [
+            64,
+            346,
+            44,
+            44
+          ],
+          "actual": [
+            257.25,
+            431.8125,
+            44,
+            44
+          ],
+          "delta": [
+            193.25,
+            85.8125,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-ctrl-c": {
+          "role": "hit",
+          "target": [
+            112,
+            346,
+            54,
+            44
+          ],
+          "actual": [
+            305.25,
+            431.8125,
+            61.0625,
+            44
+          ],
+          "delta": [
+            193.25,
+            85.8125,
+            7.0625,
+            0
+          ],
+          "centerHit": false,
+          "result": "over-2pt"
+        }
+      },
+      "counts": {
+        "over-2pt": 13
+      }
+    },
+    {
+      "shell": "tauri",
+      "phase": "before",
+      "board": "settings-active-320",
+      "captureState": "settings-active",
+      "viewport": [
+        320,
+        640
+      ],
+      "safeArea": [
+        24,
+        24
+      ],
+      "simulatedKeyboardTop": null,
+      "sourceGeometrySha256": "53777467163c7436558a408edb7a5cda544be77a4ead8ec18c5bafa6dbbe0561",
+      "image": {
+        "file": "screens/tauri-before-320-settings-active.png",
+        "pixels": [
+          320,
+          640
+        ],
+        "sourceSha256": "6e0d0cff2789e2a79337d9a5b411efc3a885f48a492283a10ed05b64c7f6c377",
+        "archiveSha256": "60918731e219889c83d33be7b93372c5ae7d7373d26cd25403238c9f85301ecb",
+        "pixelSha256": "dbb56e9baed1f663100f4a748180aa061f03fd7d607a77cef503611828745ccc",
+        "removedChunks": [
+          "eXIf"
+        ]
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            24,
+            320,
+            56
+          ],
+          "actual": [
+            0,
+            0,
+            320,
+            90
+          ],
+          "delta": [
+            0,
+            -24,
+            0,
+            34
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "active-ssh": {
+          "role": "geometry",
+          "target": [
+            16,
+            100,
+            288,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "target-card": {
+          "role": "geometry",
+          "target": [
+            16,
+            154,
+            288,
+            52
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "font-size": {
+          "role": "hit",
+          "target": [
+            16,
+            244,
+            288,
+            48
+          ],
+          "actual": [
+            31,
+            208.8125,
+            258,
+            46
+          ],
+          "delta": [
+            15,
+            -35.1875,
+            -30,
+            -2
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "save-font-size": {
+          "role": "hit",
+          "target": [
+            16,
+            304,
+            288,
+            48
+          ],
+          "actual": [
+            31,
+            254.8125,
+            81.609375,
+            44
+          ],
+          "delta": [
+            15,
+            -49.1875,
+            -206.390625,
+            -4
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "transfer-settings": {
+          "role": "hit",
+          "target": [
+            16,
+            368,
+            288,
+            48
+          ],
+          "actual": [
+            16,
+            347.8125,
+            118.296875,
+            44
+          ],
+          "delta": [
+            0,
+            -20.1875,
+            -169.703125,
+            -4
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "settings-tabs": {
+          "role": "geometry",
+          "target": [
+            0,
+            560,
+            320,
+            56
+          ],
+          "actual": [
+            0,
+            551,
+            320,
+            65
+          ],
+          "delta": [
+            0,
+            -9,
+            0,
+            9
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "tab-board": {
+          "role": "hit",
+          "target": [
+            0,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            8,
+            556,
+            71.5,
+            60
+          ],
+          "delta": [
+            8,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "target": [
+            80,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            85.5,
+            556,
+            71.5,
+            60
+          ],
+          "delta": [
+            5.5,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "tab-network": {
+          "role": "hit",
+          "target": [
+            160,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            163,
+            556,
+            71.5,
+            60
+          ],
+          "delta": [
+            3,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "target": [
+            240,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            240.5,
+            556,
+            71.5,
+            60
+          ],
+          "delta": [
+            0.5,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        }
+      },
+      "counts": {
+        "over-2pt": 9,
+        "missing": 2
+      }
+    },
+    {
+      "shell": "tauri",
+      "phase": "after",
+      "board": "terminal-closed-320",
+      "captureState": "terminal-closed",
+      "viewport": [
+        320,
+        640
+      ],
+      "safeArea": [
+        24,
+        24
+      ],
+      "simulatedKeyboardTop": null,
+      "sourceGeometrySha256": "c69e695c2420dee0bc3472a96dc8820f04c5ee5a1d2dfa139736cf31c3c0606f",
+      "image": {
+        "file": "screens/tauri-after-320-terminal-closed.png",
+        "pixels": [
+          320,
+          640
+        ],
+        "sourceSha256": "f7a0557dded8ff8e04077d00281294f29d517904b1f5ee72c06abfa92a6d8d35",
+        "archiveSha256": "e2daeab58288b2ebb4c6248141cdea635fb1de0c42693cd3986294824fd24ba1",
+        "pixelSha256": "1f7ff69353492e1122ccc24ce03b7727a5bcd6063de538f95dd1761fd19be807",
+        "removedChunks": [
+          "eXIf"
+        ]
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            24,
+            320,
+            56
+          ],
+          "actual": [
+            0,
+            24,
+            320,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "disconnect": {
+          "role": "hit",
+          "target": [
+            244,
+            30,
+            60,
+            44
+          ],
+          "actual": [
+            244,
+            29,
+            60,
+            44
+          ],
+          "delta": [
+            0,
+            -1,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-status": {
+          "role": "geometry",
+          "target": [
+            16,
+            92,
+            288,
+            44
+          ],
+          "actual": [
+            16,
+            92,
+            288,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "keyboard-toggle": {
+          "role": "hit",
+          "target": [
+            260,
+            92,
+            44,
+            44
+          ],
+          "actual": [
+            260,
+            92,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-panel": {
+          "role": "geometry",
+          "target": [
+            16,
+            144,
+            288,
+            304
+          ],
+          "actual": [
+            16,
+            144,
+            288,
+            304
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-keys": {
+          "role": "geometry",
+          "target": [
+            16,
+            456,
+            288,
+            92
+          ],
+          "actual": [
+            16,
+            456,
+            288,
+            92
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-esc": {
+          "role": "hit",
+          "target": [
+            16,
+            456,
+            44,
+            44
+          ],
+          "actual": [
+            16,
+            456,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-tab": {
+          "role": "hit",
+          "target": [
+            64,
+            456,
+            44,
+            44
+          ],
+          "actual": [
+            64,
+            456,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-up": {
+          "role": "hit",
+          "target": [
+            112,
+            456,
+            44,
+            44
+          ],
+          "actual": [
+            112,
+            456,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-down": {
+          "role": "hit",
+          "target": [
+            160,
+            456,
+            44,
+            44
+          ],
+          "actual": [
+            160,
+            456,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-left": {
+          "role": "hit",
+          "target": [
+            16,
+            504,
+            44,
+            44
+          ],
+          "actual": [
+            16,
+            504,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-right": {
+          "role": "hit",
+          "target": [
+            64,
+            504,
+            44,
+            44
+          ],
+          "actual": [
+            64,
+            504,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-ctrl-c": {
+          "role": "hit",
+          "target": [
+            112,
+            504,
+            54,
+            44
+          ],
+          "actual": [
+            112,
+            504,
+            54,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-tabs": {
+          "role": "geometry",
+          "target": [
+            0,
+            560,
+            320,
+            56
+          ],
+          "actual": [
+            0,
+            560,
+            320,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-board": {
+          "role": "hit",
+          "target": [
+            0,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            0,
+            560,
+            80,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "target": [
+            80,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            80,
+            560,
+            80,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-network": {
+          "role": "hit",
+          "target": [
+            160,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            160,
+            560,
+            80,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "target": [
+            240,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            240,
+            560,
+            80,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        }
+      },
+      "counts": {
+        "pass": 18
+      }
+    },
+    {
+      "shell": "tauri",
+      "phase": "after",
+      "board": "terminal-open-320",
+      "captureState": "terminal-open",
+      "viewport": [
+        320,
+        640
+      ],
+      "safeArea": [
+        24,
+        24
+      ],
+      "simulatedKeyboardTop": 402,
+      "sourceGeometrySha256": "c69e695c2420dee0bc3472a96dc8820f04c5ee5a1d2dfa139736cf31c3c0606f",
+      "image": {
+        "file": "screens/tauri-after-320-terminal-open.png",
+        "pixels": [
+          320,
+          640
+        ],
+        "sourceSha256": "e0ae374bdaf05adfbd5d151afcde19b29c51fcd483ac4f0a97ee58811b7d54a3",
+        "archiveSha256": "4bfd100eb062be0279a81d85e03905d96051bb83bf9e84fdf185785cc4a14adb",
+        "pixelSha256": "f204957adf87fe9c804d048966a2c9f7e41a16cfbeb0f70da33625b758dcf298",
+        "removedChunks": [
+          "eXIf"
+        ]
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            24,
+            320,
+            56
+          ],
+          "actual": [
+            0,
+            24,
+            320,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "disconnect": {
+          "role": "hit",
+          "target": [
+            244,
+            30,
+            60,
+            44
+          ],
+          "actual": [
+            244,
+            29,
+            60,
+            44
+          ],
+          "delta": [
+            0,
+            -1,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-status": {
+          "role": "geometry",
+          "target": [
+            16,
+            92,
+            288,
+            44
+          ],
+          "actual": [
+            16,
+            92,
+            288,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "keyboard-toggle": {
+          "role": "hit",
+          "target": [
+            260,
+            92,
+            44,
+            44
+          ],
+          "actual": [
+            260,
+            92,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-panel": {
+          "role": "geometry",
+          "target": [
+            16,
+            144,
+            288,
+            146
+          ],
+          "actual": [
+            16,
+            144,
+            288,
+            146
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-keys": {
+          "role": "geometry",
+          "target": [
+            16,
+            298,
+            288,
+            92
+          ],
+          "actual": [
+            16,
+            298,
+            288,
+            92
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-esc": {
+          "role": "hit",
+          "target": [
+            16,
+            298,
+            44,
+            44
+          ],
+          "actual": [
+            16,
+            298,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-tab": {
+          "role": "hit",
+          "target": [
+            64,
+            298,
+            44,
+            44
+          ],
+          "actual": [
+            64,
+            298,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-up": {
+          "role": "hit",
+          "target": [
+            112,
+            298,
+            44,
+            44
+          ],
+          "actual": [
+            112,
+            298,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-down": {
+          "role": "hit",
+          "target": [
+            160,
+            298,
+            44,
+            44
+          ],
+          "actual": [
+            160,
+            298,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-left": {
+          "role": "hit",
+          "target": [
+            16,
+            346,
+            44,
+            44
+          ],
+          "actual": [
+            16,
+            346,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-right": {
+          "role": "hit",
+          "target": [
+            64,
+            346,
+            44,
+            44
+          ],
+          "actual": [
+            64,
+            346,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-ctrl-c": {
+          "role": "hit",
+          "target": [
+            112,
+            346,
+            54,
+            44
+          ],
+          "actual": [
+            112,
+            346,
+            54,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        }
+      },
+      "counts": {
+        "pass": 13
+      }
+    },
+    {
+      "shell": "tauri",
+      "phase": "after",
+      "board": "settings-active-320",
+      "captureState": "settings-active",
+      "viewport": [
+        320,
+        640
+      ],
+      "safeArea": [
+        24,
+        24
+      ],
+      "simulatedKeyboardTop": null,
+      "sourceGeometrySha256": "c69e695c2420dee0bc3472a96dc8820f04c5ee5a1d2dfa139736cf31c3c0606f",
+      "image": {
+        "file": "screens/tauri-after-320-settings-active.png",
+        "pixels": [
+          320,
+          640
+        ],
+        "sourceSha256": "08c4aae35073d2437bbc04c547997ee3708c7d4ff529c57b81ad00b93c9606dd",
+        "archiveSha256": "61631a5cea4e462375d576c05a9e03b4777a30f80d32a1ae1bee48508a2893d5",
+        "pixelSha256": "0e92c336b70a2e0ae4752e17282e8461aa784c01c845db5cbeda18317f2c87de",
+        "removedChunks": [
+          "eXIf"
+        ]
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            24,
+            320,
+            56
+          ],
+          "actual": [
+            0,
+            24,
+            320,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "active-ssh": {
+          "role": "geometry",
+          "target": [
+            16,
+            100,
+            288,
+            44
+          ],
+          "actual": [
+            16,
+            100,
+            288,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "target-card": {
+          "role": "geometry",
+          "target": [
+            16,
+            154,
+            288,
+            52
+          ],
+          "actual": [
+            16,
+            154,
+            288,
+            52
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "font-size": {
+          "role": "hit",
+          "target": [
+            16,
+            244,
+            288,
+            48
+          ],
+          "actual": [
+            16,
+            244,
+            288,
+            48
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "save-font-size": {
+          "role": "hit",
+          "target": [
+            16,
+            304,
+            288,
+            48
+          ],
+          "actual": [
+            16,
+            304,
+            288,
+            48
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "transfer-settings": {
+          "role": "hit",
+          "target": [
+            16,
+            368,
+            288,
+            48
+          ],
+          "actual": [
+            16,
+            368,
+            288,
+            48
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "settings-tabs": {
+          "role": "geometry",
+          "target": [
+            0,
+            560,
+            320,
+            56
+          ],
+          "actual": [
+            0,
+            560,
+            320,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-board": {
+          "role": "hit",
+          "target": [
+            0,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            0,
+            560,
+            80,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "target": [
+            80,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            80,
+            560,
+            80,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-network": {
+          "role": "hit",
+          "target": [
+            160,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            160,
+            560,
+            80,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "target": [
+            240,
+            560,
+            80,
+            56
+          ],
+          "actual": [
+            240,
+            560,
+            80,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        }
+      },
+      "counts": {
+        "pass": 11
+      }
+    },
+    {
+      "shell": "flutter",
+      "phase": "before",
+      "board": "terminal-closed-390",
+      "captureState": "terminal-closed",
+      "viewport": [
+        390,
+        844
+      ],
+      "safeArea": [
+        47,
+        34
+      ],
+      "simulatedKeyboardTop": null,
+      "sourceGeometrySha256": "31c48504c3bb9b3dbeae20162f4ec3ef5b7cb9e4bc992710b1c1564b7910aa4c",
+      "image": {
+        "file": "screens/flutter-before-390-terminal-closed.png",
+        "pixels": [
+          390,
+          844
+        ],
+        "sourceSha256": "8a7c21f8696bd9511786d0f03e5a4cc38aa52be34a91d6480f29fde53ad10c53",
+        "archiveSha256": "8a7c21f8696bd9511786d0f03e5a4cc38aa52be34a91d6480f29fde53ad10c53",
+        "pixelSha256": "b5486002516e27968c4158543506d23d1c766d4fdc099cdb10404b21ea361755",
+        "removedChunks": []
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            47,
+            390,
+            56
+          ],
+          "actual": [
+            0.0,
+            47.0,
+            390.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "disconnect": {
+          "role": "hit",
+          "target": [
+            306,
+            53,
+            60,
+            44
+          ],
+          "actual": [
+            337.79999923706055,
+            51.0,
+            52.20000076293945,
+            48.0
+          ],
+          "delta": [
+            31.799999,
+            -2.0,
+            -7.799999,
+            4.0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "terminal-status": {
+          "role": "geometry",
+          "target": [
+            24,
+            115,
+            342,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "keyboard-toggle": {
+          "role": "hit",
+          "target": [
+            322,
+            115,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "terminal-panel": {
+          "role": "geometry",
+          "target": [
+            24,
+            167,
+            342,
+            523
+          ],
+          "actual": [
+            0.0,
+            167.0,
+            390.0,
+            595.0
+          ],
+          "delta": [
+            -24.0,
+            0.0,
+            48.0,
+            72.0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "terminal-keys": {
+          "role": "geometry",
+          "target": [
+            24,
+            698,
+            342,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "key-esc": {
+          "role": "hit",
+          "target": [
+            24,
+            698,
+            44,
+            44
+          ],
+          "actual": [
+            0.0,
+            762.0,
+            48.0,
+            48.0
+          ],
+          "delta": [
+            -24.0,
+            64.0,
+            4.0,
+            4.0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-tab": {
+          "role": "hit",
+          "target": [
+            72,
+            698,
+            44,
+            44
+          ],
+          "actual": [
+            48.0,
+            762.0,
+            48.06171798706055,
+            48.0
+          ],
+          "delta": [
+            -24.0,
+            64.0,
+            4.061718,
+            4.0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-up": {
+          "role": "hit",
+          "target": [
+            120,
+            698,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "key-down": {
+          "role": "hit",
+          "target": [
+            168,
+            698,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "key-left": {
+          "role": "hit",
+          "target": [
+            216,
+            698,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "key-right": {
+          "role": "hit",
+          "target": [
+            264,
+            698,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "key-ctrl-c": {
+          "role": "hit",
+          "target": [
+            312,
+            698,
+            54,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "terminal-tabs": {
+          "role": "geometry",
+          "target": [
+            0,
+            754,
+            390,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "tab-board": {
+          "role": "hit",
+          "target": [
+            0,
+            754,
+            97.5,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "target": [
+            97.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "tab-network": {
+          "role": "hit",
+          "target": [
+            195,
+            754,
+            97.5,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "target": [
+            292.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        }
+      },
+      "counts": {
+        "pass": 1,
+        "over-2pt": 4,
+        "missing": 13
+      }
+    },
+    {
+      "shell": "flutter",
+      "phase": "before",
+      "board": "terminal-open-390",
+      "captureState": "terminal-open",
+      "viewport": [
+        390,
+        844
+      ],
+      "safeArea": [
+        47,
+        34
+      ],
+      "simulatedKeyboardTop": 553,
+      "sourceGeometrySha256": "31c48504c3bb9b3dbeae20162f4ec3ef5b7cb9e4bc992710b1c1564b7910aa4c",
+      "image": {
+        "file": "screens/flutter-before-390-terminal-open.png",
+        "pixels": [
+          390,
+          844
+        ],
+        "sourceSha256": "ea8842bb8d84498797109a8aa6f5de516d6987c191783240d138d5846d791f45",
+        "archiveSha256": "ea8842bb8d84498797109a8aa6f5de516d6987c191783240d138d5846d791f45",
+        "pixelSha256": "fead708e4d81a6dad3bb9fdd25a21bd0413e413290578434b8491961e428ebb6",
+        "removedChunks": []
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            47,
+            390,
+            56
+          ],
+          "actual": [
+            0.0,
+            47.0,
+            390.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "disconnect": {
+          "role": "hit",
+          "target": [
+            306,
+            53,
+            60,
+            44
+          ],
+          "actual": [
+            337.79999923706055,
+            51.0,
+            52.20000076293945,
+            48.0
+          ],
+          "delta": [
+            31.799999,
+            -2.0,
+            -7.799999,
+            4.0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "terminal-status": {
+          "role": "geometry",
+          "target": [
+            24,
+            115,
+            342,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "keyboard-toggle": {
+          "role": "hit",
+          "target": [
+            322,
+            115,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "terminal-panel": {
+          "role": "geometry",
+          "target": [
+            24,
+            167,
+            342,
+            322
+          ],
+          "actual": [
+            0.0,
+            167.0,
+            390.0,
+            338.0
+          ],
+          "delta": [
+            -24.0,
+            0.0,
+            48.0,
+            16.0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "terminal-keys": {
+          "role": "geometry",
+          "target": [
+            24,
+            497,
+            342,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "key-esc": {
+          "role": "hit",
+          "target": [
+            24,
+            497,
+            44,
+            44
+          ],
+          "actual": [
+            0.0,
+            505.0,
+            48.0,
+            48.0
+          ],
+          "delta": [
+            -24.0,
+            8.0,
+            4.0,
+            4.0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-tab": {
+          "role": "hit",
+          "target": [
+            72,
+            497,
+            44,
+            44
+          ],
+          "actual": [
+            48.0,
+            505.0,
+            48.06171798706055,
+            48.0
+          ],
+          "delta": [
+            -24.0,
+            8.0,
+            4.061718,
+            4.0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-up": {
+          "role": "hit",
+          "target": [
+            120,
+            497,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "key-down": {
+          "role": "hit",
+          "target": [
+            168,
+            497,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "key-left": {
+          "role": "hit",
+          "target": [
+            216,
+            497,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "key-right": {
+          "role": "hit",
+          "target": [
+            264,
+            497,
+            44,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "key-ctrl-c": {
+          "role": "hit",
+          "target": [
+            312,
+            497,
+            54,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        }
+      },
+      "counts": {
+        "pass": 1,
+        "over-2pt": 4,
+        "missing": 8
+      }
+    },
+    {
+      "shell": "flutter",
+      "phase": "before",
+      "board": "settings-active-390",
+      "captureState": "terminal-echo",
+      "viewport": [
+        390,
+        844
+      ],
+      "safeArea": [
+        47,
+        34
+      ],
+      "simulatedKeyboardTop": null,
+      "sourceGeometrySha256": "31c48504c3bb9b3dbeae20162f4ec3ef5b7cb9e4bc992710b1c1564b7910aa4c",
+      "image": {
+        "file": "screens/flutter-before-390-terminal-echo.png",
+        "pixels": [
+          390,
+          844
+        ],
+        "sourceSha256": "c89970966b769920ee76fb726eb8edc017698b42ea54290a738a8ebffe9946eb",
+        "archiveSha256": "c89970966b769920ee76fb726eb8edc017698b42ea54290a738a8ebffe9946eb",
+        "pixelSha256": "2970b2324738e4275a04b95e4b6ecb86bdecd0bb273e83b30778f41a17768fa1",
+        "removedChunks": []
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            47,
+            390,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "active-ssh": {
+          "role": "geometry",
+          "target": [
+            24,
+            123,
+            342,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "target-card": {
+          "role": "geometry",
+          "target": [
+            24,
+            177,
+            342,
+            52
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "font-size": {
+          "role": "hit",
+          "target": [
+            24,
+            267,
+            342,
+            48
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "save-font-size": {
+          "role": "hit",
+          "target": [
+            24,
+            327,
+            342,
+            48
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "transfer-settings": {
+          "role": "hit",
+          "target": [
+            24,
+            391,
+            342,
+            48
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "settings-tabs": {
+          "role": "geometry",
+          "target": [
+            0,
+            754,
+            390,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "tab-board": {
+          "role": "hit",
+          "target": [
+            0,
+            754,
+            97.5,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "target": [
+            97.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "tab-network": {
+          "role": "hit",
+          "target": [
+            195,
+            754,
+            97.5,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "target": [
+            292.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        }
+      },
+      "counts": {
+        "missing": 11
+      }
+    },
+    {
+      "shell": "flutter",
+      "phase": "after",
+      "board": "terminal-closed-390",
+      "captureState": "terminal-closed",
+      "viewport": [
+        390,
+        844
+      ],
+      "safeArea": [
+        47,
+        34
+      ],
+      "simulatedKeyboardTop": null,
+      "sourceGeometrySha256": "abec8a9a5d97ce329f693cfae0a2e49c013f1352800513910b33ff2c456a09e0",
+      "image": {
+        "file": "screens/flutter-after-390-terminal-closed.png",
+        "pixels": [
+          390,
+          844
+        ],
+        "sourceSha256": "ce5b8522ada0112268b010a35d9d8bb42f00d15ad21b20ed8066ab0bd82605c0",
+        "archiveSha256": "ce5b8522ada0112268b010a35d9d8bb42f00d15ad21b20ed8066ab0bd82605c0",
+        "pixelSha256": "0e753278cb10d921a82c18287beab090f2dcf547a0bacfbbbccfd69ddb68376e",
+        "removedChunks": []
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            47,
+            390,
+            56
+          ],
+          "actual": [
+            0.0,
+            47.0,
+            390.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "disconnect": {
+          "role": "hit",
+          "target": [
+            306,
+            53,
+            60,
+            44
+          ],
+          "actual": [
+            306.0,
+            53.0,
+            60.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-status": {
+          "role": "geometry",
+          "target": [
+            24,
+            115,
+            342,
+            44
+          ],
+          "actual": [
+            24.0,
+            115.0,
+            342.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "keyboard-toggle": {
+          "role": "hit",
+          "target": [
+            322,
+            115,
+            44,
+            44
+          ],
+          "actual": [
+            322.0,
+            115.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-panel": {
+          "role": "geometry",
+          "target": [
+            24,
+            167,
+            342,
+            523
+          ],
+          "actual": [
+            24.0,
+            167.0,
+            342.0,
+            523.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-keys": {
+          "role": "geometry",
+          "target": [
+            24,
+            698,
+            342,
+            44
+          ],
+          "actual": [
+            24.0,
+            698.0,
+            342.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-esc": {
+          "role": "hit",
+          "target": [
+            24,
+            698,
+            44,
+            44
+          ],
+          "actual": [
+            24.0,
+            698.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-tab": {
+          "role": "hit",
+          "target": [
+            72,
+            698,
+            44,
+            44
+          ],
+          "actual": [
+            72.0,
+            698.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-up": {
+          "role": "hit",
+          "target": [
+            120,
+            698,
+            44,
+            44
+          ],
+          "actual": [
+            120.0,
+            698.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-down": {
+          "role": "hit",
+          "target": [
+            168,
+            698,
+            44,
+            44
+          ],
+          "actual": [
+            168.0,
+            698.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-left": {
+          "role": "hit",
+          "target": [
+            216,
+            698,
+            44,
+            44
+          ],
+          "actual": [
+            216.0,
+            698.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-right": {
+          "role": "hit",
+          "target": [
+            264,
+            698,
+            44,
+            44
+          ],
+          "actual": [
+            264.0,
+            698.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-ctrl-c": {
+          "role": "hit",
+          "target": [
+            312,
+            698,
+            54,
+            44
+          ],
+          "actual": [
+            312.0,
+            698.0,
+            54.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-tabs": {
+          "role": "geometry",
+          "target": [
+            0,
+            754,
+            390,
+            56
+          ],
+          "actual": [
+            0.0,
+            754.0,
+            390.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-board": {
+          "role": "hit",
+          "target": [
+            0,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            0.0,
+            754.0,
+            97.5,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass",
+          "measurementSource": "flutterNavigationTapTargets"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "target": [
+            97.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            97.5,
+            754.0,
+            97.5,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-network": {
+          "role": "hit",
+          "target": [
+            195,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            195.0,
+            754.0,
+            97.5,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass",
+          "measurementSource": "flutterNavigationTapTargets"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "target": [
+            292.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            292.5,
+            754.0,
+            97.5,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        }
+      },
+      "counts": {
+        "pass": 18
+      }
+    },
+    {
+      "shell": "flutter",
+      "phase": "after",
+      "board": "terminal-open-390",
+      "captureState": "terminal-open",
+      "viewport": [
+        390,
+        844
+      ],
+      "safeArea": [
+        47,
+        34
+      ],
+      "simulatedKeyboardTop": 553,
+      "sourceGeometrySha256": "abec8a9a5d97ce329f693cfae0a2e49c013f1352800513910b33ff2c456a09e0",
+      "image": {
+        "file": "screens/flutter-after-390-terminal-open.png",
+        "pixels": [
+          390,
+          844
+        ],
+        "sourceSha256": "545a58df99f2eb0f3a482ec074a39fabce74c9631a8bafa57cdab957e5c193d3",
+        "archiveSha256": "545a58df99f2eb0f3a482ec074a39fabce74c9631a8bafa57cdab957e5c193d3",
+        "pixelSha256": "cf6974d322ee14ed0273f0c5a689549fd834570d4407b7320edcccf2e70291b6",
+        "removedChunks": []
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            47,
+            390,
+            56
+          ],
+          "actual": [
+            0.0,
+            47.0,
+            390.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "disconnect": {
+          "role": "hit",
+          "target": [
+            306,
+            53,
+            60,
+            44
+          ],
+          "actual": [
+            306.0,
+            53.0,
+            60.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-status": {
+          "role": "geometry",
+          "target": [
+            24,
+            115,
+            342,
+            44
+          ],
+          "actual": [
+            24.0,
+            115.0,
+            342.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "keyboard-toggle": {
+          "role": "hit",
+          "target": [
+            322,
+            115,
+            44,
+            44
+          ],
+          "actual": [
+            322.0,
+            115.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-panel": {
+          "role": "geometry",
+          "target": [
+            24,
+            167,
+            342,
+            322
+          ],
+          "actual": [
+            24.0,
+            167.0,
+            342.0,
+            322.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-keys": {
+          "role": "geometry",
+          "target": [
+            24,
+            497,
+            342,
+            44
+          ],
+          "actual": [
+            24.0,
+            497.0,
+            342.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-esc": {
+          "role": "hit",
+          "target": [
+            24,
+            497,
+            44,
+            44
+          ],
+          "actual": [
+            24.0,
+            497.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-tab": {
+          "role": "hit",
+          "target": [
+            72,
+            497,
+            44,
+            44
+          ],
+          "actual": [
+            72.0,
+            497.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-up": {
+          "role": "hit",
+          "target": [
+            120,
+            497,
+            44,
+            44
+          ],
+          "actual": [
+            120.0,
+            497.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-down": {
+          "role": "hit",
+          "target": [
+            168,
+            497,
+            44,
+            44
+          ],
+          "actual": [
+            168.0,
+            497.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-left": {
+          "role": "hit",
+          "target": [
+            216,
+            497,
+            44,
+            44
+          ],
+          "actual": [
+            216.0,
+            497.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-right": {
+          "role": "hit",
+          "target": [
+            264,
+            497,
+            44,
+            44
+          ],
+          "actual": [
+            264.0,
+            497.0,
+            44.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-ctrl-c": {
+          "role": "hit",
+          "target": [
+            312,
+            497,
+            54,
+            44
+          ],
+          "actual": [
+            312.0,
+            497.0,
+            54.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        }
+      },
+      "counts": {
+        "pass": 13
+      }
+    },
+    {
+      "shell": "flutter",
+      "phase": "after",
+      "board": "settings-active-390",
+      "captureState": "settings-active",
+      "viewport": [
+        390,
+        844
+      ],
+      "safeArea": [
+        47,
+        34
+      ],
+      "simulatedKeyboardTop": null,
+      "sourceGeometrySha256": "abec8a9a5d97ce329f693cfae0a2e49c013f1352800513910b33ff2c456a09e0",
+      "image": {
+        "file": "screens/flutter-after-390-settings-active.png",
+        "pixels": [
+          390,
+          844
+        ],
+        "sourceSha256": "5509db8e37a9197dd0b3d5b9943a38f3b55702ed6f706abf5ccaf215de1ee8d6",
+        "archiveSha256": "5509db8e37a9197dd0b3d5b9943a38f3b55702ed6f706abf5ccaf215de1ee8d6",
+        "pixelSha256": "baab8f9a3f3a771d0a0bfee8f90cae7c3e4444be107eb9e37c51331966abb8c2",
+        "removedChunks": []
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            47,
+            390,
+            56
+          ],
+          "actual": [
+            0.0,
+            47.0,
+            390.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "active-ssh": {
+          "role": "geometry",
+          "target": [
+            24,
+            123,
+            342,
+            44
+          ],
+          "actual": [
+            24.0,
+            123.0,
+            342.0,
+            44.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "target-card": {
+          "role": "geometry",
+          "target": [
+            24,
+            177,
+            342,
+            52
+          ],
+          "actual": [
+            24.0,
+            177.0,
+            342.0,
+            52.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "font-size": {
+          "role": "hit",
+          "target": [
+            24,
+            267,
+            342,
+            48
+          ],
+          "actual": [
+            24.0,
+            267.0,
+            342.0,
+            48.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "save-font-size": {
+          "role": "hit",
+          "target": [
+            24,
+            327,
+            342,
+            48
+          ],
+          "actual": [
+            24.0,
+            327.0,
+            342.0,
+            48.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "transfer-settings": {
+          "role": "hit",
+          "target": [
+            24,
+            391,
+            342,
+            48
+          ],
+          "actual": [
+            24.0,
+            391.0,
+            342.0,
+            48.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "settings-tabs": {
+          "role": "geometry",
+          "target": [
+            0,
+            754,
+            390,
+            56
+          ],
+          "actual": [
+            0.0,
+            754.0,
+            390.0,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-board": {
+          "role": "hit",
+          "target": [
+            0,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            0.0,
+            754.0,
+            97.5,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass",
+          "measurementSource": "flutterNavigationTapTargets"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "target": [
+            97.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            97.5,
+            754.0,
+            97.5,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-network": {
+          "role": "hit",
+          "target": [
+            195,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            195.0,
+            754.0,
+            97.5,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass",
+          "measurementSource": "flutterNavigationTapTargets"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "target": [
+            292.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            292.5,
+            754.0,
+            97.5,
+            56.0
+          ],
+          "delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        }
+      },
+      "counts": {
+        "pass": 11
+      }
+    },
+    {
+      "shell": "tauri",
+      "phase": "before",
+      "board": "terminal-closed-390",
+      "captureState": "terminal-closed",
+      "viewport": [
+        390,
+        844
+      ],
+      "safeArea": [
+        47,
+        34
+      ],
+      "simulatedKeyboardTop": null,
+      "sourceGeometrySha256": "53777467163c7436558a408edb7a5cda544be77a4ead8ec18c5bafa6dbbe0561",
+      "image": {
+        "file": "screens/tauri-before-390-terminal-closed.png",
+        "pixels": [
+          390,
+          844
+        ],
+        "sourceSha256": "6fd222264067cc791392ecfcd2ec6e0570128d5090e7b9f84fd5642d561e7a68",
+        "archiveSha256": "221ecd9a4d47e5b84d09e7128da46bb17f09239741f118781389cd2bd40504fb",
+        "pixelSha256": "3546c7c108c7a9e229cdf07263fe3cfa114afaa346023d82cc1fbc2ffa09776f",
+        "removedChunks": [
+          "eXIf"
+        ]
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            47,
+            390,
+            56
+          ],
+          "actual": [
+            0,
+            0,
+            390,
+            130
+          ],
+          "delta": [
+            0,
+            -47,
+            0,
+            74
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "disconnect": {
+          "role": "hit",
+          "target": [
+            306,
+            53,
+            60,
+            44
+          ],
+          "actual": [
+            199,
+            692.8125,
+            175,
+            44
+          ],
+          "delta": [
+            -107,
+            639.8125,
+            115,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "terminal-status": {
+          "role": "geometry",
+          "target": [
+            24,
+            115,
+            342,
+            44
+          ],
+          "actual": [
+            16,
+            243.8125,
+            358,
+            19
+          ],
+          "delta": [
+            -8,
+            128.8125,
+            16,
+            -25
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "keyboard-toggle": {
+          "role": "hit",
+          "target": [
+            322,
+            115,
+            44,
+            44
+          ],
+          "actual": [
+            16,
+            692.8125,
+            175,
+            44
+          ],
+          "delta": [
+            -306,
+            577.8125,
+            131,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "terminal-panel": {
+          "role": "geometry",
+          "target": [
+            24,
+            167,
+            342,
+            523
+          ],
+          "actual": [
+            16,
+            322.8125,
+            358,
+            306
+          ],
+          "delta": [
+            -8,
+            155.8125,
+            16,
+            -217
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "terminal-keys": {
+          "role": "geometry",
+          "target": [
+            24,
+            698,
+            342,
+            44
+          ],
+          "actual": [
+            16,
+            636.8125,
+            358,
+            44
+          ],
+          "delta": [
+            -8,
+            -61.1875,
+            16,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-esc": {
+          "role": "hit",
+          "target": [
+            24,
+            698,
+            44,
+            44
+          ],
+          "actual": [
+            16,
+            636.8125,
+            44.4375,
+            44
+          ],
+          "delta": [
+            -8,
+            -61.1875,
+            0.4375,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-tab": {
+          "role": "hit",
+          "target": [
+            72,
+            698,
+            44,
+            44
+          ],
+          "actual": [
+            64.4375,
+            636.8125,
+            44.8125,
+            44
+          ],
+          "delta": [
+            -7.5625,
+            -61.1875,
+            0.8125,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-up": {
+          "role": "hit",
+          "target": [
+            120,
+            698,
+            44,
+            44
+          ],
+          "actual": [
+            113.25,
+            636.8125,
+            44,
+            44
+          ],
+          "delta": [
+            -6.75,
+            -61.1875,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-down": {
+          "role": "hit",
+          "target": [
+            168,
+            698,
+            44,
+            44
+          ],
+          "actual": [
+            161.25,
+            636.8125,
+            44,
+            44
+          ],
+          "delta": [
+            -6.75,
+            -61.1875,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-left": {
+          "role": "hit",
+          "target": [
+            216,
+            698,
+            44,
+            44
+          ],
+          "actual": [
+            209.25,
+            636.8125,
+            44,
+            44
+          ],
+          "delta": [
+            -6.75,
+            -61.1875,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-right": {
+          "role": "hit",
+          "target": [
+            264,
+            698,
+            44,
+            44
+          ],
+          "actual": [
+            257.25,
+            636.8125,
+            44,
+            44
+          ],
+          "delta": [
+            -6.75,
+            -61.1875,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-ctrl-c": {
+          "role": "hit",
+          "target": [
+            312,
+            698,
+            54,
+            44
+          ],
+          "actual": [
+            305.25,
+            636.8125,
+            61.0625,
+            44
+          ],
+          "delta": [
+            -6.75,
+            -61.1875,
+            7.0625,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "terminal-tabs": {
+          "role": "geometry",
+          "target": [
+            0,
+            754,
+            390,
+            56
+          ],
+          "actual": [
+            0,
+            745,
+            390,
+            65
+          ],
+          "delta": [
+            0,
+            -9,
+            0,
+            9
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "tab-board": {
+          "role": "hit",
+          "target": [
+            0,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            8,
+            750,
+            89,
+            60
+          ],
+          "delta": [
+            8,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "target": [
+            97.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            103,
+            750,
+            89,
+            60
+          ],
+          "delta": [
+            5.5,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "tab-network": {
+          "role": "hit",
+          "target": [
+            195,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            198,
+            750,
+            89,
+            60
+          ],
+          "delta": [
+            3,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "target": [
+            292.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            293,
+            750,
+            89,
+            60
+          ],
+          "delta": [
+            0.5,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        }
+      },
+      "counts": {
+        "over-2pt": 18
+      }
+    },
+    {
+      "shell": "tauri",
+      "phase": "before",
+      "board": "terminal-open-390",
+      "captureState": "terminal-open",
+      "viewport": [
+        390,
+        844
+      ],
+      "safeArea": [
+        47,
+        34
+      ],
+      "simulatedKeyboardTop": 553,
+      "sourceGeometrySha256": "53777467163c7436558a408edb7a5cda544be77a4ead8ec18c5bafa6dbbe0561",
+      "image": {
+        "file": "screens/tauri-before-390-terminal-open.png",
+        "pixels": [
+          390,
+          844
+        ],
+        "sourceSha256": "9088c724297e6f6db52512db4a4fb99e8a20344ea2ee026180d6ec713bdb5df0",
+        "archiveSha256": "db3780f08c0f2692bb87bedf469670eb35904d5cb510d8ed20956a4563e364ec",
+        "pixelSha256": "e74ebb858b7c0121827e88ef027ef06b18f2e1428643690345eb0871c590009e",
+        "removedChunks": [
+          "eXIf"
+        ]
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            47,
+            390,
+            56
+          ],
+          "actual": [
+            0,
+            0,
+            390,
+            130
+          ],
+          "delta": [
+            0,
+            -47,
+            0,
+            74
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "disconnect": {
+          "role": "hit",
+          "target": [
+            306,
+            53,
+            60,
+            44
+          ],
+          "actual": [
+            199,
+            759.8125,
+            175,
+            44
+          ],
+          "delta": [
+            -107,
+            706.8125,
+            115,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "terminal-status": {
+          "role": "geometry",
+          "target": [
+            24,
+            115,
+            342,
+            44
+          ],
+          "actual": [
+            16,
+            243.8125,
+            358,
+            19
+          ],
+          "delta": [
+            -8,
+            128.8125,
+            16,
+            -25
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "keyboard-toggle": {
+          "role": "hit",
+          "target": [
+            322,
+            115,
+            44,
+            44
+          ],
+          "actual": [
+            16,
+            278.8125,
+            81.609375,
+            44
+          ],
+          "delta": [
+            -306,
+            163.8125,
+            37.609375,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "terminal-panel": {
+          "role": "geometry",
+          "target": [
+            24,
+            167,
+            342,
+            322
+          ],
+          "actual": [
+            16,
+            322.8125,
+            358,
+            373
+          ],
+          "delta": [
+            -8,
+            155.8125,
+            16,
+            51
+          ],
+          "centerHit": false,
+          "result": "over-2pt"
+        },
+        "terminal-keys": {
+          "role": "geometry",
+          "target": [
+            24,
+            497,
+            342,
+            44
+          ],
+          "actual": [
+            16,
+            703.8125,
+            358,
+            44
+          ],
+          "delta": [
+            -8,
+            206.8125,
+            16,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-esc": {
+          "role": "hit",
+          "target": [
+            24,
+            497,
+            44,
+            44
+          ],
+          "actual": [
+            16,
+            703.8125,
+            44.4375,
+            44
+          ],
+          "delta": [
+            -8,
+            206.8125,
+            0.4375,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-tab": {
+          "role": "hit",
+          "target": [
+            72,
+            497,
+            44,
+            44
+          ],
+          "actual": [
+            64.4375,
+            703.8125,
+            44.8125,
+            44
+          ],
+          "delta": [
+            -7.5625,
+            206.8125,
+            0.8125,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-up": {
+          "role": "hit",
+          "target": [
+            120,
+            497,
+            44,
+            44
+          ],
+          "actual": [
+            113.25,
+            703.8125,
+            44,
+            44
+          ],
+          "delta": [
+            -6.75,
+            206.8125,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-down": {
+          "role": "hit",
+          "target": [
+            168,
+            497,
+            44,
+            44
+          ],
+          "actual": [
+            161.25,
+            703.8125,
+            44,
+            44
+          ],
+          "delta": [
+            -6.75,
+            206.8125,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-left": {
+          "role": "hit",
+          "target": [
+            216,
+            497,
+            44,
+            44
+          ],
+          "actual": [
+            209.25,
+            703.8125,
+            44,
+            44
+          ],
+          "delta": [
+            -6.75,
+            206.8125,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-right": {
+          "role": "hit",
+          "target": [
+            264,
+            497,
+            44,
+            44
+          ],
+          "actual": [
+            257.25,
+            703.8125,
+            44,
+            44
+          ],
+          "delta": [
+            -6.75,
+            206.8125,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "key-ctrl-c": {
+          "role": "hit",
+          "target": [
+            312,
+            497,
+            54,
+            44
+          ],
+          "actual": [
+            305.25,
+            703.8125,
+            61.0625,
+            44
+          ],
+          "delta": [
+            -6.75,
+            206.8125,
+            7.0625,
+            0
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        }
+      },
+      "counts": {
+        "over-2pt": 13
+      }
+    },
+    {
+      "shell": "tauri",
+      "phase": "before",
+      "board": "settings-active-390",
+      "captureState": "settings-active",
+      "viewport": [
+        390,
+        844
+      ],
+      "safeArea": [
+        47,
+        34
+      ],
+      "simulatedKeyboardTop": null,
+      "sourceGeometrySha256": "53777467163c7436558a408edb7a5cda544be77a4ead8ec18c5bafa6dbbe0561",
+      "image": {
+        "file": "screens/tauri-before-390-settings-active.png",
+        "pixels": [
+          390,
+          844
+        ],
+        "sourceSha256": "c90f74645f0c085ac00f702e1d16b1010933e9823cbde06fdfd3d1b126ce1f35",
+        "archiveSha256": "ad65f6db3a882c117c6ac958f0ce56f1203dd9fc1e6796e9164ff5b56421804f",
+        "pixelSha256": "5b0a85234c9a4df1865937d15cce515d1423b8266e46d13982f420ad71650278",
+        "removedChunks": [
+          "eXIf"
+        ]
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            47,
+            390,
+            56
+          ],
+          "actual": [
+            0,
+            0,
+            390,
+            113
+          ],
+          "delta": [
+            0,
+            -47,
+            0,
+            57
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "active-ssh": {
+          "role": "geometry",
+          "target": [
+            24,
+            123,
+            342,
+            44
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "target-card": {
+          "role": "geometry",
+          "target": [
+            24,
+            177,
+            342,
+            52
+          ],
+          "actual": null,
+          "delta": null,
+          "centerHit": null,
+          "result": "missing"
+        },
+        "font-size": {
+          "role": "hit",
+          "target": [
+            24,
+            267,
+            342,
+            48
+          ],
+          "actual": [
+            31,
+            231.8125,
+            328,
+            46
+          ],
+          "delta": [
+            7,
+            -35.1875,
+            -14,
+            -2
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "save-font-size": {
+          "role": "hit",
+          "target": [
+            24,
+            327,
+            342,
+            48
+          ],
+          "actual": [
+            31,
+            277.8125,
+            81.609375,
+            44
+          ],
+          "delta": [
+            7,
+            -49.1875,
+            -260.390625,
+            -4
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "transfer-settings": {
+          "role": "hit",
+          "target": [
+            24,
+            391,
+            342,
+            48
+          ],
+          "actual": [
+            16,
+            370.8125,
+            118.296875,
+            44
+          ],
+          "delta": [
+            -8,
+            -20.1875,
+            -223.703125,
+            -4
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "settings-tabs": {
+          "role": "geometry",
+          "target": [
+            0,
+            754,
+            390,
+            56
+          ],
+          "actual": [
+            0,
+            745,
+            390,
+            65
+          ],
+          "delta": [
+            0,
+            -9,
+            0,
+            9
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "tab-board": {
+          "role": "hit",
+          "target": [
+            0,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            8,
+            750,
+            89,
+            60
+          ],
+          "delta": [
+            8,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "target": [
+            97.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            103,
+            750,
+            89,
+            60
+          ],
+          "delta": [
+            5.5,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "tab-network": {
+          "role": "hit",
+          "target": [
+            195,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            198,
+            750,
+            89,
+            60
+          ],
+          "delta": [
+            3,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "target": [
+            292.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            293,
+            750,
+            89,
+            60
+          ],
+          "delta": [
+            0.5,
+            -4,
+            -8.5,
+            4
+          ],
+          "centerHit": true,
+          "result": "over-2pt"
+        }
+      },
+      "counts": {
+        "over-2pt": 9,
+        "missing": 2
+      }
+    },
+    {
+      "shell": "tauri",
+      "phase": "after",
+      "board": "terminal-closed-390",
+      "captureState": "terminal-closed",
+      "viewport": [
+        390,
+        844
+      ],
+      "safeArea": [
+        47,
+        34
+      ],
+      "simulatedKeyboardTop": null,
+      "sourceGeometrySha256": "c69e695c2420dee0bc3472a96dc8820f04c5ee5a1d2dfa139736cf31c3c0606f",
+      "image": {
+        "file": "screens/tauri-after-390-terminal-closed.png",
+        "pixels": [
+          390,
+          844
+        ],
+        "sourceSha256": "c48b3095a68ccf806015b130bb583a482befab2c7fa0237d22397b5e0a6cb6de",
+        "archiveSha256": "effa3d6ddace1ee64c91188d62a496421b23db4d9b7a0c9d53f49c8f00749e26",
+        "pixelSha256": "4fa42f70b80993ca63f83a88ce923c5e7056f575a09a6ee22996101ecac198b7",
+        "removedChunks": [
+          "eXIf"
+        ]
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            47,
+            390,
+            56
+          ],
+          "actual": [
+            0,
+            47,
+            390,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "disconnect": {
+          "role": "hit",
+          "target": [
+            306,
+            53,
+            60,
+            44
+          ],
+          "actual": [
+            306,
+            52,
+            60,
+            44
+          ],
+          "delta": [
+            0,
+            -1,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-status": {
+          "role": "geometry",
+          "target": [
+            24,
+            115,
+            342,
+            44
+          ],
+          "actual": [
+            24,
+            115,
+            342,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "keyboard-toggle": {
+          "role": "hit",
+          "target": [
+            322,
+            115,
+            44,
+            44
+          ],
+          "actual": [
+            322,
+            115,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-panel": {
+          "role": "geometry",
+          "target": [
+            24,
+            167,
+            342,
+            523
+          ],
+          "actual": [
+            24,
+            167,
+            342,
+            523
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-keys": {
+          "role": "geometry",
+          "target": [
+            24,
+            698,
+            342,
+            44
+          ],
+          "actual": [
+            24,
+            698,
+            342,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-esc": {
+          "role": "hit",
+          "target": [
+            24,
+            698,
+            44,
+            44
+          ],
+          "actual": [
+            24,
+            698,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-tab": {
+          "role": "hit",
+          "target": [
+            72,
+            698,
+            44,
+            44
+          ],
+          "actual": [
+            72,
+            698,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-up": {
+          "role": "hit",
+          "target": [
+            120,
+            698,
+            44,
+            44
+          ],
+          "actual": [
+            120,
+            698,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-down": {
+          "role": "hit",
+          "target": [
+            168,
+            698,
+            44,
+            44
+          ],
+          "actual": [
+            168,
+            698,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-left": {
+          "role": "hit",
+          "target": [
+            216,
+            698,
+            44,
+            44
+          ],
+          "actual": [
+            216,
+            698,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-right": {
+          "role": "hit",
+          "target": [
+            264,
+            698,
+            44,
+            44
+          ],
+          "actual": [
+            264,
+            698,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-ctrl-c": {
+          "role": "hit",
+          "target": [
+            312,
+            698,
+            54,
+            44
+          ],
+          "actual": [
+            312,
+            698,
+            54,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-tabs": {
+          "role": "geometry",
+          "target": [
+            0,
+            754,
+            390,
+            56
+          ],
+          "actual": [
+            0,
+            754,
+            390,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-board": {
+          "role": "hit",
+          "target": [
+            0,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            0,
+            754,
+            97.5,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0.0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "target": [
+            97.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            97.5,
+            754,
+            97.5,
+            56
+          ],
+          "delta": [
+            0.0,
+            0,
+            0.0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-network": {
+          "role": "hit",
+          "target": [
+            195,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            195,
+            754,
+            97.5,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0.0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "target": [
+            292.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            292.5,
+            754,
+            97.5,
+            56
+          ],
+          "delta": [
+            0.0,
+            0,
+            0.0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        }
+      },
+      "counts": {
+        "pass": 18
+      }
+    },
+    {
+      "shell": "tauri",
+      "phase": "after",
+      "board": "terminal-open-390",
+      "captureState": "terminal-open",
+      "viewport": [
+        390,
+        844
+      ],
+      "safeArea": [
+        47,
+        34
+      ],
+      "simulatedKeyboardTop": 553,
+      "sourceGeometrySha256": "c69e695c2420dee0bc3472a96dc8820f04c5ee5a1d2dfa139736cf31c3c0606f",
+      "image": {
+        "file": "screens/tauri-after-390-terminal-open.png",
+        "pixels": [
+          390,
+          844
+        ],
+        "sourceSha256": "1fd2d0070914adc63490bd7e39653cada309e3b41015b743fb6b4bed535a74d8",
+        "archiveSha256": "a30c3c94f50ec8203bb57361d57af370b7d7126919f377f889a16d3756eca6fe",
+        "pixelSha256": "7cad807c95849723e0c11c2857e3b4eb69d00b6fab576f8c0659a7003d864d87",
+        "removedChunks": [
+          "eXIf"
+        ]
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            47,
+            390,
+            56
+          ],
+          "actual": [
+            0,
+            47,
+            390,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "disconnect": {
+          "role": "hit",
+          "target": [
+            306,
+            53,
+            60,
+            44
+          ],
+          "actual": [
+            306,
+            52,
+            60,
+            44
+          ],
+          "delta": [
+            0,
+            -1,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-status": {
+          "role": "geometry",
+          "target": [
+            24,
+            115,
+            342,
+            44
+          ],
+          "actual": [
+            24,
+            115,
+            342,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "keyboard-toggle": {
+          "role": "hit",
+          "target": [
+            322,
+            115,
+            44,
+            44
+          ],
+          "actual": [
+            322,
+            115,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-panel": {
+          "role": "geometry",
+          "target": [
+            24,
+            167,
+            342,
+            322
+          ],
+          "actual": [
+            24,
+            167,
+            342,
+            322
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "terminal-keys": {
+          "role": "geometry",
+          "target": [
+            24,
+            497,
+            342,
+            44
+          ],
+          "actual": [
+            24,
+            497,
+            342,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-esc": {
+          "role": "hit",
+          "target": [
+            24,
+            497,
+            44,
+            44
+          ],
+          "actual": [
+            24,
+            497,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-tab": {
+          "role": "hit",
+          "target": [
+            72,
+            497,
+            44,
+            44
+          ],
+          "actual": [
+            72,
+            497,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-up": {
+          "role": "hit",
+          "target": [
+            120,
+            497,
+            44,
+            44
+          ],
+          "actual": [
+            120,
+            497,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-down": {
+          "role": "hit",
+          "target": [
+            168,
+            497,
+            44,
+            44
+          ],
+          "actual": [
+            168,
+            497,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-left": {
+          "role": "hit",
+          "target": [
+            216,
+            497,
+            44,
+            44
+          ],
+          "actual": [
+            216,
+            497,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-right": {
+          "role": "hit",
+          "target": [
+            264,
+            497,
+            44,
+            44
+          ],
+          "actual": [
+            264,
+            497,
+            44,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "key-ctrl-c": {
+          "role": "hit",
+          "target": [
+            312,
+            497,
+            54,
+            44
+          ],
+          "actual": [
+            312,
+            497,
+            54,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        }
+      },
+      "counts": {
+        "pass": 13
+      }
+    },
+    {
+      "shell": "tauri",
+      "phase": "after",
+      "board": "settings-active-390",
+      "captureState": "settings-active",
+      "viewport": [
+        390,
+        844
+      ],
+      "safeArea": [
+        47,
+        34
+      ],
+      "simulatedKeyboardTop": null,
+      "sourceGeometrySha256": "c69e695c2420dee0bc3472a96dc8820f04c5ee5a1d2dfa139736cf31c3c0606f",
+      "image": {
+        "file": "screens/tauri-after-390-settings-active.png",
+        "pixels": [
+          390,
+          844
+        ],
+        "sourceSha256": "a9fd3843fc2aa99ad475df7cea9880ab4354a736bbf3664e5b84565114a56fb0",
+        "archiveSha256": "e520670d29466d911815bcaec0ae3afc1c7b903f29b7a10b88a4e6fa92da0ae1",
+        "pixelSha256": "8e82bd390659d87e2143d8f9acf8e6cf80be782a319f73ef85c155f34e9f73c8",
+        "removedChunks": [
+          "eXIf"
+        ]
+      },
+      "anchors": {
+        "app-header": {
+          "role": "geometry",
+          "target": [
+            0,
+            47,
+            390,
+            56
+          ],
+          "actual": [
+            0,
+            47,
+            390,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "active-ssh": {
+          "role": "geometry",
+          "target": [
+            24,
+            123,
+            342,
+            44
+          ],
+          "actual": [
+            24,
+            123,
+            342,
+            44
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "target-card": {
+          "role": "geometry",
+          "target": [
+            24,
+            177,
+            342,
+            52
+          ],
+          "actual": [
+            24,
+            177,
+            342,
+            52
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "font-size": {
+          "role": "hit",
+          "target": [
+            24,
+            267,
+            342,
+            48
+          ],
+          "actual": [
+            24,
+            267,
+            342,
+            48
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "save-font-size": {
+          "role": "hit",
+          "target": [
+            24,
+            327,
+            342,
+            48
+          ],
+          "actual": [
+            24,
+            327,
+            342,
+            48
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "transfer-settings": {
+          "role": "hit",
+          "target": [
+            24,
+            391,
+            342,
+            48
+          ],
+          "actual": [
+            24,
+            391,
+            342,
+            48
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "settings-tabs": {
+          "role": "geometry",
+          "target": [
+            0,
+            754,
+            390,
+            56
+          ],
+          "actual": [
+            0,
+            754,
+            390,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-board": {
+          "role": "hit",
+          "target": [
+            0,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            0,
+            754,
+            97.5,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0.0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-terminal": {
+          "role": "hit",
+          "target": [
+            97.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            97.5,
+            754,
+            97.5,
+            56
+          ],
+          "delta": [
+            0.0,
+            0,
+            0.0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-network": {
+          "role": "hit",
+          "target": [
+            195,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            195,
+            754,
+            97.5,
+            56
+          ],
+          "delta": [
+            0,
+            0,
+            0.0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        },
+        "tab-settings": {
+          "role": "hit",
+          "target": [
+            292.5,
+            754,
+            97.5,
+            56
+          ],
+          "actual": [
+            292.5,
+            754,
+            97.5,
+            56
+          ],
+          "delta": [
+            0.0,
+            0,
+            0.0,
+            0
+          ],
+          "centerHit": true,
+          "result": "pass"
+        }
+      },
+      "counts": {
+        "pass": 11
+      }
+    }
+  ],
+  "comparisonNotes": [
+    "系统区域只模拟 inset，排除在应用锚点计数之外。",
+    "Flutter 顶栏源矩形包含顶部安全区，比较时剔除顶部安全区。",
+    "Flutter 基线使用旧 TerminalView 可视外框对照终端面板；文本标签未与新容器比较。",
+    "Flutter 基线设置不可达。两壳比较仅包括同设备同键盘状态的画面。",
+    "Flutter 看板与网络底栏的 8 项矩形和中心命中来自单独的 Widget 回环重采。各页 image 和 sourceGeometrySha256 仍指原截图批次。",
+    "容器中心落在空白不参与命中门槛。可触锚点需实际中心命中且至少 44×44 pt。"
+  ],
+  "measurementSources": {
+    "flutterNavigationTapTargets": {
+      "sourceCommit": "6075d7f2fd884e38af6f8e80152ec24b8507ab75",
+      "testPath": "validation/flutter/test/direct_ssh_mobile_terminal_test.dart",
+      "designSourceBlob": "a1bebc83f488a673077ee64f0613d36c0ef27dca",
+      "archive": "flutter-navigation-anchors.json",
+      "archiveSha256": "eff81789f25074524767408e7849fe7084463a6e006a55e94db0287f1fe72122",
+      "sourceTestLogSha256": "ea611a43c2423a34920f16c8b506479354390c81377456bb1f9c1fa68a192cb3",
+      "sourcePeerLogSha256": "26d3cb01d0325a04081d83ffef0eb4cc94d187a0a2aca418a3a064579e9d93a3",
+      "sourceReadmeSha256": "b513141ffe03a010d7d8e8f308e24fbc96c01a19ffac42aa675e2c68bbba98c3",
+      "scope": "独立 Widget 回环实测，默认测试字体，DPR 1，仅记录矩形和中心命中",
+      "passedWidgetCases": 2,
+      "nativeDeviceTest": false
+    }
+  }
+}

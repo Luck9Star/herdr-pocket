@@ -34,6 +34,29 @@ fun main() {
     view.visibleTop = 156
     check(topInset() == 36)
     android.os.Build.VERSION.SDK_INT = 35
+    fun imeInsets() = Invoke().also { plugin.topInset(it) }.result
+    activity.windowManager.metrics.bounds.bottom = 2440
+    view.y = 100
+    check(imeInsets()["imeVisible"] == false)
+    check("imeOverlapPx" !in imeInsets())
+    view.insets.imeVisible = true
+    view.insets.imeBottom = 900
+    check(imeInsets()["imeOverlapPx"] == 900 && imeInsets()["viewHeightPx"] == 2340)
+    view.height = 1440
+    check(imeInsets()["imeOverlapPx"] == 0 && imeInsets()["viewHeightPx"] == 1440)
+    view.height = 2340
+    view.y = 0
+    check(imeInsets()["imeOverlapPx"] == 800)
+    view.insets.imeBottom = 0
+    check(imeInsets()["imeVisible"] == true && "imeOverlapPx" !in imeInsets())
+    view.insets.imeBottom = 900
+    activity.focus = false
+    check("imeVisible" !in imeInsets())
+    activity.focus = true
+    android.os.Build.VERSION.SDK_INT = 29
+    check("imeVisible" !in imeInsets())
+    android.os.Build.VERSION.SDK_INT = 35
+    check(ime.shown == 0 && ime.hidden == 0)
     fun send(action: String, ticket: String = token): Invoke {
         val request = Invoke()
         request.args = TerminalKeyboardArgs().also { it.action = action; it.ticket = ticket }

@@ -4,6 +4,8 @@ import json
 import os
 from pathlib import Path
 import tempfile
+from threading import Event
+import time
 import sys
 import types
 import struct
@@ -158,6 +160,8 @@ class GuardTests(unittest.TestCase):
                         return '35'
                     if args == ('shell', 'am', 'get-current-user'):
                         return '0'
+                    if args == ('shell', 'settings', 'get', 'secure', 'show_ime_with_hard_keyboard'):
+                        return '1'
                     return ''
                 env = {'GITHUB_SHA': 'a' * 40, 'GITHUB_RUN_ID': '123', 'RUNNER_TEMP': temp}
                 args = types.SimpleNamespace(project=app, output=output)
@@ -205,9 +209,79 @@ class GuardTests(unittest.TestCase):
         result = {key: True for key in runner.PUBLIC_FIELDS}
         result.update(schemaVersion=1, platform='android-api35-emulator', physicalImeVerified=False)
         self.assertEqual(runner.safe_result(json.dumps(result)), result)
-        for change in ({'remoteEchoVisible': False}, {'physicalImeVerified': True}, {'password': 'must-not-export'}):
+        for change in ({'remoteEchoVisible': False}, {'physicalImeVerified': True}, {'password': 'must-not-export'},
+                       {'platformKeyboardOpenedAndClosed': 1}, {'boardNetworkSettingsReturnedToSameTerminal': False},
+                       {'schemaVersion': True}):
             with self.subTest(change=tuple(change)), self.assertRaises(runner.Failure):
                 runner.safe_result(json.dumps({**result, **change}))
+        del result['platformKeyboardOpenedAndClosed']
+        with self.assertRaises(runner.Failure):
+            runner.safe_result(json.dumps(result))
+
+    def test_mobile_checkpoints_reject_missing_alien_skipped_and_replayed_phases(self):
+        fixture = Mock()
+        for value in ([], {'phase': 'board_visible'}, {'phase': 'keyboard_shown', 'password': 'secret'},
+                      {'phase': ['keyboard_shown']}, {'phase': 'unrecognized'}):
+            with self.subTest(value_type=type(value).__name__), self.assertRaises(runner.Failure):
+                runner.ordinary_mobile_checkpoint(fixture, value, {})
+        for completed in ({}, {'keyboard_shown': {}}, {phase: {} for phase in reversed(runner.ORDINARY_MOBILE_PHASES)}):
+            with self.assertRaisesRegex(runner.Failure, '^direct_ssh_mobile_checkpoints_incomplete$'):
+                runner.require_ordinary_mobile_checkpoints(completed)
+        with self.assertRaisesRegex(runner.Failure, '^direct_ssh_mobile_stage_out_of_order$'):
+            runner.ordinary_mobile_checkpoint(fixture, {'phase': 'keyboard_shown'},
+                                              {'keyboard_shown': {}, 'keyboard_hidden': {}})
+        self.assertIsNone(runner.ordinary_mobile_checkpoint(fixture, {'phase': 'keyboard_hidden'},
+                          {'keyboard_shown': {}, 'keyboard_hidden': {}}))
+        fixture.snapshot.assert_not_called()
+
+    def test_mobile_waits_only_for_first_valid_peer_output_publication(self):
+        probe = dict(id=1, hostKey='A', authAttempts=0, authSuccesses=0, ptyRequests=0, shellRequests=0,
+                     inputBytes=0, outputBytes=0, authAccepted=False, markerReceived=False, sessionClosed=False)
+        shell = dict(id=2, hostKey='A', authAttempts=1, authSuccesses=1, ptyRequests=1, shellRequests=1,
+                     inputBytes=0, outputBytes=0, authAccepted=True, markerReceived=False, sessionClosed=False,
+                     closed=False)
+
+        def facts(**session):
+            return dict(connections=2, connectionsClosed=False, connectionEvents=[probe, dict(shell, **session)])
+
+        failure = '^direct_ssh_ordinary_session_evidence_invalid$'
+        first = {'phase': 'keyboard_shown'}
+        for change in (dict(inputBytes=1), dict(authAttempts=2), dict(ptyRequests=2), dict(shellRequests=2),
+                       dict(closed=True), dict(id=3), dict(outputBytes=-1), dict(outputBytes=True)):
+            for sample in (1, 2):
+                with self.subTest(change=change, sample=sample), patch.object(runner, 'time') as clock:
+                    samples = [facts()] * (sample - 1) + [facts(**change), facts(outputBytes=24)]
+                    fixture = Mock(snapshot=Mock(side_effect=samples))
+                    clock.monotonic.return_value = 1
+                    with self.assertRaisesRegex(runner.Failure, failure):
+                        runner.ordinary_mobile_checkpoint(fixture, first, {})
+                    self.assertEqual(fixture.snapshot.call_count, sample)
+                    self.assertEqual(clock.sleep.call_count, sample - 1)
+
+        with patch.object(runner, 'time') as clock:
+            fixture = Mock(snapshot=Mock(side_effect=[facts(), facts(outputBytes=24)]))
+            clock.monotonic.side_effect = [0, 0, 5]
+            with self.assertRaisesRegex(runner.Failure, failure):
+                runner.ordinary_mobile_checkpoint(fixture, first, {})
+            fixture.snapshot.assert_called_once()
+            clock.sleep.assert_called_once()
+
+        with patch.object(runner, 'time') as clock:
+            fixture = Mock(snapshot=Mock(side_effect=[facts(), facts(outputBytes=24)]))
+            with self.assertRaisesRegex(runner.Failure, failure):
+                runner.ordinary_mobile_checkpoint(fixture, {'phase': 'keyboard_hidden'}, {'keyboard_shown': {}})
+            fixture.snapshot.assert_called_once()
+            clock.sleep.assert_not_called()
+
+        with patch.object(runner, 'time') as clock:
+            closed = facts(inputBytes=9, markerReceived=True, sessionClosed=True, closed=True)
+            closed['connectionEvents'][0] = dict(probe, closed=True)
+            closed['connectionsClosed'] = True
+            fixture = Mock(snapshot=Mock(return_value=closed))
+            with self.assertRaisesRegex(runner.Failure, failure):
+                runner.ordinary_session_evidence(fixture, closed=True)
+            fixture.snapshot.assert_called_once()
+            clock.sleep.assert_not_called()
 
     def test_rotation_public_result_requires_every_boolean_and_rejects_extra_data(self):
         result = {key: True for key in runner.ROTATION_PUBLIC_FIELDS}
@@ -253,11 +327,14 @@ class GuardTests(unittest.TestCase):
         with self.assertRaisesRegex(runner.Failure, '^direct_android_rotation_server_evidence_invalid$'):
             runner.rotation_checkpoint(fixture, {'phase': 'rejected', 'stage': 2}, {})
 
-    def test_rotation_exchange_allows_only_fixed_public_filenames(self):
+    def test_exchange_allows_only_fixed_public_filenames(self):
         with patch.object(runner, 'package_present', return_value=False):
-            for name in ('rotation-stage.json', 'rotation-result.json'):
+            for name in ('rotation-stage.json', 'rotation-result.json', 'ordinary-mobile-stage.json',
+                         'encrypted-stage.json', 'encrypted-result.json', 'encrypted-diagnostic.json'):
                 self.assertIsNone(runner.read_public_json('cache/herdr-direct-ssh-123/' + name))
-            for name in ('../defines.json', 'rotation-rejected-confirmed.json', 'rotation-secret.json'):
+            for name in ('../defines.json', 'rotation-rejected-confirmed.json', 'rotation-secret.json',
+                         'ordinary-mobile-keyboard_shown-confirmed.json', 'ordinary-mobile-result.json',
+                         'encrypted-secret.json', 'encrypted-review-confirmed.json', '../herdr-key-123.json'):
                 with self.subTest(name=name), self.assertRaises(runner.Failure):
                     runner.read_public_json('cache/herdr-direct-ssh-123/' + name)
 
@@ -315,10 +392,31 @@ class GuardTests(unittest.TestCase):
 
 @unittest.skipUnless(importlib.util.find_spec('paramiko') is not None, 'Paramiko is unavailable; loopback protocol test is optional in this environment')
 class LoopbackTests(unittest.TestCase):
-    def test_shared_peer_requires_auth_pty_shell_marker_and_peer_close_then_cleans(self):
+    def test_shared_peer_stays_on_one_session_for_mobile_checkpoints_then_receives_one_marker_and_closes(self):
+        for deadline in (None, time.monotonic() + 60):
+            with self.subTest(shared_deadline=deadline is not None):
+                self.assert_ordinary_mobile_session(deadline)
+
+    def assert_ordinary_mobile_session(self, deadline):
         import paramiko
         from direct_ssh_fixture import DirectSshFixture
-        with DirectSshFixture() as fixture:
+        first_output_sent, publish_ready = Event(), Event()
+
+        class DelayedReadyPublication(DirectSshFixture):
+            def _connection_increment(self, transport, field, amount=1):
+                if field == 'outputBytes' and not first_output_sent.is_set():
+                    first_output_sent.set()
+                    publish_ready.wait(5)
+                super()._connection_increment(transport, field, amount)
+
+        with DelayedReadyPublication(screen_proof=True, channel_deadline=deadline) as fixture:
+            probe = paramiko.Transport(('127.0.0.1', fixture.port))
+            try:
+                probe.start_client(timeout=5)
+                self.assertEqual(probe.get_remote_server_key().get_base64(), fixture.public_key.split()[1])
+            finally:
+                probe.close()
+            self.assertTrue(fixture.wait_for_connections_closed(1))
             transport = paramiko.Transport(('127.0.0.1', fixture.port))
             try:
                 transport.start_client(timeout=5)
@@ -328,6 +426,38 @@ class LoopbackTests(unittest.TestCase):
                 channel.get_pty(term='xterm-256color', width=80, height=24)
                 channel.invoke_shell()
                 channel.settimeout(5)
+                self.assertIn(b'POCKET-ANDROID-READY', channel.recv(4096))
+                self.assertTrue(first_output_sent.wait(5))
+                snapshot = fixture.snapshot
+
+                def release_after_first_snapshot():
+                    facts = snapshot()
+                    if not publish_ready.is_set():
+                        self.assertEqual(facts['connectionEvents'][1]['outputBytes'], 0)
+                        publish_ready.set()
+                    return facts
+
+                completed = {}
+                for phase in runner.ORDINARY_MOBILE_PHASES:
+                    with patch.object(fixture, 'snapshot', side_effect=release_after_first_snapshot):
+                        name, evidence = runner.ordinary_mobile_checkpoint(fixture, {'phase': phase}, completed)
+                    self.assertEqual(name, phase)
+                    self.assertEqual(evidence, {'id': 2, 'authAttempts': 1, 'authSuccesses': 1, 'ptyRequests': 1,
+                                                'shellRequests': 1, 'inputBytes': 0, 'markerReceived': False, 'closed': False})
+                    completed[name] = evidence
+                runner.require_ordinary_mobile_checkpoints(completed)
+                pending_probe_cleanup = fixture.snapshot()
+                pending_probe_cleanup['connectionEvents'][0]['closed'] = False
+                with patch.object(fixture, 'snapshot', return_value=pending_probe_cleanup):
+                    self.assertEqual(runner.ordinary_session_evidence(fixture, closed=False), evidence)
+                for index, field, value in ((0, 'authAttempts', 1), (1, 'id', 3), (1, 'authAttempts', 2),
+                                            (1, 'ptyRequests', 2), (1, 'shellRequests', 2), (1, 'inputBytes', 1),
+                                            (1, 'closed', True)):
+                    drift = fixture.snapshot()
+                    drift['connectionEvents'][index][field] = value
+                    with patch.object(fixture, 'snapshot', return_value=drift), self.assertRaisesRegex(
+                            runner.Failure, '^direct_ssh_ordinary_session_evidence_invalid$'):
+                        runner.ordinary_session_evidence(fixture, closed=False)
                 channel.sendall((fixture.marker + '\r').encode())
                 received = b''
                 while fixture.echo_marker.encode() not in received:
@@ -335,8 +465,18 @@ class LoopbackTests(unittest.TestCase):
                 self.assertIn(b'\x1b[32m' + fixture.echo_marker.encode(), received)
                 channel.close()
             finally:
+                publish_ready.set()
                 transport.close()
-            self.assertTrue(fixture.wait_for('sessionClosed'))
+            self.assertTrue(fixture.wait_for_connections_closed(2))
+            evidence = runner.ordinary_session_evidence(fixture, closed=True)
+            self.assertEqual(evidence['inputBytes'], 9)
+            self.assertTrue(evidence['closed'])
+            self.assertTrue(evidence['markerReceived'])
+            pending_probe_cleanup = fixture.snapshot()
+            pending_probe_cleanup['connectionEvents'][0]['closed'] = False
+            with patch.object(fixture, 'snapshot', return_value=pending_probe_cleanup), self.assertRaisesRegex(
+                    runner.Failure, '^direct_ssh_ordinary_session_evidence_invalid$'):
+                runner.ordinary_session_evidence(fixture, closed=True)
             facts = fixture.snapshot()
             self.assertTrue(all(facts[k] for k in ('authAccepted', 'ptyRequested', 'shellRequested', 'markerReceived')))
             self.assertIn([80, 24], facts['ptySizes'])
@@ -386,6 +526,513 @@ class LoopbackTests(unittest.TestCase):
         with DirectSshFixture() as fixture:
             self.assertNotIn('helperKeysExact', fixture.snapshot())
 
+
+
+class EncryptedKeyAcceptanceTests(unittest.TestCase):
+    def test_workflow_explicit_case_keeps_standard_default_and_push_scope(self):
+        workflow = (HERE.parents[1] / '.github/workflows/direct-ssh-android.yml').read_text()
+        self.assertIn("'codex/acceptance/direct-ssh-android-*'", workflow)
+        self.assertIn('options: [standard, encrypted-key]', workflow)
+        self.assertIn('default: standard', workflow)
+        self.assertIn("if: ${{ inputs.auth_case == 'encrypted-key' }}", workflow)
+        self.assertIn('flutter build apk --debug --target-platform android-x64 --no-pub -t integration_test/android_direct_ssh_test.dart', workflow)
+        self.assertIn('AUTH_CASE: ${{ inputs.auth_case }}', workflow)
+        self.assertIn('case "${AUTH_CASE:-}" in', workflow)
+        self.assertIn("''|standard) set -- ;;", workflow)
+        self.assertIn('encrypted-key) set -- --encrypted-key ;;', workflow)
+        self.assertIn("*) echo 'unsupported SSH acceptance case' >&2; exit 1 ;;", workflow)
+        self.assertIn('--output "$RUNNER_TEMP/direct-ssh-public" "$@"', workflow)
+
+    def test_workflow_case_shell_rejects_unexpected_values_without_expansion(self):
+        import subprocess
+        workflow = (HERE.parents[1] / '.github/workflows/direct-ssh-android.yml').read_text()
+        start = workflow.index('          case "${AUTH_CASE:-}" in')
+        end = workflow.index('          esac', start) + len('          esac')
+        program = workflow[start:end] + '\nprintf "<%s>" "$@"'
+        for value, expected in [('', '<>'), ('standard', '<>'), ('encrypted-key', '<--encrypted-key>')]:
+            result = subprocess.run(['bash', '-c', program], env={**os.environ, 'AUTH_CASE': value},
+                                    capture_output=True, text=True, check=False)
+            self.assertEqual((result.returncode, result.stdout), (0, expected))
+        for value in ('bogus', 'encrypted-key; echo leaked'):
+            result = subprocess.run(['bash', '-c', program], env={**os.environ, 'AUTH_CASE': value},
+                                    capture_output=True, text=True, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, '')
+            self.assertNotIn(value, result.stderr)
+
+    def test_startup_observation_does_not_probe_app_before_install(self):
+        path = 'cache/herdr-direct-ssh-123'
+        with patch.object(runner, 'package_present', return_value=False), \
+             patch.object(runner, 'read_public_json') as read:
+            self.assertEqual(runner.encrypted_app_observation(path), (False, None, None))
+            read.assert_not_called()
+        with patch.object(runner, 'package_present', return_value=True), \
+             patch.object(runner, 'read_public_json', side_effect=[None, None]) as read:
+            self.assertEqual(runner.encrypted_app_observation(path), (True, None, None))
+            self.assertEqual(read.call_count, 2)
+            self.assertTrue(all(call.kwargs == {'package_known': True} for call in read.call_args_list))
+        with patch.object(runner, 'package_present', return_value=True), \
+             patch.object(runner, 'read_public_json', side_effect=[{'stage': 'encrypted_waiting_private'}, None]):
+            self.assertEqual(runner.encrypted_app_observation(path), (True, 'encrypted_waiting_private', None))
+        with patch.object(runner, 'package_present', return_value=True), \
+             patch.object(runner, 'read_public_json', return_value={'stage': 'private-key-content'}):
+            with self.assertRaises(runner.Failure): runner.encrypted_app_observation(path)
+        with patch.object(runner, 'package_present', return_value=True), \
+             patch.object(runner, 'read_public_json', side_effect=[{'stage': 'encrypted_waiting_private'},
+                 {'stage': 'fixture_validation', 'code': 'direct_ssh_android_ui_failed'}]):
+            self.assertEqual(runner.encrypted_app_observation(path),
+                             (True, 'encrypted_waiting_private', 'fixture_validation'))
+
+    def test_connect_diagnostic_accepts_only_fixed_token_free_state(self):
+        value = dict.fromkeys(runner.ENCRYPTED_CONNECT_BOOLEAN_FIELDS, False)
+        value.update(status='disabled', rectPt=[16, 500, 358, 48],
+                     viewSizePx=[1080, 2400], viewSizePt=[360, 800], insetBottomPx=0)
+        self.assertEqual(runner.safe_encrypted_connect_diagnostic(value), value)
+        for status in ('checking', 'missing', 'multiple', 'disabled', 'not_hit', 'unstable', 'ready'):
+            self.assertEqual(runner.safe_encrypted_connect_diagnostic({**value, 'status': status})['status'], status)
+        for bad in ({**value, 'status': 'sensitive-test-key'},
+                    {**value, 'privateKeyEmpty': 'sensitive-test-key'},
+                    {**value, 'rectPt': [16, 500, 358, True]},
+                    {**value, 'extra': 'sensitive-test-key'}):
+            with self.subTest(bad=bad), self.assertRaises(runner.Failure):
+                runner.safe_encrypted_connect_diagnostic(bad)
+
+    def test_tool_progress_discards_untrusted_output_and_detects_split_markers(self):
+        import io
+        class Chunks:
+            def __init__(self):
+                self.parts = iter([b"running gradle task 'asse", b"mbledebug'\r\n", b'sensitive-test-key ',
+                    b'installing build/app/outputs/', b' loading /x/android_direct_ssh_test.dart', b''])
+            def read1(self, unused): return next(self.parts)
+        progress = runner.SanitizedToolProgress(Chunks())
+        result = progress.finish()
+        self.assertEqual(result['streamState'], 'eof')
+        self.assertTrue(result['markers']['gradleStarted'])
+        self.assertTrue(result['markers']['installationStarted'])
+        self.assertTrue(result['markers']['testLoading'])
+        self.assertNotIn('sensitive-test-key', json.dumps(result))
+        self.assertEqual(set(result['markers']), set(runner.TOOL_MARKERS))
+
+    def test_device_state_uses_fixed_values_without_echoing_adb_output(self):
+        for reply, expected in [(CompletedProcess([], 0, b'device\n', b''), 'device'),
+                                (CompletedProcess([], 1, b'', b'error: device offline'), 'offline'),
+                                (CompletedProcess([], 1, b'', b'error: device unauthorized'), 'unauthorized'),
+                                (CompletedProcess([], 1, b'sensitive-test-key', b''), 'unavailable')]:
+            with self.subTest(expected=expected), patch.object(runner, 'adb', return_value=reply):
+                self.assertEqual(runner.encrypted_device_state(), expected)
+        with patch.object(runner, 'adb', side_effect=__import__('subprocess').TimeoutExpired('adb', 30)):
+            self.assertEqual(runner.encrypted_device_state(), 'timeout')
+
+    def test_cleanup_checks_remain_independent_when_reverse_removal_fails(self):
+        calls = []
+        def fake_adb(*args, **unused):
+            calls.append(args)
+            if args[:2] == ('reverse', '--remove'):
+                raise __import__('subprocess').TimeoutExpired('adb', 30)
+            return CompletedProcess([], 0, b'', b'')
+        with patch.object(runner, 'adb', side_effect=fake_adb), \
+             patch.object(runner, 'package_present', side_effect=[True, False]), \
+             patch.object(runner, 'forward_set', return_value=set()):
+            cleanup, checks = runner.cleanup_encrypted_device('tcp:40001', set())
+        self.assertEqual(cleanup, {'reverseRemoved': False, 'packageRemoved': True, 'ownedForwardsRemoved': True})
+        self.assertEqual(checks, {'reverse': 'unproven', 'package': 'verified', 'forwards': 'verified'})
+        self.assertEqual(sum(call[:2] == ('reverse', '--remove') for call in calls), 1)
+        self.assertIn(('uninstall', runner.PACKAGE), calls)
+
+    def test_app_stage_is_fixed_and_failure_code_is_exact(self):
+        self.assertEqual(runner.safe_encrypted_app_stage({'stage':'encrypted_waiting_private'}), 'encrypted_waiting_private')
+        self.assertEqual(runner.safe_encrypted_app_stage({'stage':'encrypted_home', 'code':'direct_ssh_android_ui_failed'}, failure=True), 'encrypted_home')
+        for value in ({'stage':'sensitive-test-key'}, {'stage':'encrypted_home','secret':'x'},
+                      {'stage':'encrypted_home','code':'sensitive-test-key'}):
+            with self.subTest(value=value), self.assertRaises(runner.Failure):
+                runner.safe_encrypted_app_stage(value, failure=('code' in value))
+
+    def test_result_is_exact_and_never_exports_credentials(self):
+        value = {field: True for field in runner.ENCRYPTED_PUBLIC_FIELDS}
+        value.update(schemaVersion=1, platform='android-api35-emulator', physicalImeVerified=False)
+        self.assertEqual(runner.safe_encrypted_result(json.dumps(value)), value)
+        for extra in ({'privateKey': 'secret'}, {'passphrase': 'secret'},
+                      {'wrongPassphraseRejectedLocally': False}, {'physicalImeVerified': True},
+                      {'schemaVersion': True}, {'credentialsCleared': 1}):
+            with self.subTest(extra=tuple(extra)), self.assertRaises(runner.Failure):
+                runner.safe_encrypted_result(json.dumps({**value, **extra}))
+        with self.assertRaises(runner.Failure):
+            runner.safe_encrypted_result('{')
+
+    def test_review_and_wrong_passphrase_require_one_closed_unauthenticated_probe(self):
+        probe = dict(id=1, hostKey='A', authAttempts=0, authSuccesses=0,
+            ptyRequests=0, shellRequests=0, inputBytes=0, outputBytes=0,
+            authAccepted=False, markerReceived=False, sessionClosed=False, closed=True)
+        fixture = Mock()
+        fixture.wait_for_connections_closed.return_value = True
+        fixture.snapshot.return_value = dict(connections=1, connectionsClosed=True, connectionEvents=[probe])
+        self.assertEqual(runner.encrypted_probe_evidence(fixture), probe)
+        for field, bad in [('authAttempts', 1), ('authSuccesses', 1), ('ptyRequests', 1),
+                           ('shellRequests', 1), ('inputBytes', 1), ('outputBytes', 1),
+                           ('closed', False), ('authAttempts', False)]:
+            fixture.snapshot.return_value = dict(connections=1, connectionsClosed=True,
+                connectionEvents=[{**probe, field: bad}])
+            with self.subTest(field=field, value=bad), self.assertRaises(runner.Failure):
+                runner.encrypted_probe_evidence(fixture)
+        fixture.snapshot.return_value = dict(connections=2, connectionsClosed=True, connectionEvents=[probe, probe])
+        with self.assertRaises(runner.Failure):
+            runner.encrypted_probe_evidence(fixture)
+
+    def test_encrypted_stages_are_ordered_and_only_accept_public_phase(self):
+        self.assertEqual(runner.checked_encrypted_stage({'phase': 'review'}, {}), 'review')
+        self.assertIsNone(runner.checked_encrypted_stage({'phase': 'review'}, {'review': {}}))
+        self.assertEqual(runner.checked_encrypted_stage({'phase': 'rejected'}, {'review': {}}), 'rejected')
+        for value, completed in [({'phase': 'rejected'}, {}), ({'phase': 'review', 'secret': 'x'}, {}),
+                                 ({'phase': False}, {}), ({'phase': 'connected'}, {}), ([], {})]:
+            with self.subTest(value=value), self.assertRaises(runner.Failure):
+                runner.checked_encrypted_stage(value, completed)
+
+    def test_encrypted_diagnostic_only_exports_fixed_token_free_metrics(self):
+        data = {'phase': 'encrypted_wait_idle_ime', 'terminalCount': 1,
+            'terminalHit': True, 'disconnectHit': True, 'toggleHit': True, 'enterHit': False, 'headerHit': True,
+            'toggleState': 'close', 'insetBottomPx': 400, 'viewSizePx': [1080, 2400],
+            'terminalRectPt': [16, 144, 320, 300], 'enterRectPt': [300, 400, 54, 44], 'columns': 12, 'rows': 10,
+            'terminalFocused': False, 'testInputRegistered': True, 'testClientSet': True,
+            'welcomeVisible': True, 'echoVisible': False}
+        self.assertEqual(runner.safe_encrypted_diagnostic(data), data)
+        for mutation in ({'privateKey': 'sensitive-test-key'}, {'phase': 'other'},
+                         {'toggleState': 'sensitive-test-phrase'}, {'terminalHit': 1},
+                         {'insetBottomPx': -1}, {'columns': True}, {'viewSizePx': [0, 1]},
+                         {'terminalRectPt': [0, 0, -1, 10]}, {'terminalRectPt': 'secret'}):
+            with self.subTest(mutation=mutation), self.assertRaises(runner.Failure):
+                runner.safe_encrypted_diagnostic({**data, **mutation})
+        with self.assertRaises(runner.Failure):
+            runner.safe_encrypted_diagnostic({key: value for key, value in data.items() if key != 'phase'})
+
+    def test_private_ipc_is_single_write_and_never_appears_in_arguments(self):
+        fixture = Mock(private_key='sensitive-test-key', passphrase='sensitive-test-phrase')
+        with patch.object(runner, 'adb') as adb:
+            runner.deliver_encrypted_credentials(fixture, '123')
+        self.assertEqual(adb.call_count, 4)
+        calls = adb.call_args_list
+        self.assertEqual(json.loads(calls[1].kwargs['data']),
+                         {'privateKey': fixture.private_key, 'passphrase': fixture.passphrase})
+        self.assertEqual(calls[2].args[-2:], ('600', 'cache/herdr-key-123.pending'))
+        self.assertEqual(calls[3].args[-2:], ('cache/herdr-key-123.pending', 'cache/herdr-key-123.json'))
+        self.assertNotIn('sensitive-test-key', repr([c.args for c in calls]))
+        self.assertNotIn('sensitive-test-phrase', repr([c.args for c in calls]))
+        with patch.object(runner, 'adb') as adb, self.assertRaises(runner.Failure):
+            runner.deliver_encrypted_credentials(fixture, '../123')
+        adb.assert_not_called()
+        with patch.object(runner, 'adb', side_effect=runner.Failure('failed')) as adb, self.assertRaises(runner.Failure):
+            runner.deliver_encrypted_credentials(fixture, '123')
+        self.assertEqual(adb.call_count, 1)
+
+    def test_encrypted_screenshot_uses_normal_ocr_without_rotation_bypass(self):
+        header = b'\x89PNG\r\n\x1a\n' + b'\x00\x00\x00\x0dIHDR' + struct.pack('>II', 400, 600)
+        fixture = Mock(username='fixture', port=40001, screen_token='ARCH BARN CAVE DECK DUSK EAST FACT FADE')
+        request = {'tag': 'ordinary', 'attempt': 1, 'bounds': [0, 20, 400, 500],
+                   'viewSize': [400, 600], 'observedTarget': 'fixture@127.0.0.1:40001'}
+        gate = Mock(return_value={'markerVisible': True, 'tokenVisible': True})
+        gate_module = types.SimpleNamespace(ScreenshotGateError=type('GateError', (ValueError,), {}),
+                                            verify_terminal_screenshot=gate)
+        with tempfile.TemporaryDirectory() as temp, patch.dict(sys.modules, {'terminal_screenshot_gate': gate_module}), \
+             patch.object(runner, 'adb', return_value=CompletedProcess([], 0, header, b'')):
+            completed = {}
+            runner.screen_checkpoint(request, completed, fixture, None, 'cache/test', Path(temp), require_rotation=False)
+            self.assertTrue(completed['ordinary']['accepted'])
+            self.assertEqual(gate.call_count, 2)
+            self.assertTrue(all(call.kwargs['expected_token'] == fixture.screen_token for call in gate.call_args_list))
+            with self.assertRaises(runner.Failure):
+                runner.screen_checkpoint({**request, 'tag': 'key-rotation'}, {}, fixture, None,
+                                         'cache/test', Path(temp), require_rotation=False)
+
+    def test_failure_does_not_publish_secret_or_embed_it_in_build_defines(self):
+        import shutil
+        from screen_proof_token import SCREEN_WORDS
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); app = root / 'app'; app.mkdir(); output = root / 'public'
+            key_temp = tempfile.TemporaryDirectory(dir=temp)
+            fixture = MagicMock(port=40001, username='fixture', private_key='sensitive-test-key',
+                passphrase='sensitive-test-phrase', fingerprint='SHA256:public',
+                screen_token=' '.join(SCREEN_WORDS[:8]), echo_marker='POCKET-ANDROID-SSH-OK')
+            fixture._temp = key_temp
+            fixture.__enter__.return_value = fixture
+            fixture.snapshot.return_value = {'connectionsClosed': True}
+            def exit_fixture(*unused):
+                fixture.private_key = fixture.passphrase = ''
+                key_temp.cleanup()
+            fixture.__exit__.side_effect = exit_fixture
+            fake_module = types.SimpleNamespace(EncryptedKeyFixture=Mock(return_value=fixture))
+            def fake_text(*args):
+                values = {('devices',): 'List of devices attached\nemulator-5554 device',
+                    ('shell', 'getprop', 'ro.kernel.qemu'): '1',
+                    ('shell', 'getprop', 'ro.build.version.sdk'): '35',
+                    ('shell', 'am', 'get-current-user'): '0',
+                    ('shell', 'settings', 'get', 'secure', 'show_ime_with_hard_keyboard'): '1'}
+                return values.get(args, '')
+            def fail_start(command, **options):
+                self.assertEqual(options['stdout'], runner.subprocess.PIPE)
+                self.assertEqual(options['stderr'], runner.subprocess.STDOUT)
+                define = next(x.split('=', 1)[1] for x in command if x.startswith('--dart-define-from-file='))
+                content = Path(define).read_text()
+                self.assertNotIn('sensitive-test-key', content)
+                self.assertNotIn('sensitive-test-phrase', content)
+                raise RuntimeError('sensitive-test-key sensitive-test-phrase')
+            env = {'GITHUB_SHA': 'a'*40, 'GITHUB_RUN_ID': '123', 'RUNNER_TEMP': temp}
+            args = types.SimpleNamespace(project=app, output=output)
+            with patch.dict(sys.modules, {'tauri_encrypted_key_fixture': fake_module}), \
+                 patch.object(runner, 'checked_paths', return_value=(app, output)), \
+                 patch.object(runner, 'verify_prepared'), patch.object(runner, 'text', side_effect=fake_text), \
+                 patch.object(runner, 'package_present', return_value=False), \
+                 patch.object(runner, 'forward_set', return_value=set()), patch.object(runner, 'adb'), \
+                 patch.object(runner.subprocess, 'Popen', side_effect=fail_start):
+                with self.assertRaises(runner.Failure): runner.run_encrypted(args, env)
+            published = ''.join(f.read_text() for f in output.iterdir() if f.is_file())
+            self.assertNotIn('sensitive-test-key', published)
+            self.assertNotIn('sensitive-test-phrase', published)
+            self.assertFalse(Path(key_temp.name).exists())
+            self.assertFalse(any(root.glob('herdr-direct-android-key-*')))
+
+    def test_reverse_conflict_and_failed_creation_never_remove_unowned_mapping(self):
+        from screen_proof_token import SCREEN_WORDS
+        for scenario in ('existing', 'creation_failed'):
+            with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp); app = root / 'app'; app.mkdir(); output = root / 'public'
+                key_temp = tempfile.TemporaryDirectory(dir=temp)
+                fixture = MagicMock(port=40001, username='fixture', private_key='sensitive-test-key',
+                    passphrase='sensitive-test-phrase', fingerprint='SHA256:public',
+                    screen_token=' '.join(SCREEN_WORDS[:8]), echo_marker='POCKET-ANDROID-SSH-OK')
+                fixture._temp = key_temp; fixture.__enter__.return_value = fixture
+                fixture.snapshot.return_value = {'connectionsClosed': True}
+                def exit_fixture(*unused):
+                    fixture.private_key = fixture.passphrase = ''
+                    key_temp.cleanup()
+                fixture.__exit__.side_effect = exit_fixture
+                fake_module = types.SimpleNamespace(EncryptedKeyFixture=Mock(return_value=fixture))
+                mappings = {'tcp:40001'} if scenario == 'existing' else set()
+                calls = []
+                def fake_text(*args):
+                    if args == ('reverse', '--list'):
+                        return '\n'.join('emulator-5554 '+m+' '+m for m in sorted(mappings))
+                    values = {('devices',): 'List of devices attached\nemulator-5554 device',
+                        ('shell', 'getprop', 'ro.kernel.qemu'): '1',
+                        ('shell', 'getprop', 'ro.build.version.sdk'): '35',
+                        ('shell', 'am', 'get-current-user'): '0',
+                        ('shell', 'settings', 'get', 'secure', 'show_ime_with_hard_keyboard'): '1'}
+                    return values.get(args, '')
+                def fake_adb(*args, **unused):
+                    calls.append(args)
+                    if args[:2] == ('reverse', '--no-rebind'):
+                        # Another actor acquired the mapping after the read.
+                        mappings.add('tcp:40001')
+                        raise runner.Failure('direct_android_adb_failed')
+                    if args[:2] == ('reverse', '--remove'):
+                        mappings.discard(args[2])
+                    return CompletedProcess([], 0, b'', b'')
+                env = {'GITHUB_SHA': 'a'*40, 'GITHUB_RUN_ID': '123', 'RUNNER_TEMP': temp}
+                args = types.SimpleNamespace(project=app, output=output)
+                with patch.dict(sys.modules, {'tauri_encrypted_key_fixture': fake_module}), \
+                     patch.object(runner, 'checked_paths', return_value=(app, output)), \
+                     patch.object(runner, 'verify_prepared'), patch.object(runner, 'text', side_effect=fake_text), \
+                     patch.object(runner, 'package_present', return_value=False), \
+                     patch.object(runner, 'forward_set', return_value=set()), patch.object(runner, 'adb', side_effect=fake_adb):
+                    with self.assertRaises(runner.Failure): runner.run_encrypted(args, env)
+                self.assertEqual(mappings, {'tcp:40001'})
+                self.assertFalse(any(call[:2] == ('reverse', '--remove') for call in calls))
+                creations = [call for call in calls if call[:2] == ('reverse', '--no-rebind')]
+                self.assertEqual(len(creations), 0 if scenario == 'existing' else 1)
+                self.assertFalse(Path(key_temp.name).exists())
+
+    def test_device_failure_preserves_only_whitelisted_stage_and_metrics(self):
+        from screen_proof_token import SCREEN_WORDS
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); app = root / 'app'; app.mkdir(); output = root / 'public'
+            key_temp = tempfile.TemporaryDirectory(dir=temp)
+            fixture = MagicMock(port=40001, username='fixture', private_key='sensitive-test-key',
+                passphrase='sensitive-test-phrase', fingerprint='SHA256:public',
+                screen_token=' '.join(SCREEN_WORDS[:8]), echo_marker='POCKET-ANDROID-SSH-OK')
+            fixture._temp = key_temp; fixture.__enter__.return_value = fixture
+            def exit_fixture(*unused):
+                fixture.private_key = fixture.passphrase = ''
+                key_temp.cleanup()
+            fixture.__exit__.side_effect = exit_fixture
+            probe = dict(id=1, hostKey='A', authAttempts=0, authSuccesses=0,
+                ptyRequests=0, shellRequests=0, inputBytes=0, outputBytes=0,
+                authAccepted=False, markerReceived=False, sessionClosed=False, closed=True)
+            fixture.snapshot.return_value = dict(connections=1, connectionsClosed=True, connectionEvents=[probe])
+            fixture.wait_for_connections_closed.return_value = True
+            diagnostic = {'phase': 'encrypted_keyboard_show', 'terminalCount': 1,
+                'terminalHit': True, 'disconnectHit': True, 'toggleHit': True, 'enterHit': False, 'headerHit': True,
+                'toggleState': 'close', 'insetBottomPx': 400, 'viewSizePx': [1080, 2400],
+                'terminalRectPt': [16, 144, 320, 300], 'enterRectPt': [300, 400, 54, 44],
+                'columns': 12, 'rows': 10, 'terminalFocused': False, 'testInputRegistered': True,
+                'testClientSet': True, 'welcomeVisible': True, 'echoVisible': False}
+            connect_diagnostic = dict.fromkeys(runner.ENCRYPTED_CONNECT_BOOLEAN_FIELDS, False)
+            connect_diagnostic.update(status='disabled', rectPt=[16, 500, 358, 48], viewSizePx=[1080, 2400], viewSizePt=[360, 800], insetBottomPx=0)
+            fake_module = types.SimpleNamespace(EncryptedKeyFixture=Mock(return_value=fixture))
+            process = Mock(pid=12345); process.stdout = __import__('io').BytesIO(b'')
+            process.poll.side_effect = [None, None, 1, 1, 1, 1]
+            finished = {'value': False}
+            def wait(**unused): finished['value'] = True; return 1
+            process.wait.side_effect = wait
+            def fake_text(*args):
+                values = {('devices',): 'List of devices attached\nemulator-5554 device',
+                    ('shell', 'getprop', 'ro.kernel.qemu'): '1',
+                    ('shell', 'getprop', 'ro.build.version.sdk'): '35',
+                    ('shell', 'am', 'get-current-user'): '0',
+                    ('shell', 'settings', 'get', 'secure', 'show_ime_with_hard_keyboard'): '1'}
+                return values.get(args, '')
+            def read_json(path, *unused, **kwargs):
+                if path.endswith('/stage.json'): return {'stage': 'encrypted_waiting_private'}
+                if path.endswith('encrypted-diagnostic.json'): return diagnostic
+                if path.endswith('encrypted-connect-diagnostic.json'): return connect_diagnostic
+                if path.endswith('encrypted-stage.json'): return {'phase': 'review'}
+                if path.endswith('failure.json') and finished['value']: return {'stage': 'encrypted_keyboard_show', 'code': 'direct_ssh_android_ui_failed'}
+                return None
+            env = {'GITHUB_SHA': 'a'*40, 'GITHUB_RUN_ID': '123', 'RUNNER_TEMP': temp}
+            args = types.SimpleNamespace(project=app, output=output)
+            with patch.dict(sys.modules, {'tauri_encrypted_key_fixture': fake_module}), \
+                 patch.object(runner, 'checked_paths', return_value=(app, output)), \
+                 patch.object(runner, 'verify_prepared'), patch.object(runner, 'text', side_effect=fake_text), \
+                 patch.object(runner, 'encrypted_device_state', return_value='device'), \
+                 patch.object(runner, 'package_present', side_effect=[False, True, False, False]), \
+                 patch.object(runner, 'forward_set', return_value=set()), \
+                 patch.object(runner, 'adb', return_value=CompletedProcess([], 0, b'', b'')), \
+                 patch.object(runner, 'read_public_json', side_effect=read_json), \
+                 patch.object(runner.time, 'sleep'), patch.object(runner.subprocess, 'Popen', return_value=process):
+                with self.assertRaisesRegex(runner.Failure, 'direct_android_device_test_failed'):
+                    runner.run_encrypted(args, env)
+            result = json.loads((output/'result.json').read_text())
+            self.assertEqual(result['failureStage'], 'encrypted_keyboard_show')
+            self.assertEqual(result['uiDiagnostic'], diagnostic)
+            self.assertEqual(result['connectDiagnostic'], connect_diagnostic)
+            self.assertNotIn('sensitive-test-key', json.dumps(result))
+            self.assertNotIn('sensitive-test-phrase', json.dumps(result))
+            self.assertFalse(Path(key_temp.name).exists())
+
+    def test_complete_case_requires_review_rejection_ocr_and_live_peer_confirmation(self):
+        from screen_proof_token import SCREEN_WORDS
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); app = root / 'app'; app.mkdir(); output = root / 'public'
+            key_temp = tempfile.TemporaryDirectory(dir=temp)
+            fixture = MagicMock(port=40001, username='fixture', private_key='sensitive-test-key',
+                passphrase='sensitive-test-phrase', fingerprint='SHA256:public',
+                screen_token=' '.join(SCREEN_WORDS[:8]), echo_marker='POCKET-ANDROID-SSH-OK')
+            fixture._temp = key_temp; fixture.__enter__.return_value = fixture
+            def exit_fixture(*unused):
+                fixture.private_key = fixture.passphrase = ''
+                key_temp.cleanup()
+            fixture.__exit__.side_effect = exit_fixture
+            probe = dict(id=1, hostKey='A', authAttempts=0, authSuccesses=0,
+                ptyRequests=0, shellRequests=0, inputBytes=0, outputBytes=0,
+                authAccepted=False, markerReceived=False, sessionClosed=False, closed=True)
+            session = dict(id=2, hostKey='A', authAttempts=1, authSuccesses=1,
+                ptyRequests=1, shellRequests=1, inputBytes=9, outputBytes=99,
+                authAccepted=True, markerReceived=True, sessionClosed=True, closed=True)
+            before = dict(connections=1, connectionsClosed=True, connectionEvents=[probe])
+            closed = dict(connections=2, connectionsClosed=True, connectionEvents=[probe, session])
+            fixture.snapshot.side_effect = [before, before, closed, closed, closed, closed]
+            fixture.wait_for_connections_closed.return_value = True
+            fixture.wait_for.return_value = True
+            fake_module = types.SimpleNamespace(EncryptedKeyFixture=Mock(return_value=fixture))
+            process = Mock(pid=12345); process.stdout = __import__('io').BytesIO(b'')
+            process.poll.return_value = None
+            def wait(**unused): process.poll.return_value = 0; return 0
+            process.wait.side_effect = wait
+            def fake_text(*args):
+                values = {('devices',): 'List of devices attached\nemulator-5554 device',
+                    ('shell', 'getprop', 'ro.kernel.qemu'): '1',
+                    ('shell', 'getprop', 'ro.build.version.sdk'): '35',
+                    ('shell', 'am', 'get-current-user'): '0',
+                    ('shell', 'settings', 'get', 'secure', 'show_ime_with_hard_keyboard'): '1'}
+                return values.get(args, '')
+            current = {'round': 0}
+            device = {key: True for key in runner.ENCRYPTED_PUBLIC_FIELDS}
+            device.update(schemaVersion=1, platform='android-api35-emulator', physicalImeVerified=False)
+            diagnostic = {'phase': 'encrypted_capture', 'terminalCount': 1,
+                'terminalHit': True, 'disconnectHit': True, 'toggleHit': True, 'enterHit': False, 'headerHit': True,
+                'toggleState': 'open', 'insetBottomPx': 0, 'viewSizePx': [1080, 2400],
+                'terminalRectPt': [16, 144, 320, 300], 'enterRectPt': [300, 400, 54, 44], 'columns': 22, 'rows': 10,
+                'terminalFocused': False, 'testInputRegistered': True, 'testClientSet': True,
+                'welcomeVisible': True, 'echoVisible': True}
+            def read_json(path, *unused, **kwargs):
+                if path.endswith('/stage.json'): return {'stage': 'encrypted_waiting_private'}
+                if path.endswith('encrypted-diagnostic.json'): return diagnostic
+                if path.endswith('screen-request.json'): return {'valid': True} if current['round'] == 2 else None
+                if path.endswith('encrypted-stage.json'): return {'phase': 'review' if current['round'] == 0 else 'rejected'}
+                if path.endswith('encrypted-result.json'):
+                    result = device if current['round'] == 2 else None
+                    current['round'] += 1
+                    return result
+                return None
+            def screenshot(request, screens, *unused, **kwargs):
+                self.assertFalse(kwargs['require_rotation'])
+                screens['ordinary'] = {'attempt': 1, 'accepted': True, 'expectedTarget': 'fixture@127.0.0.1:40001'}
+            png = b'\x89PNG\r\n\x1a\n' + b'test'
+            env = {'GITHUB_SHA': 'a'*40, 'GITHUB_RUN_ID': '123', 'RUNNER_TEMP': temp}
+            args = types.SimpleNamespace(project=app, output=output)
+            with patch.dict(sys.modules, {'tauri_encrypted_key_fixture': fake_module}), \
+                 patch.object(runner, 'checked_paths', return_value=(app, output)), \
+                 patch.object(runner, 'verify_prepared'), patch.object(runner, 'text', side_effect=fake_text), \
+                 patch.object(runner, 'encrypted_device_state', return_value='device'), \
+                 patch.object(runner, 'package_present', side_effect=[False, True, True, True, True, False]), \
+                 patch.object(runner, 'forward_set', return_value=set()), \
+                 patch.object(runner, 'adb', return_value=CompletedProcess([], 0, png, b'')) as adb, \
+                 patch.object(runner, 'read_public_json', side_effect=read_json), \
+                 patch.object(runner, 'screen_checkpoint', side_effect=screenshot), \
+                 patch.object(runner.time, 'sleep'), patch.object(runner.subprocess, 'Popen', return_value=process):
+                report = runner.run_encrypted(args, env)
+            self.assertEqual(report['status'], 'passed')
+            self.assertTrue(report['startup']['packageObserved'])
+            self.assertTrue(report['startup']['appStageObserved'])
+            self.assertTrue(report['startup']['privateInputDelivered'])
+            self.assertEqual(report['startup']['tool']['streamState'], 'eof')
+            self.assertEqual(report['uiDiagnostic'], diagnostic)
+            self.assertEqual(tuple(report['checkpoints']), ('review', 'rejected'))
+            self.assertTrue(report['peerClosedBeforeDriverExit'])
+            self.assertTrue(report['cleanup']['temporaryKeyRemoved'])
+            self.assertFalse(report['cleanup']['rawLogsUploaded'])
+            calls = adb.call_args_list
+            self.assertTrue(any(call.args == ('reverse', '--no-rebind', 'tcp:40001', 'tcp:40001') for call in calls))
+            self.assertTrue(any(call.args == ('reverse', '--remove', 'tcp:40001') for call in calls))
+            secret_writes = [call for call in calls if call.kwargs.get('data') and b'sensitive-test-key' in call.kwargs['data']]
+            self.assertEqual(len(secret_writes), 1)
+            self.assertNotIn('sensitive-test-key', (output/'result.json').read_text())
+            self.assertNotIn('sensitive-test-phrase', (output/'result.json').read_text())
+            self.assertFalse(Path(key_temp.name).exists())
+
+    @unittest.skipUnless(importlib.util.find_spec('paramiko') and __import__('shutil').which('ssh-keygen'),
+                         'Paramiko and ssh-keygen required')
+    def test_real_encrypted_peer_authenticates_once_echoes_proof_and_closes(self):
+        import io
+        import paramiko
+        from tauri_encrypted_key_fixture import EncryptedKeyFixture
+        from screen_proof_token import token_lines
+        with EncryptedKeyFixture(screen_proof=True) as fixture:
+            private_dir = fixture._temp.name
+            fixture.echo_marker += '\r\n' + '\r\n'.join(token_lines(fixture.screen_token))
+            with paramiko.Transport(('127.0.0.1', fixture.port)) as probe:
+                probe.start_client(timeout=5)
+                self.assertEqual(probe.get_remote_server_key(), fixture._key)
+            runner.encrypted_probe_evidence(fixture)
+            key = paramiko.Ed25519Key.from_private_key(io.StringIO(fixture.private_key), password=fixture.passphrase)
+            transport = paramiko.Transport(('127.0.0.1', fixture.port))
+            try:
+                transport.start_client(timeout=5)
+                transport.auth_publickey(fixture.username, key)
+                channel = transport.open_session(timeout=5)
+                channel.get_pty(); channel.invoke_shell(); channel.settimeout(5)
+                channel.sendall(b'hp-check\r')
+                self.assertTrue(fixture.wait_for('markerReceived'))
+                output = b''
+                while token_lines(fixture.screen_token)[-1].encode() not in output and len(output) < 8192:
+                    output += channel.recv(8192)
+                self.assertIn(b'POCKET-ANDROID-SSH-OK', output)
+                for token in token_lines(fixture.screen_token): self.assertIn(token.encode(), output)
+                channel.close()
+                self.assertTrue(fixture.wait_for('sessionClosed'))
+            finally:
+                transport.close()
+            self.assertTrue(fixture.wait_for_connections_closed(2))
+            runner.ordinary_session_evidence(fixture, closed=True)
+        self.assertFalse(Path(private_dir).exists())
+        self.assertEqual((fixture.private_key, fixture.passphrase), ('', ''))
 
 if __name__ == '__main__':
     unittest.main()

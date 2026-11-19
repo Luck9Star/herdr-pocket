@@ -2,7 +2,9 @@
 
 ## 2026-11-18 验收索引
 
-先按两壳实际运行画面复核手机界面和操作可达性，再核对配对、看板、终端与恢复。手机优先，桌面紧随。桌面可复用已确认的设计并先推进可独立验证的流程。以下逐项台账独立于普通 SSH 界面专项，按各证据记录的环境和来源判定。[Android 普通 SSH](69-mobile-ssh-active-terminal.md) · [iOS 普通 SSH](70-ios-ssh-host-key-rotation.md)
+先按两壳实际运行画面复核手机界面和操作可达性，再核对配对、看板、终端与恢复。手机优先，桌面紧随。桌面可复用已确认的设计并先推进可独立验证的流程。以下逐项台账独立于普通 SSH 界面专项，按各证据记录的环境和来源判定。[Android 普通 SSH](69-mobile-ssh-active-terminal.md) · [iOS 普通 SSH](70-ios-ssh-host-key-rotation.md) · [活动终端与切页本地验证](73-mobile-ssh-terminal-navigation.md)
+
+2026-11-19 补充 Flutter D2 窗口变化和键盘焦点的 Widget 复验，以及 macOS 独立双回环配对证据。[桌面分屏窗口变化验收](74-desktop-split-resize.md)
 
 [M0 证据归档](#m0--调研归档与证据整理) · [M0.5 选型与可行性](#m05--手机终端-ab-与五端可行性验证) · [M1 接入与终端](#m1--扫码与手动接入的前台闭环) · [M2 网络](#m2--按-provider--平台集成三网络) · [M3 发布](#m3--可靠性与公开开源发布) · [M4 通知](#m4--后台通知) · [M5 后续功能](#m5--按实际使用反馈扩展)
 
@@ -91,7 +93,7 @@ Flutter 平台流与节点 GUI 随后在 `d6c4285` 接入，两套当前源码�
 - [ ] **M0.5-05** 三网络使用独立配置与秘密范围，建立共享节点释放规则；单网验证与首版必需的跨 provider 并发分开记录，至少验证 Tailscale + EasyTier，不扩成同 provider 任意多身份。
   **待验证。** Android 两壳 TS+ET 先停任一网的四案已过。实际设备、共享节点释放和其他组合分别验收，见 M2。[Android 双网](67-android-dual-network-startup.md)
 - [ ] **M0.5-06** 手机标签切换、桌面分屏验证独立目标/草稿、输入焦点和资源预算；隐藏标签可暂停观察/渲染并在新 full 后恢复，分屏调整不静默 resize 远端。
-  **待验证。** 手机已有独立标签与保留连接，Android 受保护恢复分批有证。桌面实际分屏、焦点、窗口调整和资源预算待补。[标签](22-mobile-terminal-tabs.md) · [Android 0011 / 0014](58-session-handoff-2026-11-09-r2.md) · [桌面设计](08-ui-design-plan.md)
+  **待验证。** 手机已有独立标签与保留连接，Android 受保护恢复分批有证。Flutter D2 的窗口收纳、回宽、唯一输入焦点和固定观察网格已过 Widget 回归。macOS 原生窗口的双真实连接、各端窗口变化和资源预算仍待核对。[标签](22-mobile-terminal-tabs.md) · [Android 0011 / 0014](58-session-handoff-2026-11-09-r2.md) · [桌面 D2 验收](74-desktop-split-resize.md)
 - [ ] **M0.5-07** 分清断开主机、离开网络/停用配置、删除身份的实际效果，不将停用统一解释为销毁原生节点；重叠地址须证明底层可定向到选定网络，否则拒绝该并发组合并改用显式切换。
   **待验证。** Android 受检会话在停用本网络后关闭，另一网沿原会话续输。物理网络下共享节点、删除身份与同址路由仍须分别取证，见 M2-02 至 M2-05。[隔离验收](65-dual-overlay-validation.md) · [Android 双网](67-android-dual-network-startup.md)
 - [ ] **M0.5-08** 与手机 A/B 并行做 Windows overlay 原生桥最小验证：当前 Dart 候选 `tailscale` 0.9.0 不支持 Windows，不能靠 UI 框架可构建跳过；Linux 验证系统凭据服务缺失/锁定时的行为，不回退明文。
@@ -126,7 +128,7 @@ Flutter 平台流与节点 GUI 随后在 `d6c4285` 接入，两套当前源码�
 - [ ] **M1-06** 按主机分组的看板、待处理项、同步时间与失去连接状态。
   **待验证。** 看板、会话筛选、同步与陈旧状态已有源码及 Android 配对观察证据。待处理项、掉线和前台刷新需在真实设备组合复测。[同步模型](23-mobile-session-watch.md) · [Android 看板](40-android-paired-dashboard-validation.md) · [看板搜索复测](58-session-handoff-2026-11-09-r2.md)
 - [ ] **M1-07** 手机看板进入多个终端标签并切换；桌面主机侧栏、列表与多标签/分屏工作台，支持窗口调整和键盘导航，始终只有一个明确输入焦点。
-  **待实现／待验证。** 手机标签已有实现与 Android 全帧恢复证据。桌面主机侧栏与实际多分屏工作台还需实现和验收。macOS 普通 SSH 单窗口已实测。[标签](22-mobile-terminal-tabs.md) · [Mac 实窗](63-design-parity-and-direct-ssh.md) · [桌面设计](08-ui-design-plan.md)
+  **待验证。** 手机标签已有实现与 Android 全帧恢复证据。Ubuntu 历史 S06 有 Flutter Widget 和 Tauri GTK 各自的真实双连接结果。Flutter 最新 D2 在合成 Widget 中通过阈值、窗口变化和键盘导航验证。macOS 普通 SSH 单窗口、无界面的双回环已有独立记录，原生窗口内两条真实连接仍待验收。[标签](22-mobile-terminal-tabs.md) · [普通 SSH 实窗](63-design-parity-and-direct-ssh.md) · [S06 与 D2 证据](74-desktop-split-resize.md)
 - [x] **M1-08** 从看板进入准确目标，观察终端，区分当前画面与旧画面。
   **已通过。** （2026-11-10 勾选：两壳在 API 35 模拟器完成明确 pane 选择、full/delta 与主动停止，停止后画面正确标记陈旧——[15](15-mobile-gui-validation.md)、run `42659301059`（Flutter）、run `42681783874`（Tauri，`stoppedStale: true`）；为模拟器级证据。）
 - [ ] **M1-09** 五端默认观察，显式进入完整逐键终端，支持快捷键、组合键与交互 TUI；手机提供辅助键、草稿编辑和多行粘贴预览。

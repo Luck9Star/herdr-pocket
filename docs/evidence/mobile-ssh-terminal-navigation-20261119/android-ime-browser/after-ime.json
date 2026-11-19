@@ -1,0 +1,1942 @@
+{
+  "phase": "after",
+  "real": true,
+  "engine": "157.0.8103.79",
+  "rows": [
+    {
+      "size": [
+        320,
+        640
+      ],
+      "phase": "initial",
+      "mode": "unchanged",
+      "display": [
+        320,
+        640
+      ],
+      "visual": 640,
+      "ime": {
+        "visible": false,
+        "height": 0,
+        "overlap": 0
+      },
+      "viewportHeight": "",
+      "viewportInset": "",
+      "controls": {
+        "title": {
+          "rect": [
+            16,
+            38.5,
+            76.5625,
+            25
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "target": {
+          "rect": [
+            88,
+            107,
+            151.828125,
+            13
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "hide": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "show": {
+          "rect": [
+            260,
+            92,
+            44,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "disconnect": {
+          "rect": [
+            244,
+            29,
+            60,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "routes": {
+          "rect": [
+            0,
+            560,
+            320,
+            80
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "output": {
+          "rect": [
+            16,
+            144,
+            288,
+            304
+          ],
+          "visible": true,
+          "hit": true
+        }
+      },
+      "focused": false
+    },
+    {
+      "size": [
+        320,
+        640
+      ],
+      "phase": "opened",
+      "mode": "unchanged",
+      "display": [
+        320,
+        640
+      ],
+      "visual": 640,
+      "ime": {
+        "visible": true,
+        "height": 640,
+        "overlap": 238
+      },
+      "viewportHeight": "402px",
+      "viewportInset": "238px",
+      "controls": {
+        "title": {
+          "rect": [
+            16,
+            38.5,
+            76.5625,
+            25
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "target": {
+          "rect": [
+            88,
+            107,
+            151.828125,
+            13
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "hide": {
+          "rect": [
+            260,
+            92,
+            44,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "show": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "disconnect": {
+          "rect": [
+            244,
+            29,
+            60,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "routes": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "output": {
+          "rect": [
+            16,
+            144,
+            288,
+            146
+          ],
+          "visible": true,
+          "hit": true
+        }
+      },
+      "focused": true
+    },
+    {
+      "size": [
+        320,
+        640
+      ],
+      "phase": "hidden",
+      "mode": "unchanged",
+      "display": [
+        320,
+        640
+      ],
+      "visual": 640,
+      "ime": {
+        "visible": false,
+        "height": 640,
+        "overlap": 238
+      },
+      "viewportHeight": "",
+      "viewportInset": "",
+      "controls": {
+        "title": {
+          "rect": [
+            16,
+            38.5,
+            76.5625,
+            25
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "target": {
+          "rect": [
+            88,
+            107,
+            151.828125,
+            13
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "hide": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "show": {
+          "rect": [
+            260,
+            92,
+            44,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "disconnect": {
+          "rect": [
+            244,
+            29,
+            60,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "routes": {
+          "rect": [
+            0,
+            560,
+            320,
+            80
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "output": {
+          "rect": [
+            16,
+            144,
+            288,
+            304
+          ],
+          "visible": true,
+          "hit": true
+        }
+      },
+      "focused": false
+    },
+    {
+      "size": [
+        320,
+        640
+      ],
+      "phase": "system-back",
+      "mode": "unchanged",
+      "display": [
+        320,
+        640
+      ],
+      "visual": 640,
+      "ime": {
+        "visible": false,
+        "height": 640,
+        "overlap": 0
+      },
+      "viewportHeight": "",
+      "viewportInset": "",
+      "controls": {
+        "title": {
+          "rect": [
+            16,
+            38.5,
+            76.5625,
+            25
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "target": {
+          "rect": [
+            88,
+            107,
+            151.828125,
+            13
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "hide": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "show": {
+          "rect": [
+            260,
+            92,
+            44,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "disconnect": {
+          "rect": [
+            244,
+            29,
+            60,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "routes": {
+          "rect": [
+            0,
+            560,
+            320,
+            80
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "output": {
+          "rect": [
+            16,
+            144,
+            288,
+            304
+          ],
+          "visible": true,
+          "hit": true
+        }
+      },
+      "focused": true
+    },
+    {
+      "size": [
+        320,
+        640
+      ],
+      "mode": "unchanged",
+      "peer": {
+        "connection": 2,
+        "auth": 1,
+        "pty": 1,
+        "shell": 1,
+        "inputBytes": 0,
+        "closed": true
+      }
+    },
+    {
+      "size": [
+        390,
+        844
+      ],
+      "phase": "initial",
+      "mode": "unchanged",
+      "display": [
+        390,
+        844
+      ],
+      "visual": 844,
+      "ime": {
+        "visible": false,
+        "height": 0,
+        "overlap": 0
+      },
+      "viewportHeight": "",
+      "viewportInset": "",
+      "controls": {
+        "title": {
+          "rect": [
+            24,
+            61.5,
+            76.5625,
+            25
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "target": {
+          "rect": [
+            96,
+            130,
+            165.640625,
+            14
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "hide": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "show": {
+          "rect": [
+            322,
+            115,
+            44,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "disconnect": {
+          "rect": [
+            306,
+            52,
+            60,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "routes": {
+          "rect": [
+            0,
+            754,
+            390,
+            90
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "output": {
+          "rect": [
+            24,
+            167,
+            342,
+            523
+          ],
+          "visible": true,
+          "hit": true
+        }
+      },
+      "focused": false
+    },
+    {
+      "size": [
+        390,
+        844
+      ],
+      "phase": "opened",
+      "mode": "unchanged",
+      "display": [
+        390,
+        844
+      ],
+      "visual": 844,
+      "ime": {
+        "visible": true,
+        "height": 844,
+        "overlap": 291
+      },
+      "viewportHeight": "553px",
+      "viewportInset": "291px",
+      "controls": {
+        "title": {
+          "rect": [
+            24,
+            61.5,
+            76.5625,
+            25
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "target": {
+          "rect": [
+            96,
+            130,
+            165.640625,
+            14
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "hide": {
+          "rect": [
+            322,
+            115,
+            44,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "show": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "disconnect": {
+          "rect": [
+            306,
+            52,
+            60,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "routes": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "output": {
+          "rect": [
+            24,
+            167,
+            342,
+            322
+          ],
+          "visible": true,
+          "hit": true
+        }
+      },
+      "focused": true
+    },
+    {
+      "size": [
+        390,
+        844
+      ],
+      "phase": "hidden",
+      "mode": "unchanged",
+      "display": [
+        390,
+        844
+      ],
+      "visual": 844,
+      "ime": {
+        "visible": false,
+        "height": 844,
+        "overlap": 291
+      },
+      "viewportHeight": "",
+      "viewportInset": "",
+      "controls": {
+        "title": {
+          "rect": [
+            24,
+            61.5,
+            76.5625,
+            25
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "target": {
+          "rect": [
+            96,
+            130,
+            165.640625,
+            14
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "hide": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "show": {
+          "rect": [
+            322,
+            115,
+            44,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "disconnect": {
+          "rect": [
+            306,
+            52,
+            60,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "routes": {
+          "rect": [
+            0,
+            754,
+            390,
+            90
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "output": {
+          "rect": [
+            24,
+            167,
+            342,
+            523
+          ],
+          "visible": true,
+          "hit": true
+        }
+      },
+      "focused": false
+    },
+    {
+      "size": [
+        390,
+        844
+      ],
+      "phase": "system-back",
+      "mode": "unchanged",
+      "display": [
+        390,
+        844
+      ],
+      "visual": 844,
+      "ime": {
+        "visible": false,
+        "height": 844,
+        "overlap": 0
+      },
+      "viewportHeight": "",
+      "viewportInset": "",
+      "controls": {
+        "title": {
+          "rect": [
+            24,
+            61.5,
+            76.5625,
+            25
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "target": {
+          "rect": [
+            96,
+            130,
+            165.640625,
+            14
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "hide": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "show": {
+          "rect": [
+            322,
+            115,
+            44,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "disconnect": {
+          "rect": [
+            306,
+            52,
+            60,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "routes": {
+          "rect": [
+            0,
+            754,
+            390,
+            90
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "output": {
+          "rect": [
+            24,
+            167,
+            342,
+            523
+          ],
+          "visible": true,
+          "hit": true
+        }
+      },
+      "focused": true
+    },
+    {
+      "size": [
+        390,
+        844
+      ],
+      "mode": "unchanged",
+      "peer": {
+        "connection": 2,
+        "auth": 1,
+        "pty": 1,
+        "shell": 1,
+        "inputBytes": 0,
+        "closed": true
+      }
+    },
+    {
+      "size": [
+        393,
+        851
+      ],
+      "phase": "initial",
+      "mode": "unchanged",
+      "display": [
+        393,
+        851
+      ],
+      "visual": 851,
+      "ime": {
+        "visible": false,
+        "height": 0,
+        "overlap": 0
+      },
+      "viewportHeight": "",
+      "viewportInset": "",
+      "controls": {
+        "title": {
+          "rect": [
+            24,
+            62.5,
+            76.5625,
+            25
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "target": {
+          "rect": [
+            96,
+            131,
+            165.640625,
+            14
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "hide": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "show": {
+          "rect": [
+            325,
+            116,
+            44,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "disconnect": {
+          "rect": [
+            309,
+            53,
+            60,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "routes": {
+          "rect": [
+            0,
+            771,
+            393,
+            80
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "output": {
+          "rect": [
+            24,
+            168,
+            345,
+            539
+          ],
+          "visible": true,
+          "hit": true
+        }
+      },
+      "focused": false
+    },
+    {
+      "size": [
+        393,
+        851
+      ],
+      "phase": "opened",
+      "mode": "unchanged",
+      "display": [
+        393,
+        851
+      ],
+      "visual": 851,
+      "ime": {
+        "visible": true,
+        "height": 851,
+        "overlap": 300
+      },
+      "viewportHeight": "551px",
+      "viewportInset": "300px",
+      "controls": {
+        "title": {
+          "rect": [
+            24,
+            62.5,
+            76.5625,
+            25
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "target": {
+          "rect": [
+            96,
+            131,
+            165.640625,
+            14
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "hide": {
+          "rect": [
+            325,
+            116,
+            44,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "show": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "disconnect": {
+          "rect": [
+            309,
+            53,
+            60,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "routes": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "output": {
+          "rect": [
+            24,
+            168,
+            345,
+            319
+          ],
+          "visible": true,
+          "hit": true
+        }
+      },
+      "focused": true
+    },
+    {
+      "size": [
+        393,
+        851
+      ],
+      "phase": "hidden",
+      "mode": "unchanged",
+      "display": [
+        393,
+        851
+      ],
+      "visual": 851,
+      "ime": {
+        "visible": false,
+        "height": 851,
+        "overlap": 300
+      },
+      "viewportHeight": "",
+      "viewportInset": "",
+      "controls": {
+        "title": {
+          "rect": [
+            24,
+            62.5,
+            76.5625,
+            25
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "target": {
+          "rect": [
+            96,
+            131,
+            165.640625,
+            14
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "hide": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "show": {
+          "rect": [
+            325,
+            116,
+            44,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "disconnect": {
+          "rect": [
+            309,
+            53,
+            60,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "routes": {
+          "rect": [
+            0,
+            771,
+            393,
+            80
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "output": {
+          "rect": [
+            24,
+            168,
+            345,
+            539
+          ],
+          "visible": true,
+          "hit": true
+        }
+      },
+      "focused": false
+    },
+    {
+      "size": [
+        393,
+        851
+      ],
+      "phase": "system-back",
+      "mode": "unchanged",
+      "display": [
+        393,
+        851
+      ],
+      "visual": 851,
+      "ime": {
+        "visible": false,
+        "height": 851,
+        "overlap": 0
+      },
+      "viewportHeight": "",
+      "viewportInset": "",
+      "controls": {
+        "title": {
+          "rect": [
+            24,
+            62.5,
+            76.5625,
+            25
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "target": {
+          "rect": [
+            96,
+            131,
+            165.640625,
+            14
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "hide": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "show": {
+          "rect": [
+            325,
+            116,
+            44,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "disconnect": {
+          "rect": [
+            309,
+            53,
+            60,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "routes": {
+          "rect": [
+            0,
+            771,
+            393,
+            80
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "output": {
+          "rect": [
+            24,
+            168,
+            345,
+            539
+          ],
+          "visible": true,
+          "hit": true
+        }
+      },
+      "focused": true
+    },
+    {
+      "size": [
+        393,
+        851
+      ],
+      "mode": "unchanged",
+      "peer": {
+        "connection": 2,
+        "auth": 1,
+        "pty": 1,
+        "shell": 1,
+        "inputBytes": 0,
+        "closed": true
+      }
+    },
+    {
+      "size": [
+        393,
+        851
+      ],
+      "phase": "initial",
+      "mode": "visual",
+      "display": [
+        393,
+        851
+      ],
+      "visual": 851,
+      "ime": {
+        "visible": false,
+        "height": 0,
+        "overlap": 0
+      },
+      "viewportHeight": "",
+      "viewportInset": "",
+      "controls": {
+        "title": {
+          "rect": [
+            24,
+            62.5,
+            76.5625,
+            25
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "target": {
+          "rect": [
+            96,
+            131,
+            165.640625,
+            14
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "hide": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "show": {
+          "rect": [
+            325,
+            116,
+            44,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "disconnect": {
+          "rect": [
+            309,
+            53,
+            60,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "routes": {
+          "rect": [
+            0,
+            771,
+            393,
+            80
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "output": {
+          "rect": [
+            24,
+            168,
+            345,
+            539
+          ],
+          "visible": true,
+          "hit": true
+        }
+      },
+      "focused": false
+    },
+    {
+      "size": [
+        393,
+        851
+      ],
+      "phase": "opened",
+      "mode": "visual",
+      "display": [
+        393,
+        851
+      ],
+      "visual": 551,
+      "ime": {
+        "visible": true,
+        "height": 851,
+        "overlap": 300
+      },
+      "viewportHeight": "551px",
+      "viewportInset": "300px",
+      "controls": {
+        "title": {
+          "rect": [
+            24,
+            62.5,
+            76.5625,
+            25
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "target": {
+          "rect": [
+            96,
+            131,
+            165.640625,
+            14
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "hide": {
+          "rect": [
+            325,
+            116,
+            44,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "show": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "disconnect": {
+          "rect": [
+            309,
+            53,
+            60,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "routes": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "output": {
+          "rect": [
+            24,
+            168,
+            345,
+            319
+          ],
+          "visible": true,
+          "hit": true
+        }
+      },
+      "focused": true
+    },
+    {
+      "size": [
+        393,
+        851
+      ],
+      "phase": "hidden",
+      "mode": "visual",
+      "display": [
+        393,
+        851
+      ],
+      "visual": 851,
+      "ime": {
+        "visible": false,
+        "height": 851,
+        "overlap": 300
+      },
+      "viewportHeight": "",
+      "viewportInset": "",
+      "controls": {
+        "title": {
+          "rect": [
+            24,
+            62.5,
+            76.5625,
+            25
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "target": {
+          "rect": [
+            96,
+            131,
+            165.640625,
+            14
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "hide": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "show": {
+          "rect": [
+            325,
+            116,
+            44,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "disconnect": {
+          "rect": [
+            309,
+            53,
+            60,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "routes": {
+          "rect": [
+            0,
+            771,
+            393,
+            80
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "output": {
+          "rect": [
+            24,
+            168,
+            345,
+            539
+          ],
+          "visible": true,
+          "hit": true
+        }
+      },
+      "focused": false
+    },
+    {
+      "size": [
+        393,
+        851
+      ],
+      "phase": "system-back",
+      "mode": "unchanged",
+      "display": [
+        393,
+        851
+      ],
+      "visual": 851,
+      "ime": {
+        "visible": false,
+        "height": 851,
+        "overlap": 0
+      },
+      "viewportHeight": "",
+      "viewportInset": "",
+      "controls": {
+        "title": {
+          "rect": [
+            24,
+            62.5,
+            76.5625,
+            25
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "target": {
+          "rect": [
+            96,
+            131,
+            165.640625,
+            14
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "hide": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "show": {
+          "rect": [
+            325,
+            116,
+            44,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "disconnect": {
+          "rect": [
+            309,
+            53,
+            60,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "routes": {
+          "rect": [
+            0,
+            771,
+            393,
+            80
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "output": {
+          "rect": [
+            24,
+            168,
+            345,
+            539
+          ],
+          "visible": true,
+          "hit": true
+        }
+      },
+      "focused": true
+    },
+    {
+      "size": [
+        393,
+        851
+      ],
+      "mode": "visual",
+      "peer": {
+        "connection": 2,
+        "auth": 1,
+        "pty": 1,
+        "shell": 1,
+        "inputBytes": 0,
+        "closed": true
+      }
+    },
+    {
+      "size": [
+        393,
+        851
+      ],
+      "phase": "initial",
+      "mode": "native",
+      "display": [
+        393,
+        851
+      ],
+      "visual": 851,
+      "ime": {
+        "visible": false,
+        "height": 0,
+        "overlap": 0
+      },
+      "viewportHeight": "",
+      "viewportInset": "",
+      "controls": {
+        "title": {
+          "rect": [
+            24,
+            62.5,
+            76.5625,
+            25
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "target": {
+          "rect": [
+            96,
+            131,
+            165.640625,
+            14
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "hide": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "show": {
+          "rect": [
+            325,
+            116,
+            44,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "disconnect": {
+          "rect": [
+            309,
+            53,
+            60,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "routes": {
+          "rect": [
+            0,
+            771,
+            393,
+            80
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "output": {
+          "rect": [
+            24,
+            168,
+            345,
+            539
+          ],
+          "visible": true,
+          "hit": true
+        }
+      },
+      "focused": false
+    },
+    {
+      "size": [
+        393,
+        851
+      ],
+      "phase": "opened",
+      "mode": "native",
+      "display": [
+        393,
+        551
+      ],
+      "visual": 551,
+      "ime": {
+        "visible": true,
+        "height": 551,
+        "overlap": 0
+      },
+      "viewportHeight": "551px",
+      "viewportInset": "0px",
+      "controls": {
+        "title": {
+          "rect": [
+            24,
+            62.5,
+            76.5625,
+            25
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "target": {
+          "rect": [
+            96,
+            131,
+            165.640625,
+            14
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "hide": {
+          "rect": [
+            325,
+            116,
+            44,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "show": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "disconnect": {
+          "rect": [
+            309,
+            53,
+            60,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "routes": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "output": {
+          "rect": [
+            24,
+            168,
+            345,
+            319
+          ],
+          "visible": true,
+          "hit": true
+        }
+      },
+      "focused": true
+    },
+    {
+      "size": [
+        393,
+        851
+      ],
+      "phase": "hidden",
+      "mode": "native",
+      "display": [
+        393,
+        851
+      ],
+      "visual": 551,
+      "ime": {
+        "visible": false,
+        "height": 551,
+        "overlap": 0
+      },
+      "viewportHeight": "",
+      "viewportInset": "",
+      "controls": {
+        "title": {
+          "rect": [
+            24,
+            62.5,
+            76.5625,
+            25
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "target": {
+          "rect": [
+            96,
+            131,
+            165.640625,
+            14
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "hide": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "show": {
+          "rect": [
+            325,
+            116,
+            44,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "disconnect": {
+          "rect": [
+            309,
+            53,
+            60,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "routes": {
+          "rect": [
+            0,
+            471,
+            393,
+            80
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "output": {
+          "rect": [
+            24,
+            168,
+            345,
+            239
+          ],
+          "visible": true,
+          "hit": true
+        }
+      },
+      "focused": false
+    },
+    {
+      "size": [
+        393,
+        851
+      ],
+      "phase": "system-back",
+      "mode": "unchanged",
+      "display": [
+        393,
+        851
+      ],
+      "visual": 851,
+      "ime": {
+        "visible": false,
+        "height": 851,
+        "overlap": 0
+      },
+      "viewportHeight": "",
+      "viewportInset": "",
+      "controls": {
+        "title": {
+          "rect": [
+            24,
+            62.5,
+            76.5625,
+            25
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "target": {
+          "rect": [
+            96,
+            131,
+            165.640625,
+            14
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "hide": {
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visible": false,
+          "hit": false
+        },
+        "show": {
+          "rect": [
+            325,
+            116,
+            44,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "disconnect": {
+          "rect": [
+            309,
+            53,
+            60,
+            44
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "routes": {
+          "rect": [
+            0,
+            471,
+            393,
+            80
+          ],
+          "visible": true,
+          "hit": true
+        },
+        "output": {
+          "rect": [
+            24,
+            168,
+            345,
+            239
+          ],
+          "visible": true,
+          "hit": true
+        }
+      },
+      "focused": true
+    },
+    {
+      "size": [
+        393,
+        851
+      ],
+      "mode": "native",
+      "peer": {
+        "connection": 2,
+        "auth": 1,
+        "pty": 1,
+        "shell": 1,
+        "inputBytes": 0,
+        "closed": true
+      }
+    }
+  ]
+}

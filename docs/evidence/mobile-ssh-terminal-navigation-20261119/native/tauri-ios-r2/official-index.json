@@ -1,0 +1,812 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "2bd6dc83ce3e40a6ac34232078f3214163c04bba",
+  "status": "passed",
+  "sourceResultSha256": "6577aada257517edf36a2196bfadca12759605fc177723fb9865565897769070",
+  "run": 44461266808,
+  "job": 135348341572,
+  "artifact": 14500344080,
+  "zipSha256": "6b366234ab911df4e69792b4395e97db8a1d7a5645a77eaf1e84ab8bc6856ed2",
+  "simulator": {
+    "deviceType": "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max",
+    "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-26-2"
+  },
+  "ordinary": {
+    "activeFlow": [
+      {
+        "step": "keyboard_opened",
+        "keyboardVisible": true,
+        "action": {
+          "screenFrame": [
+            0,
+            0,
+            440,
+            956
+          ],
+          "ownerResolved": true,
+          "centerVisible": true,
+          "statusBarFrames": [
+            [
+              0,
+              0,
+              440,
+              54
+            ]
+          ],
+          "enabled": true,
+          "role": "button",
+          "visibleFrame": [
+            0,
+            54,
+            440,
+            902
+          ],
+          "hittable": true,
+          "fullyVisible": true,
+          "frame": [
+            372,
+            130,
+            44,
+            44
+          ]
+        },
+        "peer": {
+          "id": 2,
+          "hostKey": "A",
+          "authAttempts": 1,
+          "authSuccesses": 1,
+          "ptyRequests": 1,
+          "shellRequests": 1,
+          "inputBytes": 0,
+          "closed": false
+        }
+      },
+      {
+        "step": "keyboard_closed",
+        "keyboardVisible": false,
+        "action": {
+          "frame": [
+            372,
+            130,
+            44,
+            44
+          ],
+          "visibleFrame": [
+            0,
+            54,
+            440,
+            601
+          ],
+          "centerVisible": true,
+          "fullyVisible": true,
+          "statusBarFrames": [
+            [
+              0,
+              0,
+              440,
+              54
+            ]
+          ],
+          "role": "button",
+          "enabled": true,
+          "ownerResolved": true,
+          "screenFrame": [
+            0,
+            0,
+            440,
+            956
+          ],
+          "hittable": true
+        },
+        "peer": {
+          "id": 2,
+          "hostKey": "A",
+          "authAttempts": 1,
+          "authSuccesses": 1,
+          "ptyRequests": 1,
+          "shellRequests": 1,
+          "inputBytes": 0,
+          "closed": false
+        }
+      },
+      {
+        "step": "board",
+        "keyboardVisible": false,
+        "action": {
+          "enabled": true,
+          "ownerResolved": true,
+          "visibleFrame": [
+            0,
+            54,
+            440,
+            902
+          ],
+          "hittable": true,
+          "fullyVisible": true,
+          "screenFrame": [
+            0,
+            0,
+            440,
+            956
+          ],
+          "frame": [
+            0,
+            770,
+            110,
+            56
+          ],
+          "statusBarFrames": [
+            [
+              0,
+              0,
+              440,
+              54
+            ]
+          ],
+          "role": "otherNative",
+          "centerVisible": true
+        },
+        "peer": {
+          "id": 2,
+          "hostKey": "A",
+          "authAttempts": 1,
+          "authSuccesses": 1,
+          "ptyRequests": 1,
+          "shellRequests": 1,
+          "inputBytes": 0,
+          "closed": false
+        }
+      },
+      {
+        "step": "terminal_from_board",
+        "keyboardVisible": false,
+        "action": {
+          "frame": [
+            110,
+            770,
+            110,
+            56
+          ],
+          "hittable": true,
+          "centerVisible": true,
+          "statusBarFrames": [
+            [
+              0,
+              0,
+              440,
+              54
+            ]
+          ],
+          "enabled": true,
+          "ownerResolved": true,
+          "screenFrame": [
+            0,
+            0,
+            440,
+            956
+          ],
+          "fullyVisible": true,
+          "role": "otherNative",
+          "visibleFrame": [
+            0,
+            54,
+            440,
+            902
+          ]
+        },
+        "peer": {
+          "id": 2,
+          "hostKey": "A",
+          "authAttempts": 1,
+          "authSuccesses": 1,
+          "ptyRequests": 1,
+          "shellRequests": 1,
+          "inputBytes": 0,
+          "closed": false
+        }
+      },
+      {
+        "step": "network",
+        "keyboardVisible": false,
+        "action": {
+          "frame": [
+            220,
+            770,
+            110,
+            56
+          ],
+          "visibleFrame": [
+            0,
+            54,
+            440,
+            902
+          ],
+          "role": "otherNative",
+          "screenFrame": [
+            0,
+            0,
+            440,
+            956
+          ],
+          "statusBarFrames": [
+            [
+              0,
+              0,
+              440,
+              54
+            ]
+          ],
+          "ownerResolved": true,
+          "fullyVisible": true,
+          "enabled": true,
+          "hittable": true,
+          "centerVisible": true
+        },
+        "peer": {
+          "id": 2,
+          "hostKey": "A",
+          "authAttempts": 1,
+          "authSuccesses": 1,
+          "ptyRequests": 1,
+          "shellRequests": 1,
+          "inputBytes": 0,
+          "closed": false
+        }
+      },
+      {
+        "step": "terminal_from_network",
+        "keyboardVisible": false,
+        "action": {
+          "ownerResolved": true,
+          "visibleFrame": [
+            0,
+            54,
+            440,
+            902
+          ],
+          "role": "otherNative",
+          "enabled": true,
+          "fullyVisible": true,
+          "centerVisible": true,
+          "screenFrame": [
+            0,
+            0,
+            440,
+            956
+          ],
+          "statusBarFrames": [
+            [
+              0,
+              0,
+              440,
+              54
+            ]
+          ],
+          "frame": [
+            115,
+            766,
+            103,
+            60
+          ],
+          "hittable": true
+        },
+        "peer": {
+          "id": 2,
+          "hostKey": "A",
+          "authAttempts": 1,
+          "authSuccesses": 1,
+          "ptyRequests": 1,
+          "shellRequests": 1,
+          "inputBytes": 0,
+          "closed": false
+        }
+      },
+      {
+        "step": "settings",
+        "keyboardVisible": false,
+        "action": {
+          "centerVisible": true,
+          "fullyVisible": true,
+          "hittable": true,
+          "frame": [
+            330,
+            770,
+            110,
+            56
+          ],
+          "role": "otherNative",
+          "visibleFrame": [
+            0,
+            54,
+            440,
+            902
+          ],
+          "screenFrame": [
+            0,
+            0,
+            440,
+            956
+          ],
+          "statusBarFrames": [
+            [
+              0,
+              0,
+              440,
+              54
+            ]
+          ],
+          "enabled": true,
+          "ownerResolved": true
+        },
+        "peer": {
+          "id": 2,
+          "hostKey": "A",
+          "authAttempts": 1,
+          "authSuccesses": 1,
+          "ptyRequests": 1,
+          "shellRequests": 1,
+          "inputBytes": 0,
+          "closed": false
+        }
+      },
+      {
+        "step": "terminal_from_settings",
+        "keyboardVisible": false,
+        "action": {
+          "ownerResolved": true,
+          "hittable": true,
+          "role": "otherNative",
+          "visibleFrame": [
+            0,
+            54,
+            440,
+            902
+          ],
+          "screenFrame": [
+            0,
+            0,
+            440,
+            956
+          ],
+          "statusBarFrames": [
+            [
+              0,
+              0,
+              440,
+              54
+            ]
+          ],
+          "enabled": true,
+          "centerVisible": true,
+          "fullyVisible": true,
+          "frame": [
+            110,
+            770,
+            110,
+            56
+          ]
+        },
+        "peer": {
+          "id": 2,
+          "hostKey": "A",
+          "authAttempts": 1,
+          "authSuccesses": 1,
+          "ptyRequests": 1,
+          "shellRequests": 1,
+          "inputBytes": 0,
+          "closed": false
+        }
+      }
+    ],
+    "connections": [
+      {
+        "id": 1,
+        "hostKey": "A",
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "markerReceived": false,
+        "singleMarkerLineExact": false,
+        "sessionClosed": false,
+        "closed": true
+      },
+      {
+        "id": 2,
+        "hostKey": "A",
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 9,
+        "outputBytes": 102,
+        "markerReceived": true,
+        "singleMarkerLineExact": true,
+        "sessionClosed": true,
+        "closed": true
+      }
+    ],
+    "explicitDisconnect": true,
+    "returnHomeCheckpoint": "ordinary_returned_home"
+  },
+  "keyChange": {
+    "connections": [
+      {
+        "id": 1,
+        "hostKey": "A",
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "markerReceived": false,
+        "singleMarkerLineExact": false,
+        "sessionClosed": false,
+        "closed": true
+      },
+      {
+        "id": 2,
+        "hostKey": "B",
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "markerReceived": false,
+        "singleMarkerLineExact": false,
+        "sessionClosed": false,
+        "closed": true
+      },
+      {
+        "id": 3,
+        "hostKey": "B",
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "markerReceived": false,
+        "singleMarkerLineExact": false,
+        "sessionClosed": false,
+        "closed": true
+      },
+      {
+        "id": 4,
+        "hostKey": "B",
+        "authAttempts": 1,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 9,
+        "outputBytes": 102,
+        "markerReceived": true,
+        "singleMarkerLineExact": true,
+        "sessionClosed": true,
+        "closed": true
+      }
+    ],
+    "cancelKeptTrust": true,
+    "freshFingerprintConfirmed": true,
+    "explicitDisconnect": true,
+    "navigationCheckpointsCaptured": false
+  },
+  "screens": {
+    "ordinary": {
+      "imageFile": "ordinary-terminal.png",
+      "imageSha256": "58dc11f01425b956485067cb1de2c8f8eca0d4d4418ad9b706913216611150ea",
+      "terminalBounds": [
+        75,
+        549,
+        1170,
+        1566
+      ],
+      "targetBounds": [
+        288,
+        432,
+        513,
+        45
+      ],
+      "nativeScale": 3.0,
+      "nativeOwner": {
+        "webWrapperCount": 3,
+        "webFrames": [
+          [
+            0,
+            0,
+            440,
+            956
+          ],
+          [
+            0,
+            0,
+            440,
+            956
+          ],
+          [
+            0,
+            0,
+            440,
+            956
+          ]
+        ],
+        "windowFrame": [
+          0,
+          0,
+          440,
+          956
+        ],
+        "uniqueWebBoundsCount": 1
+      },
+      "activeHeaderBounds": {
+        "titleFrame": [
+          24,
+          77,
+          77,
+          24
+        ],
+        "statusBarFrames": [
+          [
+            0,
+            0,
+            440,
+            54
+          ]
+        ],
+        "disconnectHittable": true,
+        "disconnectFrame": [
+          356,
+          67,
+          60,
+          44
+        ],
+        "sameOwner": true
+      },
+      "boundSource": "terminal_control_bounds",
+      "controlBounds": {
+        "keyboardFrame": [
+          372,
+          130,
+          44,
+          44
+        ],
+        "helperFrames": [
+          [
+            24,
+            714,
+            44,
+            44
+          ],
+          [
+            72,
+            714,
+            44,
+            44
+          ],
+          [
+            120,
+            714,
+            44,
+            44
+          ],
+          [
+            168,
+            714,
+            44,
+            44
+          ]
+        ],
+        "sameOwner": true
+      },
+      "candidateTerminalBounds": [
+        0,
+        522,
+        1320,
+        1620
+      ],
+      "targetVisible": true,
+      "expectedTarget": "fixture@127.0.0.1:50058",
+      "systemCapture": "XCUIScreen.main",
+      "noCredentialsVisible": true,
+      "schemaVersion": 1,
+      "imageSize": [
+        1320,
+        2868
+      ],
+      "expectedMarker": "POCKET-ANDROID-SSH-OK",
+      "expectedToken": "PATH HEAT FARM HARD ARCH PAST HEAT PART",
+      "markerVisible": true,
+      "tokenVisible": true,
+      "ocrEngine": "tesseract 5.5.4",
+      "ocrAttempts": 1,
+      "ocrPageSegmentationMode": 6,
+      "proofSequenceVisible": true,
+      "criteriaFile": "ordinary-terminal-ocr.json",
+      "criteriaSha256": "7a4c954e60802b49b4f2de6434e1d3eee6fdb22c9011d7554487f348ede8b974",
+      "archiveSha256": "2af4048866c8fa556ec0268c410dd0870d63d3b5ea9a2ed383d2604ebb52e73c",
+      "pixelSha256": "ba9c850d92391171289fe0e3c63b855212d442f3948b568b72c7917171e08eb5",
+      "removedChunks": [
+        "eXIf",
+        "iTXt"
+      ],
+      "framebufferPixels": [
+        1320,
+        2868
+      ],
+      "previousArchive": "../../../mobile-ssh-auth-r23/tauri-ios-r7/ordinary-terminal.png",
+      "previousArchiveSha256": "be53ab54c18f754033bf65f92706bc03dedf8c974b0c627e33982196e5af9741"
+    },
+    "keyChange": {
+      "imageFile": "key-change-terminal.png",
+      "imageSha256": "9288a8176b1a0a98df649f2258dc27f09d7f1b551555fec779d209b4309d8762",
+      "terminalBounds": [
+        75,
+        549,
+        1170,
+        1566
+      ],
+      "targetBounds": [
+        288,
+        432,
+        513,
+        45
+      ],
+      "nativeScale": 3.0,
+      "nativeOwner": {
+        "webWrapperCount": 3,
+        "windowFrame": [
+          0,
+          0,
+          440,
+          956
+        ],
+        "webFrames": [
+          [
+            0,
+            0,
+            440,
+            956
+          ],
+          [
+            0,
+            0,
+            440,
+            956
+          ],
+          [
+            0,
+            0,
+            440,
+            956
+          ]
+        ],
+        "uniqueWebBoundsCount": 1
+      },
+      "activeHeaderBounds": {
+        "titleFrame": [
+          24,
+          77,
+          77,
+          24
+        ],
+        "statusBarFrames": [
+          [
+            0,
+            0,
+            440,
+            54
+          ]
+        ],
+        "sameOwner": true,
+        "disconnectHittable": true,
+        "disconnectFrame": [
+          356,
+          67,
+          60,
+          44
+        ]
+      },
+      "boundSource": "terminal_control_bounds",
+      "controlBounds": {
+        "keyboardFrame": [
+          372,
+          130,
+          44,
+          44
+        ],
+        "helperFrames": [
+          [
+            24,
+            714,
+            44,
+            44
+          ],
+          [
+            72,
+            714,
+            44,
+            44
+          ],
+          [
+            120,
+            714,
+            44,
+            44
+          ],
+          [
+            168,
+            714,
+            44,
+            44
+          ]
+        ],
+        "sameOwner": true
+      },
+      "candidateTerminalBounds": [
+        0,
+        522,
+        1320,
+        1620
+      ],
+      "targetVisible": true,
+      "expectedTarget": "fixture@127.0.0.1:50060",
+      "systemCapture": "XCUIScreen.main",
+      "noCredentialsVisible": true,
+      "schemaVersion": 1,
+      "imageSize": [
+        1320,
+        2868
+      ],
+      "expectedMarker": "POCKET-ANDROID-SSH-OK",
+      "expectedToken": "FACT LAST LAST HARP BARN LEAF SALT FAST",
+      "markerVisible": true,
+      "tokenVisible": true,
+      "ocrEngine": "tesseract 5.5.4",
+      "ocrAttempts": 1,
+      "ocrPageSegmentationMode": 6,
+      "proofSequenceVisible": true,
+      "criteriaFile": "key-change-terminal-ocr.json",
+      "criteriaSha256": "dd4ea495139b25e7130de77ced1ec0e9c7cffb0f65e6d140f498cba5fd5d50ac",
+      "archiveSha256": "04057b75c02261da84e1662d671380e709d4c142e1d8d2932e80ba641f3bc7df",
+      "pixelSha256": "ab0ae70ba6d631f713070f12890d4666896985b22a055f50df88bc30907f6afb",
+      "removedChunks": [
+        "eXIf",
+        "iTXt"
+      ],
+      "framebufferPixels": [
+        1320,
+        2868
+      ],
+      "previousArchive": "../../../mobile-ssh-auth-r23/tauri-ios-r7/key-change-terminal.png",
+      "previousArchiveSha256": "1ef59e65d4c1eda1391745734dd964180487d7f241b55abde627ec4c265c526a"
+    }
+  },
+  "cleanup": {
+    "simulatorDeleted": true,
+    "fixturesClosed": true,
+    "privateFilesRemoved": true
+  },
+  "scope": "iPhone 模拟器、自有回环密码认证、XCTest 输入和系统键盘开合",
+  "previousComparison": {
+    "sourceSHA": "1c441c0cae12ccb00cea64dc9db09b0949626b39",
+    "run": 44450826220,
+    "sameSimulatorModelAndRuntime": true,
+    "keyboardNotVisibleInAllFourFrames": true,
+    "framebufferPixels": [
+      1320,
+      2868
+    ],
+    "acceptance": "同状态目视比较"
+  },
+  "unverified": [
+    "原生 2 pt 逐锚比较",
+    "系统 IME 组词",
+    "Tauri iOS 私钥认证",
+    "实体设备",
+    "真实跨网"
+  ]
+}

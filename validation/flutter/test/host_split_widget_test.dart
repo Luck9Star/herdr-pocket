@@ -29,8 +29,29 @@ class SplitAdapter extends TabFixtureAdapter {
   }
 }
 
+bool focusedWithin(WidgetTester tester, Finder finder) {
+  final element = tester.element(finder);
+  final focused = FocusManager.instance.primaryFocus?.context;
+  if (identical(focused, element)) return true;
+  var within = false;
+  focused?.visitAncestorElements((ancestor) {
+    within = identical(ancestor, element);
+    return !within;
+  });
+  return within;
+}
+
+Future<void> tabTo(WidgetTester tester, Finder finder) async {
+  for (var index = 0; index < 100; index++) {
+    if (focusedWithin(tester, finder)) return;
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+  }
+  expect(focusedWithin(tester, finder), isTrue, reason: 'Tab must reach $finder');
+}
+
 void main() {
-  testWidgets('two saved targets observe independently; focus and narrow layout revoke only the other side', (tester) async {
+  testWidgets('D2 keeps the focused target and restores the original split after a width change', (tester) async {
     tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(1440, 900);
     addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);
     final catalog = HostCatalog(storage: MemoryCatalogStorage(), clock: () => 1000); await catalog.load();
@@ -54,11 +75,12 @@ void main() {
       home: HostCatalogPage(tokens: tokens, catalog: catalog, tabs: tabs,
       keys: keys, adapterFactory: (p) => adapters[p.id] = SplitAdapter(), offlineBuilder: (_) => const SizedBox()))));
     Future<void> capture(String name) async {
-      if (!Platform.environment.containsKey('HERDR_SPLIT_CAPTURE')) return;
+      final directory = Platform.environment['HERDR_SPLIT_CAPTURE'];
+      if (directory == null) return;
       final boundary=tester.renderObject<RenderRepaintBoundary>(find.byKey(const ValueKey('split-capture')));
       await tester.runAsync(() async { final image=await boundary.toImage(pixelRatio: 1);
         final bytes=await image.toByteData(format: ui.ImageByteFormat.png);
-        File('/tmp/herdr-s06-$name.png').writeAsBytesSync(bytes!.buffer.asUint8List()); image.dispose(); });
+        File('$directory/herdr-s06-$name.png').writeAsBytesSync(bytes!.buffer.asUint8List()); image.dispose(); });
     }
     await tester.pumpAndSettle();
     await tapVisible(tester, 'host-open-${a.id}'); await tester.pumpAndSettle();
@@ -112,17 +134,23 @@ void main() {
     aTerminal.textInput('A'); await tester.pump(); await tester.pump();
     expect(aAdapter.writes, ['probeA:A']); expect(bAdapter.writes, ['probeB:B']);
     expect(aAdapter.pauses, 1); expect(bAdapter.pauses, 0);
-    final bFocus = find.byKey(ValueKey('workspace-focus-$bId'));
-    final focusChild = find.descendant(of: bFocus, matching: find.byType(Text)).first;
-    Focus.of(tester.element(focusChild)).requestFocus(); await tester.pump();
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter); await tester.pump();
-    expect(tabs.activeId, bId);
-    aTerminal.textInput('late'); await tester.pump();
-    expect(aAdapter.writes, ['probeA:A']); expect(bAdapter.writes, ['probeB:B']);
-    await tester.tap(aFocus); await tester.pump();
+    final aObserve = find.descendant(of: aView, matching: find.byKey(const ValueKey('remote-mode-observe')));
+    await tester.ensureVisible(aObserve); await tester.tap(aObserve); await tester.pump();
+    final wideLeft = tester.getRect(bView).left;
+    final wideRight = tester.getRect(aView).left;
+    expect(wideLeft, lessThan(wideRight));
+    final stashed = find.byKey(const ValueKey('workspace-split-stashed'));
+    tester.view.physicalSize = const Size(1184, 900); await tester.pumpAndSettle();
+    expect(aVisibleTerminal, findsOneWidget); expect(bVisibleTerminal, findsOneWidget);
+    expect(find.byKey(ValueKey('host-split-$bId')).hitTestable(), findsOneWidget);
+    tester.view.physicalSize = const Size(1183, 900); await tester.pumpAndSettle();
+    final criticalSidebarAllowsSplit = find.byKey(ValueKey('host-split-$bId')).evaluate().isNotEmpty;
+    final criticalStashed = stashed.evaluate().isNotEmpty;
+    await capture('critical');
     tester.view.physicalSize = const Size(700, 900); await tester.pump(); await tester.pump();
     await capture('narrow');
-    expect(tabs.activeId, aId); expect(tabs.splitId, isNull);
+    final narrowStashed = stashed.evaluate().isNotEmpty;
+    expect(tabs.activeId, aId);
     expect(tabs.find(aId)!.visible.value, isTrue); expect(tabs.find(bId)!.visible.value, isFalse);
     final retained=find.descendant(of: find.byKey(ValueKey('host-tab-view-$aId')), matching: find.byType(TerminalView));
     expect(retained, findsOneWidget);
@@ -131,6 +159,117 @@ void main() {
     expect(aAdapter.config.observationCols, 80); expect(aAdapter.config.observationRows, 24);
     expect(bAdapter.config.observationCols, 80); expect(bAdapter.config.observationRows, 24);
     expect(aAdapter.calls, 1); expect(bAdapter.calls, 1);
+    tester.view.physicalSize = const Size(1440, 900); await tester.pumpAndSettle();
+    await capture('restored');
+    expect(
+      (criticalSidebarAllowsSplit, bVisibleTerminal.evaluate().isNotEmpty),
+      (false, true),
+      reason: '1183 cannot offer split; 1440 must restore the previous second pane',
+    );
+    expect(tester.getRect(bView).left, wideLeft);
+    expect(tester.getRect(aView).left, wideRight);
+    expect(criticalStashed, isTrue);
+    expect(narrowStashed, isTrue);
+    expect(stashed, findsNothing);
+    expect(tabs.activeId, aId);
+    expect(tabs.find(aId)!.inputEligible.value, isTrue);
+    expect(tabs.find(bId)!.inputEligible.value, isFalse);
+    expect(tester.widget<TerminalView>(bVisibleTerminal).terminal, same(bTerminal));
+    // Re-widening auto-resumes the layout-stashed side pane exactly once (D2);
+    // the pause confirmation from narrowing may still be settling (late pause).
+    expect(bAdapter.resumes, 1);
+    expect(bAdapter.calls, 1);
+    expect(bTerminal.viewWidth, 80);
+    expect(bTerminal.viewHeight, 24);
+    final bFocus = find.byKey(ValueKey('workspace-focus-$bId'));
+    expect(find.descendant(of: bFocus, matching: find.text('B · 已暂停')), findsNothing);
+    expect(find.descendant(of: bView, matching: find.byKey(const ValueKey('remote-resume'))), findsNothing);
+    await tabTo(tester, bFocus);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pump();
+    expect(focusedWithin(tester, bFocus), isFalse);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab); await tester.pump();
+    expect(focusedWithin(tester, bFocus), isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter); await tester.pump();
+    expect(tabs.activeId, bId);
+    aTerminal.textInput('late'); await tester.pump();
+    bTerminal.textInput('no automatic input'); await tester.pump();
+    expect(aAdapter.writes, ['probeA:A']); expect(bAdapter.writes, ['probeB:B']);
+
+    // The auto-resume waits for a fresh full frame of the same target: a late
+    // frame from the pre-pause generation is refused like the stale full.
+    final bOldGeneration = bAdapter.generation - 1;
+    bAdapter.frame!(bOldGeneration, 'w1:p1', const RemoteFrame(0, true, 'STALE GENERATION FULL'));
+    await tester.pump();
+    expect(tester.widget<TerminalView>(bVisibleTerminal).terminal, same(bTerminal));
+    bAdapter.frame!(bAdapter.generation, 'w1:p1', const RemoteFrame(0, true, 'OLD FULL'));
+    await tester.pump();
+    expect(tester.widget<TerminalView>(bVisibleTerminal).terminal, same(bTerminal));
+    bAdapter.frame!(bAdapter.generation, 'w1:p1', const RemoteFrame(0, true, 'B RESUMED', observationEpoch: 1));
+    await tester.pump();
+    final bResumed = tester.widget<TerminalView>(bVisibleTerminal).terminal;
+    expect(bResumed.buffer.lines[0].getCodePoint(0), 'B'.codeUnitAt(0));
+    expect(bResumed, isNot(same(bTerminal)));
+    await tester.ensureVisible(bDirect);
+    await tester.tap(bDirect);
+    await tester.pumpAndSettle();
+    final directFocus = tester.widget<TerminalView>(bVisibleTerminal).focusNode;
+    expect(FocusManager.instance.primaryFocus, same(directFocus));
+
+    // The active terminal was explicitly put into direct mode before resizing.
+    // Preserve its actual focus while taking the other side out of traversal.
+    tester.view.physicalSize = const Size(700, 900); await tester.pumpAndSettle();
+    expect(aVisibleTerminal, findsNothing);
+    expect(FocusManager.instance.primaryFocus, same(directFocus));
+    tester.view.physicalSize = const Size(1440, 900); await tester.pumpAndSettle();
+    expect(FocusManager.instance.primaryFocus, same(directFocus));
+    expect(aVisibleTerminal, findsOneWidget);
+    // A became the stashed side pane at 700; re-widening auto-resumes it too.
+    expect(aAdapter.resumes, 2);
+    expect((bResumed.viewWidth, bResumed.viewHeight), (80, 24));
+    expect(tester.widget<TerminalView>(bVisibleTerminal).autoResize, isFalse);
+    expect(aAdapter.writes, ['probeA:A']); expect(bAdapter.writes, ['probeB:B']);
+
+    tester.view.physicalSize = const Size(700, 900); await tester.pumpAndSettle();
+    await tapVisible(tester, 'workspace-close-split');
+    expect(stashed, findsNothing);
+    tester.view.physicalSize = const Size(1440, 900); await tester.pumpAndSettle();
+    expect(aVisibleTerminal, findsNothing);
+    expect(bVisibleTerminal, findsOneWidget);
+    expect(tabs.activeId, bId);
+    expect(aAdapter.calls, 1); expect(bAdapter.calls, 1);
+    expect(aAdapter.writes, ['probeA:A']); expect(bAdapter.writes, ['probeB:B']);
+    // Manually paused panes stay manual: revealing A via its tab after
+    // closeSplit must not auto-resume; the review button still works.
+    expect(aAdapter.resumes, 2);
+    // Direct-mode terminal holds keyboard traversal; drive the same tab-bar
+    // select() the button performs (its keyboard path is covered above).
+    tabs.select(aId); await tester.pumpAndSettle();
+    expect(tabs.activeId, aId);
+    expect(aAdapter.resumes, 2);
+    final resumeA2 = find.descendant(of: aView, matching: find.byKey(const ValueKey('remote-resume')));
+    await tester.ensureVisible(resumeA2); await tester.tap(resumeA2); await tester.pump();
+    expect(aAdapter.resumes, 3);
+    // Reviewer counterexample: a manually-paused side pane must not gain
+    // auto-resume eligibility from a fresh narrow/widen cycle (D2).
+    await tapVisible(tester, 'host-split-$bId'); await tester.pumpAndSettle();
+    expect(tabs.splitId, bId);
+    tester.view.physicalSize = const Size(700, 900); await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(1440, 900); await tester.pumpAndSettle();
+    expect(bAdapter.resumes, 1); // narrow/widen alone grants nothing
+    final resumeB2 = find.descendant(of: bView, matching: find.byKey(const ValueKey('remote-resume')));
+    await tester.ensureVisible(resumeB2); await tester.tap(resumeB2); await tester.pump();
+    expect(bAdapter.resumes, 2); // manual entry still works
+    // Second reviewer case: a pane that resumed and is still waiting for its
+    // new full (live=false) must not lose layout eligibility. A second full
+    // round-trip with no frame delivered still auto-resumes the same target.
+    tester.view.physicalSize = const Size(700, 900); await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(1440, 900); await tester.pumpAndSettle();
+    expect(bAdapter.resumes, 3); // auto-resume on the final widen, same target
+    expect(bAdapter.writes, ['probeB:B']); // zero remote input added
+    expect(bAdapter.calls, 1); // no reconnect
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox()); tabs.dispose(); catalog.dispose();
   });

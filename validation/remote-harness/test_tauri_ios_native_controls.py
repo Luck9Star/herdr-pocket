@@ -102,6 +102,70 @@ let unrelated = hits("Status AQAB", short, .outsideEditor)
 precondition(!unrelated.header.contains(true) && !unrelated.body.contains(true), "common short strings are not key evidence")
 ''')
 
+    def test_manual_shortcut_requires_the_active_empty_card_and_excludes_add_choice(self):
+        self.compile_and_run(r'''
+import Foundation
+import CoreGraphics
+typealias Fact = NativeControlPolicy.Fact
+let brand = Fact(identifier: "", label: "Herdr Pocket", role: "staticText", value: nil)
+let title = Fact(identifier: "", label: "还没有主机", role: "staticText", value: nil)
+let hint = Fact(identifier: "", label: "添加主机后，在这里查看会话和任务状态。", role: "staticText", value: nil)
+let add = Fact(identifier: "host-empty-add", label: "添加主机", role: "button", value: nil)
+let fallback = Fact(identifier: "", label: "普通 SSH 终端", role: "button", value: nil)
+let explicit = Fact(identifier: "home-open-ssh", label: fallback.label, role: "button", value: nil)
+let wrong = Fact(identifier: "add-ssh", label: fallback.label, role: "button", value: nil)
+let addDetail = Fact(identifier: "", label: "使用服务器密码或已有私钥打开远程 Shell。", role: "staticText", value: nil)
+let window = [0], web = [0, 1, 2], card = web + [3]
+let paths = [web + [1], card + [1], card + [2], card + [4], card + [3]]
+let frames = [CGRect(x: 40, y: 100, width: 120, height: 30), CGRect(x: 40, y: 180, width: 100, height: 20),
+              CGRect(x: 40, y: 210, width: 330, height: 20), CGRect(x: 40, y: 322, width: 360, height: 48),
+              CGRect(x: 40, y: 262, width: 360, height: 48)]
+func selected(_ item: Fact = fallback, paths route: [[Int]] = paths, geometry: [CGRect] = frames,
+              extra: Fact? = nil, extraFrame: CGRect = .zero) -> Int? {
+    var facts = [brand, title, hint, item, add]
+    var allPaths = route, allFrames = geometry
+    var owners = Array(repeating: window, count: 5), webs = Array(repeating: web, count: 5)
+    if let extra {
+        facts.append(extra)
+        allPaths.append([1, 0, 0])
+        allFrames.append(extraFrame)
+        owners.append([1])
+        webs.append([1, 0])
+    }
+    return NativeControlPolicy.compactHomeShortcut(facts, paths: allPaths, windows: owners, webs: webs,
+                                                  frames: allFrames, card: [0, 1, 2, 3, 4])
+}
+precondition(selected() == 3 && selected(explicit) == 3)
+precondition(selected(wrong) == nil)
+precondition(selected(extra: wrong) == 3)
+precondition(selected(extra: wrong, extraFrame: frames[3]) == nil)
+precondition(selected(extra: fallback, extraFrame: frames[3]) == nil)
+precondition(selected(extra: addDetail, extraFrame: frames[2]) == nil)
+var offCard = paths
+offCard[3] = web + [9, 2]
+precondition(selected(paths: offCard) == nil)
+var wrongOrder = paths
+wrongOrder.swapAt(3, 4)
+precondition(selected(paths: wrongOrder) == nil)
+var misplaced = frames
+misplaced[3] = frames[3].offsetBy(dx: 3, dy: 0)
+precondition(selected(geometry: misplaced) == nil)
+misplaced[3] = frames[3].offsetBy(dx: 0, dy: 25)
+precondition(selected(geometry: misplaced) == nil)
+let geometry: [String: Any] = ["role": "button", "enabled": true, "hittable": true, "ownerResolved": true,
+    "fullyVisible": true, "frame": [40.0, 322.0, 360.0, 48.0]]
+precondition(NativeHomeReadiness.compactEntryReady(geometry, witnessed: frames[3]))
+for flag in ["enabled", "hittable", "ownerResolved", "fullyVisible"] {
+    var blocked = geometry
+    blocked[flag] = false
+    precondition(!NativeHomeReadiness.compactEntryReady(blocked, witnessed: frames[3]))
+}
+var undersized = geometry
+undersized["frame"] = [40.0, 322.0, 360.0, 47.0]
+precondition(!NativeHomeReadiness.compactEntryReady(undersized, witnessed: frames[3]))
+precondition(!NativeHomeReadiness.compactEntryReady(geometry, witnessed: frames[3].insetBy(dx: 0, dy: 1)))
+''')
+
     def test_production_home_wait_separates_slow_initialization_from_unsafe_navigation(self):
         # Exercise the production launch methods with deterministic XCTest
         # observations and an injectable clock for the cold-start deadline.
@@ -121,8 +185,8 @@ final class Launch {
     var wakes: [(Bool, TimeInterval)]
     var unidentifiedOverrides: [String: Any] = [:]
     var compact = false
-    var compactAddHeights: [(witnessed: Double, live: Double)] = []
-    var compactAddArrival = "addChoice"
+    var manualHomeCardWithoutShortcut = false
+    var shortcutArrival = "sshForm"
     var waits: [TimeInterval] = []
     var clicks: [String] = []
     var posts: [(String, [String: Any])] = []
@@ -153,6 +217,7 @@ final class Adapter {
     let launch: Launch
     var app: App { App(staticTexts: Query(launch: launch)) }
     var lastHomeSample: [String: Any]?
+    var manualHomeCardSeen = false
     var nativePhase = "ordinary_open_add"
     init(_ launch: Launch) { self.launch = launch }
     func navigationState(publish: Bool = true) throws -> [String: Any] {
@@ -160,6 +225,7 @@ final class Adapter {
         launch.sampled += 1
         let (state, delay) = launch.snapshots.count == 1 ? launch.snapshots[0] : launch.snapshots.removeFirst()
         Clock.time += delay
+        manualHomeCardSeen = nativePhase == "encrypted_key_open_add" && state == .shell && launch.manualHomeCardWithoutShortcut
         if state == .unidentifiedStartup {
             let members = ["brand", "headerAdd", "emptyAdd", "homeHeading", "emptyHeading", "zeroHosts",
                            "ordinaryShortcut", "addHeading", "sshOption"]
@@ -179,14 +245,6 @@ final class Adapter {
                 "noKnownErrors": state != .loading && state != .error, "credentialsEmpty": true,
                 "windowCount": 1, "webViewCount": 3, "inputCount": 0, "compactEmptyHome": launch.compact && state == .ready]
     }
-    func currentCompactAddReady() throws -> Bool {
-        precondition(launch.clicks.isEmpty)
-        let heights = launch.compactAddHeights.count == 1 ? launch.compactAddHeights[0] : launch.compactAddHeights.removeFirst()
-        let frame = CGRect(x: 12, y: 165, width: 310, height: heights.witnessed)
-        let geometry: [String: Any] = ["role": "button", "enabled": true, "hittable": true, "ownerResolved": true,
-            "fullyVisible": true, "frame": [8.0, 217.0, 300.0, heights.live]]
-        return NativeHomeReadiness.compactAddReady(geometry, witnessed: frame)
-    }
     func require(_ condition: Bool, _ code: String) throws {
         if !condition { throw Rejected(code: code) }
     }
@@ -194,8 +252,10 @@ final class Adapter {
     func navigate(_ member: String, compactRoute: Bool) throws -> (String, String, String) {
         precondition(lastHomeSample?["knownEmptyHome"] as? Bool == true)
         precondition(compactRoute == launch.compact)
+        if member == "ordinaryShortcut", launch.shortcutArrival == "missing" { return ("missing", "uniqueLabel", "otherNative") }
         launch.clicks.append(member)
-        if compactRoute && member == "emptyAdd" { return (launch.compactAddArrival, "buttonRole", "button") }
+        if member == "ordinaryShortcut" { return (launch.shortcutArrival, "buttonRole", "button") }
+        if compactRoute && member == "emptyAdd" { return ("addChoice", "buttonRole", "button") }
         return ("sshForm", "buttonRole", "button")
     }
     func phase(_ name: String) throws { nativePhase = "ordinary_" + name }
@@ -204,14 +264,14 @@ final class Adapter {
             "func awaitEmptyHome()", "func openHomeSSH()")) + r'''
 }
 func verify(_ launch: Launch, _ outcome: String, _ failure: String? = nil, states: [String],
-            manualKey: Bool = false) -> [String: Any] {
+            manualKey: Bool = false, clicks: [String]? = nil) -> [String: Any] {
     Clock.time = 0
     var caught: String?
     let adapter = Adapter(launch)
     if manualKey { adapter.nativePhase = "encrypted_key_open_add" }
     do { try adapter.run() } catch let rejection as Rejected { caught = rejection.code } catch { fatalError() }
     precondition(caught == failure)
-    precondition(launch.clicks == (failure == nil ? (launch.compact ? ["emptyAdd", "sshChoice"] : ["headerAdd"]) : []))
+    precondition(launch.clicks == (clicks ?? (failure == nil ? (launch.compact ? ["emptyAdd", "sshChoice"] : ["headerAdd"]) : [])))
     precondition(launch.posts.map { $0.0 } == (failure == nil ? ["native_home", "native_home_entry"] : ["native_home"]))
     let trace = launch.posts[0].1["readiness"] as! [String: Any]
     precondition(trace["outcome"] as? String == outcome && trace["strictSamples"] as? Int == launch.sampled)
@@ -243,28 +303,29 @@ precondition(recovers.sampled == 2 && recovers.waits == [4] && (recovered["elaps
 let compact = Launch([(.ready, 0.25)])
 compact.compact = true
 _ = verify(compact, "ready", states: ["ready"])
-let compactPendingThenReady = Launch([(.ready, 0)], wakes: [(true, 0.3)])
-compactPendingThenReady.compact = true
-compactPendingThenReady.compactAddHeights = [(22, 22), (48, 48)]
-_ = verify(compactPendingThenReady, "ready", states: ["compact_add_pending", "ready"], manualKey: true)
-precondition(compactPendingThenReady.sampled == 2 && compactPendingThenReady.clicks.filter { $0 == "emptyAdd" }.count == 1)
-for heights: (Double, Double) in [(22, 22), (48, 22), (22, 48)] {
-    let undersized = Launch([(.ready, 0)])
-    undersized.compact = true
-    undersized.compactAddHeights = [heights]
-    let result = verify(undersized, "compact_add_pending", "native_encrypted_key_empty_add_unproven",
-                        states: ["compact_add_pending"], manualKey: true)
-    precondition(result["elapsedMs"] as? Int == 35000 && undersized.clicks.isEmpty)
+let shortcut = Launch([(.ready, 0)])
+shortcut.compact = true
+_ = verify(shortcut, "ready", states: ["ready"], manualKey: true, clicks: ["ordinaryShortcut"])
+let entry = shortcut.posts.last!.1
+precondition(entry["member"] as? String == "ordinaryShortcut" && entry["route"] as? String == "directSSH" &&
+             entry["enteredAddPage"] as? Bool == false)
+let noCompactHome = Launch([(.ready, 0)])
+_ = verify(noCompactHome, "ready", "native_encrypted_key_home_shortcut_unproven", states: ["ready"], manualKey: true)
+let mixedShortcut = Launch([(.shell, 0), (.ready, 0)])
+mixedShortcut.manualHomeCardWithoutShortcut = true
+_ = verify(mixedShortcut, "shell", "native_encrypted_key_home_shortcut_unproven", states: ["shell"], manualKey: true)
+precondition(mixedShortcut.sampled == 1 && mixedShortcut.waits.isEmpty)
+let noOwner = Launch([(.ready, 0)])
+noOwner.compact = true
+noOwner.shortcutArrival = "missing"
+_ = verify(noOwner, "ready", "native_encrypted_key_home_shortcut_unproven", states: ["ready"], manualKey: true)
+for wrongArrival in ["emptyHome", "addChoice", "unexpected"] {
+    let missedTap = Launch([(.ready, 0)])
+    missedTap.compact = true
+    missedTap.shortcutArrival = wrongArrival
+    _ = verify(missedTap, "ready", "native_encrypted_key_home_shortcut_no_progress", states: ["ready"],
+               manualKey: true, clicks: ["ordinaryShortcut"])
 }
-let missedTap = Launch([(.ready, 0)])
-missedTap.compact = true
-missedTap.compactAddHeights = [(48, 48)]
-missedTap.compactAddArrival = "emptyHome"
-let manual = Adapter(missedTap)
-manual.nativePhase = "encrypted_key_open_add"
-do { try manual.run(); fatalError("no progress must fail") }
-catch let error as Rejected { precondition(error.code == "native_home_navigation_failed") }
-precondition(missedTap.clicks == ["emptyAdd"])
 let persistent = Launch([(.unidentifiedStartup, 0.317)])
 _ = verify(persistent, "unexpected", "native_home_identity_unproven", states: ["unidentified_startup", "unexpected"])
 precondition(persistent.sampled == 2 && persistent.waits == [4])

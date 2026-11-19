@@ -107,7 +107,8 @@ NATIVE_FAILURES = frozenset((
     'native_mobile_submit_owner_unproven', 'native_mobile_return_owner_unproven',
     'native_encrypted_key_owner_unproven', 'native_encrypted_key_method_unproven',
     'native_encrypted_key_entry_unproven', 'native_encrypted_key_rejection_unproven',
-    'native_encrypted_key_credentials_retained', 'native_encrypted_key_empty_add_unproven')) | MOBILE_PASSWORD_FAILURES | ENCRYPTED_AUTH_FAILURES
+    'native_encrypted_key_credentials_retained', 'native_encrypted_key_empty_add_unproven',
+    'native_encrypted_key_home_shortcut_unproven', 'native_encrypted_key_home_shortcut_no_progress')) | MOBILE_PASSWORD_FAILURES | ENCRYPTED_AUTH_FAILURES
 HOME_MEMBERS = frozenset(('brand', 'headerAdd', 'emptyAdd', 'homeHeading', 'emptyHeading',
                          'zeroHosts', 'ordinaryShortcut', 'addHeading', 'sshOption'))
 COMPACT_HOME_MEMBERS = {'emptyDescription', 'compactShortcut'}
@@ -1197,12 +1198,16 @@ class Checkpoints:
                 scenarios = {'encrypted_key': ('encryptedKey', self.encrypted, 'encrypted_key_probe')}
             scenario = next((name for name in scenarios if phase in (name + '_open_add', name + '_open_ssh')), None)
             require(self.failure is None and scenario is not None, 'tauri_ios_home_diagnostic_phase_invalid')
+            manual_shortcut = scenario == 'encrypted_key'
+            if manual_shortcut:
+                require(phase == 'encrypted_key_open_add' and stage != 'native_navigation_arrival',
+                        'tauri_ios_home_diagnostic_phase_invalid')
             key, fixture, next_stage = scenarios[scenario]
             require(self.index == self.stages.index(next_stage), 'tauri_ios_home_diagnostic_phase_invalid')
             require(fixture is None or fixture.snapshot()['connections'] == 0, 'tauri_ios_navigation_after_ssh')
             readiness = self.result.get('homeReadiness', {})
-            if stage != 'native_home' and key in readiness:
-                require(readiness[key]['outcome'] == 'ready', 'tauri_ios_home_retry_unsafe')
+            if stage != 'native_home' and (manual_shortcut or key in readiness):
+                require(readiness.get(key, {}).get('outcome') == 'ready', 'tauri_ios_home_retry_unsafe')
             if stage == 'native_home':
                 home = public_home_diagnostic(payload.get('home'))
                 if 'readiness' in payload:
@@ -1262,7 +1267,19 @@ class Checkpoints:
                         'tauri_ios_navigation_replay_rejected')
                 expected = 'addChoice' if payload['member'] == 'sshChoice' else 'emptyHome'
                 require(before['page'] == expected, 'tauri_ios_home_retry_unsafe')
-                if before.get('compactEmptyHome'):
+                if manual_shortcut:
+                    require(not trace, 'tauri_ios_navigation_replay_rejected')
+                    require(before.get('compactEmptyHome') is True and not before['addTitleSeen']
+                            and not before['formByStructure'] and payload['member'] == 'ordinaryShortcut'
+                            and payload['selection'] in ('buttonRole', 'uniqueIdentifier') and geometry['role'] == 'button'
+                            and payload['performed'] and geometry['fullyVisible'] and geometry['frame'][3] >= 48
+                            and binding is not None and binding['witnessFrame'] is not None
+                            and binding['witnessFrame'] == binding['liveFrame'] == binding['ownerFrame']
+                            and all(abs(a - b) <= 0.5 for a, b in zip(binding['liveFrame'], geometry['frame']))
+                            and binding['windowFrame'] is not None and binding['webFrames']
+                            and all(frame is not None for frame in binding['webFrames']),
+                            'tauri_ios_home_retry_unsafe')
+                elif before.get('compactEmptyHome'):
                     require(payload['member'] == 'emptyAdd' and geometry['role'] == 'button',
                             'tauri_ios_home_retry_unsafe')
                 if trace and trace[0]['before'].get('compactEmptyHome'):
@@ -1298,7 +1315,15 @@ class Checkpoints:
                 trace = self.result.get('navigationTrace', {}).get(key, [])
                 arrival = self.result.get('navigationArrivals', {}).get(key)
                 final_state = arrival['state'] if arrival else (trace[-1]['after'] if trace else {})
-                if trace and trace[0]['before'].get('compactEmptyHome'):
+                if manual_shortcut:
+                    require(key not in self.result.get('homeEntry', {})
+                            and len(trace) == 1 and trace[0]['performed'] and trace[0]['outcome'] == 'sshForm'
+                            and trace[0]['member'] == payload['member'] == 'ordinaryShortcut'
+                            and trace[0]['selection'] == payload['selection'] and payload['role'] == 'button'
+                            and payload['route'] == 'directSSH' and payload['enteredAddPage'] is False
+                            and not final_state['addTitleSeen'] and not final_state['emptyHomeIdentity'],
+                            'tauri_ios_home_entry_invalid')
+                elif trace and trace[0]['before'].get('compactEmptyHome'):
                     require([row['member'] for row in trace if row['performed']] == ['emptyAdd', 'sshChoice']
                             and payload['member'] == 'emptyAdd' and payload.get('route') == 'viaAdd',
                             'tauri_ios_home_entry_invalid')
@@ -1446,7 +1471,8 @@ class Checkpoints:
                 if code.startswith('native_encrypted_'):
                     require(self.encrypted is not None and set(payload) == {'stage', 'nativeCheckpoint', 'nativeFailureCode'},
                             'tauri_ios_native_diagnostic_invalid')
-                if code == 'native_encrypted_key_empty_add_unproven':
+                if code in ('native_encrypted_key_empty_add_unproven', 'native_encrypted_key_home_shortcut_unproven',
+                            'native_encrypted_key_home_shortcut_no_progress'):
                     require(phase == 'encrypted_key_open_add', 'tauri_ios_native_diagnostic_invalid')
                 if observation or code in MOBILE_PASSWORD_FAILURES:
                     keys = {'stage', 'nativeCheckpoint', 'nativeFailureCode'}

@@ -327,7 +327,6 @@ enum NativeHostObservation {
 enum NativeHomeReadiness {
     enum State: String {
         case ready, loading, shell, error, alert, unexpected, notForeground = "not_foreground"
-        case compactAddPending = "compact_add_pending"
         case unidentifiedStartup = "unidentified_startup"
     }
 
@@ -358,7 +357,7 @@ enum NativeHomeReadiness {
         if home["knownEmptyHome"] as? Bool == true && permitsNavigation(state, from: "emptyHome") { return .ready }
         return .shell
     }
-    static func compactAddReady(_ geometry: [String: Any], witnessed: CGRect) -> Bool {
+    static func compactEntryReady(_ geometry: [String: Any], witnessed: CGRect) -> Bool {
         // The compact card sets a 48 CSS px minimum with initial-scale=1.
         guard NativeFramePolicy.valid(witnessed), witnessed.height >= 48,
               let frame = geometry["frame"] as? [Double], frame.count == 4, frame[3] >= 48 else { return false }
@@ -730,6 +729,40 @@ enum NativeControlPolicy {
               NativeFramePolicy.sameOwner(windowPaths: selected.map { windows[$0] }, webPaths: selected.map { webs[$0] }) else { return nil }
         return selected
     }
+    static func compactHomeShortcut(_ facts: [Fact], paths: [[Int]], windows: [[Int]], webs: [[Int]],
+                                    frames: [CGRect], card: [Int]) -> Int? {
+        guard facts.count == paths.count, facts.count == windows.count, facts.count == webs.count,
+              facts.count == frames.count, card.count == 5, card.allSatisfy(facts.indices.contains),
+              NativeFramePolicy.sameOwner(windowPaths: card.map { windows[$0] }, webPaths: card.map { webs[$0] })
+              else { return nil }
+        let heading = card[1], description = card[2], shortcut = card[3], add = card[4]
+        let label = "普通 SSH 终端", identifier = "home-open-ssh"
+        let visible = facts.indices.filter { NativeFramePolicy.valid(frames[$0]) }
+        let candidates = visible.filter {
+            facts[$0].identifier == identifier || (facts[$0].role == "button" && facts[$0].label == label)
+        }
+        let addIDs: Set<String> = ["add-ssh", "add-ssh-label", "add-ssh-detail", "add-herdr", "add-choice-heading", "add-back"]
+        let addLabels: Set<String> = ["添加连接", "选择连接方式", "返回看板", "herdr 配对 / 手动连接",
+            "使用服务器密码或已有私钥打开远程 Shell。"]
+        guard candidates == [shortcut], !visible.contains(where: {
+            addIDs.contains(facts[$0].identifier) || addLabels.contains(facts[$0].label)
+        }), facts[shortcut].role == "button", facts[shortcut].label == label,
+              ["", label, identifier].contains(facts[shortcut].identifier) else { return nil }
+        let parent = Array(paths[shortcut].dropLast())
+        let web = webs[shortcut], window = windows[shortcut]
+        guard !window.isEmpty, web.count > window.count, web.starts(with: window), parent.starts(with: web),
+              paths[add].dropLast().elementsEqual(parent), paths[heading].starts(with: parent),
+              paths[description].starts(with: parent), paths[heading].lexicographicallyPrecedes(paths[description]),
+              paths[description].lexicographicallyPrecedes(paths[add]),
+              paths[add].lexicographicallyPrecedes(paths[shortcut]) else { return nil }
+        let title = frames[heading], hint = frames[description], first = frames[add], second = frames[shortcut]
+        let gap = second.minY - first.maxY
+        guard [title, hint, first, second].allSatisfy(NativeFramePolicy.valid),
+              title.maxY <= hint.minY, hint.maxY <= first.minY, (0...24).contains(gap),
+              abs(first.minX - second.minX) <= 1, abs(first.maxX - second.maxX) <= 1,
+              hint.minX >= first.minX - 1, hint.maxX <= first.maxX + 1 else { return nil }
+        return shortcut
+    }
     static func valueText(_ value: Any?) -> String? {
         if value == nil { return "" }
         if let text = value as? String { return text }
@@ -791,6 +824,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     private var mobileFlow = false
     private var nativePhase = "ordinary_launch"
     private var lastHomeSample: [String: Any]?
+    private var manualHomeCardSeen = false
     private var pageButtons: [String: Observed] = [:]
     private struct LiveControl {
         let element: XCUIElement
@@ -2590,9 +2624,12 @@ final class TauriDirectSSHUITests: XCTestCase {
         func witness(_ targets: [(String?, String, Bool)]) -> [Observed]? {
             NativeControlPolicy.pageWitness(facts, paths: paths, windows: windows, webs: webs, targets: targets)?.map { visible[$0] }
         }
-        let homeCard = witness([(nil, "Herdr Pocket", false), (nil, "还没有主机", false),
-            (nil, "添加主机后，在这里查看会话和任务状态。", false), ("home-open-ssh", "普通 SSH 终端", true),
-            ("host-empty-add", "添加主机", true)])
+        let emptyCardText: [(String?, String, Bool)] = [(nil, "Herdr Pocket", false), (nil, "还没有主机", false),
+            (nil, "添加主机后，在这里查看会话和任务状态。", false)]
+        let addTarget = ("host-empty-add" as String?, "添加主机", true)
+        let homeTargets = emptyCardText + [("home-open-ssh", "普通 SSH 终端", true), addTarget]
+        let homeIndices = NativeControlPolicy.pageWitness(facts, paths: paths, windows: windows, webs: webs, targets: homeTargets)
+        let homeCard = homeIndices?.map { visible[$0] }
         let choices = [("add-herdr" as String?, "herdr 配对 / 手动连接", true), ("add-ssh" as String?, "普通 SSH 终端", true)]
         let mobileChoice = witness([(nil, "添加主机", false), ("add-choice-heading", "选择连接方式", false),
             ("add-back", "返回看板", true)] + choices)
@@ -2618,8 +2655,15 @@ final class TauriDirectSSHUITests: XCTestCase {
         let form = formOwnerResolved
         let page = form ? "sshForm" : choice ? "addChoice" : empty ? "emptyHome" : "unexpected"
         let compact = empty && home["compactEmptyHome"] as? Bool == true
+        manualHomeCardSeen = nativePhase == "encrypted_key_open_add" && noForm && mobileChoice == nil && legacyChoice == nil &&
+            (homeCard != nil || witness(emptyCardText + [addTarget]) != nil)
         pageButtons.removeAll()
         if compact, let entry = homeCard?.last { pageButtons["emptyAdd"] = entry }
+        if compact, nativePhase == "encrypted_key_open_add", let homeIndices,
+           let index = NativeControlPolicy.compactHomeShortcut(facts, paths: paths, windows: windows, webs: webs,
+                frames: visible.map { $0.snapshot.frame }, card: homeIndices) {
+            pageButtons["ordinaryShortcut"] = visible[index]
+        }
         if choice, let ssh = (mobileChoice ?? legacyChoice)?.last { pageButtons["sshChoice"] = ssh }
         let title = witness([("ssh-page-heading", "普通 SSH 终端", false)]) != nil
         let passwords = tree.filter { $0.snapshot.elementType == .secureTextField &&
@@ -2643,8 +2687,11 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
     @MainActor
     private func navigationGeometry(_ current: LiveControl) throws -> [String: Any] {
+        navigationGeometry(current, owner: controlOwner(current.snapshot, try observedNodes()))
+    }
+    @MainActor
+    private func navigationGeometry(_ current: LiveControl, owner: Observed?) -> [String: Any] {
         let snapshot = current.snapshot
-        let owner = controlOwner(snapshot, try observedNodes())
         let measured = owner.flatMap { controlVisibleFrame($0, current) }
         let visible = measured ?? .zero
         let center = CGPoint(x: snapshot.frame.midX, y: snapshot.frame.midY)
@@ -2660,17 +2707,16 @@ final class TauriDirectSSHUITests: XCTestCase {
             "fullyVisible": measured != nil && visible.contains(snapshot.frame) && visible.contains(selectedFrame)]
     }
     @MainActor
-    private func currentCompactAddReady() throws -> Bool {
-        guard let witness = pageButtons["emptyAdd"], let live = liveOnPath(witness) else { return false }
-        return NativeHomeReadiness.compactAddReady(try navigationGeometry(live), witnessed: witness.snapshot.frame)
-    }
-
-    @MainActor
     private func navigationElement(_ member: String) -> (XCUIElement, String)? {
+        let manualShortcut = nativePhase == "encrypted_key_open_add" && member == "ordinaryShortcut"
         if let button = pageButtons[member] {
             guard let live = liveOnPath(button), live.snapshot.elementType == .button else { return nil }
+            if manualShortcut {
+                return (live.element, button.snapshot.identifier == "home-open-ssh" ? "uniqueIdentifier" : "buttonRole")
+            }
             return (live.element, button.snapshot.identifier.isEmpty ? "buttonRole" : "uniqueIdentifier")
         }
+        if manualShortcut { return nil }
         let targets = ["headerAdd": ("host-open-remote", "＋ 添加主机"), "emptyAdd": ("host-empty-add", "添加主机"),
             "ordinaryShortcut": ("home-open-ssh", "普通 SSH"), "sshChoice": ("add-ssh", "普通 SSH 终端")]
         guard let (identifier, label) = targets[member] else { return nil }
@@ -2684,6 +2730,8 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func navigate(_ member: String, compactRoute: Bool = false) throws -> (String, String, String) {
+        let manualShortcut = nativePhase == "encrypted_key_open_add" && member == "ordinaryShortcut"
+        let shortcutUnproven = "native_encrypted_key_home_shortcut_unproven"
         let before = try navigationState()
         // A delayed view transition may already have produced the real form.
         // Preserve this newly sampled source state; never rewrite it as addChoice
@@ -2697,55 +2745,91 @@ final class TauriDirectSSHUITests: XCTestCase {
             return ("sshForm", "uniqueIdentifier", role(current.snapshot.elementType))
         }
         try require(NativeHomeReadiness.permitsNavigation(before, from: member == "sshChoice" ? "addChoice" : "emptyHome"),
-                    "native_home_retry_unsafe")
+                    manualShortcut ? shortcutUnproven : "native_home_retry_unsafe")
         if compactRoute {
             let witness = member == "sshChoice" ? "mobileAddChoice" : "compactEmptyHome"
             try require(pageButtons[member] != nil && before[witness] as? Bool == true,
-                        "native_home_retry_unsafe")
+                        manualShortcut ? shortcutUnproven : "native_home_retry_unsafe")
+        }
+        if manualShortcut {
+            try require(before["addTitleSeen"] as? Bool == false && before["formByStructure"] as? Bool == false,
+                        shortcutUnproven)
         }
         guard let (item, selection) = navigationElement(member) else { return ("missing", "uniqueLabel", "otherNative") }
         // Retain the first page witness and its live owner as geometry only.
         // This records the actual native binding, never a guessed hit point.
         var binding: [String: Any]?
-        if let witness = pageButtons[member], let live = liveControl(item) {
+        var shortcutGeometry: [String: Any]?
+        let witness = pageButtons[member]
+        if let witness, let live = liveControl(item) {
             let owner = controlOwner(live.snapshot, try observedNodes())
+            if manualShortcut, let owner, owner.path == witness.path, owner.windowPath == witness.windowPath,
+               owner.webPath == witness.webPath, sameIdentity(witness.snapshot, live.snapshot),
+               owner.snapshot.frame == live.snapshot.frame, witness.snapshot.frame == live.snapshot.frame {
+                shortcutGeometry = navigationGeometry(live, owner: owner)
+            }
             binding = ["witnessFrame": NativeFramePolicy.diagnosticRect(witness.snapshot.frame),
                 "liveFrame": NativeFramePolicy.diagnosticRect(live.snapshot.frame),
                 "ownerFrame": NativeFramePolicy.diagnosticRect(owner?.snapshot.frame),
                 "windowFrame": NativeFramePolicy.diagnosticRect(witness.window),
                 "webFrames": witness.webs.map { NativeFramePolicy.diagnosticRect($0) }]
         }
-        let geometry = try navigationGeometry(item)
-        if compactRoute && nativePhase == "encrypted_key_open_add" && member == "emptyAdd" {
-            let witnessed = pageButtons[member]?.snapshot.frame ?? .null
-            try require(NativeHomeReadiness.compactAddReady(geometry, witnessed: witnessed),
-                        "native_encrypted_key_empty_add_unproven")
+        let geometry: [String: Any]
+        if manualShortcut {
+            guard let witness, let shortcutGeometry,
+                  shortcutGeometry["centerVisible"] as? Bool == true,
+                  NativeHomeReadiness.compactEntryReady(shortcutGeometry, witnessed: witness.snapshot.frame) else {
+                try require(false, shortcutUnproven)
+                throw NSError(domain: shortcutUnproven, code: 1)
+            }
+            geometry = shortcutGeometry
+        } else {
+            geometry = try navigationGeometry(item)
         }
         let allowed = geometry["ownerResolved"] as? Bool == true && geometry["centerVisible"] as? Bool == true &&
             geometry["enabled"] as? Bool == true && geometry["hittable"] as? Bool == true
+        func reached(_ state: [String: Any]) -> Bool {
+            NativeViewPolicy.reached(member: member, page: state["page"] as! String) ||
+                (manualShortcut && state["addTitleSeen"] as? Bool == true)
+        }
         let started = ProcessInfo.processInfo.systemUptime
         if allowed { item.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
         var after = try navigationState()
-        if allowed {
+        if allowed && (!manualShortcut || !reached(after)) {
             let deadline = Date().addingTimeInterval(6)
             repeat {
                 after = try navigationState()
-                if NativeViewPolicy.reached(member: member, page: after["page"] as! String) { break }
+                if reached(after) { break }
                 Thread.sleep(forTimeInterval: 0.2)
             } while Date() < deadline
         }
         let page = after["page"] as! String
         let outcome = !allowed ? "blocked" : page == "sshForm" ? "sshForm" : page == "addChoice" ? "addChoice" :
             page == "emptyHome" ? "noProgress" : "unexpected"
-        let presentAfter = item.exists
-        let afterGeometry: Any = presentAfter ? try navigationGeometry(item) : NSNull()
+        let afterGeometry: Any
+        if manualShortcut {
+            if page == "emptyHome", let current = pageButtons[member], let witness, current.path == witness.path,
+               current.windowPath == witness.windowPath, current.webPath == witness.webPath,
+               sameIdentity(current.snapshot, witness.snapshot), let live = liveOnPath(current) {
+                afterGeometry = try navigationGeometry(live)
+            } else {
+                afterGeometry = NSNull()
+            }
+        } else {
+            afterGeometry = item.exists ? try navigationGeometry(item) : NSNull()
+        }
         var navigation: [String: Any] = ["nativeCheckpoint": nativePhase, "member": member, "selection": selection,
             "method": "elementCenter", "performed": allowed, "geometry": geometry,
-            "targetPresentAfter": presentAfter, "afterGeometry": afterGeometry,
+            "targetPresentAfter": !(afterGeometry is NSNull), "afterGeometry": afterGeometry,
             "elapsedMs": min(60000, max(0, Int((ProcessInfo.processInfo.systemUptime - started) * 1000))),
             "before": before, "after": after, "outcome": outcome]
         if let binding = binding { navigation["binding"] = binding }
         try post("native_navigation", navigation)
+        if manualShortcut {
+            try require(NativeHomeReadiness.permitsNavigation(after, from: "sshForm") &&
+                        after["addTitleSeen"] as? Bool == false && after["emptyHomeIdentity"] as? Bool == false,
+                        "native_encrypted_key_home_shortcut_no_progress")
+        }
         return (page, selection, geometry["role"] as! String)
     }
 
@@ -2772,10 +2856,6 @@ final class TauriDirectSSHUITests: XCTestCase {
             // Give an unfinished app time to advance and take a fresh sample.
             if strictSamples == 1 { deadline = clock() + 35 }
             outcome = NativeHomeReadiness.classify(state, home: lastHomeSample!)
-            if nativePhase == "encrypted_key_open_add", outcome == .ready, state["compactEmptyHome"] as? Bool == true,
-               try !currentCompactAddReady() {
-                outcome = .compactAddPending
-            }
             if strictSamples == 1 && outcome == .unexpected &&
                 NativeHomeReadiness.canResampleUnidentifiedStartup(state, home: lastHomeSample!) {
                 outcome = .unidentifiedStartup
@@ -2786,8 +2866,9 @@ final class TauriDirectSSHUITests: XCTestCase {
                 transitions.append(["state": outcome.rawValue, "elapsedMs": milliseconds(checkedAt - start)])
             }
             // The unidentified first observation gets only one passive resample.
-            guard outcome == .loading || outcome == .shell || outcome == .compactAddPending ||
-                  outcome == .unidentifiedStartup else { break }
+            // An already visible manual empty card with an unproven shortcut is final.
+            if outcome == .shell && manualHomeCardSeen { break }
+            guard outcome == .loading || outcome == .shell || outcome == .unidentifiedStartup else { break }
             let slice = min(4, deadline - clock())
             if slice <= 0 { break }
             if markerSeen { Thread.sleep(forTimeInterval: slice) }
@@ -2804,7 +2885,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         try post("native_home", ["nativeCheckpoint": nativePhase, "home": lastHomeSample!, "readiness": readiness])
         switch outcome {
         case .ready: return
-        case .compactAddPending: try require(false, "native_encrypted_key_empty_add_unproven")
+        case .shell where manualHomeCardSeen: try require(false, "native_encrypted_key_home_shortcut_unproven")
         case .error: try require(false, "native_home_known_loading_error")
         case .alert: try require(false, "native_home_alert_present")
         case .notForeground: try require(false, "native_home_not_foreground")
@@ -2816,6 +2897,15 @@ final class TauriDirectSSHUITests: XCTestCase {
     private func openHomeSSH() throws {
         try awaitEmptyHome()
         let compact = lastHomeSample?["compactEmptyHome"] as? Bool == true
+        if nativePhase == "encrypted_key_open_add" {
+            try require(compact, "native_encrypted_key_home_shortcut_unproven")
+            let (page, selection, originalRole) = try navigate("ordinaryShortcut", compactRoute: true)
+            try require(page != "missing", "native_encrypted_key_home_shortcut_unproven")
+            try require(page == "sshForm", "native_encrypted_key_home_shortcut_no_progress")
+            try post("native_home_entry", ["nativeCheckpoint": nativePhase, "member": "ordinaryShortcut", "selection": selection,
+                "role": originalRole, "enteredAddPage": false, "enteredSSHForm": true, "route": "directSSH"])
+            return
+        }
         for member in compact ? ["emptyAdd"] : ["headerAdd", "emptyAdd", "ordinaryShortcut"] {
             let (page, selection, originalRole) = try navigate(member, compactRoute: compact)
             if page == "missing" { continue }

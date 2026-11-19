@@ -1063,6 +1063,76 @@ class CaptureDiagnosticsTests(unittest.TestCase):
 
 
 class HomeDiagnosticsTests(unittest.TestCase):
+    def test_manual_compact_home_accepts_only_one_bound_direct_shortcut(self):
+        class NoPeer:
+            def snapshot(self):
+                return {'connections': 0}
+
+        phase = 'encrypted_key_open_add'
+        home = {**self.value(), 'compactEmptyHome': True}
+        for name in ('homeHeading', 'zeroHosts', 'headerAdd'):
+            home['members'][name] = {'count': 0, 'roles': []}
+        home['members']['emptyDescription'] = {'count': 1, 'roles': ['staticText']}
+        home['members']['compactShortcut'] = {'count': 1, 'roles': ['button']}
+        readiness = {'outcome': 'ready', 'elapsedMs': 200, 'strictSampleMs': 200, 'strictSamples': 1,
+                     'waitCalls': 0, 'samples': [{'state': 'ready', 'elapsedMs': 200}]}
+        frame = [40, 346, 360, 48]
+
+        def new_state(directory):
+            state = ios.Checkpoints(None, None, directory, {}, encrypted=NoPeer())
+            state.index = ios.ENCRYPTED_KEY_STAGES.index('encrypted_key_probe')
+            state.accept({'stage': 'native_home', 'nativeCheckpoint': phase, 'home': home, 'readiness': readiness})
+            return state
+
+        def navigation(after):
+            event = self.navigation('ordinaryShortcut', 'emptyHome', after)
+            event.update(nativeCheckpoint=phase, binding={
+                'witnessFrame': frame, 'liveFrame': frame, 'ownerFrame': frame,
+                'windowFrame': [0, 0, 440, 956], 'webFrames': [[0, 62, 440, 850]],
+            })
+            event['before']['compactEmptyHome'] = True
+            event['geometry'].update(role='button', frame=frame)
+            return event
+
+        entry = {'stage': 'native_home_entry', 'nativeCheckpoint': phase, 'member': 'ordinaryShortcut',
+                 'selection': 'uniqueIdentifier', 'role': 'button', 'enteredAddPage': False,
+                 'enteredSSHForm': True, 'route': 'directSSH'}
+        with tempfile.TemporaryDirectory() as directory:
+            state = new_state(directory)
+            success = navigation('sshForm')
+            alternate_routes = ({'member': 'emptyAdd'}, {'member': 'sshChoice'},
+                                {'nativeCheckpoint': 'encrypted_key_open_ssh'}, {'selection': 'uniqueLabel'},
+                                {'binding': None}, {'performed': False, 'outcome': 'blocked'},
+                                {'binding': {**success['binding'], 'ownerFrame': [40, 347, 360, 48]}},
+                                {'geometry': {**success['geometry'], 'fullyVisible': False}},
+                                {'before': {**success['before'], 'addTitleSeen': True}})
+            for change in alternate_routes:
+                with self.subTest(change=change), self.assertRaises(ios.Failure):
+                    state.accept({**success, **change})
+            with self.assertRaisesRegex(ios.Failure, 'home_entry_invalid'):
+                state.accept(entry)
+            state.accept(success)
+            with self.assertRaisesRegex(ios.Failure, 'navigation_replay_rejected'):
+                state.accept(success)
+            for change in ({'route': 'viaAdd', 'enteredAddPage': True}, {'selection': 'buttonRole'}):
+                with self.subTest(change=change), self.assertRaisesRegex(ios.Failure, 'home_entry_invalid'):
+                    state.accept({**entry, **change})
+            state.accept(entry)
+            self.assertEqual(state.result['homeEntry']['encryptedKey']['route'], 'directSSH')
+            with self.assertRaisesRegex(ios.Failure, 'home_entry_invalid'):
+                state.accept(entry)
+            self.assertEqual(len(state.result['navigationTrace']['encryptedKey']), 1)
+            self.assertEqual(state.index, ios.ENCRYPTED_KEY_STAGES.index('encrypted_key_probe'))
+            for page in ('emptyHome', 'addChoice', 'unexpected'):
+                missed = new_state(directory)
+                missed.accept(navigation(page))
+                with self.subTest(page=page), self.assertRaisesRegex(ios.Failure, 'home_entry_invalid'):
+                    missed.accept(entry)
+                code = 'native_encrypted_key_home_shortcut_no_progress'
+                missed.accept({'stage': 'native_failure', 'nativeCheckpoint': phase, 'nativeFailureCode': code})
+                self.assertEqual(missed.result['nativeFailureCode'], code)
+                self.assertNotIn('homeEntry', missed.result)
+
     def test_compact_home_requires_owned_roles_and_two_real_navigation_actions(self):
         home = {**self.value(), 'compactEmptyHome': True}
         members = home['members']

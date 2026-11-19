@@ -130,7 +130,7 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    await app.main();
+    await tester.runAsync(app.main);
     await tester.pumpAndSettle();
     await tap('hosts-direct-ssh');
     for (final field in {'direct-host': '127.0.0.1', 'direct-user': 'fixture', 'direct-port': port}.entries) {

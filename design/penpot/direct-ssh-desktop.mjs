@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 const tokens = JSON.parse(readFileSync(new URL('../../validation/shared/design-tokens-v2.json', import.meta.url)));
 const color = tokens.colors;
 const target = 'demo@ssh.example.test:22';
+const promptText = 'demo@lab:~$'; // 11 字形（4+1+3+1+1+1），无尾空格
 const fingerprint = (label) => `SHA256:${createHash('sha256').update(label).digest('base64').replace(/=$/, '')}`;
 const currentKey = fingerprint('herdr-pocket design example current');
 const replacementKey = fingerprint('herdr-pocket design example replacement');
@@ -349,10 +350,11 @@ function terminal(board) {
     const terminalText = (value, y, fill) => text(value, margin + 12, y, { family: mono, size: 14, fill, limit: workWidth - 24 });
     terminalText('demo@lab:~$ pwd', base, color.termPrompt);
     terminalText('/home/demo', base + 20, color.termText);
-    terminalText('demo@lab:~$', base + 40, color.termPrompt);
-    // 光标位置按提示符 12 个字形（无尾空格）实测字宽求值：JetBrainsMono hmtx 每字形 600/1000 UPM
-    // = 0.6em × 14px = 8.4px/列；12 列 = 100.8px，与任意等宽 fallback 字宽一致成比例。
-    rect(margin + 12 + 12 * monoColumn, base + 27, 8, 15, color.termCursor, 1);
+    terminalText(promptText, base + 40, color.termPrompt);
+    // 光标 x 按提示符字符串本身求值（promptText.length 列，无硬编码）：JetBrainsMono hmtx
+    // 实测每字形 600/1000 UPM = 0.6em × 14px = 8.4px，11 列 = 92.4px；
+    // 其它字体按各自 hmtx/实测字宽独立校准，不假设 fallback 字宽相同。
+    rect(margin + 12 + promptText.length * monoColumn, base + 27, 8, 15, color.termCursor, 1);
   });
   // 滚动条是键鼠连续控件：不适用 44pt 控件下限，标注 geometry；滚轮行为遵循系统惯例。
   layer('terminal-scrollbar', margin + workWidth - 10, terminalY + 4, 6, termHeight - 8, () => {

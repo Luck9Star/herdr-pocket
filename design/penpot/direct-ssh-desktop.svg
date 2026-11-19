@@ -543,7 +543,7 @@
 <text id="terminal-1440-text-12" x="276" y="147" font-family="JetBrainsMono Nerd Font Mono, JetBrains Mono, Menlo, monospace" font-size="14" font-weight="400" fill="#38BDF8" text-anchor="start">demo@lab:~$ pwd</text>
 <text id="terminal-1440-text-13" x="276" y="167" font-family="JetBrainsMono Nerd Font Mono, JetBrains Mono, Menlo, monospace" font-size="14" font-weight="400" fill="#E6EDF3" text-anchor="start">/home/demo</text>
 <text id="terminal-1440-text-14" x="276" y="187" font-family="JetBrainsMono Nerd Font Mono, JetBrains Mono, Menlo, monospace" font-size="14" font-weight="400" fill="#38BDF8" text-anchor="start">demo@lab:~$</text>
-<rect x="376.8" y="174" width="8" height="15" rx="1" fill="#818CF8"/>
+<rect x="368.4" y="174" width="8" height="15" rx="1" fill="#818CF8"/>
 </g>
 <g id="terminal-1440-terminal-scrollbar"><title>terminal-scrollbar</title>
 <rect x="1390" y="124" width="6" height="756" rx="3" fill="#F1F5F9"/>
@@ -1633,7 +1633,7 @@
 <text id="terminal-980-text-12" x="276" y="147" font-family="JetBrainsMono Nerd Font Mono, JetBrains Mono, Menlo, monospace" font-size="14" font-weight="400" fill="#38BDF8" text-anchor="start">demo@lab:~$ pwd</text>
 <text id="terminal-980-text-13" x="276" y="167" font-family="JetBrainsMono Nerd Font Mono, JetBrains Mono, Menlo, monospace" font-size="14" font-weight="400" fill="#E6EDF3" text-anchor="start">/home/demo</text>
 <text id="terminal-980-text-14" x="276" y="187" font-family="JetBrainsMono Nerd Font Mono, JetBrains Mono, Menlo, monospace" font-size="14" font-weight="400" fill="#38BDF8" text-anchor="start">demo@lab:~$</text>
-<rect x="376.8" y="174" width="8" height="15" rx="1" fill="#818CF8"/>
+<rect x="368.4" y="174" width="8" height="15" rx="1" fill="#818CF8"/>
 </g>
 <g id="terminal-980-terminal-scrollbar"><title>terminal-scrollbar</title>
 <rect x="930" y="124" width="6" height="636" rx="3" fill="#F1F5F9"/>
@@ -2673,7 +2673,7 @@
 <text id="terminal-700-text-5" x="116" y="147" font-family="JetBrainsMono Nerd Font Mono, JetBrains Mono, Menlo, monospace" font-size="14" font-weight="400" fill="#38BDF8" text-anchor="start">demo@lab:~$ pwd</text>
 <text id="terminal-700-text-6" x="116" y="167" font-family="JetBrainsMono Nerd Font Mono, JetBrains Mono, Menlo, monospace" font-size="14" font-weight="400" fill="#E6EDF3" text-anchor="start">/home/demo</text>
 <text id="terminal-700-text-7" x="116" y="187" font-family="JetBrainsMono Nerd Font Mono, JetBrains Mono, Menlo, monospace" font-size="14" font-weight="400" fill="#38BDF8" text-anchor="start">demo@lab:~$</text>
-<rect x="216.8" y="174" width="8" height="15" rx="1" fill="#818CF8"/>
+<rect x="208.4" y="174" width="8" height="15" rx="1" fill="#818CF8"/>
 </g>
 <g id="terminal-700-terminal-scrollbar"><title>terminal-scrollbar</title>
 <rect x="650" y="124" width="6" height="756" rx="3" fill="#F1F5F9"/>

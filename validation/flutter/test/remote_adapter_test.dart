@@ -425,10 +425,13 @@ void main() {
     final config = RemoteConfig.fromJson(fixtureConfig());
     final ended = expectLater(first.read(config),throwsA(failure('cancelled')));
     await Future<void>.delayed(Duration.zero);
+    final originalGeneration = first.generation;
     final cancelling = first.cancel();
     await Future<void>.delayed(Duration.zero); expect(socket.closeCalled,isTrue);
+    final joinedCancellation = first.cancel();
+    expect(first.generation, originalGeneration + 1);
     await Future<void>.delayed(const Duration(milliseconds:2100));
-    await cancelling; await ended;
+    await cancelling; await joinedCancellation; await ended;
     expect(socket.destroyed,isTrue); expect(budget.inUse,1);
     await expectLater(second.read(config),throwsA(failure('connection_capacity')));
     socket.closing.complete(); await Future<void>.delayed(Duration.zero);

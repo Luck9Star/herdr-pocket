@@ -643,6 +643,8 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
     def test_app_stage_and_failure_details_are_strictly_allowlisted(self):
         self.assertEqual(runner.safe_encrypted_app_stage({'stage': 'encrypted_waiting_private'}),
                          'encrypted_waiting_private')
+        self.assertEqual(runner.safe_encrypted_app_stage({'stage': 'encrypted_prepare_rejection'}),
+                         'encrypted_prepare_rejection')
         self.assertEqual(runner.safe_encrypted_app_stage({'stage': 'encrypted_prepare_connect'}),
                          'encrypted_prepare_connect')
         for value in ({'stage': 'sensitive-test-key'}, {'stage': 'encrypted_home', 'secret': 'x'}):

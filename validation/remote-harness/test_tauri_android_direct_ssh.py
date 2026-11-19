@@ -1,7 +1,9 @@
 """No AVD or SSH: verify that the device driver cannot claim unobserved UI/peer evidence."""
 import types
-import hashlib
 import io
+import hashlib
+import os
+import sys
 import json
 from pathlib import Path
 import struct
@@ -1153,6 +1155,116 @@ class PixelRegistrationTests(unittest.TestCase):
         self.assertEqual(result['coordinateMethod'],'exact_pixel_registration')
         self.assertEqual(result['pixelRegistrationBefore']['origin'],[17,23])
         gate.assert_called_once_with(actual,expected_token=fixture.screen_token,bounds=(25,83,140,130))
+
+class CombinedRotationFixture(RotationFixture):
+    private_key='SYNTHETIC-PRIVATE-KEY'
+    passphrase='SYNTHETIC-PASSPHRASE'
+    screen_token=None
+
+    def public_key_auth_evidence(self):
+        return {'stage':4,'connections':4,'publicKeyAccepted':True,
+                'authAttempts':1,'authSuccesses':1,'ptyRequests':1,
+                'shellRequests':1,'inputBytes':4,'outputBytes':48}
+
+
+class CombinedRotationBrowser(RotationBrowser):
+    def __init__(self,state):
+        super().__init__(state)
+        state.private_key=False;state.passphrase=False;state.method=None
+
+    def select_option(self,selector,value):
+        self.actions.append(('select',selector,value))
+        self.state.method=value
+
+    def fill(self,selector,value):
+        super().fill(selector,value)
+        if selector=='#ssh-key': self.state.private_key=True
+        if selector=='#ssh-passphrase': self.state.passphrase=True
+
+    def click(self,selector):
+        super().click(selector)
+        if selector in ('#ssh-key-cancel','#ssh-probe') or (
+                selector in ('#ssh-form button[type=submit]','#ssh-connect') and self.state.live):
+            self.state.private_key=False;self.state.passphrase=False
+
+    def evaluate(self,expression):
+        if "'#ssh-key').value" in expression or "'#ssh-passphrase').value" in expression:
+            self.expressions.append(expression)
+            return self.state.private_key or self.state.passphrase
+        return super().evaluate(expression)
+
+
+class RotatingEncryptedKeyTests(unittest.TestCase):
+    def setUp(self):
+        self._wait_patcher=patch.object(driver,'wait_for',_fast_wait_for)
+        self._wait_patcher.start()
+        self.addCleanup(self._wait_patcher.stop)
+
+    def test_combined_case_uses_public_key_credentials_and_publishes_fixed_facts(self):
+        state=RotationState();browser=CombinedRotationBrowser(state);fixture=CombinedRotationFixture(state)
+        result=driver.exercise_key_change_ui(browser,fixture,encrypted_key=True)
+        self.assertEqual(state.method,'key')
+        self.assertIn(('fill','#ssh-key',CombinedRotationFixture.private_key),browser.actions)
+        self.assertIn(('fill','#ssh-passphrase',CombinedRotationFixture.passphrase),browser.actions)
+        self.assertNotIn(('fill','#ssh-password',CombinedRotationFixture.password),browser.actions)
+        self.assertEqual(result['publicKeyEvidence']['publicKeyAccepted'],True)
+        self.assertEqual(result['publicKeyEvidence']['authSuccesses'],1)
+        published=json.dumps(result)
+        for secret in (CombinedRotationFixture.private_key,CombinedRotationFixture.passphrase,CombinedRotationFixture.password):
+            self.assertNotIn(secret,published)
+
+    def test_combined_case_rejects_missing_public_key_acceptance(self):
+        state=RotationState();browser=CombinedRotationBrowser(state);fixture=CombinedRotationFixture(state)
+        fixture.public_key_auth_evidence=Mock(side_effect=ValueError('invalid_public_key_auth_evidence'))
+        with self.assertRaisesRegex(driver.GuiFailure,'direct_rotation_encrypted_key_evidence_invalid'):
+            driver.exercise_key_change_ui(browser,fixture,encrypted_key=True)
+
+    def test_optional_scenario_runs_only_combined_case(self):
+        import tauri_encrypted_key_fixture
+        self.assertTrue(hasattr(tauri_encrypted_key_fixture,'RotatingEncryptedKeyFixture'))
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder).resolve();apk=root/'test.apk';apk.write_bytes(b'apk')
+            output=root/'evidence'
+            fake_fixture=Mock();fake_fixture.snapshot.return_value={'connectionsClosed':True}
+            fake_module=types.SimpleNamespace(RotatingEncryptedKeyFixture=lambda: MagicMock(
+                __enter__=Mock(return_value=fake_fixture),__exit__=Mock(return_value=False)))
+            rotation_result={'cleanup':{},'publicKeyEvidence':{'publicKeyAccepted':True}}
+            with patch.dict(sys.modules,{'tauri_encrypted_key_fixture':fake_module}), \
+                 patch.dict(os.environ,{'RUNNER_TEMP':str(root),'GITHUB_SHA':'0'*40},clear=False), \
+                 patch.object(sys,'argv',['driver','--apk',str(apk),'--output',str(output),
+                                         '--scenario','encrypted-key-rotation']), \
+                 patch.object(driver,'run_device',return_value=rotation_result) as run_device, \
+                 patch.object(driver,'probe_evidence',return_value={}):
+                driver.main()
+            report=json.loads((output/'manifest.json').read_text())
+            self.assertEqual(report['status'],'passed')
+            self.assertEqual(report['scenario'],'encrypted-key-rotation')
+            self.assertEqual(report['commandPath'],'native Tauri ssh commands in Android WebView')
+            manifest=(output/'manifest.json').read_text()
+            for secret in (CombinedRotationFixture.private_key,CombinedRotationFixture.passphrase,CombinedRotationFixture.password):
+                self.assertNotIn(secret,manifest)
+            self.assertEqual(report['rotationEncryptedKey'],rotation_result)
+            self.assertNotIn('encryptedKey',report)
+            self.assertEqual(run_device.call_args.kwargs['key_change'],True)
+            self.assertEqual(run_device.call_args.kwargs['encrypted_key'],True)
+
+    def test_rotating_fixture_public_key_evidence_is_bounded_and_rejects_password_success(self):
+        import tauri_encrypted_key_fixture as module
+        fixture=object.__new__(module.RotatingEncryptedKeyFixture)
+        events=[{'authAttempts':0,'authSuccesses':0,'ptyRequests':0,'shellRequests':0,
+                 'inputBytes':0,'outputBytes':0} for _ in range(3)]
+        final={'authAttempts':1,'authSuccesses':1,'ptyRequests':1,'shellRequests':1,
+               'inputBytes':4,'outputBytes':48,'publicKeyAccepted':True}
+        with patch.object(fixture,'rotation_evidence',return_value={'stage':4,'connections':4}), \
+             patch.object(fixture,'snapshot',return_value={'connectionEvents':[*events,final]}):
+            evidence=fixture.public_key_auth_evidence()
+        self.assertEqual(evidence['publicKeyAccepted'],True)
+        self.assertEqual(set(evidence),{'stage','connections','publicKeyAccepted','authAttempts',
+            'authSuccesses','ptyRequests','shellRequests','inputBytes','outputBytes'})
+        with patch.object(fixture,'rotation_evidence',return_value={'stage':4,'connections':4}), \
+             patch.object(fixture,'snapshot',return_value={'connectionEvents':[*events,{**final,'publicKeyAccepted':False}]}):
+            with self.assertRaises(ValueError): fixture.public_key_auth_evidence()
+
 
 
 if __name__=='__main__': unittest.main()

@@ -3,6 +3,14 @@ on:
   push:
     branches: ['codex/acceptance/direct-ssh-android-*']
   workflow_dispatch:
+    inputs:
+      scenario:
+        description: SSH acceptance scenario
+        type: choice
+        default: default
+        options:
+          - default
+          - encrypted-key-rotation
 permissions:
   contents: read
 concurrency:
@@ -65,11 +73,14 @@ jobs:
           Path(sys.argv[1]).write_bytes(candidates[0].read_bytes())
           PY
       - name: Exercise real app UI against an owned temporary SSH server
+        env:
+          SSH_SCENARIO: ${{ inputs.scenario || 'default' }}
         run: |
           mkdir -p "$RUNNER_TEMP/tauri-direct-evidence"
           bash validation/remote-harness/with-android-emulator.sh \
             "$RUNNER_TEMP/direct-ssh-venv/bin/python" validation/remote-harness/tauri_android_direct_ssh.py \
-            --apk "$RUNNER_TEMP/tauri-direct-x86_64.apk" --output "$RUNNER_TEMP/tauri-direct-evidence"
+            --apk "$RUNNER_TEMP/tauri-direct-x86_64.apk" --output "$RUNNER_TEMP/tauri-direct-evidence" \
+            --scenario "$SSH_SCENARIO"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

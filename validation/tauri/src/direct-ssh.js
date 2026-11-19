@@ -38,8 +38,11 @@ export function createDirectSsh({invoke, channelFactory, onStatus, onData}) {
     sessionId = null;
     let closed = false;
     if (id) {
-      // The native command resolves with unit; a false reply is not confirmation.
-      try { closed = (await invoke('ssh_shell_close', {sessionId: id})) !== false; } catch {}
+      // Tauri serializes Rust unit as null; JavaScript callers can return void.
+      try {
+        const response = await invoke('ssh_shell_close', {sessionId: id});
+        closed = response === null || response === undefined;
+      } catch {}
     }
     if (current !== generation) return;
     if ((id || explicit) && !closed) {

@@ -93,6 +93,33 @@ class HostControlTests(unittest.TestCase):
         with self.assertRaisesRegex(hosts.HostControlError, 'not_monotonic'):
             self.control.audit('et', b'')
 
+    def test_shared_mode_requires_original_port_eof_and_cannot_authorize_ts(self):
+        self.approve('et')
+        control = hosts.PairingControl(self.targets, None, None, active_ports=lambda _: set(),
+                                       shared_easytier=True)
+        target = self.targets['et']
+        (target.root / 'received.bin').write_bytes(b'')
+        log = target.root / 'sshd.log'
+        auth = ('Accepted publickey for fixture from 127.0.0.1 port 4444 ssh2: ED25519 '
+                + target.approval.fingerprint + '\n')
+        for log_line, expected in (
+            ('Connection closed by 127.0.0.1 port 44440', 'unconfirmed'),
+            ('Received signal 15; terminating.', 'unconfirmed'),
+            ('Connection closed by user fixture 127.0.0.1 port 4444', 'peer_eof'),
+            ('Received disconnect from 127.0.0.1 port 4444:11: client stopped', 'client_disconnect'),
+            ('Read error from user fixture 127.0.0.1 port 4444: Connection reset by peer', 'peer_reset'),
+        ):
+            with self.subTest(expected=expected):
+                log.write_text(auth + log_line + '\n')
+                row = control.audit('et', b'')['sessions'][0]
+                self.assertFalse(row['active'])
+                self.assertEqual(row['peerClose'], expected)
+                self.assertNotIn('4444', repr(row))
+        log.write_text('Connection closed by 127.0.0.1 port 4444\n' + auth)
+        self.assertEqual(control.audit('et', b'')['sessions'][0]['peerClose'], 'unconfirmed')
+        with self.assertRaises(hosts.HostControlError):
+            control.dispatch({'op': 'complete_ts_auth', 'authorize': True, 'url': 'https://127.0.0.1:1234'})
+
     def test_bounded_audit_and_private_materials(self):
         with self.assertRaises(hosts.HostControlError):
             self.control.dispatch({'op': 'audit', 'role': 'et', 'expectedBase64': 'not base64!'})

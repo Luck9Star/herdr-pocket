@@ -52,6 +52,20 @@ class RelayTests(unittest.TestCase):
         self.env.stop(); self.temp.cleanup()
     def write(self, data):
         self.manifest.write_text(json.dumps(data)); self.manifest.chmod(0o600)
+    def test_shared_easytier_requires_both_owned_relays_and_no_ssh_port(self):
+        roles = relay.SHARED_EASYTIER_ROLES
+        data = {'namespace': 'hp-dual-12-2', 'easytier': 11001, 'easytierSecond': 11002,
+                'sshPorts': [11003, 11004], 'ownerPids': {roles[0]: 123, roles[1]: 456}}
+        self.write(data)
+        self.assertEqual(relay.checked_manifest(self.manifest, roles=roles), data)
+        with self.assertRaises(relay.RelayError):
+            relay.checked_manifest(self.manifest)
+        for changed in ({**data, 'easytierSecond': 11003}, {**data, 'derp': 11005},
+                        {**data, 'ownerPids': {roles[0]: 123}}):
+            self.write(changed)
+            with self.assertRaises(relay.RelayError):
+                relay.checked_manifest(self.manifest, roles=roles)
+
     def test_rejects_unowned_namespace_ports_and_manifest(self):
         data = json.loads(self.manifest.read_text())
         for key, value in [('namespace','hp-dual-12-3'), ('control',11004), ('derp',True), ('sshPorts',[11004]), ('easytier',0)]:

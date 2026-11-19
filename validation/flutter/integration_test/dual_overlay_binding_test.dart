@@ -16,8 +16,9 @@ import '../test/remote_test_data.dart' show fixtureConfig;
 import '../test/network_profiles_test.dart' show testNetwork;
 
 void main() {
-  testWidgets('two hosts bind consecutively', (tester) async {
-   tester.view.devicePixelRatio=1; tester.view.physicalSize=const Size(320,844);
+  for (final width in [320.0, 390.0]) {
+  testWidgets('two hosts bind consecutively at ${width}px', (tester) async {
+   tester.view.devicePixelRatio=1; tester.view.physicalSize=Size(width,844);
    addTearDown(tester.view.resetPhysicalSize); addTearDown(tester.view.resetDevicePixelRatio);
    final root=Directory.systemTemp.createTempSync('pairing-full-'); addTearDown(() => root.deleteSync(recursive:true));
    final disk=MemoryCatalogStorage(); final now=DateTime.now().millisecondsSinceEpoch ~/ 1000;
@@ -40,12 +41,7 @@ void main() {
    if (role=='ts') raw['port']=2223;
    final profile={'version':1,'type':'herdr-connection-profile','provider':role=='et'?'easytier':'tailscale',
      for (final name in ['host','port','username','session','socketPath','herdrPath','expectedHostKey']) name:raw[name]};
-   await steps.showCatalogAdd();
-   await existing.tapStablePointer(tester,find.byKey(const ValueKey('hosts-add')));
-    if (find.byKey(const ValueKey('choose-herdr')).evaluate().isNotEmpty) {
-      await existing.tapStablePointer(tester, find.byKey(const ValueKey('choose-herdr')));
-    }
-   await existing.until(tester,()=>find.byType(PairingPage).evaluate().length==1);
+   await steps.openPairingFromCatalog();
    final page=tester.widget<PairingPage>(find.byType(PairingPage)); expect(page.keys,isNull); expect(page.adapter,isNull);
    final before=catalog.profiles.map((p)=>p.id).toSet(); final fingerprint=pairingFingerprint(profile['expectedHostKey'] as String);
    await steps.enter('profile-input',jsonEncode(profile));
@@ -77,13 +73,7 @@ h=Host(root,r['account'],pathlib.Path(sys.argv[3]).read_text());sys.stdout.write
    await tester.pageBack(); await tester.pumpAndSettle(); expect(find.byType(HostCatalogPage),findsOneWidget);
    await steps.bindHost(added.single.id,network.id,network.label,network.provider);
    expect(catalog.profiles.singleWhere((p)=>p.id==added.single.id).networkProfileId,network.id);
-   await steps.showCatalogAdd();
-   expect(tester.widget<FilledButton>(find.byKey(const ValueKey('hosts-add'))).onPressed,isNotNull);
-   await existing.tapStablePointer(tester,find.byKey(const ValueKey('hosts-add')));
-    if (find.byKey(const ValueKey('choose-herdr')).evaluate().isNotEmpty) {
-      await existing.tapStablePointer(tester, find.byKey(const ValueKey('choose-herdr')));
-    }
-   await existing.until(tester,()=>find.byType(PairingPage).evaluate().length==1);
+   await steps.openPairingFromCatalog();
    await tester.pageBack(); await tester.pumpAndSettle();
    }
    expect(catalog.profiles.length,2);
@@ -93,4 +83,5 @@ h=Host(root,r['account'],pathlib.Path(sys.argv[3]).read_text());sys.stdout.write
    }
    await tester.pumpWidget(const SizedBox()); catalog.dispose();
   });
+  }
 }

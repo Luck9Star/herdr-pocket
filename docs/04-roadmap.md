@@ -151,13 +151,13 @@ Tailscale、EasyTier 和 ZeroTier 分别推进，共用 M1 的可信连接与输
 - [ ] **M2-01** 手工创建各类型网络配置、接入、身份保存、重启/退出与分层状态提示；敏感配置不进入普通诊断。
   **待验证。** Android 两壳已有 TS/ET 配置与授权后并发，TS normal／QA 启停另经复验。ZeroTier 已有身份托管和 Android ABI 链，实机拨号、重启/退出仍待各组合验证。[双网](67-android-dual-network-startup.md) · [启动层](71-validation-branch-archive.md) · [ZeroTier S1–S4](58-session-handoff-2026-11-09-r2.md)
 - [ ] **M2-02** Host 候选路径引用网络配置，同一配置供多主机复用；停止单个主机不停止共享节点。
-  **待验证。** Tauri 八组真实浏览器／模拟 IPC 对照覆盖窄屏显式恢复、宽屏原会话续帧、显式授权输入及独立停节点。仍待真实共享节点上的双主机 SSH、断开其一后另一侧原会话续输及最终释放。[主机绑定](18-mobile-network-profiles.md) · [共享设备审查](55-mobile-shared-network-device.md) · [浏览器证据](evidence/tauri-shared-node-20261119/README.md)
+  **Flutter Android 隔离验收通过。** API 35 x86_64 模拟器通过测试转发，以同一 EasyTier 节点连接两个实际 SSH 对端。关闭 A 后，B 在原会话继续显示新帧。两端先后确认 EOF，随后主动停止原节点。Tauri 的八组对照覆盖浏览器界面与模拟 IPC；共享节点上的实际续输、实体设备和真实跨网仍待验证。[Flutter R5](evidence/flutter-android-shared-easytier-r5-20261120/README.md) · [主机绑定](18-mobile-network-profiles.md) · [共享设备审查](55-mobile-shared-network-device.md) · [Tauri 浏览器证据](evidence/tauri-shared-node-20261119/README.md)
 - [ ] **M2-03** 仅用已配置/可用网络发起有界连接尝试，待认证配置显示需操作；验证可信主机选择、重叠地址隔离与落败连接清理。
   **待验证。** Linux 封闭配置有失败拨号和跨 provider 反例。同址路由、真实可信主机选择与落败连接清理待逐平台验证。[Linux 正负对照](65-dual-overlay-validation.md)
 - [ ] **M2-04** 验证显式切换、停用配置、节点退出与认证失效；展示受影响主机，恢复前关闭输入，退出后不静默重试。
   **待验证。** Android 已通过双向停网。配置切换、认证失效、删除身份与重启后的输入关闭、影响提示和禁止重试仍待组合复验。[Android 停网](67-android-dual-network-startup.md) · [影响审查](55-mobile-shared-network-device.md)
 - [ ] **M2-05** 每个已支持单网组合通过身份/秘密隔离、共享节点复用与释放用例；前台 TS+ET 同时连接不同主机并输入，停用一网不影响另一网；声明 ZeroTier 支持须另过 TS+ZT、ET+ZT 及三者同开。
-  **待验证。** Android 模拟器先停 TS/ET × 两壳四案均通过，幸存端沿原认证会话续输、被停端保留原输入计数并关闭。双网失败见历史交接，当前结论以第 67 页为准。Linux 封闭 namespace 的两方向通过，默认 ET 对照失败。macOS 有单 TS C ABI 的 TCP 往返和独立 ET EOF 结果，双网待验。15 个单网格、20 个并发格仍待逐格验收。[Android](67-android-dual-network-startup.md) · [历史交接](66-iteration-handoff-2026-11-16.md) · [Linux 与 macOS](65-dual-overlay-validation.md) · [平台矩阵](09-prototype-validation.md#5-五端--三网络运行矩阵15格)
+  **待验证。** Android 模拟器先停 TS/ET × 两壳四案均通过，幸存端沿原认证会话续输、被停端保留原输入计数并关闭。Flutter Android 另通过同一 EasyTier 节点双主机只读观察与逐条释放。双网失败见历史交接，当前结论以第 67 页为准。Linux 封闭 namespace 的两方向通过，默认 ET 对照失败。macOS 有单 TS C ABI 的 TCP 往返和独立 ET EOF 结果，双网待验。15 个单网格、20 个并发格仍待逐格验收。[Android](67-android-dual-network-startup.md) · [历史交接](66-iteration-handoff-2026-11-16.md) · [Linux 与 macOS](65-dual-overlay-validation.md) · [平台矩阵](09-prototype-validation.md#5-五端--三网络运行矩阵15格)
 
 验收：无公开入站路径的测试主机上，各 provider × 平台在对应系统网络客户端关闭时完成看板、终端与输入闭环。分别记录平台/库版本、网络条件、连接路径、恢复及清理证据；不能用一个组合成功代替其余 14 格。
 

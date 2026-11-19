@@ -20,7 +20,7 @@ import tempfile
 import threading
 import time
 
-from android_dual_overlay_relay import AndroidDualOverlayRelay, RelayError
+from android_dual_overlay_relay import AndroidDualOverlayRelay, RelayError, ROLES, SHARED_EASYTIER_ROLES
 from android_dual_overlay_reverse import OwnedReverseMappings, SERIAL, assert_owned_avd, _adb
 from dual_overlay_loopback import read_event
 from android_dual_overlay_hosts import safe_startup_failure
@@ -113,7 +113,7 @@ def signal_owned_residents(namespace_path, inode, owner, sig, pids):
 
 class AndroidDualOverlaySession:
     def __init__(self, bundle, work_root, *, host_source, source_checkout,
-                 device=SERIAL, lifetime=900, _host_only=False, _relay_only=False):
+                 device=SERIAL, lifetime=900, shared_easytier=False, _host_only=False, _relay_only=False):
         if not re.fullmatch(r'[0-9a-f]{40}', host_source) or device != SERIAL:
             raise SessionError('fixed_host_source_and_owned_device_required')
         if type(lifetime) is not int or not 60 <= lifetime <= 1800:
@@ -122,6 +122,7 @@ class AndroidDualOverlaySession:
         self.work_root = Path(work_root).resolve(strict=True)
         self.source_checkout = Path(source_checkout).resolve(strict=True)
         self.host_source, self.lifetime = host_source, lifetime
+        self.shared_easytier = shared_easytier
         self.host_only = _host_only
         self.relay_only = _relay_only
         self.namespace = None
@@ -149,7 +150,7 @@ class AndroidDualOverlaySession:
             return self
         except BaseException as original:
             try: self.close()
-            except Exception: original.cleanup_code = 'shared_session_cleanup_failed'
+            except Exception: original.cleanup_code = 'shared_overlay_session_cleanup_incomplete'
             raise
 
     def start(self):
@@ -193,6 +194,8 @@ class AndroidDualOverlaySession:
         args += [key + '=' + value for key, value in values.items()]
         args += [sys.executable, str(HERE / 'android_dual_overlay_hosts.py'), '--bundle', str(self.bundle),
                  '--work', str(host_work), '--lifetime', str(self.lifetime)]
+        if self.shared_easytier:
+            args.append('--shared-easytier')
         self.report['stage'] = 'host-controller'
         self.process = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                         stderr=subprocess.DEVNULL, start_new_session=True)
@@ -212,8 +215,9 @@ class AndroidDualOverlaySession:
         manifest = Path(ready['relayManifestFile'])
         self._private_file(manifest, 4096)
         self.report['stage'] = 'relay-and-reverse'
+        roles = SHARED_EASYTIER_ROLES if self.shared_easytier else ROLES
         try:
-            self.relay = AndroidDualOverlayRelay(manifest)
+            self.relay = AndroidDualOverlayRelay(manifest, roles=roles)
             self.relay.__enter__()
         except RelayError as error:
             allowed = {'owned_runner_required', 'private_manifest_path_required', 'private_manifest_permissions_required',
@@ -226,7 +230,7 @@ class AndroidDualOverlaySession:
             checks = getattr(error, 'listener_checks', None)
             keys = {'exactLoopbackListener', 'expectedPidVisible', 'exactListenerOwnedByPid',
                     'samePortDeviceBoundLoopback', 'samePortListener', 'samePortMappedLoopback', 'samePortWildcard', 'samePortIPv6Loopback'}
-            if (isinstance(checks, dict) and set(checks) == {'control', 'derp', 'easytier'}
+            if (isinstance(checks, dict) and set(checks) == set(roles)
                     and all(isinstance(value, dict) and set(value) == keys
                         and all(type(flag) is bool for flag in value.values()) for value in checks.values())):
                 self.report['listenerChecks'] = checks
@@ -255,7 +259,8 @@ class AndroidDualOverlaySession:
         if role not in ('et', 'ts'):
             raise SessionError('host_role_required')
         value = json.loads(self._private_file(self.materials['hostProfiles'][role], 2048))
-        if value.get('provider') != {'et': 'easytier', 'ts': 'tailscale'}[role]:
+        expected = 'easytier' if self.shared_easytier or role == 'et' else 'tailscale'
+        if value.get('provider') != expected:
             raise SessionError('overlay_host_profile_required')
         return value
 
@@ -321,12 +326,23 @@ class AndroidDualOverlaySession:
                 if resource is not None: resource.close()
                 cleanup[name] = resource is None or name != 'reverseRemoved' or resource.cleanup_confirmed
             except Exception: cleanup[name] = False
+        if self.reverse is not None and isinstance(self.reverse.cleanup_evidence, dict):
+            self.report['reverseCleanup'] = self.reverse.cleanup_evidence
         cleanup['controllerStopped'] = self.process is None
         if self.process is not None:
             try:
                 result = self.control.call({'op': 'stop'}, timeout=45)
+                if self.shared_easytier:
+                    streams = result.get('sharedPeerStreams')
+                    if isinstance(streams, dict) and set(streams) == {'a', 'b'} and all(
+                            isinstance(value, dict) and set(value) == {'acceptedOverlayStreams', 'loopbackTcpConnections'}
+                            and all(type(count) is int and 0 <= count <= 64 for count in value.values())
+                            for value in streams.values()):
+                        self.report['sharedPeerStreams'] = streams
+                required = (CONTROLLER_CLEANUP - {'tsPeerCleanup', 'collectorStopped'} | {'etSecondPeerCleanup'}
+                            if self.shared_easytier else CONTROLLER_CLEANUP)
                 cleanup['controllerStopped'] = (result.get('stopReason') == 'explicit-stop'
-                    and all(result.get(key) is True for key in CONTROLLER_CLEANUP)
+                    and all(result.get(key) is True for key in required)
                     and self.process.wait(timeout=10) == 0)
             except Exception: cleanup['controllerStopped'] = False
         try: cleanup['namespaceRemoved'] = self._remove_namespace()
@@ -362,7 +378,7 @@ class AndroidDualOverlaySession:
 
     def __exit__(self, kind, original, _):
         try: self.close()
-        except SessionError:
+        except Exception:
             if original is None: raise
             original.cleanup_code = 'shared_overlay_session_cleanup_incomplete'
 

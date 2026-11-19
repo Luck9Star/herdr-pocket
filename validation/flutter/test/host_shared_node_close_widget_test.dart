@@ -23,6 +23,10 @@ import 'remote_test_data.dart' show fixtureConfig;
 class SharedRouteAdapter extends SplitAdapter {
   SharedRouteAdapter(this.route);
   final String route;
+  int gracefulCloses = 0;
+
+  @override
+  void requestGracefulClose() { gracefulCloses++; }
 
   @override
   void selectPane(int expectedGeneration, String paneId) {
@@ -39,6 +43,7 @@ enum CloseCase {
   stopConnection('stopping A keeps B observing'),
   focused('closing focused A keeps B observing without input'),
   unfocused('closing unfocused A keeps B observing with its existing input eligibility'),
+  mobile('closing hidden A in the mobile EasyTier layout keeps B observing'),
   paused('closing A keeps already paused B visible and paused'),
   stashed('closing A does not revive the narrow-window side'),
   hidden('closing A does not revive a hidden B');
@@ -50,17 +55,18 @@ enum CloseCase {
 void main() {
   for (final scenario in CloseCase.values) {
     testWidgets(scenario.label, (tester) async {
+      final mobile = scenario == CloseCase.mobile;
       tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.physicalSize = mobile ? const Size(390, 844) : const Size(1440, 900);
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.view.resetPhysicalSize);
       final previousPlatform = debugDefaultTargetPlatformOverride;
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
       final catalog = HostCatalog(storage: MemoryCatalogStorage(), clock: () => 1000);
       await catalog.load();
-      final network = testNetwork('tailscale');
+      final network = testNetwork(mobile ? 'easytier' : 'tailscale');
       await catalog.addNetwork(network);
-      HostProfile host(String name, String address) => tabProfile(name, 'probe$name', address, 'tailscale', 'opaque-$name')
+      HostProfile host(String name, String address) => tabProfile(name, 'probe$name', address, network.provider, 'opaque-$name')
           .change(networkProfileId: network.id, replaceNetwork: true, now: 1000);
       final a = host('A', '127.0.0.1'), b = host('B', '127.0.0.2');
       await catalog.add(a);
@@ -69,7 +75,7 @@ void main() {
       expect(a.networkProfileId, b.networkProfileId);
       final identity = {'profileId': network.id, 'provider': network.provider,
         'handle': 'a0000000-0000-4000-8000-000000000001',
-        'instanceId': 'b0000000-0000-4000-8000-000000000002', 'mode': 'DEVICE_STATE'};
+        'instanceId': 'b0000000-0000-4000-8000-000000000002', 'mode': mobile ? 'PRIVATE' : 'DEVICE_STATE'};
       final binding = NetworkNodeBinding.forProfile(network, NetworkIdentityRecord.checked(identity, network));
       final route = '${binding.routeProvider}:${binding.profileId}:${binding.profileRevision}:${binding.identityRef}';
       final aAdapter = SharedRouteAdapter(route), bAdapter = SharedRouteAdapter(route);
@@ -87,7 +93,7 @@ void main() {
           final id = (call.arguments as Map)['profileId'] as String;
           expect(id, network.id);
           statusProfiles.add(id);
-          return {'state': 'running', 'binding': binding.toMap()};
+          return {'state': mobile ? 'engine-started' : 'running', 'binding': binding.toMap()};
         }
         if (call.method == 'nodeStop') { stops++; return {'state':'stopped', 'binding':null}; }
         throw StateError('Unexpected mock network method ${call.method}');
@@ -118,18 +124,23 @@ void main() {
           await tester.tap(target);
           await tester.pump();
         }
-        await tapVisible(tester, 'host-split-${tabA.id}');
-        await tester.pumpAndSettle();
-        await tap(inside(tabA, find.byKey(const ValueKey('remote-resume'))));
-        aAdapter.frame!(aAdapter.generation, 'w1:p1', const RemoteFrame(0, true, 'A-LIVE', observationEpoch: 1));
+        if (mobile) {
+          expect(tabA.visible.value, isFalse);
+          expect(aAdapter.pauses, 1);
+        } else {
+          await tapVisible(tester, 'host-split-${tabA.id}');
+          await tester.pumpAndSettle();
+          await tap(inside(tabA, find.byKey(const ValueKey('remote-resume'))));
+          aAdapter.frame!(aAdapter.generation, 'w1:p1', const RemoteFrame(0, true, 'A-LIVE', observationEpoch: 1));
+        }
         bAdapter.frame!(bAdapter.generation, 'w1:p1', const RemoteFrame(1, false, '\r\nB-BEFORE'));
         await tester.pump();
-        if (scenario != CloseCase.unfocused) {
+        final bFocused = mobile || scenario == CloseCase.unfocused;
+        if (!bFocused) {
           await tapVisible(tester, 'workspace-focus-${tabA.id}');
         }
         final terminal = tester.widget<TerminalView>(inside(tabB, find.byType(TerminalView))).terminal;
         expect(terminal.buffer.getText(), contains('B-BEFORE'));
-        final bFocused = scenario == CloseCase.unfocused;
         expect(tabs.active, same(bFocused ? tabB : tabA));
         expect(tabB.visible.value, isTrue);
         expect(tabB.inputEligible.value, bFocused);
@@ -144,7 +155,7 @@ void main() {
         expect(aAdapter.config.host, isNot(bAdapter.config.host));
         final originalTarget = bAdapter.inputTarget!, connection = bAdapter.connection, generation = bAdapter.generation;
         expect(originalTarget.route, route);
-        expect(aAdapter.inputTarget!.route, route);
+        expect((mobile ? aAdapter.pausedTarget : aAdapter.inputTarget)!.route, route);
         expect(aAdapter.writes, isEmpty);
         expect(bAdapter.writes, isEmpty);
         if (scenario == CloseCase.stashed) {
@@ -160,7 +171,7 @@ void main() {
           await tester.pumpAndSettle();
         }
         final observing = switch (scenario) {
-          CloseCase.stopConnection || CloseCase.focused || CloseCase.unfocused => true,
+          CloseCase.stopConnection || CloseCase.focused || CloseCase.unfocused || CloseCase.mobile => true,
           _ => false,
         };
         final visible = observing || scenario == CloseCase.paused;
@@ -181,7 +192,8 @@ void main() {
           expect(tabB.layoutHidden.value, isFalse);
         }
         expect(tabs.forHost(a.id).isEmpty, closeTab);
-        expect(aAdapter.cancels, greaterThan(0));
+        expect(aAdapter.gracefulCloses, closeTab ? 1 : 0);
+        expect(aAdapter.cancels, 1);
         expect(tabs.forHost(b.id).single, same(tabB));
         if (closeTab) {
           expect(tabs.active, visible ? same(tabB) : isNull);
@@ -191,6 +203,7 @@ void main() {
         expect(bAdapter.connection, same(connection));
         expect(bAdapter.generation, generation);
         expect(bAdapter.cancels, 0);
+        expect(bAdapter.gracefulCloses, 0);
         expect(bAdapter.calls, 1);
         expect(bAdapter.resumes, 0);
         expect(stops, 0);
@@ -243,6 +256,10 @@ void main() {
           await tapVisible(tester, 'host-tab-close-${tabB.id}');
           await tester.pumpAndSettle();
           expect(tabs.tabs, isEmpty);
+          expect(aAdapter.gracefulCloses, 1);
+          expect(aAdapter.cancels, 1);
+          expect(bAdapter.gracefulCloses, 1);
+          expect(bAdapter.cancels, 1);
           expect(stops, 0);
         }
         expect(tester.takeException(), isNull);

@@ -1,0 +1,133 @@
+{
+  "schemaVersion": 1,
+  "runId": 44564557536,
+  "jobId": 135702641587,
+  "artifactId": 14552570649,
+  "status": "failed",
+  "scenario": "shared-easytier",
+  "uiSource": "0d22d9f8c9169b7bd4c117ef73dc86a0b0850235",
+  "nativeSource": "547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8",
+  "hostSource": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
+  "hostArtifactId": 14171011473,
+  "hostArtifactSha256": "4bdc54843a9f438896db3717bd002859021fab51cbe60339c35e8a62a5bd6698",
+  "nativeVariant": "test-only-private-ca-x86_64",
+  "apiLevel": 35,
+  "physicalDevice": false,
+  "rawLogsUploaded": false,
+  "deviceApi35Verified": true,
+  "instrumentationApkSha256": "39f184140c11630dbf813d01365e05f370964290a4366a4d09c760440241fa72",
+  "stage": "device_ui",
+  "uiStage": "shared_a_released",
+  "errorCode": "shared_peer_close_unconfirmed",
+  "auditProgress": {
+    "bothOriginalSshLive": true,
+    "liveProviderRelays": {
+      "a": 1,
+      "b": 1
+    },
+    "survivorFreshFrameOnOriginalSsh": true
+  },
+  "sharedPeerStreams": {
+    "a": {
+      "acceptedOverlayStreams": 1,
+      "loopbackTcpConnections": 1
+    },
+    "b": {
+      "acceptedOverlayStreams": 1,
+      "loopbackTcpConnections": 1
+    }
+  },
+  "reverseCleanup": {
+    "removedConfirmed": 2,
+    "alreadyAbsent": 0,
+    "problems": []
+  },
+  "sharedCleanup": {
+    "reverseRemoved": true,
+    "relayStopped": true,
+    "controllerStopped": true,
+    "namespaceRemoved": true,
+    "hostPrivateDirectoryRemoved": true,
+    "controlReaderStopped": true,
+    "privateFilesRemoved": true
+  },
+  "flutterStopped": true,
+  "hostCleanup": true,
+  "packageRemoved": true,
+  "forwardsRestored": true,
+  "sshAudits": {
+    "beforeClose": {
+      "a": {
+        "samples": 1,
+        "acceptedSessions": 1,
+        "newSessions": 1,
+        "capturedBytes": 0,
+        "newInputBytes": 0,
+        "exactBytes": true,
+        "authorizationActive": true,
+        "sessions": [
+          {
+            "ordinal": 1,
+            "approvedDevice": true,
+            "active": true,
+            "peerClose": "unconfirmed"
+          }
+        ]
+      },
+      "b": {
+        "samples": 1,
+        "acceptedSessions": 1,
+        "newSessions": 1,
+        "capturedBytes": 0,
+        "newInputBytes": 0,
+        "exactBytes": true,
+        "authorizationActive": true,
+        "sessions": [
+          {
+            "ordinal": 1,
+            "approvedDevice": true,
+            "active": true,
+            "peerClose": "unconfirmed"
+          }
+        ]
+      }
+    },
+    "afterCloseA": {
+      "a": {
+        "samples": 39,
+        "acceptedSessions": 1,
+        "newSessions": 0,
+        "capturedBytes": 0,
+        "newInputBytes": 0,
+        "exactBytes": true,
+        "authorizationActive": true,
+        "sessions": [
+          {
+            "ordinal": 1,
+            "approvedDevice": true,
+            "active": true,
+            "peerClose": "unconfirmed"
+          }
+        ]
+      },
+      "b": {
+        "samples": 40,
+        "acceptedSessions": 1,
+        "newSessions": 0,
+        "capturedBytes": 0,
+        "newInputBytes": 0,
+        "exactBytes": true,
+        "authorizationActive": true,
+        "sessions": [
+          {
+            "ordinal": 1,
+            "approvedDevice": true,
+            "active": true,
+            "peerClose": "unconfirmed"
+          }
+        ]
+      }
+    }
+  },
+  "flutterAtUiFailure": "running"
+}

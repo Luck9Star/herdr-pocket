@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:herdr_flutter_probe/host_catalog.dart';
+import 'package:herdr_flutter_probe/host_tabs.dart';
 import 'package:herdr_flutter_probe/network_runtime.dart';
 import 'package:herdr_flutter_probe/remote_adapter.dart';
+import 'host_catalog_test.dart' show catalogPairing;
 import 'remote_adapter_test.dart' show FakeSocket,failure;
 import 'remote_test_data.dart';
 
@@ -33,8 +37,88 @@ class GraceFixtureSocket extends FakeSocket implements RetiringSSHSocket,Gracefu
   @override Future<bool> finishGracefully({Duration budget=const Duration(seconds:1)}) {prepares++;return preparing.future;}
   @override Future<bool> get retired=>Future.value(true);
 }
+
+// Replace only the platform channel boundary; each peer observes real TCP EOF.
+class LoopbackGraceRuntime extends NativeNetworkRuntime {
+  LoopbackGraceRuntime(this.sockets) : readers = sockets.map((id, socket) => MapEntry(id, StreamIterator(socket)));
+  final Map<String,Socket> sockets;
+  final Map<String,StreamIterator<Uint8List>> readers;
+  final calls = <String>[];
+  @override Future<Object?> call(String method, Map<String,Object> args) async {
+    final id = args['streamId'] as String;
+    final socket = sockets[id]!;
+    calls.add('$id:$method');
+    switch (method) {
+      case 'streamRead':
+        final reader = readers[id]!;
+        final next = await reader.moveNext();
+        return {'bytes': next ? reader.current : Uint8List(0), 'eof': !next};
+      case 'streamFlush': await socket.flush(); return {'flushed': true};
+      case 'streamShutdown': await socket.close(); return {'shutdown': true};
+      case 'streamClose': socket.destroy(); return {'closed': true};
+      default: throw StateError('unexpected loopback stream operation');
+    }
+  }
+}
+
 Future<void> tick()=>Future<void>.delayed(Duration.zero);
 void main() {
+  test('closing tab A sends real TCP EOF while B receives fresh bytes on its original connection', () async {
+    const bound = Duration(seconds: 3);
+    final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final peers = <Socket>[];
+    final first = Completer<Socket>(), second = Completer<Socket>();
+    server.listen((peer) {
+      peers.add(peer);
+      if (peers.length == 1) first.complete(peer);
+      if (peers.length == 2) second.complete(peer);
+    });
+    addTearDown(() async { for (final peer in peers) { peer.destroy(); } await server.close(); });
+    final aSocket = await Socket.connect(server.address, server.port, timeout: bound);
+    addTearDown(aSocket.destroy);
+    final aPeer = await first.future.timeout(bound);
+    final bSocket = await Socket.connect(server.address, server.port, timeout: bound);
+    addTearDown(bSocket.destroy);
+    final bPeer = await second.future.timeout(bound);
+    final input = [<int>[], <int>[]];
+    final aEof = Completer<void>();
+    aPeer.listen(input[0].addAll, onDone: () { aEof.complete(); unawaited(aPeer.close()); });
+    bPeer.listen(input[1].addAll);
+
+    final runtime = LoopbackGraceRuntime({'A': aSocket, 'B': bSocket});
+    final a = NetworkSSHSocket(runtime, 'A', 'easy-tier:fixture');
+    final b = NetworkSSHSocket(runtime, 'B', 'easy-tier:fixture');
+    final readingA = a.stream.listen((_) {});
+    final readingB = StreamIterator(b.stream);
+    addTearDown(readingA.cancel);
+    addTearDown(readingB.cancel);
+    final tabs = HostTabs();
+    addTearDown(tabs.dispose);
+    HostProfile host(String label) => HostProfile.create(label, fixtureConfig(), catalogPairing(authorized: true), 1000);
+    tabs.open(host('A'));
+    final tabA = tabs.active!;
+    tabs.open(host('B'));
+    final tabB = tabs.active!;
+    final aClosing = Completer<bool>();
+    tabA.registerTransport(() async { aClosing.complete(await a.finishGracefully()); });
+    bPeer.add([1]);
+    expect(await readingB.moveNext().timeout(bound), isTrue);
+    expect(readingB.current, [1]);
+
+    tabs.close(tabA.id);
+    await aEof.future.timeout(bound);
+    expect(await aClosing.future.timeout(bound), isTrue);
+    expect(await a.retired.timeout(bound), isTrue);
+    expect(runtime.calls.where((call) => call == 'A:streamShutdown'), ['A:streamShutdown']);
+    expect(runtime.calls.where((call) => call == 'A:streamClose'), ['A:streamClose']);
+    bPeer.add([2]);
+    expect(await readingB.moveNext().timeout(bound), isTrue);
+    expect(readingB.current, [2]);
+    expect(tabs.active, same(tabB));
+    expect(peers, [aPeer, bPeer]);
+    expect(runtime.calls.where((call) => call.startsWith('B:')).every((call) => call == 'B:streamRead'), isTrue);
+    expect(input, [<int>[], <int>[]]);
+  });
   test('explicit close seals writes, drains once, half closes, preserves peer reply and waits EOF',() async {
     final runtime=GraceRuntime()..holdWrite=true;
     final a=NetworkSSHSocket(runtime,'A','easy-tier:fixture'),b=NetworkSSHSocket(runtime,'B','easy-tier:other');

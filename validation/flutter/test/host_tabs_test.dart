@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/host_catalog.dart';
@@ -7,6 +8,39 @@ import 'remote_test_data.dart';
 
 void main() {
   HostProfile profile(String name,String provider) => HostProfile.create(name,fixtureConfig(),catalogPairing(authorized:true),1000,provider:provider);
+  test('node stop joins a pending tab close without restarting either transport', () async {
+    final tabs = HostTabs();
+    addTearDown(tabs.dispose);
+    tabs.open(profile('A', 'easytier'));
+    final a = tabs.active!;
+    tabs.open(profile('B', 'easytier'));
+    final b = tabs.active!;
+    final aClose = Completer<void>(), bClose = Completer<void>();
+    final calls = <String>[];
+    a.registerTransport(() { calls.add('A'); return aClose.future; });
+    b.registerTransport(() { calls.add('B'); return bClose.future; });
+
+    tabs.close(a.id);
+    tabs.close(a.id);
+    expect(calls, ['A']);
+    expect(tabs.active, same(b));
+
+    var settled = false;
+    final stopping = tabs.closeHostsAndWait({a.hostId, b.hostId}).then((value) {
+      settled = true;
+      return value;
+    });
+    tabs.close(b.id);
+    expect(calls, ['A', 'B']);
+    expect(tabs.tabs, isEmpty);
+    bClose.complete();
+    await Future<void>.delayed(Duration.zero);
+    expect(settled, isFalse);
+
+    aClose.completeError(StateError('peer close was unconfirmed'));
+    expect(await stopping, isFalse);
+    expect(calls, ['A', 'B']);
+  });
   test('select hides old lease first; tabs own navigators and never activate a sibling on close',() {
     final first = profile('A','tailscale'), second = profile('B','easytier'), tabs = HostTabs();
     tabs.open(first); final a = tabs.active!; final events = <String>[];

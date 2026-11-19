@@ -70,6 +70,7 @@ class HostTabView {
 /// new one. Returning only exposes stopped UI; it never dials or sends input.
 class HostTabs extends ChangeNotifier {
   final List<HostTab> _tabs = [];
+  final Map<HostTab,Future<void>> _closingTransports = {};
   final String _instance = List.generate(16,(_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2,'0')).join();
   int _nextId = 0;
   List<HostTab> get tabs => List.unmodifiable(_tabs);
@@ -149,6 +150,25 @@ class HostTabs extends ChangeNotifier {
   }
   void close(String id) {
     final tab = find(id); if (tab == null) return;
+    _startTransportClose(tab);
+    _removeTab(tab);
+  }
+  Future<void> _startTransportClose(HostTab tab) {
+    final pending = _closingTransports[tab];
+    if (pending != null) return pending;
+    final completion = Completer<void>();
+    final closing = _closingTransports[tab] = completion.future;
+    tab.inputEligible.value = false;
+    completion.complete(Future<void>.sync(tab.closeTransport));
+    // The tab can disappear before the transport has finished. Node stop can
+    // still join this attempt, and a UI-only close owns any asynchronous error.
+    unawaited(closing.then<void>((_) { _closingTransports.remove(tab); },
+      onError:(Object _,StackTrace __) { _closingTransports.remove(tab); }));
+    return closing;
+  }
+  void _removeTab(HostTab tab) {
+    if (!_tabs.remove(tab)) return;
+    final id = tab.id;
     tab.inputEligible.value = false; tab.summaryLease?.close(); tab.visible.value = false;
     if (activeId == id) {
       final other = splitId == null ? null : find(splitId!);
@@ -157,14 +177,18 @@ class HostTabs extends ChangeNotifier {
       other?.layoutHidden.value = false;
       splitId = null; splitLeftId = null;
     } else if (splitId == id) { splitId = null; splitLeftId = null; }
-    _tabs.remove(tab); tab.dispose(); notifyListeners();
+    tab.dispose(); notifyListeners();
   }
-  void closeHost(String hostId) { for (final tab in List<HostTab>.of(forHost(hostId))) { close(tab.id); } }
+  void closeHost(String hostId) { for (final tab in List<HostTab>.of(forHost(hostId))) { _removeTab(tab); } }
   /// Start cancellation before removing widgets; a frame is not a cleanup ack.
   Future<bool> closeHostsAndWait(Set<String> hostIds,{Duration budget = const Duration(seconds:5)}) async {
     final affected = _tabs.where((tab) => hostIds.contains(tab.hostId)).toList();
-    final closing = [for (final tab in affected) Future<void>.sync(tab.closeTransport)];
-    for (final tab in affected) { close(tab.id); }
+    final closing = <Future<void>>{
+      for (final entry in _closingTransports.entries)
+        if (hostIds.contains(entry.key.hostId)) entry.value,
+      for (final tab in affected) _startTransportClose(tab),
+    };
+    for (final tab in affected) { _removeTab(tab); }
     try { await Future.wait(closing).timeout(budget); return true; }
     catch (_) { return false; } // User stop remains available after bounded cleanup.
   }
@@ -178,7 +202,7 @@ class HostTabs extends ChangeNotifier {
       final authorityReduced = currentAuth == 'revoked' || (tab.authorization == 'authorized' && currentAuth != 'authorized') ||
         (tab.consumed && !currentConsumed);
       if (matches.length != 1 || matches.single.requiresNetworkBinding || authorityReduced || HostTab.bindingFor(matches.single,networks) != tab.binding || (matches.single.networkProfileId != null && !networks.any((n) => n.id == matches.single.networkProfileId))) {
-        close(tab.id); notice = '资料已停用、删除或绑定改变 · 对应标签已停止'; changed = true;
+        _removeTab(tab); notice = '资料已停用、删除或绑定改变 · 对应标签已停止'; changed = true;
       } else {
         tab.authorization = currentAuth as String?; tab.consumed = currentConsumed;
         if (tab.label != matches.single.label || tab.provider != matches.single.provider) {

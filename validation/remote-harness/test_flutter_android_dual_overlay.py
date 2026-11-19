@@ -358,6 +358,77 @@ class BothStoppedAuditTests(unittest.TestCase):
                     write.assert_not_called()
 
 
+class SharedEasyTierAuditTests(unittest.TestCase):
+    def setUp(self):
+        from flutter_android_dual_overlay import require_shared_host_closed, shared_checkpoint
+        self.require_closed = require_shared_host_closed
+        self.checkpoint = shared_checkpoint
+        self.closed = set()
+        self.kind = {}
+        self.drift = {}
+
+    def audit(self, role, expected):
+        self.assertEqual(expected, b'')
+        value = evidence()
+        value.update(acceptedSessions=1, capturedBytes=0)
+        value['sessions'] = [dict(ordinal=1, approvedDevice=True, active=role not in self.closed,
+                                  peerClose=self.kind.get(role, 'unconfirmed'))]
+        return dict(value, **self.drift.get(role, {}))
+
+    def test_sessions_close_before_provider_teardown_and_survivor_remains_original(self):
+        baselines, progress = {}, {}
+        self.checkpoint('shared_ready', self.audit, baselines, progress)
+        self.closed.add('et'); self.kind['et'] = 'peer_eof'
+        self.checkpoint('shared_a_released', self.audit, baselines, progress)
+        self.closed.add('ts'); self.kind['ts'] = 'client_disconnect'
+        self.checkpoint('shared_b_released', self.audit, baselines, progress)
+        self.checkpoint('shared_node_stopped', self.audit, baselines, progress)
+        self.assertEqual(progress, {'bothOriginalSshLive': True, 'survivorFreshFrameOnOriginalSsh': True,
+            'aCloseBeforeBStop': True, 'bothClosedBeforeExplicitNodeStop': True,
+            'bothClosedAfterExplicitNodeStop': True})
+
+    def test_closed_socket_or_fixture_teardown_is_not_proof_and_reset_is_rejected(self):
+        self.closed.add('et')
+        baselines = {'et': (1, 1), 'ts': (1, 1)}
+        with self.assertRaisesRegex(DualOverlayDeviceFailure, 'shared_peer_close_unconfirmed'):
+            self.require_closed(self.audit, baselines, {'et'}, timeout=0)
+        self.kind['et'] = 'peer_reset'
+        with self.assertRaisesRegex(DualOverlayDeviceFailure, 'shared_peer_closed_by_reset'):
+            self.require_closed(self.audit, baselines, {'et'}, timeout=0)
+
+    def test_provider_connections_must_drain_while_the_app_is_still_running(self):
+        from flutter_android_dual_overlay import shared_relay_state
+        from types import SimpleNamespace
+        current = [0.0]
+        def clock():
+            return current[0]
+        def sleep(seconds):
+            current[0] += seconds
+        relay = SimpleNamespace(active_connections=lambda: {'easytier': 0, 'easytierSecond': int(clock() < .2)})
+        self.assertEqual(shared_relay_state(relay, lambda: None, active=False,
+            monotonic=clock, sleep=sleep), {'a': 0, 'b': 0})
+        with self.assertRaisesRegex(DualOverlayDeviceFailure, 'shared_relay_live_missing'):
+            shared_relay_state(relay, lambda: None, active=True, timeout=0)
+        def app_exited():
+            raise DualOverlayDeviceFailure('shared_device_exited_during_host_audit')
+        with self.assertRaisesRegex(DualOverlayDeviceFailure, 'shared_device_exited_during_host_audit'):
+            shared_relay_state(relay, app_exited, active=False)
+
+    def test_no_response_when_survivor_drifts_or_required_audit_runs_after_exit(self):
+        baselines = {'et': (1, 1), 'ts': (1, 1)}
+        self.closed.add('et'); self.kind['et'] = 'peer_eof'
+        self.drift['ts'] = {'newSessions': 1}
+        with self.assertRaisesRegex(DualOverlayDeviceFailure, 'host_audit_session_changed'):
+            self.require_closed(self.audit, baselines, {'et'}, timeout=0)
+        def app_exited():
+            raise DualOverlayDeviceFailure('shared_device_exited_during_host_audit')
+        with patch('flutter_android_dual_overlay.write_exchange') as write:
+            with self.assertRaisesRegex(DualOverlayDeviceFailure, 'shared_device_exited_during_host_audit'):
+                handle_stage('shared_a_released', session=None, adb='adb', serial='emulator-5554',
+                    run=None, first_stop='', baselines=baselines, shared=True, ensure_app_running=app_exited)
+            write.assert_not_called()
+
+
 class FailedHostAuditTests(unittest.TestCase):
     def test_failure_snapshot_only_keeps_bounded_counters(self):
         class Control:
@@ -560,6 +631,177 @@ class InstalledApkTest(unittest.TestCase):
                 with self.assertRaisesRegex(DualOverlayDeviceFailure, 'installed_apk_path_invalid'):
                     installed_apk_evidence(device, 'qa', target, lambda *_: {})
 
+
+class DeviceCleanupEvidenceTest(unittest.TestCase):
+    def test_first_ui_failure_survives_host_and_device_cleanup_failures(self):
+        import json
+        from pathlib import Path
+        import subprocess
+        import sys
+        import tempfile
+        from types import SimpleNamespace
+
+        import android_dual_overlay_session as host
+        import flutter_android_dual_overlay as driver
+        import flutter_direct_ssh_android as device
+
+        cleanup = dict.fromkeys(('reverseRemoved', 'relayStopped', 'controllerStopped',
+                                 'namespaceRemoved', 'hostPrivateDirectoryRemoved',
+                                 'controlReaderStopped', 'privateFilesRemoved'), True)
+        cleanup['reverseRemoved'] = False
+        reverse = {'removedConfirmed': 1, 'alreadyAbsent': 0,
+                   'problems': ['owned_mapping_remaining', 'remove_unconfirmed']}
+        session = host.AndroidDualOverlaySession.__new__(host.AndroidDualOverlaySession)
+        session.materials = {'etNetwork': dict.fromkeys(('networkName', 'networkSecret', 'peerUrl'),
+                                                        'synthetic private configuration')}
+        session.report = {'stage': 'ready', 'cleanup': cleanup, 'reverseCleanup': reverse}
+        session.start = lambda: None
+        session.control = SimpleNamespace(call=lambda request: {'event': 'host_audit', 'role': request['role'],
+            **dict.fromkeys(('acceptedSessions', 'newSessions', 'capturedBytes', 'newInputBytes'), 0), 'sessions': []})
+        session.read_host_profile = lambda _: {}
+        def close():
+            raise OSError('synthetic private cleanup detail')
+        session.close = close
+
+        def run(command, **kwargs):
+            if command[0] == 'flutter' or command[7] != 'sh':
+                return subprocess.CompletedProcess(command, 0, b'', b'')
+            return subprocess.CompletedProcess(command, 1, b'', b'error: device offline\n')
+
+        values = {('devices',): 'List of devices attached\nemulator-5554 device',
+                  ('shell', 'getprop', 'ro.kernel.qemu'): '1',
+                  ('shell', 'getprop', 'ro.build.version.sdk'): '35',
+                  ('shell', 'getprop', 'ro.product.cpu.abi'): 'x86_64',
+                  ('shell', 'am', 'get-current-user'): '0'}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flutter = Path(driver.__file__).resolve().parents[1] / 'flutter'
+            output = root / 'evidence'
+            args = SimpleNamespace(project=flutter, output=output, qa_bundle=root, host_bundle=root,
+                host_checkout=root, host_source=driver.HOST_SOURCE_SHA, native_source=driver.NATIVE_SOURCE_SHA,
+                scenario=driver.SHARED_SCENARIO)
+            env = {'RUNNER_TEMP': tmp, 'ANDROID_AVD_HOME': str(root / 'avd'),
+                   'GITHUB_SHA': 'a' * 40, 'GITHUB_RUN_ID': '1'}
+            with patch.object(device, 'checked_paths', return_value=(flutter, output)), \
+                 patch.object(device, 'verify_prepared'), patch.object(device, 'text', side_effect=lambda *key: values[key]), \
+                 patch.object(device, 'package_present', side_effect=[False, True]), \
+                 patch.object(device, 'forward_set', return_value=set()) as forwards, \
+                 patch.object(device, 'adb', side_effect=[None, OSError('synthetic private adb detail')]), \
+                 patch.object(host, 'AndroidDualOverlaySession', return_value=session), \
+                 patch.dict(sys.modules, dual_overlay_apk=SimpleNamespace(verify=lambda *_: {'apkSha256': 'b' * 64})), \
+                 patch.object(subprocess, 'Popen', return_value=SimpleNamespace(poll=lambda: 1)), \
+                 patch.object(subprocess, 'run', side_effect=run):
+                report = driver.run_device(args, env)
+            self.assertEqual(report, json.loads((output / 'manifest.json').read_text()))
+
+        case, = report['cases']
+        self.assertEqual(report['status'], 'failed')
+        self.assertEqual(case['stage'], 'device_ui')
+        self.assertEqual(case['errorCode'], 'private_exchange_read_failed')
+        self.assertEqual(case['exchangeFailure'], {'entry': 'stage', 'reason': 'device_offline'})
+        self.assertEqual(case['flutterAtUiFailure'], 'nonzero')
+        self.assertNotIn('uiStage', case)
+        self.assertFalse(case['hostCleanup'])
+        self.assertEqual(case['reverseCleanup'], reverse)
+        self.assertEqual(case['cleanupErrorCodes'], ['host_cleanup_incomplete', 'device_cleanup_incomplete'])
+        self.assertTrue(case['flutterStopped'])
+        self.assertFalse(case['packageRemoved'])
+        self.assertTrue(case['forwardsRestored'])
+        self.assertGreater(forwards.call_count, 1)
+        self.assertNotIn('synthetic private', json.dumps(report))
+
+
+class ApkBuildFailureTest(unittest.TestCase):
+    def test_classifies_only_known_diagnostics_from_the_final_bounded_attempt(self):
+        import io
+        from flutter_android_dual_overlay import classify_apk_build_failure
+
+        samples = (
+            (b'java.io.IOException: No space left on device\n', 'disk_space'),
+            (b"  > Could not GET 'https://example.invalid/?secret=fake'. Received 504\n", 'dependency_download'),
+            (b'\x1b[31m[!] No Android SDK found. Try setting the ANDROID_HOME environment variable.\x1b[0m\n', 'android_sdk'),
+            (b'   > Android Gradle plugin requires Java 17 to run. You are currently using Java 11.\n', 'jdk'),
+            (b'Gradle build daemon disappeared unexpectedly (it may have been killed or may have crashed)\n', 'gradle'),
+            (b'/private/app/source.dart:12:3: Error: synthetic private content\n', 'dart_compile'),
+            (b"Execution failed for task ':app:mergeDebugNativeLibs'.\n", 'native_packaging'),
+            (b"Execution failed for task ':app:packageDebug'.\n", 'apk_packaging'),
+            (b"Running Gradle task 'assembleDebug'...\nGradle task assembleDebug failed with exit code 1\n", 'unknown'),
+            (b"> Could not resolve all files for configuration ':classpath'.\n", 'unknown'),
+            (b"Missing asset '/tmp/No space left on device/logo.png'\n", 'unknown'),
+            (b"SDK location not found.\n> Could not GET 'https://example.invalid'\n", 'unknown'),
+            (b"  > Could not GET 'https://example.invalid'\nRetrying Gradle Build: #1, wait time: 100ms\n"
+             b'/private/app/source.dart:12:3: Error: synthetic private content\n', 'dart_compile'),
+            (b'java.io.IOException: Disk quota exceeded\n' + b'x\n' * (256 * 1024), 'unknown'),
+        )
+        for raw, expected in samples:
+            with self.subTest(expected=expected):
+                self.assertEqual(classify_apk_build_failure(io.BytesIO(raw)), expected)
+
+    def test_shared_build_failures_preserve_cleanup_and_publish_no_log(self):
+        import errno
+        import json
+        from pathlib import Path
+        import subprocess
+        import tempfile
+        from types import SimpleNamespace
+
+        import android_dual_overlay_session as host
+        import flutter_android_dual_overlay as driver
+        import flutter_direct_ssh_android as device
+
+        device_properties = {('devices',): 'List of devices attached\nemulator-5554 device',
+            ('shell', 'getprop', 'ro.kernel.qemu'): '1', ('shell', 'getprop', 'ro.build.version.sdk'): '35',
+            ('shell', 'getprop', 'ro.product.cpu.abi'): 'x86_64', ('shell', 'am', 'get-current-user'): '0'}
+        for mode, code, expected in (('nonzero', 'device_apk_build_failed', 'dependency_download'),
+                                     ('timeout', 'device_runner_failed', 'timeout'),
+                                     ('disk', 'device_runner_failed', 'disk_space')):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                output = root / 'evidence'
+                app = Path(driver.__file__).resolve().parents[1] / 'flutter'
+                args = SimpleNamespace(project=app, output=output, qa_bundle=root, host_bundle=root,
+                    host_checkout=root, host_source=driver.HOST_SOURCE_SHA, native_source=driver.NATIVE_SOURCE_SHA,
+                    scenario=driver.SHARED_SCENARIO)
+                env = {'RUNNER_TEMP': tmp, 'ANDROID_AVD_HOME': str(root / 'avd'),
+                       'GITHUB_SHA': 'a' * 40, 'GITHUB_RUN_ID': '1'}
+                logs = []
+
+                def run(command, **kwargs):
+                    self.assertIn('--dart-define=HERDR_ANDROID_SHARED_EASYTIER=true', command)
+                    self.assertEqual(kwargs['stderr'], subprocess.STDOUT)
+                    log = kwargs['stdout']
+                    logs.append(Path(log.name))
+                    log.write(b"  > Could not GET 'https://example.invalid/private?token=placeholder'\n"
+                              b'/tmp/private-config USER=account PRIVATE_KEY=synthetic\n')
+                    if mode == 'timeout':
+                        raise subprocess.TimeoutExpired(command, kwargs['timeout'], stderr=b'private buffer')
+                    if mode == 'disk':
+                        raise OSError(errno.ENOSPC, 'synthetic disk detail')
+                    return subprocess.CompletedProcess(command, 1)
+
+                with patch.object(device, 'checked_paths', return_value=(app, output)), \
+                     patch.object(device, 'verify_prepared'), \
+                     patch.object(device, 'text', side_effect=lambda *key: device_properties[key]), \
+                     patch.object(device, 'package_present', return_value=False), \
+                     patch.object(device, 'forward_set', return_value=set()), patch.object(device, 'adb') as adb, \
+                     patch.object(host, 'AndroidDualOverlaySession') as session, \
+                     patch.object(subprocess, 'run', side_effect=run):
+                    report = driver.run_device(args, env)
+                case, = report['cases']
+                self.assertEqual(case, {'status': 'failed', 'stage': 'build', 'scenario': driver.SHARED_SCENARIO,
+                                       'errorCode': code, 'apkBuildFailure': expected,
+                                       'packageRemoved': True, 'forwardsRestored': True})
+                session.assert_not_called()
+                adb.assert_not_called()
+                self.assertEqual(len(logs), 1)
+                self.assertFalse(logs[0].exists())
+                evidence = output / 'manifest.json'
+                self.assertEqual(list(output.iterdir()), [evidence])
+                manifest = evidence.read_text()
+                self.assertEqual(json.loads(manifest), report)
+                self.assertFalse(report['rawLogsUploaded'])
+                for private in ('example.invalid', 'token', '/tmp/', 'PRIVATE_KEY', 'account', 'private buffer'):
+                    self.assertNotIn(private, manifest)
 
 
 class WorkflowFallbackTest(unittest.TestCase):

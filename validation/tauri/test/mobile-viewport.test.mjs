@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {observeAndroidSshHeader, observeMobileViewport} from '../src/mobile-viewport.js';
+import {observeAndroidSshHeader, observeAndroidSshIme, observeMobileViewport} from '../src/mobile-viewport.js';
 import {readFileSync} from 'node:fs';
 
 test('header and SSH target union native and CSS safe-area insets without adding them',()=>{
@@ -21,9 +21,9 @@ test('the compact SSH terminal and settings use the shared top inset and the vis
   const css=readFileSync(new URL('../src/direct-ssh-live.css',import.meta.url),'utf8');
   assert.ok(css.includes('#host-home { padding:var(--hp-connection-top) 0 0; }'));
   assert.ok(css.includes('top:var(--hp-connection-top)'));
-  assert.ok(css.includes('height:calc(var(--hp-visual-height,100dvh) - var(--hp-connection-top) - var(--ssh-tabs-space))'));
+  assert.ok(css.includes('height:calc(var(--hp-ssh-ime-height,var(--hp-visual-height,100dvh)) - var(--hp-connection-top) - var(--ssh-tabs-space))'));
   assert.ok(css.includes('--ssh-tabs-space:calc(56px + env(safe-area-inset-bottom,0px))'));
-  assert.match(css,/body\.keyboard-visible[^{]*\{\s*--ssh-tabs-space:0px;[\s\S]*?\.route-tabs \{ display:none; \}/);
+  assert.match(css,/body:is\(\.ssh-ime-visible,\.keyboard-visible:not\(\.ssh-ime-known\)\)[^{]*\{\s*--ssh-tabs-space:0px;[\s\S]*?\.route-tabs \{ display:none; \}/);
 });
 
 function fixture() {
@@ -31,7 +31,7 @@ function fixture() {
   const viewport={height:800,offsetTop:0,addEventListener:(name,fn)=>callbacks.set('v:'+name,fn),removeEventListener:name=>callbacks.delete('v:'+name)};
   const view={innerWidth:390,innerHeight:800,devicePixelRatio:2.75,visualViewport:viewport,addEventListener:(name,fn)=>callbacks.set('w:'+name,fn),removeEventListener:name=>callbacks.delete('w:'+name)};
   const root={style:{setProperty:(key,value)=>props.set(key,value),removeProperty:key=>props.delete(key)}};
-  const body={classList:{toggle:(key,on)=>on?classes.add(key):classes.delete(key),remove:key=>classes.delete(key)}};
+  const body={classList:{toggle:(key,on)=>on?classes.add(key):classes.delete(key),remove:(...keys)=>keys.forEach(key=>classes.delete(key))}};
   return {viewport,view,root,body,callbacks,props,classes};
 }
 test('fixed controls follow visual keyboard inset and reset after close',()=>{
@@ -90,13 +90,85 @@ test('iOS entry stores scoped CSS points and distinguishes measured zero from un
 
 test('Android overlap uses window bounds and WebView screen position',()=>{
   const source=readFileSync(new URL('../android/TerminalKeyboardPlugin.kt',import.meta.url),'utf8');
-  assert.match(source, /currentWindowMetrics\.bounds\.top/);
+  assert.match(source, /currentWindowMetrics\.bounds/);
   assert.match(source, /windowTop \+ top/);
   assert.match(source, /\(safeTop - location\[1\]\)\.coerceAtLeast\(0\)/);
   const overlap=(root,top,view)=>Math.max(0,root+top-view);
   assert.equal(overlap(100,28,100),28);
   assert.equal(overlap(100,28,128),0);
 });
+test('native Android SSH IME covers unchanged and already reduced viewports, then clears on Back and exit', async t=>{
+  const f = fixture(), timers = new Map(), nodes = ['host-home', 'home-ssh', 'ssh-live'].map(()=>({hidden:false}));
+  const ids = Object.fromEntries(['host-home', 'home-ssh', 'ssh-live'].map((id,index)=>[id,nodes[index]]));
+  let mutation, now = 0, focused = true, nextTimer = 0, reads = 0;
+  let next = {imeVisible:false};
+  const old = globalThis.MutationObserver;
+  globalThis.MutationObserver = class {constructor(fn) {mutation=fn;} observe() {} disconnect() {}};
+  t.after(()=> {globalThis.MutationObserver=old;});
+  const doc = {documentElement:f.root, body:f.body, hidden:false, hasFocus:()=>focused,
+    getElementById:id=>ids[id], addEventListener:(name,fn)=>f.callbacks.set('d:'+name,fn),
+    removeEventListener:name=>f.callbacks.delete('d:'+name)};
+  Object.assign(f.view, {innerWidth:393,innerHeight:851,devicePixelRatio:2,performance:{now:()=>now},
+    setTimeout:fn=>{timers.set(++nextTimer,fn);return nextTimer;},clearTimeout:id=>timers.delete(id)});
+  Object.assign(f.viewport, {height:851,offsetTop:0,scale:1});
+  const settle = async()=>{await Promise.resolve(); await Promise.resolve();};
+  const tick = async(delta=160)=>{
+    now+=delta; const [id,fn] = timers.entries().next().value;
+    timers.delete(id); fn(); await settle();
+  };
+  const stop = observeAndroidSshIme(f.view,doc,()=>{reads++;return next;});
+  t.after(stop);
+  await settle();
+  assert.equal(f.classes.has('ssh-ime-known'),true);
+  assert.equal(f.classes.has('ssh-ime-visible'),false);
+  assert.equal(reads,1);
+  await tick(2200);
+  assert.equal(timers.size,0,'idle closed terminal stops requesting Insets');
+  const hit = {target:{closest:()=>true}};
+  next = {imeVisible:true,viewHeightPx:1702,imeOverlapPx:600};
+  f.callbacks.get('d:pointerdown')(hit);
+  await settle();
+  assert.equal(f.classes.has('ssh-ime-visible'),true);
+  assert.equal(f.props.get('--hp-ssh-ime-height'),'551px');
+  assert.equal(f.props.get('--hp-ssh-ime-inset'),'300px');
+  f.viewport.height=551;
+  f.callbacks.get('v:resize')();
+  assert.equal(f.props.get('--hp-ssh-ime-inset'),'300px','already reduced VisualViewport is not subtracted twice');
+  next = {imeVisible:true,viewHeightPx:1102,imeOverlapPx:0};
+  f.view.innerHeight=551;
+  await tick();
+  assert.equal(f.props.get('--hp-ssh-ime-height'),'551px');
+  assert.equal(f.props.get('--hp-ssh-ime-inset'),'0px','already resized layout needs no padding');
+  next = {imeVisible:true,viewHeightPx:1102,imeOverlapPx:1102};
+  await tick();
+  assert.equal(f.props.get('--hp-ssh-ime-height'),'0px','a fully covered WebView has no visible height');
+  next = {imeVisible:false};
+  await tick();
+  assert.equal(f.classes.has('ssh-ime-known'),true);
+  assert.equal(f.classes.has('ssh-ime-visible'),false);
+  assert.equal(f.props.has('--hp-ssh-ime-height'),false);
+  assert.equal(f.props.has('--hp-ssh-ime-inset'),false);
+
+  let resolveOld;
+  next = new Promise(resolve=>{resolveOld=resolve;});
+  await tick();
+  nodes[2].hidden=true;
+  mutation();
+  assert.equal(timers.size,0);
+  assert.equal(f.classes.has('ssh-ime-known'),false);
+  next={imeVisible:false};
+  nodes[2].hidden=false;
+  mutation(); await settle();
+  resolveOld({imeVisible:true,viewHeightPx:1702,imeOverlapPx:740});
+  await settle();
+  assert.equal(f.classes.has('ssh-ime-visible'),false,'late result from prior terminal cannot override current');
+  focused=false;
+  f.callbacks.get('w:blur')();
+  assert.equal(timers.size,0);
+  assert.equal(f.classes.has('ssh-ime-known'),false);
+  assert.equal(f.props.has('--hp-ssh-ime-inset'),false);
+});
+
 test('Android SSH header scroll tracking stops during review and outside the route',()=>{
   const f=fixture(), nodes={'host-home':{hidden:false},'home-ssh':{hidden:false},'ssh-key-change':{hidden:true}};
   const previous={ResizeObserver:globalThis.ResizeObserver,MutationObserver:globalThis.MutationObserver};

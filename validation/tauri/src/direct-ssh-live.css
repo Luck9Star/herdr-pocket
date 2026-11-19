@@ -30,9 +30,9 @@
     }
   }
 
-  body.keyboard-visible:has(#host-home:not([hidden]) #home-ssh:not([hidden]) #ssh-live:not([hidden])) {
+  body:is(.ssh-ime-visible,.keyboard-visible:not(.ssh-ime-known)):has(#host-home:not([hidden]) #home-ssh:not([hidden]) #ssh-live:not([hidden])) {
     --ssh-tabs-space:0px;
-    padding-bottom:var(--hp-visual-inset,0px);
+    padding-bottom:var(--hp-ssh-ime-inset,var(--hp-visual-inset,0px));
     .route-tabs { display:none; }
   }
 
@@ -41,7 +41,7 @@
     flex-direction:column;
     margin:0;
     /* Let very short viewports scroll to the keys once the terminal reaches its minimum. */
-    min-height:calc(var(--hp-visual-height,100dvh) - var(--hp-connection-top) - var(--ssh-tabs-space));
+    min-height:calc(var(--hp-ssh-ime-height,var(--hp-visual-height,100dvh)) - var(--hp-connection-top) - var(--ssh-tabs-space));
     padding-bottom:12px;
     .ssh-wide-control { display:none; }
     .ssh-compact-control, #ssh-active-title { display:block; }
@@ -128,8 +128,10 @@
     background:var(--hp-card);
   }
   #ssh-live :is(#ssh-focus, #ssh-hide-keyboard) svg { position:relative; }
-  body:not(.keyboard-visible) #ssh-focus, body.keyboard-visible #ssh-hide-keyboard { display:grid; }
-  body.keyboard-visible #ssh-focus, body:not(.keyboard-visible) #ssh-hide-keyboard { display:none; }
+  body:not(.ssh-ime-visible,.keyboard-visible:not(.ssh-ime-known)) #ssh-focus,
+  body:is(.ssh-ime-visible,.keyboard-visible:not(.ssh-ime-known)) #ssh-hide-keyboard { display:grid; }
+  body:is(.ssh-ime-visible,.keyboard-visible:not(.ssh-ime-known)) #ssh-focus,
+  body:not(.ssh-ime-visible,.keyboard-visible:not(.ssh-ime-known)) #ssh-hide-keyboard { display:none; }
 
   #home-ssh #ssh-terminal-output {
     flex:1 0 80px;

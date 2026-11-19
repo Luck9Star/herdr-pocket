@@ -7,7 +7,7 @@ import './connection-entry.css';
 import './direct-ssh-setup.css';
 import './direct-ssh-live.css';
 import { readTheme } from './theme.js';
-import { observeAndroidSshHeader, observeMobileViewport } from './mobile-viewport.js';
+import { observeAndroidSshHeader, observeAndroidSshIme, observeMobileViewport } from './mobile-viewport.js';
 import { initRemote } from './remote.js';
 import { initKeyRouter } from './key-router.js';
 import { initializePasteClipboard } from './mobile-clipboard.js';
@@ -45,6 +45,7 @@ void platformReady?.then(() => {
   if (shellPlatform.current() !== 'android') return;
   document.documentElement.classList.add('android-edge-to-edge');
   observeAndroidSshHeader();
+  observeAndroidSshIme(window, document, () => invoke('mobile_system_top_inset'));
 });
 observeMobileViewport(undefined, undefined, undefined, native ? async () => {
   await platformReady;

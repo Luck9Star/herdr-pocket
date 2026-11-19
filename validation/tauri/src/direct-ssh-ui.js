@@ -1,6 +1,6 @@
 import { createDirectSsh } from './direct-ssh.js';
 
-export function initDirectSshUI({native, invoke, channelFactory, terminalFactory, terminalCursor, clipboardRead, onBack}) {
+export function initDirectSshUI({native, invoke, channelFactory, terminalFactory, terminalCursor, clipboardRead, keyboardRequest, onBack}) {
   const $ = id => document.getElementById(id);
   const hideKeyboard = $('ssh-hide-keyboard');
   const compactLayout = globalThis.window?.matchMedia?.('(max-width:599px)');
@@ -495,10 +495,19 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     showSetupNotice(!compact());
     scrollToStep();
   };
-  $('ssh-focus').onclick = () => terminal?.focus();
+  function requestAndroidKeyboard(action) {
+    if (!compact() || !document.documentElement?.classList?.contains('android-edge-to-edge')) return;
+    const source = terminal, epoch = visibilityEpoch;
+    if (source && eligible(source, epoch)) keyboardRequest?.(action, source.textarea, () => eligible(source, epoch));
+  }
+  $('ssh-focus').onclick = () => {
+    terminal?.focus();
+    requestAndroidKeyboard('show');
+  };
   if (hideKeyboard) hideKeyboard.onclick = () => {
     if (controller.isReady()) {
       terminal?.textarea?.blur();
+      requestAndroidKeyboard('hide');
       if (compact()) scrollToStep();
       alignHeadingBelowHeader();
     }

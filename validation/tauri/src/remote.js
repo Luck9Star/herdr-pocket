@@ -867,7 +867,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
       pairStatus('公开连接资料已填入；请独立核对用户名和主机公钥，再创建设备公开请求。');render();
     }});
   let sshBackSection = 'dashboard';
-  const ssh = initDirectSshUI({native, invoke, clipboardRead, terminalCursor:theme.terminal.cursor,
+  const ssh = initDirectSshUI({native, invoke, clipboardRead, keyboardRequest, terminalCursor:theme.terminal.cursor,
     onBack: disconnected => {
       navigateHome(disconnected ? 'dashboard' : sshBackSection);
       if (disconnected) $('host-ssh-disconnected').hidden = false;

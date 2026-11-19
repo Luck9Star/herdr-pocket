@@ -11,6 +11,34 @@ WINDOW_HEIGHT = 1200
 WIDE_WIDTH = 1440
 NARROW_WIDTH = 700
 
+TICK_ROW_SCRIPT = r"""
+const panel=document.querySelector(arguments[0]);
+const viewport=panel?.querySelector('.term-scroll'), host=viewport?.querySelector('.terminal-host');
+const screen=host?.querySelector('.xterm-screen'), row=screen?.querySelector('.xterm-rows')?.children[22];
+if(!row || !row.getClientRects().length)return {text:null,layout:{reason:'row-missing'}};
+const focus=document.activeElement, selected=panel.dataset.focus;
+function measure(){
+    const canvas=screen.getBoundingClientRect(), line=row.getBoundingClientRect(), clip=viewport.getBoundingClientRect();
+    const y=line.top+line.height/2;
+    const hits=[0,10,29].map(col=>{
+        const x=canvas.left+(col+.5)*canvas.width/80;
+        if(x<0 || x>=innerWidth || y<0 || y>=innerHeight)return 'outside-window';
+        const hit=document.elementFromPoint(x,y);
+        return hit && host.contains(hit) ? 'terminal' : 'clipped-or-covered';
+    });
+    return {hits, rowY:Math.round(y), screenHeight:Math.round(canvas.height),
+        clipTop:Math.round(clip.top), clipBottom:Math.round(clip.top+viewport.clientHeight),
+        terminalScrollTop:Math.round(viewport.scrollTop), terminalScrollHeight:viewport.scrollHeight,
+        pageScrollY:Math.round(scrollY), windowWidth:innerWidth, windowHeight:innerHeight};
+}
+const initial=measure(), hit=data=>data.hits.every(value=>value==='terminal');
+if(!hit(initial))row.scrollIntoView({block:'nearest',inline:'start',behavior:'instant'});
+const final=measure();
+const focusPreserved=document.activeElement===focus && panel.dataset.focus===selected;
+return {text:focusPreserved && hit(final) ? row.textContent.replace(/\u00a0/g,' ').trim() : null,
+    layout:{reason:!focusPreserved?'focus-changed':hit(final)?'row-hit':'row-clipped',initial,final}};
+"""
+
 
 def observed_tick(text, side):
     if not isinstance(text, str) or len(text.encode()) > 65536:
@@ -88,6 +116,7 @@ class SplitDriver:
     def __init__(self, driver, output=None):
         self.driver = driver
         self.output = output
+        self.tick_layouts = {}
 
     def read(self, script, *args):
         return self.driver.call('POST', self.driver.session + '/execute/sync', {'script': script, 'args': list(args)})
@@ -258,26 +287,18 @@ class SplitDriver:
         return wait_for(observed, 's06_tauri_layout_' + stage)
 
     def rendered_tick(self, panel, side):
-        # Read a hit-testable rendered row without moving the application's input focus.
-        text = self.read(r"""
-            const host=document.querySelector(arguments[0]+' .terminal-host');
-            const screen=host?.querySelector('.xterm-screen'), row=screen?.querySelector('.xterm-rows')?.children[22];
-            if(!row || !row.getClientRects().length)return null;
-            const r=screen.getBoundingClientRect();
-            const y=r.top+22.5*r.height/24;
-            if(![0,10,29].every(col=>{
-                const x=r.left+(col+.5)*r.width/80;
-                const hit=document.elementFromPoint(x,y);
-                return x>=0&&x<innerWidth&&y>=0&&y<innerHeight&&!!hit&&host.contains(hit);
-            }))return null;
-            return row.textContent.replace(/\u00a0/g,' ').trim() || null;
-        """, panel)
+        sample = self.read(TICK_ROW_SCRIPT, panel)
+        layout = sample['layout']
+        self.tick_layouts[side] = layout
+        if layout['reason'] == 'focus-changed':
+            raise GuiFailure('s06_tauri_tick_scroll_changed_focus')
+        text = sample['text']
         return observed_tick(text, side) if text is not None else None
 
-    def ticks(self, panels, sides, floors=None):
+    def ticks(self, panels, sides, floors=None, stage='sample'):
+        self.tick_layouts = {}
         for side in sides:
             self.collapse_details(panels[side])
-        self.driver.wait_control(panels[sides[0]] + ' .term-scroll')
 
         def current():
             ticks = [self.rendered_tick(panels[side], side) for side in sides]
@@ -286,7 +307,13 @@ class SplitDriver:
             if floors is not None and not all(tick > floor for tick, floor in zip(ticks, floors)):
                 return None
             return ticks
-        return wait_for(current, 's06_tauri_viewport_ticks_unconfirmed', timeout=12)
+        try:
+            return wait_for(current, 's06_tauri_viewport_ticks_unconfirmed_' + stage, timeout=12)
+        except GuiFailure:
+            if self.output is not None:
+                diagnostic = {'stage': stage, 'sides': self.tick_layouts}
+                (self.output / 's06-tauri-tick-failure.json').write_text(json.dumps(diagnostic, sort_keys=True))
+            raise
 
     def screenshot(self, name):
         # The ordinary pairing form may reopen when returning to the workspace.
@@ -315,7 +342,7 @@ def exercise_window_resize(ui, panels, targets, approvals, check_bytes):
 
     before_window = ui.window(WIDE_WIDTH)
     before = ui.wait_layout(panels, targets, active, b, 'wide_before')
-    initial_ticks = ui.ticks(panels, (0, 1))
+    initial_ticks = ui.ticks(panels, (0, 1), stage='wide_before')
     check_open_peers()
     ui.screenshot('resize-wide-before')
 
@@ -325,7 +352,7 @@ def exercise_window_resize(ui, panels, targets, approvals, check_bytes):
     wait_for(lambda: ui.read("""return [...document.querySelectorAll('#view-tabs button')].filter(
         e=>e.getAttribute('aria-pressed')==='false' && e.textContent.endsWith(' · 观察已暂停')).length;""") == 1,
         's06_tauri_resize_partner_pause_unconfirmed')
-    narrow_tick = ui.ticks(panels, (1,), (initial_ticks[1],))[0]
+    narrow_tick = ui.ticks(panels, (1,), (initial_ticks[1],), 'narrow_active')[0]
     check_open_peers()
     ui.screenshot('resize-narrow')
 
@@ -337,7 +364,7 @@ def exercise_window_resize(ui, panels, targets, approvals, check_bytes):
     # visible fixture ticks too, so an old retained canvas is insufficient.
     restored = ui.wait_layout(panels, targets, active, b, 'wide_restored')
     require_same_positions(before, restored)
-    restored_ticks = ui.ticks(panels, (0, 1), (initial_ticks[0], narrow_tick))
+    restored_ticks = ui.ticks(panels, (0, 1), (initial_ticks[0], narrow_tick), 'wide_restored')
     check_open_peers()
     ui.screenshot('resize-wide-restored')
 
@@ -351,7 +378,7 @@ def exercise_window_resize(ui, panels, targets, approvals, check_bytes):
     if ui.read('return document.querySelector("#remote-setup").open;') is True:
         ui.named('配对与连接资料', '#remote-setup', 'summary')
     ui.wait_layout(panels, targets, paused, b, 'manual_paused')
-    held_ticks = ui.ticks(panels, (0, 1))
+    held_ticks = ui.ticks(panels, (0, 1), stage='manual_paused')
     if ui.window(NARROW_WIDTH) != narrow_window:
         raise GuiFailure('s06_tauri_manual_narrow_viewport_changed')
     ui.wait_layout(panels, targets, narrowed_paused, b, 'manual_narrow')
@@ -359,7 +386,7 @@ def exercise_window_resize(ui, panels, targets, approvals, check_bytes):
         raise GuiFailure('s06_tauri_manual_wide_viewport_changed')
     manual_wide = ui.wait_layout(panels, targets, paused, b, 'manual_wide')
     require_same_positions(before, manual_wide)
-    if ui.ticks(panels, (0, 1)) != held_ticks:
+    if ui.ticks(panels, (0, 1), stage='manual_wide') != held_ticks:
         raise GuiFailure('s06_tauri_manual_pause_old_frame_changed')
     check_open_peers()
     ui.screenshot('resize-manual-paused')
@@ -369,8 +396,8 @@ def exercise_window_resize(ui, panels, targets, approvals, check_bytes):
     ui.wait_layout(panels, targets, paused, 0, 'manual_focused')
     ui.named('恢复观察', panels[0] + ' .tab-connection-actions')
     ui.wait_layout(panels, targets, ('active', 'paused'), 0, 'manual_resumed')
-    manual_resumed_tick = ui.ticks(panels, (0,), (held_ticks[0],))[0]
-    if ui.ticks(panels, (1,)) != [held_ticks[1]]:
+    manual_resumed_tick = ui.ticks(panels, (0,), (held_ticks[0],), 'manual_resumed')[0]
+    if ui.ticks(panels, (1,), stage='manual_other_paused') != [held_ticks[1]]:
         raise GuiFailure('s06_tauri_manual_resume_woke_other_peer')
     check_open_peers()
     return {'windowRectRoundTrip': True, 'sizes': [before_window, narrow_window, restored_window],

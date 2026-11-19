@@ -1,3 +1,4 @@
+import json
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -92,15 +93,39 @@ class TauriSplitEvidenceTests(unittest.TestCase):
             require_same_positions(before, {'views': [{'rect': b}, {'rect': a}]})
 
     def test_advance_requires_strictly_new_ticks_on_every_requested_side(self):
-        ui = SplitDriver(SimpleNamespace(wait_control=lambda _: None))
+        ui = SplitDriver(SimpleNamespace())
         samples = iter((20, 30, 21, 30, 21, 31))
         with patch.object(ui, 'collapse_details'), patch.object(ui, 'rendered_tick', side_effect=samples) as tick:
             self.assertEqual(ui.ticks(['a', 'b'], (0, 1), (20, 30)), [21, 31])
             self.assertEqual(tick.call_count, 6)
 
+    def test_tick_failure_exports_only_the_stage_and_hit_geometry(self):
+        layout = {'reason': 'row-hit', 'final': {'hits': ['terminal'] * 3, 'rowY': 930}}
+        row = {'text': 'S06 B tick 000041', 'layout': layout}
+
+        def one_poll(probe, code, timeout):
+            self.assertIsNone(probe())  # A readable row with the old tick still fails.
+            self.assertEqual(timeout, 12)
+            raise GuiFailure(code)
+
+        with tempfile.TemporaryDirectory() as directory:
+            ui = SplitDriver(SimpleNamespace(), Path(directory))
+            with (patch.object(ui, 'collapse_details'), patch.object(ui, 'read', return_value=row),
+                  patch('s06_tauri_gui.wait_for', side_effect=one_poll)):
+                with self.assertRaisesRegex(GuiFailure, '^s06_tauri_viewport_ticks_unconfirmed_narrow_active$'):
+                    ui.ticks(['a', 'b'], (1,), (41,), 'narrow_active')
+            report = json.loads((Path(directory) / 's06-tauri-tick-failure.json').read_text())
+            self.assertEqual(report, {'stage': 'narrow_active', 'sides': {'1': layout}})
+
+    def test_tick_rejects_scroll_that_moves_dom_or_selected_focus(self):
+        ui = SplitDriver(SimpleNamespace())
+        with patch.object(ui, 'read', return_value={'text': None, 'layout': {'reason': 'focus-changed'}}):
+            with self.assertRaisesRegex(GuiFailure, '^s06_tauri_tick_scroll_changed_focus$'):
+                ui.rendered_tick('panel', 1)
+
     def test_replacement_connection_stops_resize_evidence_before_first_capture(self):
         ui = SimpleNamespace(window=lambda width: {'window': {'width': width}}, wait_layout=lambda *args: {},
-                             ticks=lambda *args: [10, 20])
+                             ticks=lambda *args, **kwargs: [10, 20])
         evidence = ({'authenticationCount': 1, 'closed': False}, {'authenticationCount': 2, 'closed': False})
         with patch('s06_tauri_gui.peer_connection_evidence', side_effect=evidence):
             with self.assertRaisesRegex(GuiFailure, '^s06_tauri_resize_did_not_keep_two_original_ssh_connections$'):

@@ -121,4 +121,96 @@ void main() {
     );
     expect(clicks, 0);
   });
+
+  testWidgets(
+    'finishes the iOS passphrase edit before one stable connect tap',
+    (tester) async {
+      tester.view.devicePixelRatio = 2;
+      tester.view.physicalSize = const Size(828, 1792);
+      addTearDown(tester.view.reset);
+      final passphrase = steps.control('direct-passphrase');
+      final connect = steps.control('direct-connect');
+      final events = <String>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ListView(
+              children: [
+                const SizedBox(height: 430),
+                TextField(
+                  key: const ValueKey('direct-passphrase'),
+                  obscureText: true,
+                  onSubmitted: (_) {
+                    expect(connect, findsNothing);
+                    expect(tester.view.viewInsets.bottom, 692);
+                    events.add('done');
+                    Future<void>.delayed(const Duration(milliseconds: 150), () {
+                      tester.view.viewInsets = const FakeViewPadding();
+                      events.add('keyboard_closed');
+                    });
+                  },
+                ),
+                const SizedBox(height: 345),
+                FilledButton(
+                  key: const ValueKey('direct-connect'),
+                  onPressed: () => events.add('tap'),
+                  child: const Text('Connect'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      Future<void>.delayed(const Duration(milliseconds: 250), () {
+        tester.view.viewInsets = const FakeViewPadding(bottom: 692);
+        events.add('keyboard_open');
+      });
+
+      await steps.enterEncryptedPassphrase(
+        tester,
+        passphrase,
+        'synthetic-passphrase',
+        finishIosEditing: true,
+      );
+      expect(events, ['keyboard_open', 'done', 'keyboard_closed']);
+      await steps.tap(
+        tester,
+        'direct-connect',
+        requireEnabled: true,
+        stableHitPoint: true,
+      );
+      expect(events, ['keyboard_open', 'done', 'keyboard_closed', 'tap']);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+  );
+
+  testWidgets('Android entry leaves the edit for its existing keyboard step', (
+    tester,
+  ) async {
+    var submissions = 0;
+    final passphrase = steps.control('direct-passphrase');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TextField(
+            key: const ValueKey('direct-passphrase'),
+            obscureText: true,
+            onSubmitted: (_) => submissions++,
+          ),
+        ),
+      ),
+    );
+    await steps.enterEncryptedPassphrase(
+      tester,
+      passphrase,
+      'synthetic-passphrase',
+      finishIosEditing: false,
+    );
+    final editor = find.descendant(
+      of: passphrase,
+      matching: find.byType(EditableText),
+    );
+    expect(tester.widget<EditableText>(editor).focusNode.hasFocus, isTrue);
+    expect(submissions, 0);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 }

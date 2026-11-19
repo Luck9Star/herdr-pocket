@@ -185,8 +185,8 @@ Tailscale、EasyTier 和 ZeroTier 分别推进，共用 M1 的可信连接与输
   **待验证。** 原型已有分层云构建和可重跑说明，独立 APK/启动层及历史源码已复核。发布候选仍需干净构建和逐端归档签名、分发与真实运行。[构建规则](07-build-and-release.md) · [归档复验](71-validation-branch-archive.md)
 - [ ] **M3-10** 第三方来源/版本/许可、native 补丁、字体声明、工具链与校验和关联对应 GUI/helper 包；按衍生改动继续开源的立场审查，并交付对应源码及所需重建材料。
   **待验证。** 根 LICENSE、第三方声明、补丁、字体和固定版本材料已入库。正式 GUI 和 helper 包仍需逐件核验随包声明、校验和、对应源码、重建及渠道条件。[第三方声明](../THIRD_PARTY_NOTICES.md) · [许可与渠道](17-license-and-distribution-review.md)
-- [ ] **M3-11** 提供贡献指南、issue 模板、脱敏诊断说明与按平台区分的支持矩阵；反馈默认不上传凭据或终端内容。
-  **内容已备，待验证公开表单。** 贡献指南和故障／建议模板已就绪，诊断项默认留空，由报告者填写。合入默认分支后，从 GitHub 的 New issue 检查两份模板可选、诊断项初始为空且可留空，再完成本项。验证可在提交 Issue 前结束。[贡献指南](../CONTRIBUTING.md) · [支持矩阵](05-product-design.md#8-五端支持与开源发布) · [诊断说明](53-mobile-connection-diagnostics.md#公开反馈)
+- [x] **M3-11** 提供贡献指南、issue 模板、脱敏诊断说明与按平台区分的支持矩阵；反馈默认不上传凭据或终端内容。
+  **公开表单已验证。** GitHub 的 New issue 可打开两份模板。「报告故障」的可公开诊断结论默认为空且可留空。「提出功能建议」没有诊断字段，选填的相关平台默认为空。两份表单均取消并返回列表，未发布 Issue。[表单证据](evidence/public-issue-forms-20261120/README.md) · [贡献指南](../CONTRIBUTING.md) · [支持矩阵](05-product-design.md#8-五端支持与开源发布) · [诊断说明](53-mobile-connection-diagnostics.md#公开反馈)
 - [ ] **M3-12** 先公开源码并通过测试渠道验证安装包、升级/卸载与已知限制，逐步上架；Android 直接安装测试用 APK，AAB 不当作直接安装包；iOS 云构建仍满足对应签名、安装与平台账户条件。
   **待验证。** 源码已公开，历史 Android 测试 Release v0.1.0 / v0.1.1 有分发及签名证据。真机安装、升级/卸载、iOS 签名分发及桌面正式渠道待验。[分发台账](56-project-status-and-handoff.md) · [iOS 构建指引](61-ios-personal-build-guide.md) · [iOS 测试分发](62-ios-free-distribution-guide.md)
 

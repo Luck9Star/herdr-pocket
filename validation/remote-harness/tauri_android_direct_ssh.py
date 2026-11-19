@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 import struct
 import subprocess
+import shutil
 import sys
 import time
 import uuid
@@ -537,6 +538,8 @@ def _ime_dom_state(browser, fixture):
       const endpoint=document.getElementById('ssh-live-endpoint');
       const badge=document.querySelector('.ssh-connected-badge');
       const creds=['ssh-password','ssh-key','ssh-passphrase'].map(id=>document.getElementById(id));
+      // all three credential controls must EXIST (missing DOM => fail, not pass)
+      const credentialControlsEmpty=creds.every(e=>e!==null&&!shown(e)&&e.value==='');
       const rows=[...document.querySelectorAll('#ssh-terminal .xterm-rows > div')]
         .map(row=>row.textContent.replace(/\u00a0/g,' ').replace(/\s+/g,' ').trim()).filter(Boolean);
       // Fixture sends exactly READY + CRLF + '$ ' prompt; allow the bare prompt
@@ -545,8 +548,8 @@ def _ime_dom_state(browser, fixture):
       return {activeTerminalLive:shown(live)&&!shown(setup),
         endpointMatched:endpoint&&endpoint.textContent.trim()===expected,
         connectedBadge:badge&&badge.textContent.trim()==='已连接',
-        authFormHidden:!auth||!shown(auth),
-        credentialControlsEmpty:creds.every(e=>!e||(!shown(e)&&e.value==='')),
+        authFormHidden:auth!==null&&!shown(auth),
+        credentialControlsEmpty,
         terminalReadyOnly};
     })()""".replace('__ARG__', json.dumps(expected)))
     if not isinstance(value,dict) or set(value)!=IME_DOM_KEYS or not all(type(v) is bool for v in value.values()):
@@ -559,7 +562,8 @@ def _foreground_owned():
     text=adb('shell','dumpsys','window','displays',check=False)
     for line in text.splitlines():
         if 'mCurrentFocus' in line:
-            return PACKAGE in line
+            # exact package token, not substring of some other component
+            return re.search(r'mCurrentFocus=.*[ /=]'+re.escape(PACKAGE)+r'($|/|\s)', line) is not None
     return False
 
 
@@ -614,7 +618,6 @@ def _ocr_public_marker(png, bounds):
         raise GuiFailure('direct_ime_proof_ocr_failed') from None
 
 
-IME_READY_MARKER = 'POCKET-ANDROID-READY'
 
 
 def _atomic_publish(output, png, evidence):

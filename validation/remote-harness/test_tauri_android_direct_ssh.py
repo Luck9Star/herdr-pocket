@@ -761,6 +761,81 @@ class ActiveNavigationTests(unittest.TestCase):
         self.assertNotIn('ime-keyboard-opened-native.png.tmp',result['files'])
         self.assertEqual(result['json'].get('errorCode'),'direct_ime_proof_publish_failed')
 
+    def test_ocr_public_marker_real_function_fails_closed_without_tesseract(self):
+        # exercises the real function; on hosts without tesseract (this repo's
+        # local policy: no global installs) the guard must raise, not pass
+        with patch.dict('os.environ', {'PATH': '/nonexistent'}):
+            with self.assertRaises(driver.GuiFailure) as raised:
+                driver._ocr_public_marker(b'\x89PNG\r\n\x1a\n'+b'0'*32, (0,0,10,10))
+            self.assertEqual(str(raised.exception), 'direct_ime_proof_ocr_missing')
+        with patch.object(driver.shutil, 'which', return_value='/fake/tesseract'):
+            with self.assertRaises(driver.GuiFailure) as raised:
+                driver._ocr_public_marker(b'not-a-png', (0,0,10,10))
+            self.assertEqual(str(raised.exception), 'direct_ime_proof_ocr_failed')
+            with self.assertRaises(driver.GuiFailure) as raised:
+                driver._ocr_public_marker(b'\x89PNG\r\n\x1a\n'+b'0'*32, (-5,0,10,10))
+            self.assertEqual(str(raised.exception), 'direct_ime_proof_ocr_failed')
+
+    def test_foreground_owned_requires_exact_package_token(self):
+        from android_gui import PACKAGE
+        good=f'  mCurrentFocus=Window{{4}} {PACKAGE}/MainActivity'
+        imposter=f'  mCurrentFocus=Window{{4}} com.other.pkg{PACKAGE}/x'
+        with patch.object(driver,'adb',return_value=good):
+            self.assertTrue(driver._foreground_owned())
+        with patch.object(driver,'adb',return_value=imposter):
+            self.assertFalse(driver._foreground_owned())
+        with patch.object(driver,'adb',return_value='  unrelated dumpsys line'):
+            self.assertFalse(driver._foreground_owned())
+
+    def test_ime_dom_predicate_whitelists_ready_plus_bare_prompt_only(self):
+        # run the exact JS shipped in _ime_dom_state through the driver's own
+        # evaluate expression via node, against a real xterm-style DOM stub
+        import re as _re, json as _json, subprocess as _sp, tempfile as _tf
+        src=Path(driver.__file__).read_text()
+        body=_re.search(r'value=browser\.evaluate\(r"""(\(\(\)=>\{[\s\S]*?\}\)\(\))"""\.replace', src).group(1)
+        script=f'''
+        globalThis.__pred__=require('fs').readFileSync(process.argv[1],'utf8');
+        globalThis.getComputedStyle=()=>({{visibility:'visible'}});
+        const inner=globalThis.__pred__.trim().replace(/^\\(\\(\\)=>\\{{/,'').replace(/\\}}\\)\\(\\)\\s*;?\\s*$/,'');
+        const fn=new Function('document','{{'+inner+'}}');
+        function mk(rows,cred){{
+          const divs=rows.map(t=>({{textContent:t}}));
+          const el=(vis=true,txt='')=>({{hidden:!vis,getClientRects:()=>vis?[{{}}]:[],textContent:txt}});
+          const ids={{'ssh-live':el(true),'ssh-setup':el(false),'ssh-credentials':el(false),
+            'ssh-live-endpoint':el(true,'fixture@127.0.0.1:2222'),
+            'ssh-password':cred.pw,'ssh-key':cred.key,'ssh-passphrase':cred.pp}};
+          const badge=el(true,'已连接');
+          return fn({{getElementById:id=>id in ids?ids[id]:null,
+            querySelector:s=>s==='.ssh-connected-badge'?badge:null,
+            querySelectorAll:s=>s==='#ssh-terminal .xterm-rows > div'?divs:[]}});}}
+        const hiddenEmpty={{hidden:true,getClientRects:()=>[],value:''}};
+        const okCred={{pw:hiddenEmpty,key:hiddenEmpty,pp:hiddenEmpty}};
+        const noKey={{pw:hiddenEmpty,pp:hiddenEmpty,key:null}};
+        const leakPw={{pw:{{hidden:false,getClientRects:()=>[{{}}],value:'leak'}},key:hiddenEmpty,pp:hiddenEmpty}};
+        const valPw={{pw:{{hidden:true,getClientRects:()=>[],value:'leak'}},key:hiddenEmpty,pp:hiddenEmpty}};
+        const cases=[
+          ['pos',['POCKET-ANDROID-READY','$'],okCred,'all'],
+          ['extra-line',['POCKET-ANDROID-READY','secret'],okCred,'term-false'],
+          ['no-marker',['$'],okCred,'term-false'],
+          ['missing-ctrl',['POCKET-ANDROID-READY','$'],noKey,'creds-false'],
+          ['visible-ctrl',['POCKET-ANDROID-READY','$'],leakPw,'creds-false'],
+          ['valued-ctrl',['POCKET-ANDROID-READY','$'],valPw,'creds-false'],
+        ];
+        let failed=0;
+        for(const [name,rows,cred,want] of cases){{
+          const r=mk(rows,cred);
+          const allOk=Object.values(r).every(Boolean);
+          const ok=want==='all'?allOk:want==='term-false'?!r.terminalReadyOnly:!r.credentialControlsEmpty;
+          if(!ok){{console.log('FAIL',name);failed++;}}
+        }}
+        process.exit(failed?1:0);
+        '''
+        with _tf.TemporaryDirectory() as tmp:
+            pred=Path(tmp)/'pred.js.body'
+            pred.write_text(body.replace('__ARG__', _json.dumps('fixture@127.0.0.1:2222')))
+            result=_sp.run(['node','--input-type=commonjs','-e',script,'--',str(pred)],capture_output=True,text=True)
+        self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+
     def test_active_navigation_captures_ime_proof_after_keyboard_touch(self):
         browser=Mock();fixture=Mock();fixture.snapshot.return_value=self.peer();order=[]
         def native(b,selector): order.append(('tap',selector))

@@ -4,6 +4,7 @@ import argparse
 import base64
 import binascii
 import errno
+import hashlib
 import io
 import json
 import os
@@ -145,6 +146,22 @@ def capture_terminal(driver, endpoint, token):
             time.sleep(.2)  # Only the pixels may be read again.
 
 
+def capture_outcome(driver, selector):
+    # Snapshot only after the real UI assertions; do not alter visibility or replay input.
+    def geometry():
+        return driver.observe('''const el = node(arguments[0]);
+            if (!visible(el) || document.hidden || !document.hasFocus() || devicePixelRatio !== 1) return null;
+            const r = el.getBoundingClientRect();
+            if (r.left < 0 || r.top < 0 || r.right > innerWidth || r.bottom > innerHeight ||
+                r.width <= 0 || r.height <= 0) return null;
+            return {viewport: [innerWidth, innerHeight], bounds: [r.left, r.top, r.width, r.height]};''', selector)
+    before = wait_for(geometry, 'direct_ssh_outcome_geometry_missing')
+    png = decode_viewport_capture(driver.call('GET', driver.session + '/screenshot'), before['viewport'])
+    require(geometry() == before, 'direct_ssh_outcome_geometry_changed')
+    return png, {'imageSha256': hashlib.sha256(png).hexdigest(), 'imageSize': before['viewport'],
+                 'bounds': before['bounds'], 'capture': 'native WebKitGTK WebDriver viewport'}
+
+
 def execute(driver, fixture, report):
     host = '127.0.0.1'
     endpoint = f'{fixture.username}@{host}:{fixture.port}'
@@ -200,20 +217,30 @@ def execute(driver, fixture, report):
 
     report['stage'] = 'disconnect'
     driver.click('#ssh-disconnect')
-    wait_for(lambda: driver.observe('const status = node("#ssh-status"); return visible(status) && '
-                                    'status.innerText === "已断开；重新连接需要再次输入凭据。" && '
-                                    '!visible(node("#ssh-live")) && node("#ssh-live-endpoint").innerText === "";'),
+    wait_for(lambda: driver.observe('''const card = node('#ssh-closed-feedback');
+        const title = node('#ssh-closed-title'), detail = node('#ssh-closed-detail');
+        return visible(card) && visible(title) && visible(detail) && card.contains(title) && card.contains(detail) &&
+            title.innerText === '本机已断开' && detail.innerText === '凭据已清空，重连时请重新填写。' &&
+            !visible(node('#ssh-live')) && node('#ssh-live-endpoint').innerText === '';'''),
              'direct_ssh_ui_disconnect_unconfirmed')
     require(fixture.wait_for_connections_closed(2), 'direct_ssh_peer_disconnect_unconfirmed')
     session_evidence(fixture.snapshot(), sent=True, closed=True)
     require(driver.observe('return arguments[0].every(s => node(s).value === "") && '
                            'node("#ssh-connect").disabled;', SECRET_FIELDS), 'direct_ssh_credentials_not_cleared')
-    driver.click('#show-remote')
-    wait_for(lambda: driver.observe('return visible(node("#home-dashboard")) && !visible(node("#home-ssh"));'),
-             'direct_ssh_home_not_restored')
+    outcome_png, outcome = capture_outcome(driver, '#ssh-closed-feedback')
     session_evidence(fixture.snapshot(), sent=True, closed=True)
-    report.update(terminal=screen, returnedHome=True, credentialFieldsCleared=True)
-    return png
+    report['stage'] = 'return_home'
+    driver.click('#ssh-return-home')
+    wait_for(lambda: driver.observe('''const home = node('#home-dashboard'), result = node('#host-ssh-disconnected');
+        return visible(home) && visible(result) && home.contains(result) && result.innerText === '本机已断开' &&
+            visible(node('#host-open-remote')) && !visible(node('#home-ssh'));'''),
+             'direct_ssh_home_not_restored')
+    home_png, home = capture_outcome(driver, '#host-ssh-disconnected')
+    session_evidence(fixture.snapshot(), sent=True, closed=True)
+    report.update(terminal=screen, disconnectOutcome=outcome, homeOutcome=home,
+                  returnedHome=True, credentialFieldsCleared=True)
+    return {'ordinary-terminal.png': png, 'ordinary-disconnect.png': outcome_png, 'ordinary-home.png': home_png}
+
 
 
 def driver_ports():
@@ -253,7 +280,7 @@ def native_run(app, report):
                         'direct_ssh_window_size_unconfirmed')
                 with DirectSshFixture(screen_proof=True, channel_deadline=time.monotonic() + 240) as fixture:
                     try:
-                        png = execute(driver, fixture, report)
+                        images = execute(driver, fixture, report)
                     finally:
                         # Snapshot before fixture cleanup, so a forced close
                         # can never appear as a successful user disconnect.
@@ -276,7 +303,7 @@ def native_run(app, report):
     require(not root.exists(), 'direct_ssh_temporary_resources_remain')
     report['cleanup'] = {'peerListenerReleased': True, 'fixturePasswordCleared': True,
                          'webdriverProcessStopped': True, 'webdriverPortsReleased': True, 'privateDirectoryRemoved': True}
-    return png
+    return images
 
 
 def main():
@@ -294,8 +321,9 @@ def main():
     report = {'schemaVersion': 1, 'sourceSHA': args.source_sha, 'platform': 'Linux Tauri GTK / Xvfb',
               'authentication': 'password', 'scope': 'native application and isolated loopback SSH', 'status': 'failed'}
     try:
-        png = native_run(args.app.resolve(), report)
-        (args.output / 'ordinary-terminal.png').write_bytes(png)
+        images = native_run(args.app.resolve(), report)
+        for name, png in images.items():
+            (args.output / name).write_bytes(png)
         report.update(status='passed', stage='complete')
     except (GuiFailure, ScreenshotGateError) as error:
         report['errorCode'] = str(error)

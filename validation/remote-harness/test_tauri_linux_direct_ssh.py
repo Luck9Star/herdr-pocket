@@ -22,6 +22,7 @@ from tauri_linux_direct_ssh import (
     GuiFailure,
     ScreenshotGateError,
     capture_terminal,
+    capture_outcome,
     decode_viewport_capture,
     port_is_released,
     probe_evidence,
@@ -139,6 +140,17 @@ class ScreenshotBindingTests(unittest.TestCase):
         for encoded, size in (('%%%%', [400, 160]), (self.encoded, [800, 320]), ('', [400, 160])):
             with self.subTest(size=size), self.assertRaisesRegex(GuiFailure, 'viewport_png_invalid'):
                 decode_viewport_capture(encoded, size)
+
+    def test_outcome_capture_binds_original_viewport_and_rejects_geometry_change(self):
+        geometry = {'viewport': [400, 160], 'bounds': [20, 20, 200, 60]}
+        self.driver.observe.return_value = geometry
+        png, evidence = capture_outcome(self.driver, '#ssh-closed-feedback')
+        self.assertEqual(png, self.png)
+        self.assertEqual(evidence['bounds'], geometry['bounds'])
+        self.assertEqual(len(evidence['imageSha256']), 64)
+        self.driver.observe.side_effect = [geometry, dict(geometry, bounds=[21, 20, 200, 60])]
+        with self.assertRaisesRegex(GuiFailure, 'outcome_geometry_changed'):
+            capture_outcome(self.driver, '#ssh-closed-feedback')
 
     @patch('tauri_linux_direct_ssh.verify_terminal_screenshot')
     @patch('tauri_linux_direct_ssh.terminal_geometry')

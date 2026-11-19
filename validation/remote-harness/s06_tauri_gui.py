@@ -61,6 +61,73 @@ return {text:focusPreserved && hit(final) ? row.textContent.replace(/\u00a0/g,' 
 """
 
 
+MANUAL_PAUSE_SCRIPT = r"""
+const [selectors,targets,element]=arguments;
+const one=(root,selector)=>{
+    const matches=root.querySelectorAll(selector);
+    return matches.length===1?matches[0]:null;
+};
+const visible=e=>!!e && !e.closest('[hidden]') && getComputedStyle(e).visibility==='visible' &&
+    !!e.getClientRects().length;
+const centerHit=r=>{
+    if(!r||r.width<=0||r.height<=0)return null;
+    const x=r.left+r.width/2, y=r.top+r.height/2;
+    return x>=0&&x<innerWidth&&y>=0&&y<innerHeight?document.elementFromPoint(x,y):null;
+};
+const remote=one(document,'#remote-page'), board=one(document,'#home-dashboard');
+const heading=board?.querySelector('#host-board-intro h2'), showBoard=one(document,'#show-remote');
+const onBoard=visible(heading) && heading.contains(centerHit(heading.getBoundingClientRect())) &&
+    showBoard?.getAttribute('aria-pressed')==='true';
+const onWorkspace=visible(remote) && !visible(document.querySelector('#host-home'));
+const page=document.hidden?'background':onWorkspace?'workspace':
+    onBoard&&!!remote&&!visible(remote)?'dashboard':'other';
+const states=selectors.map((selector,i)=>{
+    const panel=remote&&one(remote, '#view-content '+selector);
+    if(!panel)return {phase:'missing',notice:'none'};
+    const title=panel.querySelector(':scope > p:not([data-role])');
+    const target=title?.textContent.split(' · ').slice(-2) ?? [];
+    if(target.length!==2||!target.every((part,j)=>part===targets[i][j]))return {phase:'unbound',notice:'none'};
+    const phase=one(panel,'.tab-connection-actions')?.dataset.state;
+    const notice=panel.querySelector(':scope > p[role="status"]')?.textContent;
+    return {phase:['disconnected','connecting','starting','active','pausing','paused','resuming','closed'].includes(phase)
+        ?phase:'other',notice:notice==='观察已暂停，SSH 保留；需主动恢复。'?'paused-message':
+        notice==='暂停未确认，连接已取消；不会自动重连。'?'pause-failed-message':'none'};
+});
+const phases=states.map(state=>state.phase), pauseNotices=states.map(state=>state.notice);
+const viewCount=Math.min(remote?.querySelectorAll('#view-content .tab-connection-actions').length ?? 0,3);
+const count=document.querySelectorAll('#host-return-home').length;
+const button=one(document,'#host-return-home');
+const buttonBound=button?.tagName==='BUTTON' && button?.textContent.trim()==='返回主机看板' &&
+    !!button.closest('#remote-page #workbench-main') && button===element;
+const enabled=!!button && !button.matches(':disabled');
+const prepared=page==='workspace' && buttonBound && enabled && visible(button) &&
+    viewCount===2 && phases.length===2 && phases.every(phase=>phase==='active');
+if(prepared)button.scrollIntoView({block:'center',inline:'center',behavior:'instant'});
+const r=visible(button)?button.getBoundingClientRect():null;
+const hit=centerHit(r);
+const hitKind=hit?(button?.contains(hit)?'button':'other'):r?'outside-or-empty':'not-visible';
+const buttonReady=prepared && !!hit && button.contains(hit);
+if(buttonReady){
+    // Read only the fact that the real control received each user event.
+    const events={pointerDown:false,click:false};
+    window.__s06ManualPauseEvents=events;
+    button.addEventListener('pointerdown',e=>events.pointerDown=e.isTrusted,{capture:true,once:true});
+    button.addEventListener('click',e=>events.click=e.isTrusted,{capture:true,once:true});
+}
+const unsafe=['dialog[open]','#remote-setup[open]','.terminal-selection',
+    '#config-transfer','#home-ssh','#home-add','#network-panel'].some(selector=>
+        [...document.querySelectorAll(selector)].some(visible));
+const events=window.__s06ManualPauseEvents;
+const round=value=>Math.round(value);
+return {page,phases,pauseNotices,viewCount,buttonReady,buttonBound:!!buttonBound,buttonEnabled:enabled,
+    buttonCount:Math.min(count,2),
+    buttonRect:r?[r.left,r.top,r.right,r.bottom].map(round):null,hit:hitKind,
+    viewport:[innerWidth,innerHeight],scrollY:round(scrollY),
+    pointerDown:events?.pointerDown===true,trustedClick:events?.click===true,
+    safeScreenshot:!unsafe && (page==='workspace'||page==='dashboard')};
+"""
+
+
 def observed_tick(text, side):
     if not isinstance(text, str) or len(text.encode()) > 65536:
         raise GuiFailure('s06_tauri_visible_text_invalid')
@@ -335,6 +402,59 @@ class SplitDriver:
                 (self.output / 's06-tauri-tick-failure.json').write_text(json.dumps(diagnostic, sort_keys=True))
             raise
 
+    def pause_on_board(self, panels, targets):
+        """Click the real return control once and observe the board and both original tabs."""
+        trace = {'clickSent': False, 'clickReturned': False, 'before': None, 'after': []}
+        endpoint = self.driver.session
+        element_key = 'element-6066-11e4-a52e-4f735466cecf'
+
+        def prepare():
+            controls = self.driver.call('POST', endpoint + '/elements',
+                                        {'using': 'css selector', 'value': '#host-return-home'})
+            element = controls[0] if len(controls) == 1 else None
+            try:
+                sample = self.read(MANUAL_PAUSE_SCRIPT, panels, targets, element)
+            except GuiFailure as error:
+                if str(error) == 'webdriver_sync_stale_element_reference':
+                    return None  # The read is safe to retry. No click was sent.
+                raise
+            trace['before'] = sample
+            return element[element_key] if element and sample['buttonReady'] is True else None
+
+        def observe():
+            sample = self.read(MANUAL_PAUSE_SCRIPT, panels, targets, None)
+            recent = trace['after']
+            if not recent or recent[-1] != sample:
+                recent.append(sample)
+                if len(recent) > 8:
+                    del recent[1]
+            return sample
+
+        def paused_on_board():
+            sample = observe()
+            # The board must really be on screen. The two phases only allow
+            # returning to Terminal, where wait_layout verifies the visible pause.
+            return (sample['page'] == 'dashboard' and sample['viewCount'] == 2 and
+                    sample['phases'] == ['paused', 'paused'])
+
+        try:
+            control = wait_for(prepare, 's06_tauri_manual_pause_control_unconfirmed')
+            trace['clickSent'] = True
+            self.driver.call('POST', endpoint + '/element/' + control + '/click', {})
+            trace['clickReturned'] = True
+            wait_for(paused_on_board, 's06_tauri_manual_pause_unconfirmed')
+        except (GuiFailure, OSError, ValueError):
+            if self.output is not None:
+                trace['screenshotSaved'] = False
+                try:
+                    if observe()['safeScreenshot'] is True:
+                        self.screenshot('manual-pause-failure')
+                        trace['screenshotSaved'] = True
+                except (GuiFailure, OSError, ValueError):
+                    pass  # Keep the original operation failure.
+                (self.output / 's06-tauri-manual-pause-failure.json').write_text(json.dumps(trace, sort_keys=True))
+            raise
+
     def screenshot(self, name):
         # The ordinary pairing form may reopen when returning to the workspace.
         if self.read('return document.querySelector("#remote-setup").open;') is not False:
@@ -390,10 +510,7 @@ def exercise_window_resize(ui, panels, targets, approvals, check_bytes):
 
     # Return to the real home board explicitly to pause both observations,
     # then use the ordinary Terminal navigation to return to their saved tabs.
-    ui.driver.click('#host-return-home')
-    wait_for(lambda: ui.read("""const a=document.querySelectorAll('#view-content .tab-connection-actions');
-        return a.length===2 && [...a].every(e=>e.dataset.state==='paused');""") is True,
-        's06_tauri_manual_pause_unconfirmed')
+    ui.pause_on_board(panels, targets)
     ui.driver.click('#nav-terminal')
     if ui.read('return document.querySelector("#remote-setup").open;') is True:
         ui.named('配对与连接资料', '#remote-setup', 'summary')

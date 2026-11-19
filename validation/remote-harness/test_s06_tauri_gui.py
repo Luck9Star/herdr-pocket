@@ -170,6 +170,77 @@ class TauriSplitEvidenceTests(unittest.TestCase):
             SplitDriver(SimpleNamespace(session='/session/test', call=call)).named('管理')
         self.assertEqual(len(clicks), 1)
 
+    def test_manual_pause_requires_the_real_board_and_both_original_paused_panels(self):
+        for route, phases, count, accepted in (
+            ('dashboard', ['paused', 'paused'], 2, True),
+            ('workspace', ['paused', 'paused'], 2, False),
+            ('dashboard', ['paused', 'pausing'], 2, False),
+            ('dashboard', ['paused', 'unbound'], 2, False),
+            ('dashboard', ['paused', 'paused'], 3, False),
+        ):
+            with self.subTest(route=route, phases=phases, count=count):
+                clicks = []
+                def call(method, path, data=None):
+                    if path.endswith('/elements'):
+                        return [{'element-6066-11e4-a52e-4f735466cecf': 'original'}]
+                    if path.endswith('/click'):
+                        clicks.append((method, path, data))
+                        return None
+                    raise AssertionError(path)
+
+                def one_poll(probe, code, **kwargs):
+                    result = probe()
+                    if not result:
+                        raise GuiFailure(code)
+                    return result
+
+                ui = SplitDriver(SimpleNamespace(session='/session/test', call=call))
+                before = {'page': 'workspace', 'phases': ['active', 'active'], 'buttonReady': True}
+                after = {'page': route, 'phases': phases, 'viewCount': count, 'buttonReady': False}
+                with (patch.object(ui, 'read', side_effect=[before, after]),
+                      patch('s06_tauri_gui.wait_for', side_effect=one_poll)):
+                    if accepted:
+                        ui.pause_on_board(['a', 'b'], [[], []])
+                    else:
+                        with self.assertRaisesRegex(GuiFailure, '^s06_tauri_manual_pause_unconfirmed$'):
+                            ui.pause_on_board(['a', 'b'], [[], []])
+                self.assertEqual(clicks, [('POST', '/session/test/element/original/click', {})])
+
+    def test_manual_pause_never_clicks_an_occluded_control_or_replays_click_error(self):
+        for button_ready, safe, expected_clicks in ((False, False, 0), (True, False, 1), (True, True, 1)):
+            with self.subTest(button_ready=button_ready, safe=safe), tempfile.TemporaryDirectory() as directory:
+                clicks = []
+                def call(method, path, data=None):
+                    if path.endswith('/elements'):
+                        return [{'element-6066-11e4-a52e-4f735466cecf': 'original'}]
+                    if path.endswith('/click'):
+                        clicks.append(path)
+                        raise GuiFailure('webdriver_click_unknown_error')
+                    raise AssertionError(path)
+
+                def one_poll(probe, code, **kwargs):
+                    result = probe()
+                    if not result:
+                        raise GuiFailure(code)
+                    return result
+
+                state = {'page': 'workspace', 'phases': ['active', 'active'], 'buttonReady': button_ready,
+                         'safeScreenshot': safe}
+                ui = SplitDriver(SimpleNamespace(session='/session/test', call=call), Path(directory))
+                with (patch.object(ui, 'read', return_value=state), patch.object(ui, 'screenshot') as shot,
+                      patch('s06_tauri_gui.wait_for', side_effect=one_poll)):
+                    with self.assertRaises(GuiFailure):
+                        ui.pause_on_board(['a', 'b'], [[], []])
+                self.assertEqual(len(clicks), expected_clicks)
+                if safe:
+                    shot.assert_called_once_with('manual-pause-failure')
+                else:
+                    shot.assert_not_called()
+                report = json.loads((Path(directory) / 's06-tauri-manual-pause-failure.json').read_text())
+                self.assertEqual(report['clickSent'], button_ready)
+                self.assertFalse(report['clickReturned'])
+                self.assertIs(report['screenshotSaved'], safe)
+
     def test_visible_snapshots_require_the_correct_independent_peer_marker(self):
         self.assertEqual(observed_tick('Synthetic observe tick 000123', 0), 123)
         self.assertEqual(observed_tick('S06 B tick 000124', 1), 124)

@@ -176,25 +176,50 @@ final class MacosS06UITests: XCTestCase {
         return (named[0], field)
     }
 
-    private func enterPublicValue(_ text: String, into label: String, pair control: PairControl) throws {
-        let target = try reveal(label, kind: .textField, enabled: true, pair: control)
-        let code = control.rawValue
-        trace("PAIR_INPUT", "\(code),click")
-        target.click()
-        let before = try until("public_pair_field_owner_lost", seconds: 4) {
-            self.currentPairField(label, control: control)
+    private func focusedPairField(_ label: String, control: PairControl, in windowFrame: CGRect)
+        throws -> (owner: XCUIElement, field: XCUIElement) {
+        try until("public_pair_focus_unproven", seconds: 4) {
+            try self.require(self.app.state == .runningForeground && self.app.windows.count == 1
+                && self.window.exists && self.window.frame == windowFrame, "public_pair_window_changed")
+            guard let current = self.currentPairField(label, control: control) else {
+                throw Failure.check("public_pair_field_owner_lost")
+            }
+            guard let brand = UInt32("__HP_S06_FOCUS_BRAND__", radix: 16),
+                  let image = NSBitmapImageRep(data: current.owner.screenshot().pngRepresentation)?.cgImage else {
+                throw Failure.check("public_pair_focus_image_unavailable")
+            }
+            return MacosS06FocusOutline.present(in: image, width: current.owner.frame.width, brand: brand)
+                ? current : nil
         }
+    }
+
+    private func enterPublicValue(_ text: String, into label: String, pair control: PairControl) throws {
+        _ = try reveal(label, kind: .textField, enabled: true, pair: control)
+        let code = control.rawValue
+        let windowFrame = window.frame
+        guard let target = currentPairField(label, control: control) else {
+            throw Failure.check("public_pair_field_owner_lost")
+        }
+        let clickFrame = target.field.frame
+        Thread.sleep(forTimeInterval: 0.1)
+        try require(window.frame == windowFrame, "public_pair_window_changed")
+        guard let live = currentPairField(label, control: control), live.field.frame == clickFrame else {
+            throw Failure.check("public_pair_click_geometry_unstable")
+        }
+        trace("PAIR_INPUT", "\(code),click")
+        live.field.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
+        trace("PAIR_INPUT", "\(code),focus")
+        let before = try focusedPairField(label, control: control, in: windowFrame)
         func exact(_ value: String?) -> Bool { value?.utf8.elementsEqual(text.utf8) == true }
         let ownerBeforeExact = exact(before.field.value as? String)
-        before.field.typeKey("a", modifierFlags: .command)
+        app.typeKey("a", modifierFlags: .command)
+        _ = try focusedPairField(label, control: control, in: windowFrame)
         trace("PAIR_INPUT", "\(code),typing")
-        // XCTest requires keyboard focus on the element or its descendant.
-        // Send the fixture value once, to the named field's own native control.
-        before.field.typeText(text)
+        // Flutter's accessibility proxy and the native first responder can differ.
+        // The actual field outline proves ownership before app-level keyboard input.
+        app.typeText(text)
         trace("PAIR_INPUT", "\(code),typed")
-        let after = try until("public_pair_field_owner_lost", seconds: 4) {
-            self.currentPairField(label, control: control)
-        }
+        let after = try focusedPairField(label, control: control, in: windowFrame)
         let ownerAfterExact = exact(after.field.value as? String)
         let editors = after.owner.descendants(matching: .textView).allElementsBoundByIndex
             .filter { within(after.owner.frame, $0) }
@@ -212,14 +237,15 @@ final class MacosS06UITests: XCTestCase {
             trace("PAIR_READ", "\(code),\(bits)")
         }
         trace("PAIR_INPUT", "\(code),copy")
-        after.field.typeKey("a", modifierFlags: .command)
-        after.field.typeKey("c", modifierFlags: .command)
+        app.typeKey("a", modifierFlags: .command)
+        _ = try focusedPairField(label, control: control, in: windowFrame)
+        app.typeKey("c", modifierFlags: .command)
         _ = try until("public_value_not_read_back") {
             changed = self.clipboard.changeCount != cleared
             if changed { copyExact = exact(self.clipboard.string(forType: .string)) }
             return copyExact ? true : nil
         }
-        try require(currentPairField(label, control: control) != nil, "public_pair_field_owner_lost")
+        _ = try focusedPairField(label, control: control, in: windowFrame)
         trace("PAIR_INPUT", "\(code),verified")
     }
 

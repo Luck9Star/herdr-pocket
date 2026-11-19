@@ -225,6 +225,62 @@ class MacosS06Checks(unittest.TestCase):
         self.assertNotIn('private', json.dumps(facts))
         self.assertNotIn('Secret', json.dumps(facts))
 
+    def test_pair_focus_diagnostics_accept_only_fixed_phase_and_failure(self):
+        log = ("HP_S06_NATIVE_PAIR_CONTROL=host\n"
+               "HP_S06_NATIVE_PAIR_INPUT=host,focus\n"
+               "HP_S06_NATIVE_PAIR_INPUT=host,privateFocus\n"
+               "HP_S06_NATIVE_FAILURE=public_pair_focus_unproven\n"
+               "HP_S06_NATIVE_FAILURE=private_value\n")
+        facts = log_facts(log)
+        self.assertEqual(facts['lastPairInputStep'], 'focus')
+        self.assertEqual(facts['fixedFailure'], 'public_pair_focus_unproven')
+        self.assertNotIn('private', json.dumps(facts))
+
+    def test_generated_native_focus_color_comes_from_app_tokens(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            app = Path(temporary)
+            assets = app / 'assets/shared'
+            assets.mkdir(parents=True)
+            token = assets / 'design-tokens-v2.json'
+            generated = app / 'macos/RunnerTests/RunnerTests.swift'
+            generated.parent.mkdir(parents=True)
+            nonce = '7' * 64
+            with patch.object(runner, 'prepare'), patch.object(runner, 'install_test_semantics_hook'):
+                token.write_text(json.dumps({'colors': {'brand': '#123aEf'}}))
+                runner.prepare_test(app, nonce)
+                source = generated.read_text()
+                self.assertIn('UInt32("123aEf", radix: 16)', source)
+                self.assertIn('enum MacosS06FocusOutline', source)
+                self.assertNotIn('__HP_S06_FOCUS_BRAND__', source)
+                token.write_text(json.dumps({'colors': {'brand': 'private-text'}}))
+                with self.assertRaisesRegex(GuiFailure, 'focus_token_invalid'):
+                    runner.prepare_test(app, nonce)
+
+    @unittest.skipUnless(sys.platform == 'darwin' and shutil.which('swiftc'), 'requires local macOS AppKit')
+    def test_focus_outline_requires_both_edges_and_ignores_inner_color(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            driver = root / 'main.swift'
+            driver.write_text('''import CoreGraphics
+let sRGB = CGColorSpace(name: CGColorSpace.sRGB)!
+let context = CGContext(data: nil, width: 144, height: 64, bitsPerComponent: 8, bytesPerRow: 144 * 4,
+    space: sRGB, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+context.setFillColor(red: 1, green: 1, blue: 1, alpha: 1)
+context.fill(CGRect(x: 0, y: 0, width: 144, height: 64))
+context.setFillColor(red: 79.0 / 255, green: 70.0 / 255, blue: 229.0 / 255, alpha: 1)
+context.fill(CGRect(x: 72, y: 0, width: 1, height: 64))
+func focused() -> Bool { MacosS06FocusOutline.present(in: context.makeImage()!, width: 72, brand: 0x4f46e5) }
+precondition(!focused())
+context.fill(CGRect(x: 4, y: 0, width: 1, height: 64))
+precondition(!focused())
+context.fill(CGRect(x: 139, y: 0, width: 1, height: 64))
+precondition(focused())
+''')
+            executable = root / 'check-outline'
+            subprocess.run(['swiftc', runner.HERE / 'macos_s06_focus.swift', driver, '-o', executable],
+                           check=True, timeout=30)
+            subprocess.run([executable], check=True, timeout=5)
+
     def test_xcresult_counts_are_only_small_numeric_fields(self):
         raw = {'totalTestCount': 1, 'failedTests': 1, 'passedTests': True, 'skippedTests': 9000,
                'configuration': 'secret-data', 'failedDetails': ['secret-path']}

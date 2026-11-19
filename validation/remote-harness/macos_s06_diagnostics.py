@@ -14,7 +14,7 @@ PAIR_CONTROLS = {'entry', 'host', 'port', 'user', 'session', 'socket', 'herdr', 
                  'accept', 'connect', 'back'}
 PAIR_AX_COUNTS = ('named', 'expectedRole', 'withinRegion', 'hittable', 'enabled', 'namedTextViews',
                   'namedEditableChildren', 'formTitleHittable', 'storageUnavailableHittable')
-PAIR_INPUT_STEPS = {'click', 'typing', 'typed', 'copy', 'verified'}
+PAIR_INPUT_STEPS = {'click', 'focus', 'typing', 'typed', 'copy', 'verified'}
 PAIR_READ_BITS = ('ownerAXBeforeExact', 'ownerAXAfterExact', 'ownedEditorPresent',
                   'ownedEditorAXExact', 'clipboardChanged', 'clipboardExact')
 CHANNEL_FAILURES = {'scope_invalid', 'message_rejected', 'topic_occupied', 'prepare_denied',
@@ -25,7 +25,8 @@ FAILURES = {'private_channel_send_failed', 'private_channel_receive_failed',
             'isolated_display_too_small', 'native_window_missing', 'native_window_origin_not_reached',
             'native_window_width_not_reached', 'native_window_height_not_reached',
             'unique_visible_control_missing', 'public_value_not_read_back', 'public_request_unavailable',
-            'public_clipboard_write_failed', 'public_pair_field_owner_lost',
+            'public_clipboard_write_failed', 'public_pair_field_owner_lost', 'public_pair_window_changed',
+            'public_pair_click_geometry_unstable', 'public_pair_focus_image_unavailable', 'public_pair_focus_unproven',
             'reviewed_host_response_unavailable', 'reviewed_host_response_invalid',
             'peer_close_unconfirmed_while_window_running', 'peer_close_receipt_invalid', 'native_visible_peer_marker_missing',
             'native_visible_peer_marker_mismatch', 'native_visible_tick_invalid',

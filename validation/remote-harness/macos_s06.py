@@ -33,14 +33,22 @@ def prepare_test(app, nonce):
         raise GuiFailure('s06_native_channel_scope_invalid')
     fixture = (HERE / 'macos_s06_fixture.swift').read_text()
     channel = (HERE / 'macos_s06_channel.swift').read_text()
+    focus = (HERE / 'macos_s06_focus.swift').read_text()
     template = (HERE / 'macos_s06_xcuitest.swift').read_text()
-    placeholder = '__HP_S06_CHANNEL_NONCE__'
-    if template.count(placeholder) != 1:
-        raise GuiFailure('s06_native_test_template_invalid')
+    try:
+        tokens = json.loads(bounded_wire(app / 'assets/shared/design-tokens-v2.json', 65536))
+        brand = tokens['colors']['brand']
+    except (OSError, ValueError, KeyError, TypeError):
+        raise GuiFailure('s06_native_focus_token_invalid') from None
+    if not isinstance(brand, str) or re.fullmatch(r'#[a-fA-F0-9]{6}', brand) is None:
+        raise GuiFailure('s06_native_focus_token_invalid')
+    for placeholder, replacement in (('__HP_S06_CHANNEL_NONCE__', nonce), ('__HP_S06_FOCUS_BRAND__', brand[1:])):
+        if template.count(placeholder) != 1:
+            raise GuiFailure('s06_native_test_template_invalid')
+        template = template.replace(placeholder, replacement)
     prepare(app)
     install_test_semantics_hook(app)
-    (app / 'macos/RunnerTests/RunnerTests.swift').write_text(
-        fixture + '\n' + channel + '\n' + template.replace(placeholder, nonce))
+    (app / 'macos/RunnerTests/RunnerTests.swift').write_text('\n'.join((fixture, channel, focus, template)))
 
 
 def stock_binary(binary):

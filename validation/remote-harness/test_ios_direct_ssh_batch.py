@@ -37,30 +37,49 @@ class WorkflowRoutingTests(unittest.TestCase):
         self.assertNotIn('--include-encrypted-key', tauri)
         self.assertNotIn('encrypted-key-terminal', tauri)
 
+    def test_flutter_encrypted_rotation_option_is_not_shared_with_tauri(self):
+        workflow = (Path(__file__).resolve().parents[2] / '.github/workflows/direct-ssh-ios.yml').read_text()
+        flutter, tauri = self.job(workflow, 'flutter'), self.job(workflow, 'tauri')
+        prefix = 'refs/heads/codex/acceptance/direct-ssh-ios-flutter-only-encrypted-rotation-'
+        self.assertIn(f"FLUTTER_ENCRYPTED_ROTATION: ${{{{ startsWith(github.ref, '{prefix}') }}}}", flutter)
+        self.assertEqual(flutter.count('options+=(--encrypted-key-rotation)'), 2)
+        for name in (batch.ENCRYPTED_ROTATION_REVIEW, *batch.ENCRYPTED_ROTATION_PROOF,
+                     *batch.ENCRYPTED_ROTATION_PROOF.values()):
+            self.assertIn(name, flutter)
+            self.assertNotIn(name, tauri)
+
     def test_branch_routes_both_clients_or_a_single_requested_client(self):
         workflow = (Path(__file__).resolve().parents[2] / '.github/workflows/direct-ssh-ios.yml').read_text()
         routes = {}
+        manual = {}
+        prefix = 'refs/heads/codex/acceptance/direct-ssh-ios-'
+        combo = prefix + 'flutter-only-encrypted-rotation-'
         for client in ('flutter', 'tauri'):
             job = re.search(rf'(?ms)^  {client}-ordinary-ssh-ios:\n    if: (.*?)^    runs-on:', workflow)
             self.assertIsNotNone(job)
             routes[client] = []
             for clause in job[1].removeprefix('>-\n').split('&&'):
+                if clause.strip() == f"(!startsWith(github.ref, '{combo}') || github.event_name == 'workflow_dispatch')":
+                    manual[client] = combo
+                    continue
                 match = re.fullmatch(r"(!?)startsWith\(github\.ref, '([^']+)'\)", clause.strip())
                 self.assertIsNotNone(match, 'expected a branch-prefix condition')
                 routes[client].append(match.groups())
 
-        prefix = 'refs/heads/codex/acceptance/direct-ssh-ios-'
-        for ref, expected in (
-            (prefix + 'both-r1', {'flutter', 'tauri'}),
-            (prefix + 'flutter-only-r1', {'flutter'}),
-            (prefix + 'tauri-only-r1', {'tauri'}),
-            (prefix + 'flutter-only-encrypted-key-r1', {'flutter'}),
-            ('refs/heads/main', set()),
-            ('refs/tags/codex/acceptance/direct-ssh-ios-r1', set()),
+        for ref, event, expected in (
+            (prefix + 'both-r1', 'push', {'flutter', 'tauri'}),
+            (prefix + 'flutter-only-r1', 'push', {'flutter'}),
+            (prefix + 'tauri-only-r1', 'push', {'tauri'}),
+            (prefix + 'flutter-only-encrypted-key-r1', 'push', {'flutter'}),
+            (combo + 'r1', 'push', set()),
+            (combo + 'r1', 'workflow_dispatch', {'flutter'}),
+            ('refs/heads/main', 'workflow_dispatch', set()),
+            ('refs/tags/codex/acceptance/direct-ssh-ios-r1', 'workflow_dispatch', set()),
         ):
             with self.subTest(ref=ref):
                 selected = {client for client, clauses in routes.items()
-                            if all(ref.startswith(branch) != bool(negated) for negated, branch in clauses)}
+                            if all(ref.startswith(branch) != bool(negated) for negated, branch in clauses)
+                            and (client not in manual or not ref.startswith(manual[client]) or event == 'workflow_dispatch')}
                 self.assertEqual(selected, expected)
 
 class PublicEvidenceTests(unittest.TestCase):
@@ -80,22 +99,84 @@ class PublicEvidenceTests(unittest.TestCase):
                     'markerReceived': True, 'singleMarkerLineExact': True, 'sessionClosed': True, 'closed': True},
                 'authenticationMethod': 'publickey', 'peerClosedBeforeDriverExit': True}
 
-    def evidence(self, root, *, status='passed'):
+    def evidence(self, root, *, status='passed', encrypted_rotation=False):
         from PIL import Image
         artifacts = {}
-        for index, name in enumerate(sorted(batch.REQUIRED_IMAGES)):
+        proofs = batch.ENCRYPTED_ROTATION_PROOF if encrypted_rotation else batch.TERMINAL_PROOFS
+        names = {batch.ENCRYPTED_ROTATION_REVIEW, *proofs} if encrypted_rotation else batch.REQUIRED_IMAGES
+        for index, name in enumerate(sorted(names)):
             stream = io.BytesIO()
             Image.new('RGB', (8, 8), (index * 30, 40, 60)).save(stream, format='PNG')
             data = stream.getvalue()
             (root / name).write_bytes(data)
             artifacts[name] = hashlib.sha256(data).hexdigest()
-            if name in batch.TERMINAL_PROOFS:
-                (root / batch.TERMINAL_PROOFS[name]).write_text(json.dumps({
+            if name in proofs:
+                (root / proofs[name]).write_text(json.dumps({
                     'imageSha256': artifacts[name], 'markerVisible': True,
                     'tokenVisible': True, 'proofSequenceVisible': True}))
         report = {'sourceSHA': self.source_sha, 'status': status, 'artifacts': artifacts}
         (root / 'result.json').write_text(json.dumps(report))
         return report
+
+    def encrypted_rotation_report(self, root):
+        report = self.evidence(root, encrypted_rotation=True)
+        case = self.encrypted_key_case()
+        probe = {**case.pop('wrongPassphrase')['peer'], 'markerReceived': False,
+                 'authAccepted': False, 'sessionClosed': False}
+        case['acceptedSession'].update(id=4, hostKey='B')
+        case['protocolRef'] = 'encryptedRotationProtocol'
+        case['checkpoints'] = {'review': probe, 'rejected': {'stage': 2, 'connections': 2, 'connectionsClosed': True},
+            'cancelled': {'stage': 2, 'connections': 2, 'connectionsClosed': True},
+            'reprobed': {'stage': 3, 'connections': 3, 'connectionsClosed': True}}
+        case['device'] = dict.fromkeys(('sameTarget', 'oldFingerprintMatchedIndependentA',
+            'changedFingerprintMatchedIndependentB', 'rejectedBeforeAuthentication', 'reviewNavigationBlocked',
+            'cancelKeepsOldTrust', 'credentialsLockedBeforeApproval', 'noAutomaticConnection',
+            'freshProbeMatchedIndependentB', 'explicitRotatedTrustRequired', 'privateKeyPasted',
+            'passphraseObscured', 'privateInputRemoved', 'clipboardCleared', 'credentialsCleared'), True)
+        image, proof = next(iter(batch.ENCRYPTED_ROTATION_PROOF.items()))
+        case['terminalScreenshot'] = {'imageFile': image, 'imageSha256': report['artifacts'][image],
+            'criteriaFile': proof, 'criteriaSha256': hashlib.sha256((root / proof).read_bytes()).hexdigest()}
+        review = batch.ENCRYPTED_ROTATION_REVIEW
+        case['reviewScreenshot'] = {'imageFile': review, 'imageSha256': report['artifacts'][review],
+                                    'purpose': 'design-review-no-ocr'}
+        events = [probe, {**probe, 'id': 2, 'hostKey': 'B'}, {**probe, 'id': 3, 'hostKey': 'B'},
+                  {**case['acceptedSession'], 'authAccepted': True}]
+        cleanup = dict.fromkeys(('simulatorDeleted', 'fixtureClosed', 'flutterToolStopped', 'appRemoved',
+                                 'privateRemoved', 'encryptedFixtureClosed', 'encryptedSecretsCleared'), True)
+        report.update(kind='flutter-ios-simulator-encrypted-key-rotation', cases={'encryptedKeyRotation': case},
+            encryptedRotationProtocol={'connections': 4, 'connectionsClosed': True, 'connectionEvents': events},
+            cleanup={**cleanup, 'rawLogsUploaded': False},
+            screens={'encrypted-rotation': {'accepted': True, 'targetEvidence': {'targetVisible': True}}})
+        (root / 'result.json').write_text(json.dumps(report))
+        return report
+
+    def test_encrypted_rotation_publication_requires_exact_combination_and_separate_pixels(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            report = self.encrypted_rotation_report(root)
+            def publish(name, *, mode=True):
+                return batch.publish_evidence(root, root / name, shell='flutter', source_sha=self.source_sha,
+                                              encrypted_rotation=mode)
+            self.assertEqual(publish('verified'), {'result.json', *report['artifacts'], *batch.ENCRYPTED_ROTATION_PROOF.values()})
+            with self.assertRaisesRegex(batch.BatchFailure, 'artifact_manifest_invalid'):
+                publish('normal-mode', mode=False)
+            for key, bad, code in ((('encryptedRotationProtocol', 'connectionEvents', 1, 'authAttempts'), 1, 'case_invalid'),
+                                   (('cases', 'encryptedKeyRotation', 'checkpoints', 'cancelled', 'connections'), 3, 'case_invalid'),
+                                   (('cases', 'encryptedKeyRotation', 'acceptedSession', 'inputBytes'), 18, 'case_invalid'),
+                                   (('cases', 'encryptedKeyRotation', 'acceptedSession', 'singleMarkerLineExact'), False, 'case_invalid'),
+                                   (('cases', 'encryptedKeyRotation', 'protocolRef'), 'encryptedProtocol', 'case_invalid'),
+                                   (('cases', 'encryptedKeyRotation', 'terminalScreenshot', 'imageFile'), 'encrypted-key-terminal.png', 'artifact_ref_invalid'),
+                                   (('cases', 'encryptedKeyRotation', 'terminalScreenshot', 'criteriaSha256'), '0' * 64, 'criteria_hash_mismatch'),
+                                   (('cleanup', 'encryptedSecretsCleared'), False, 'case_invalid')):
+                parent = report
+                for part in key[:-1]:
+                    parent = parent[part]
+                old = parent[key[-1]]
+                parent[key[-1]] = bad
+                (root / 'result.json').write_text(json.dumps(report))
+                with self.subTest(key=key), self.assertRaisesRegex(batch.BatchFailure, code):
+                    publish(code + '-' + key[-1])
+                parent[key[-1]] = old
 
     def publish(self, root, destination):
         return batch.publish_evidence(root, destination, shell='tauri', source_sha=self.source_sha)

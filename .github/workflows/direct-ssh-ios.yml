@@ -17,12 +17,14 @@ jobs:
   flutter-ordinary-ssh-ios:
     if: >-
       startsWith(github.ref, 'refs/heads/codex/acceptance/direct-ssh-ios-') &&
-      !startsWith(github.ref, 'refs/heads/codex/acceptance/direct-ssh-ios-tauri-only-')
+      !startsWith(github.ref, 'refs/heads/codex/acceptance/direct-ssh-ios-tauri-only-') &&
+      (!startsWith(github.ref, 'refs/heads/codex/acceptance/direct-ssh-ios-flutter-only-encrypted-rotation-') || github.event_name == 'workflow_dispatch')
     runs-on: macos-15
     timeout-minutes: 60
     env:
       PYTHONDONTWRITEBYTECODE: '1'
       FLUTTER_INCLUDE_ENCRYPTED_KEY: ${{ startsWith(github.ref, 'refs/heads/codex/acceptance/direct-ssh-ios-flutter-only-encrypted-key-') }}
+      FLUTTER_ENCRYPTED_ROTATION: ${{ startsWith(github.ref, 'refs/heads/codex/acceptance/direct-ssh-ios-flutter-only-encrypted-rotation-') }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -77,6 +79,7 @@ jobs:
           export PATH="$RUNNER_TEMP/direct-ssh-sdk/bin:$PATH"
           options=()
           if [[ "$FLUTTER_INCLUDE_ENCRYPTED_KEY" == true ]]; then options+=(--include-encrypted-key); fi
+          if [[ "$FLUTTER_ENCRYPTED_ROTATION" == true ]]; then options+=(--encrypted-key-rotation); fi
           "$RUNNER_TEMP/direct-ssh-python/bin/python" validation/remote-harness/flutter_direct_ssh_ios.py \
             --project "$RUNNER_TEMP/direct-ssh-app" --output "$RUNNER_TEMP/direct-ssh-public" "${options[@]}"
       - name: Remove isolated app even if preparation or the runner failed
@@ -99,6 +102,7 @@ jobs:
         run: |
           options=()
           if [[ "$FLUTTER_INCLUDE_ENCRYPTED_KEY" == true ]]; then options+=(--include-encrypted-key); fi
+          if [[ "$FLUTTER_ENCRYPTED_ROTATION" == true ]]; then options+=(--encrypted-key-rotation); fi
           "$RUNNER_TEMP/direct-ssh-python/bin/python" validation/remote-harness/ios_direct_ssh_batch.py publish \
             --shell flutter --source-sha "$GITHUB_SHA" \
             --root "$RUNNER_TEMP/direct-ssh-public" --destination "$RUNNER_TEMP/direct-ssh-verified" "${options[@]}"
@@ -117,6 +121,9 @@ jobs:
             ${{ runner.temp }}/direct-ssh-verified/preconnect.png
             ${{ runner.temp }}/direct-ssh-verified/encrypted-key-terminal.png
             ${{ runner.temp }}/direct-ssh-verified/encrypted-key-terminal-ocr.json
+            ${{ runner.temp }}/direct-ssh-verified/encrypted-rotation-review.png
+            ${{ runner.temp }}/direct-ssh-verified/encrypted-rotation-terminal.png
+            ${{ runner.temp }}/direct-ssh-verified/encrypted-rotation-terminal-ocr.json
           if-no-files-found: warn
 
   tauri-ordinary-ssh-ios:

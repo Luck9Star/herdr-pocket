@@ -451,6 +451,7 @@ Future<void> runLinuxOrdinary(
   LinuxTarget target, {
   required void Function(String phase) step,
   required Checkpoint checkpoint,
+  TargetPlatform platform = TargetPlatform.linux,
 }) async {
   step('home');
   await tester.runAsync(app.main);
@@ -474,7 +475,7 @@ Future<void> runLinuxOrdinary(
   step('form');
   await openDirectSshFromHome(tester);
   final page = find.byType(DirectSshPage);
-  expect(Theme.of(tester.element(page)).platform, TargetPlatform.linux);
+  expect(Theme.of(tester.element(page)).platform, platform);
   final setupHeader = control('direct-page-header');
   expect(
     find.descendant(of: setupHeader, matching: find.text('普通 SSH')),

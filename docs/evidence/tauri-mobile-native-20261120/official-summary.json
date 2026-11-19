@@ -537,6 +537,7 @@
           "encryptedSecretsCleared": true,
           "rawLogsUploaded": false
         },
+        "cleanupNote": "reported fields only; overall path and native tap acceptance not passed",
         "cases": {
           "ordinary": "not_run",
           "keyChange": "not_run",

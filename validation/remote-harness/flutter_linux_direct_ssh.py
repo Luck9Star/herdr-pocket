@@ -171,6 +171,33 @@ def capture(request, token):
             time.sleep(.2)
 
 
+def capture_outcome(request):
+    first = native_window()
+    try:
+        frame = ImageGrab.grab(xdisplay=os.environ['DISPLAY'])
+    except OSError:
+        raise GuiFailure('flutter_linux_x11_framebuffer_unavailable') from None
+    with frame as image:
+        require(native_window() == first, 'flutter_linux_window_changed_during_capture')
+        x, y, width, height = first[1]
+        require(request.keys() == {'surface', 'outcomeBounds'} and request['surface'] == [width, height] and
+                x + width <= image.width and y + height <= image.height,
+                'flutter_linux_outcome_surface_mismatch')
+        bounds = request['outcomeBounds']
+        require(isinstance(bounds, list) and len(bounds) == 4 and all(type(n) is int for n in bounds),
+                'flutter_linux_outcome_bounds_invalid')
+        left, top, w, h = bounds
+        require(left >= 0 and top >= 0 and w > 0 and h > 0 and left + w <= width and top + h <= height,
+                'flutter_linux_outcome_bounds_invalid')
+        with io.BytesIO() as output:
+            image.save(output, format='PNG')
+            png = output.getvalue()
+        evidence = {'imageSha256': hashlib.sha256(png).hexdigest(), 'imageSize': list(image.size),
+                    'windowBounds': list(first[1]), 'bounds': [x + left, y + top, w, h],
+                    'capture': 'unscaled X11 Xvfb framebuffer PNG'}
+    return png, evidence
+
+
 def exchange(process, root, fixture, report):
     def request(name, *, timeout=45):
         def available():
@@ -181,11 +208,12 @@ def exchange(process, root, fixture, report):
             return None
         return wait_for(available, f'flutter_linux_checkpoint_timeout_{name}', timeout=timeout)[0]
 
-    png = None
+    images = {}
     for phase in ('probe', 'connected', 'capture', 'disconnect', 'complete'):
         report['checkpoint'] = phase
         value = request(phase, timeout=1000 if phase == 'probe' else 45)
-        require(phase in ('probe', 'capture') or value == {}, 'flutter_linux_unexpected_exchange_fields')
+        require(phase in ('probe', 'capture', 'disconnect', 'complete') or value == {},
+                'flutter_linux_unexpected_exchange_fields')
         if phase == 'probe':
             require(value.keys() == {'algorithm'} and value['algorithm'] in ('ssh-rsa', 'rsa-sha2-256', 'rsa-sha2-512'),
                     'flutter_linux_displayed_algorithm_invalid')
@@ -200,15 +228,18 @@ def exchange(process, root, fixture, report):
             report['fingerprintConfirmed'] = True
         elif phase == 'capture':
             session_evidence(fixture.snapshot(), sent=True, closed=False)
-            png, report['terminal'] = capture(value, fixture.screen_token)
+            images['ordinary-terminal.png'], report['terminal'] = capture(value, fixture.screen_token)
             session_evidence(fixture.snapshot(), sent=True, closed=False)
         else:
             require(fixture.wait_for_connections_closed(2), 'flutter_linux_peer_close_unconfirmed')
             session_evidence(fixture.snapshot(), sent=True, closed=True)
+            name = 'disconnect' if phase == 'disconnect' else 'home'
+            images[f'ordinary-{name}.png'], report[f'{name}Outcome'] = capture_outcome(value)
+            session_evidence(fixture.snapshot(), sent=True, closed=True)
         (root / f'{phase}.ok').touch(exist_ok=False)
     require(process.wait(timeout=40) == 0, 'flutter_linux_test_failed_after_home')
     report.update(returnedHome=True, credentialFieldsCleared=True)
-    return png
+    return images
 
 
 def run(app, source, report):
@@ -232,7 +263,7 @@ def run(app, source, report):
                     f'--dart-define=HERDR_FLUTTER_LINUX_DIRECT_DIR={root}', f'integration_test/{TEST}']
             with owned_process(args, cwd=app, env=env, log=root / 'flutter.log') as process:
                 try:
-                    png = exchange(process, root, fixture, report)
+                    images = exchange(process, root, fixture, report)
                 finally:
                     report['peer'] = fixture.snapshot()  # Before any forced teardown.
                     stage = read_exchange(root, 'stage')
@@ -244,7 +275,7 @@ def run(app, source, report):
     require(not root.exists(), 'flutter_linux_fixture_directory_remains')
     report['cleanup'] = {'ownedFlutterProcessStopped': True, 'peerListenerReleased': True,
                          'fixturePasswordCleared': True, 'fixtureDirectoryRemoved': True}
-    return png
+    return images
 
 
 def main():
@@ -265,8 +296,9 @@ def main():
               'authentication': 'password', 'scope': 'native Flutter integration_test with Flutter test input and X11 pixels',
               'physicalImeVerified': False, 'status': 'failed'}
     try:
-        png = run(app, args.source_sha, report)
-        (args.output / 'ordinary-terminal.png').write_bytes(png)
+        images = run(app, args.source_sha, report)
+        for name, png in images.items():
+            (args.output / name).write_bytes(png)
         report.update(status='passed', checkpoint='complete')
     except ScreenshotGateError as error:
         report['errorCode'] = str(error)

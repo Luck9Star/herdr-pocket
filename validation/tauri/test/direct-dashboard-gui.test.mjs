@@ -27,6 +27,7 @@ class Element {
   close() { this.open=false; this.previousFocus?.focus(); }
   replaceChildren(...nodes) { this.children = [...nodes]; }
   setAttribute(key, value) { this.attrs[key] = value; }
+  getAttribute(key) { return this.attrs[key] ?? null; }
   addEventListener(name, fn) { (this.events[name] ??= []).push(fn); }
   dispatch(name, event = {}) {
     for (const fn of this.events[name] || []) {
@@ -79,12 +80,13 @@ async function importedRemote() {
   return import(`data:text/javascript;base64,${source}`);
 }
 
-async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scanResponse, pairRequest=pairingCameraFixture().request, clipboardWrite, pairAcceptStored=true, hostRemove, hostCleanupRetry, read = null, compactEntry = null, tabInvoke } = {}) {
+async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scanResponse, pairRequest=pairingCameraFixture().request, clipboardWrite, pairAcceptStored=true, hostRemove, hostCleanupRetry, read = null, compactEntry = null, tabInvoke, sshInvoke } = {}) {
   const previous = {
     document: globalThis.document,
     window: globalThis.window,
     confirm: globalThis.confirm,
     fixture: globalThis.__directGuiDeps,
+    requestAnimationFrame: globalThis.requestAnimationFrame,
   };
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
   const nodes = Object.fromEntries(
@@ -115,6 +117,7 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scan
     addEventListener(name,fn) { (documentEvents[name] ??= []).push(fn); },
   };
   globalThis.window = { addEventListener(name,fn) { (windowEvents[name] ??= []).push(fn); }, confirm: () => true };
+  if (sshInvoke) globalThis.requestAnimationFrame = () => 1;
   if (compactEntry) {
     window.matchMedia = () => compactEntry;
     nodes['home-open-ssh'].parentElement = nodes['host-board-intro'];
@@ -142,6 +145,7 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scan
   const invoke = async (name, args = {}) => {
     calls.push({ name, args });
     if (tabInvoke && name.startsWith('remote_tab_')) return tabInvoke(name,args);
+    if (sshInvoke && name.startsWith('ssh_shell_')) return sshInvoke(name,args);
     if (name === 'ssh_host_key_probe') return {...args,publicKey:'ssh-ed25519 FIXTURE',fingerprint:'SHA256:fixture'};
     if (name === 'ssh_shell_open') return 'ssh-fixture';
     if (name === 'ssh_shell_close') return;
@@ -236,6 +240,7 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scan
       globalThis.window = previous.window;
       globalThis.confirm = previous.confirm;
       globalThis.__directGuiDeps = previous.fixture;
+      globalThis.requestAnimationFrame = previous.requestAnimationFrame;
     },
   };
 }
@@ -1943,11 +1948,11 @@ test('SSH authentication selection clears abandoned secrets and sends only the c
     n['ssh-auth-method'].value='key';n['ssh-auth-method'].dispatch('change');
     assert.equal(n['ssh-password'].value,'');assert.equal(n['ssh-password-fields'].hidden,true);
     assert.equal(n['ssh-key-fields'].hidden,false);assert.equal(n['ssh-review'].checked,true);
-    n['ssh-key'].value='-----BEGIN OPENSSH PRIVATE KEY-----\nfixture\n-----END OPENSSH PRIVATE KEY-----';
+    n['ssh-key'].value='-----BEGIN PRIVATE KEY-----\nQUJDREVGR0hJSktM\n-----END PRIVATE KEY-----';
     n['ssh-passphrase'].value='passphrase fixture';
     await n['ssh-form'].onsubmit({preventDefault(){}});
     const keyConfig=h.calls.filter(c=>c.name==='ssh_shell_open').at(-1).args.config;
-    assert.match(keyConfig.privateKeyPem,/\nfixture\n/);assert.equal(keyConfig.privateKeyPassphrase,'passphrase fixture');assert.equal('password' in keyConfig,false);
+    assert.match(keyConfig.privateKeyPem,/\nQUJDREVGR0hJSktM\n/);assert.equal(keyConfig.privateKeyPassphrase,'passphrase fixture');assert.equal('password' in keyConfig,false);
     assert.equal(n['ssh-key'].value,'');assert.equal(n['ssh-passphrase'].value,'');
     n['ssh-cancel'].click();await flush();
     n['ssh-key'].value='unused key';n['ssh-passphrase'].value='unused phrase';
@@ -1960,6 +1965,140 @@ test('SSH authentication selection clears abandoned secrets and sends only the c
     n['ssh-key'].value='disconnect secret';n['ssh-passphrase'].value='disconnect phrase';n['ssh-disconnect'].click();
     assert.equal(n['ssh-key'].value,'');assert.equal(n['ssh-passphrase'].value,'');
   } finally { h.finish(); await flush(); h.restore(); }
+});
+
+async function openOrdinary(h, id, host = 'fixture.invalid') {
+  const n = h.nodes;
+  n['home-open-ssh'].click();
+  assert.equal(n['home-ssh'].hidden, false);
+  n['ssh-host'].value = host;
+  n['ssh-host'].dispatch('input');
+  n['ssh-port'].value = '2222';
+  n['ssh-user'].value = 'fixture';
+  await n['ssh-probe'].onclick();
+  n['ssh-review'].checked = true;
+  n['ssh-review'].dispatch('change');
+  n['ssh-password'].value = 'temporary fixture';
+  n['ssh-password'].dispatch('input');
+  await n['ssh-form'].onsubmit({preventDefault(){}});
+  const channel = h.calls.filter(c => c.name === 'ssh_shell_open').at(-1).args.onEvent;
+  channel.onmessage({sessionId:id, seq:1, kind:'ready'});
+  assert.equal(n['ssh-live'].hidden, false);
+  assert.equal(n['ssh-disconnect'].disabled, false);
+  return channel;
+}
+
+test('entry sidebar toggle changes and restores its real expanded state', async () => {
+  const h = await setup(), button = h.nodes['sidebar-toggle'];
+  try {
+    const initial = button.getAttribute('aria-expanded');
+    button.click();
+    assert.notEqual(button.getAttribute('aria-expanded'), initial);
+    assert.equal(document.body.dataset.entrySidebar, initial === 'true' ? 'collapsed' : 'expanded');
+    button.click();
+    assert.equal(button.getAttribute('aria-expanded'), initial);
+    assert.equal(document.body.dataset.entrySidebar, initial === 'true' ? 'expanded' : 'collapsed');
+  } finally { h.restore(); }
+});
+
+test('ordinary SSH natural exit shows confirmed local retirement and genuine remote evidence', async () => {
+  let finishClose;
+  const close = new Promise(resolve => { finishClose = resolve; });
+  const h = await setup({compactEntry:{matches:true, addEventListener(){}}, sshInvoke:name => name === 'ssh_shell_open' ? 's1' : close});
+  const n = h.nodes;
+  try {
+    const channel = await openOrdinary(h, 's1');
+    channel.onmessage({sessionId:'s1', seq:2, kind:'exit', exitSignal:'USR2'});
+    assert.equal(n['ssh-live'].hidden, true);
+    assert.equal(n['ssh-closed-feedback'].hidden, false);
+    assert.equal(n['ssh-closed-title'].textContent, '正在断开…');
+    assert.equal(n['ssh-closed-feedback'].dataset.phase, 'pending');
+    assert.equal(n['ssh-password'].value, '');
+    finishClose(null);
+    await flush();
+    assert.equal(n['ssh-closed-title'].textContent, '本机已断开');
+    assert.equal(n['ssh-closed-feedback'].dataset.phase, 'confirmed');
+    assert.equal(n['ssh-closed-detail'].textContent, '远端已报告结束，凭据已清空。重连时请重新填写。');
+    assert.equal(n['ssh-return-home'].hidden, false);
+    n['ssh-return-home'].click();
+    assert.equal(n['home-dashboard'].hidden, false);
+    assert.match(n['host-ssh-disconnected'].textContent, /^本机已断开/);
+  } finally { finishClose(null); await flush(); h.restore(); }
+});
+
+test('returning home before ordinary SSH close resolves updates only that dashboard notice', async () => {
+  let finishClose;
+  const close = new Promise(resolve => { finishClose = resolve; });
+  const h = await setup({compactEntry:{matches:true, addEventListener(){}}, sshInvoke:name => name === 'ssh_shell_open' ? 's1' : close});
+  const n = h.nodes;
+  try {
+    const channel = await openOrdinary(h, 's1');
+    n['ssh-disconnect'].click();
+    assert.equal(n['ssh-return-home'].hidden, false);
+    n['ssh-return-home'].click();
+    assert.equal(n['home-dashboard'].hidden, false);
+    assert.equal(n['home-ssh'].hidden, true);
+    assert.equal(n['host-ssh-disconnected'].textContent, '正在断开…');
+    assert.equal(n['host-ssh-disconnected'].dataset.phase, 'pending');
+    channel.onmessage({sessionId:'s1', seq:2, kind:'exit'});
+    assert.equal(n['host-ssh-disconnected'].textContent, '正在断开…');
+    finishClose(null);
+    await flush();
+    assert.equal(n['home-dashboard'].hidden, false);
+    assert.equal(n['host-ssh-disconnected'].textContent, '本机已断开');
+    assert.equal(n['host-ssh-disconnected'].dataset.phase, 'confirmed');
+    channel.onmessage({sessionId:'s1', seq:3, kind:'exit', exitSignal:'other'});
+    assert.equal(n['host-ssh-disconnected'].textContent, '本机已断开；远端已报告结束。');
+    assert.deepEqual(h.calls.filter(c => c.name === 'ssh_shell_close').map(c => c.args.sessionId), ['s1']);
+  } finally { finishClose(null); await flush(); h.restore(); }
+});
+
+test('ordinary SSH failed close retains its phase on the returned dashboard', async () => {
+  const h = await setup({compactEntry:{matches:false, addEventListener(){}}, sshInvoke:name => name === 'ssh_shell_open' ? 's1' : false});
+  const n = h.nodes;
+  try {
+    await openOrdinary(h, 's1');
+    n['ssh-disconnect'].click();
+    await flush();
+    assert.equal(n['ssh-closed-feedback'].dataset.phase, 'failed');
+    n['ssh-return-home'].click();
+    assert.equal(n['host-ssh-disconnected'].dataset.phase, 'failed');
+    assert.equal(n['host-ssh-disconnected'].textContent, '本机连接关闭失败');
+  } finally { h.restore(); }
+});
+
+test('ordinary SSH late failure and exit cannot overwrite another route or newer terminal', async () => {
+  let finishClose;
+  const close = new Promise(resolve => { finishClose = resolve; });
+  let opened = 0;
+  const h = await setup({compactEntry:{matches:false, addEventListener(){}},
+    sshInvoke:(name, args) => name === 'ssh_shell_open' ? `s${++opened}`
+      : name === 'ssh_shell_close' && args.sessionId === 's1' ? close : null});
+  const n = h.nodes;
+  try {
+    const old = await openOrdinary(h, 's1');
+    n['ssh-disconnect'].click();
+    n['show-remote'].dispatch('click');
+    assert.equal(n['home-dashboard'].hidden, false);
+    assert.equal(n['host-ssh-disconnected'].textContent, '正在断开…');
+    n['nav-settings'].click();
+    assert.equal(n['home-settings'].hidden, false);
+    assert.equal(n['host-ssh-disconnected'].hidden, true);
+    n['show-remote'].dispatch('click');
+    assert.equal(n['home-dashboard'].hidden, false);
+    assert.equal(n['host-ssh-disconnected'].hidden, true);
+    await openOrdinary(h, 's2', 'second.invalid');
+    old.onmessage({sessionId:'s1', seq:2, kind:'exit', exitStatus:0});
+    finishClose(false);
+    await flush();
+    assert.equal(n['home-ssh'].hidden, false);
+    assert.equal(n['host-ssh-disconnected'].hidden, true);
+    assert.equal(n['ssh-live'].hidden, false);
+    assert.match(n['ssh-live-endpoint'].textContent, /second\.invalid/);
+    assert.equal(n['ssh-status'].textContent, '已连接，可以输入。');
+    n['ssh-disconnect'].click();
+    await flush();
+  } finally { finishClose(false); await flush(); h.restore(); }
 });
 
 test('mobile mode controls retain editor focus until intentional mode transition', async () => {

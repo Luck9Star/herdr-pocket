@@ -95,6 +95,19 @@ Map<String, Object> visiblePixels(
   };
 }
 
+Map<String, Object> outcomePixels(WidgetTester tester, Finder outcome) {
+  final size = tester.view.physicalSize;
+  expect(tester.view.devicePixelRatio, 1);
+  expect(outcome.hitTestable(), findsOneWidget);
+  final rect = tester.getRect(outcome);
+  final left = rect.left.ceil(), top = rect.top.ceil();
+  final right = rect.right.floor(), bottom = rect.bottom.floor();
+  expect(left >= 0 && top >= 0 && right <= size.width && bottom <= size.height &&
+      right > left && bottom > top, isTrue);
+  return {'surface': [size.width.round(), size.height.round()],
+    'outcomeBounds': [left, top, right - left, bottom - top]};
+}
+
 Future<void> runLinuxOrdinary(
   WidgetTester tester,
   LinuxTarget target, {
@@ -273,21 +286,35 @@ Future<void> runLinuxOrdinary(
     () =>
         terminalView.evaluate().isEmpty &&
         bound.evaluate().isEmpty &&
-        control('direct-form').evaluate().length == 1,
+        control('direct-form').evaluate().length == 1 &&
+        control('direct-status').evaluate().length == 1 &&
+        tester.widget<Text>(control('direct-status')).data == '本机已断开',
     'linux_direct_disconnect_timeout',
   );
-  expect(find.text('已断开；未重放输入。'), findsOneWidget);
+  expect(control('direct-closed-feedback').hitTestable(), findsOneWidget);
   expect(
-    credential.text.isEmpty &&
-        tester.widget<FilledButton>(connect).onPressed == null,
-    isTrue,
+    find.descendant(
+      of: control('direct-closed-feedback'),
+      matching: find.text('凭据已清空，重连时请重新填写。'),
+    ),
+    findsOneWidget,
   );
-  await checkpoint('disconnect', const {});
+  expect(credential.text, isEmpty);
+  expect(password, findsNothing);
+  expect(control('direct-passphrase'), findsNothing);
+  expect(connect, findsNothing);
+  expect(
+    tester.widget<FilledButton>(control('direct-probe')).onPressed,
+    isNotNull,
+  );
+  final outcomeGeometry = outcomePixels(tester, control('direct-closed-feedback'));
+  await checkpoint('disconnect', outcomeGeometry);
+  expect(outcomePixels(tester, control('direct-closed-feedback')), outcomeGeometry);
 
   step('return_home');
   await tapControl(
     tester,
-    find.byType(BackButton),
+    control('direct-return-home'),
     'linux_return_home',
     reveal: false,
   );
@@ -298,8 +325,15 @@ Future<void> runLinuxOrdinary(
         control('hosts-direct-ssh').hitTestable().evaluate().length == 1,
     'linux_direct_return_home_timeout',
   );
+  expect(control('home-ssh-closed').hitTestable(), findsOneWidget);
+  expect(
+    tester.widget<Text>(control('home-ssh-closed-title')).data,
+    '本机已断开',
+  );
   expect(tester.takeException(), isNull);
-  await checkpoint('complete', const {});
+  final homeGeometry = outcomePixels(tester, control('home-ssh-closed'));
+  await checkpoint('complete', homeGeometry);
+  expect(outcomePixels(tester, control('home-ssh-closed')), homeGeometry);
 }
 
 void main() {

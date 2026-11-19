@@ -5,6 +5,7 @@ import {createUnicodeTerminal} from './terminal-unicode.js';
 import {createTerminalSelection} from './terminal-selection.js';
 import {createFontDiagnostics} from './terminal-font-diagnostics.js';
 import { initDirectSshUI } from './direct-ssh-ui.js';
+import { directSshCloseFeedback } from './direct-ssh.js';
 import { initNetworkUI } from './network-ui.js';
 import { initTabWorkspace } from './tab-workspace.js';
 import { Terminal } from '@xterm/xterm';
@@ -866,17 +867,29 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
       pairStatus('公开连接资料已填入；请独立核对用户名和主机公钥，再创建设备公开请求。');render();
     }});
   let sshBackSection = 'dashboard';
+  let homeSshClose = null;
+  function renderHomeSshClose() {
+    const notice = $('host-ssh-disconnected');
+    notice.hidden = !homeSshClose || $('host-home').hidden || $('home-dashboard').hidden;
+    if (homeSshClose) notice.dataset.phase = homeSshClose.phase;
+    else delete notice.dataset.phase;
+    if (!notice.hidden) {
+      const {title} = directSshCloseFeedback(homeSshClose);
+      notice.textContent = homeSshClose.phase === 'confirmed' && homeSshClose.remoteReported
+        ? `${title}；远端已报告结束。` : title;
+    }
+  }
   const ssh = initDirectSshUI({native, invoke, clipboardRead, keyboardRequest, terminalCursor:theme.terminal.cursor,
-    onBack: disconnected => {
-      navigateHome(disconnected ? 'dashboard' : sshBackSection);
-      if (disconnected) $('host-ssh-disconnected').hidden = false;
-    },
+    onBack: (outcome, returnToDashboard) => navigateHome(outcome || returnToDashboard ? 'dashboard' : sshBackSection),
+    onCloseUpdate: outcome => { if (homeSshClose === outcome) renderHomeSshClose(); },
     channelFactory:()=>new Channel(), terminalFactory:options=>createUnicodeTerminal(Terminal,options)});
   function setHomeSection(section) {
-    if (section !== 'dashboard') $('host-ssh-disconnected').hidden = true;
     const wasHidden = $('home-ssh').hidden;
-    if (section !== 'ssh' && !$('home-ssh').hidden) ssh.hide();
+    const close = section !== 'ssh' && !wasHidden ? ssh.hide() : null;
+    if (section !== 'dashboard') homeSshClose = null;
+    else if (close) homeSshClose = close;
     for (const name of ['dashboard','terminal','network','settings','add','ssh']) $('home-'+name).hidden=name!==section;
+    renderHomeSshClose();
     if (section === 'ssh' && wasHidden) ssh.show();
     for (const [id,name] of [['show-remote','dashboard'],['nav-terminal','terminal'],['nav-network','network'],['nav-settings','settings']]) $(id).setAttribute('aria-pressed',String(name===section || name==='terminal' && section==='ssh'));
   }
@@ -886,6 +899,21 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     if ($('host-home').hidden) $('show-remote').click();
     setHomeSection(section);
     if(section==='network' && $('network-panel').hidden && !$('network-open').disabled) $('network-open').click();
+  }
+  const sidebarToggle = $('sidebar-toggle');
+  if (sidebarToggle) {
+    const updateSidebarToggle = () => {
+      const expanded = document.body.dataset.entrySidebar
+        ? document.body.dataset.entrySidebar === 'expanded' : globalThis.innerWidth >= 960;
+      sidebarToggle.setAttribute('aria-expanded', String(expanded));
+      sidebarToggle.setAttribute('aria-label', expanded ? '收起侧栏' : '展开侧栏');
+    };
+    sidebarToggle.onclick = () => {
+      document.body.dataset.entrySidebar = sidebarToggle.getAttribute('aria-expanded') === 'true' ? 'collapsed' : 'expanded';
+      updateSidebarToggle();
+    };
+    globalThis.window?.addEventListener('resize', updateSidebarToggle);
+    updateSidebarToggle();
   }
   $('nav-terminal').onclick=()=>{ if(ssh.isActive()) {navigateHome('ssh');return;} if (!$('remote-page').hidden) {setHomeSection('terminal');return;} if(workspace.hasTabs()) {onLeaveFixture();showRemotePage();return;} navigateHome('terminal'); };
   $('nav-network').onclick=()=>navigateHome('network');
@@ -1007,6 +1035,8 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     closeConfigTransfer();
     void workspace.hide();cancel('已离开远端读取；没有后台连接或自动恢复。'); showingRemote=false;
     saveHostDraft(); hostNavigation++; $('host-home').hidden=true; $('remote-page').hidden=true; $('fixture-workbench').hidden=false;
+    homeSshClose = null;
+    renderHomeSshClose();
     $('show-fixture').setAttribute('aria-pressed','true'); $('show-remote').setAttribute('aria-pressed','false'); onFixture();
   };
   $('show-remote').onclick=()=>{

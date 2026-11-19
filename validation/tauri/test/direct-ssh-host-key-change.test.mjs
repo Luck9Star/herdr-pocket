@@ -43,7 +43,7 @@ class Element {
   blur() {}
 }
 
-function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBottom = 130, compact = false, clipboardRead, onBack, failClose = false } = {}) {
+function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBottom = 130, compact = false, clipboardRead, onBack, failClose = false, closeReply = null } = {}) {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const ids = [...html.matchAll(/id="([^"]+)"/g)].map(match => match[1]);
   const nodes = Object.fromEntries(ids.map((id) => [id, new Element()]));
@@ -85,7 +85,11 @@ function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBot
     scrollBy: (x, y) => scrolls.push([x, y]),
     scrollTo: (x, y) => tops.push([x, y]),
   };
-  if (compact) view.matchMedia = () => ({matches:true,addEventListener() {}});
+  const compactLayout = {
+    matches: compact,
+    addEventListener(type, listener) { this[type] = listener; },
+  };
+  view.matchMedia = () => compactLayout;
   globalThis.document = document;
   globalThis.window = view;
   globalThis.requestAnimationFrame = (fn) => { frames.push(fn); return frames.length; };
@@ -123,12 +127,13 @@ function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBot
     }
     if (cmd === "ssh_shell_close") {
       if (failClose) throw Error("fixture_close_failed");
-      return {};
+      return closeReply;
     }
     return {};
   };
   const terminalFactory = () => ({
     textarea: new Element(),
+    options: {},
     modes: { applicationCursorKeysMode: false },
     open() {},
     onData() {},
@@ -161,6 +166,10 @@ function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBot
     view,
     navGroups,
     heading,
+    setCompact(value) {
+      compactLayout.matches = value;
+      compactLayout.change();
+    },
     probe,
     holdProbe: promise => { pendingProbe = promise; },
     connect,
@@ -723,6 +732,30 @@ test("mobile trust requires explicit consent and retains old trust after rejecti
   } finally { h.restore(); }
 });
 
+test("desktop setup requires explicit fingerprint confirmation and cancel retains old trust", async () => {
+  const h = setup({compact:false}), n = h.nodes;
+  try {
+    await h.probe();
+    assert.equal(n["home-ssh"].dataset.sshStep, "trust");
+    n["ssh-trust-cancel"].onclick();
+    assert.equal(n["home-ssh"].dataset.sshStep, "target");
+    assert.equal(h.openCalls().length, 0);
+    await h.probe();
+    n["ssh-trust-confirm"].onclick();
+    assert.equal(n["home-ssh"].dataset.sshStep, "auth");
+    n["ssh-password"].value = "fixture";
+    await n["ssh-form"].onsubmit({preventDefault(){}});
+    await flush();
+    assert.equal(n["ssh-key-change"].hidden, false);
+    n["ssh-key-cancel"].onclick();
+    assert.match(n["ssh-prior-fingerprint"].textContent, /SHA256:reviewedLocalOnly/);
+    await n["ssh-probe"].onclick();
+    n["ssh-trust-cancel"].onclick();
+    assert.match(n["ssh-prior-fingerprint"].textContent, /SHA256:reviewedLocalOnly/);
+    assert.equal(h.openCalls().length, 1);
+  } finally { h.restore(); }
+});
+
 test("mobile target edits retire late probe and private key paste replies", async () => {
   const pending = Promise.withResolvers();
   const clipboard = Promise.withResolvers();
@@ -774,12 +807,12 @@ test("mobile private key gate checks a complete envelope and recognized encrypte
 
 test("an acknowledged explicit close announces once and preserves the mobile target", async () => {
   const announced = [];
-  const h = setup({compact:true,onBack:closed=>announced.push(closed)});
+  const h = setup({compact:true,onBack:(...args)=>announced.push(args)});
   const n = h.nodes;
   try {
     assert.equal(n["ssh-closed-feedback"].hidden,true);
     n["ssh-step-back"].onclick();
-    assert.deepEqual(announced,[false]);
+    assert.deepEqual(announced,[[null,false]]);
     h.setAccept(true);
     await h.probe();
     n["ssh-trust-confirm"].onclick();
@@ -790,6 +823,9 @@ test("an acknowledged explicit close announces once and preserves the mobile tar
     await flush();
     assert.equal(h.calls.filter(call=>call.cmd==="ssh_shell_close").length,1);
     assert.equal(n["ssh-closed-feedback"].hidden,false);
+    assert.equal(n["ssh-closed-title"].textContent,"本机已断开");
+    assert.equal(n["ssh-closed-detail"].textContent,"凭据已清空，重连时请重新填写。");
+    assert.equal(n["ssh-return-home"].hidden,false);
     assert.equal(n["ssh-password"].value,"");
     assert.equal(n["ssh-host"].value,"127.0.0.1");
     assert.equal(n["ssh-user"].value,"tester");
@@ -797,13 +833,13 @@ test("an acknowledged explicit close announces once and preserves the mobile tar
     n["ssh-return-home"].onclick();
     n["ssh-return-home"].onclick();
     assert.equal(n["ssh-closed-feedback"].hidden,true);
-    assert.deepEqual(announced,[false,true]);
+    assert.deepEqual(announced,[[null,false],["confirmed",true]]);
   } finally { h.restore(); }
 });
 
 test("an unconfirmed close is reported without creating a home disconnect notice", async () => {
   const announced = [];
-  const h = setup({compact:true,failClose:true,onBack:closed=>announced.push(closed)});
+  const h = setup({compact:true,failClose:true,onBack:(...args)=>announced.push(args)});
   const n = h.nodes;
   try {
     h.setAccept(true);
@@ -812,10 +848,87 @@ test("an unconfirmed close is reported without creating a home disconnect notice
     await h.connect();
     n["ssh-disconnect"].onclick();
     await flush();
-    assert.match(n["ssh-status"].textContent,/无法确认/);
-    assert.equal(n["ssh-closed-feedback"].hidden,true);
-    assert.equal(n["ssh-return-home"].hidden,true);
-    n["ssh-step-back"].onclick();
-    assert.deepEqual(announced,[false]);
+    assert.match(n["ssh-status"].textContent,/本机连接关闭失败/);
+    assert.equal(n["ssh-closed-feedback"].hidden,false);
+    assert.equal(n["ssh-closed-title"].textContent,"本机连接关闭失败");
+    assert.equal(n["ssh-closed-detail"].textContent,"会话可能仍在。可返回首页。");
+    assert.equal(n["ssh-return-home"].hidden,false);
+    n["ssh-return-home"].onclick();
+    assert.deepEqual(announced,[["failed",true]]);
+  } finally { h.restore(); }
+});
+
+for (const [outcome, options] of [
+  ["confirmed", {}],
+  ["returned false", { closeReply: false }],
+  ["rejected", { failClose: true }],
+]) {
+  test(`desktop explicit disconnect reports ${outcome} and returns to the dashboard once`, async () => {
+    const announced = [];
+    const h = setup({ ...options, onBack: (...args) => announced.push(args) });
+    const n = h.nodes;
+    const confirmed = outcome === "confirmed";
+    try {
+      h.setAccept(true);
+      await h.probe();
+      await h.connect();
+      assert.equal(n["ssh-live"].hidden, false);
+      n["ssh-disconnect"].onclick();
+      n["ssh-disconnect"].onclick();
+      await flush();
+
+      assert.equal(n["home-ssh"].dataset.sshClose, confirmed ? "confirmed" : "failed");
+      assert.match(n["ssh-status"].textContent, confirmed ? /^本机已断开/ : /^本机连接关闭失败/);
+      assert.deepEqual(h.tops.at(-1), [0, 0]);
+      assert.equal(n["ssh-live"].hidden, true);
+      assert.equal(n["ssh-return-home"].hidden, false);
+      assert.equal(n["ssh-review"].checked, false);
+      assert.equal(n["ssh-form"].children.every(button => button.disabled), true);
+      assert.ok(["ssh-password", "ssh-key", "ssh-passphrase"].every(id => n[id].value === ""));
+
+      h.setCompact(true);
+      assert.equal(n["ssh-closed-feedback"].hidden, false);
+      assert.equal(n["ssh-closed-feedback"].dataset.phase, confirmed ? "confirmed" : "failed");
+      assert.equal(n["ssh-closed-title"].textContent, confirmed ? "本机已断开" : "本机连接关闭失败");
+      assert.equal(n["ssh-return-home"].hidden, false);
+      h.setCompact(false);
+      assert.equal(n["ssh-return-home"].hidden, false);
+      assert.equal(n["home-ssh"].dataset.sshClose, confirmed ? "confirmed" : "failed");
+      n["ssh-return-home"].onclick();
+      n["ssh-return-home"].onclick();
+      assert.deepEqual(announced, [[confirmed ? "confirmed" : "failed", true]]);
+      assert.equal(n["ssh-return-home"].hidden, true);
+      assert.equal(h.openCalls().length, 1);
+      assert.equal(h.calls.filter(call=>call.cmd==="ssh_shell_close").length, 1);
+      assert.equal(h.calls.filter(call=>call.cmd==="ssh_shell_write").length, 0);
+    } finally { h.restore(); }
+  });
+}
+
+test("desktop page visibility cleanup preserves a pending and resolved explicit close outcome", async () => {
+  let resolveClose;
+  const closeReply = new Promise(resolve => { resolveClose = resolve; });
+  const h = setup({ closeReply });
+  const n = h.nodes;
+  function backgroundAndReturn() {
+    h.document.hidden = true;
+    h.document.visibilitychange();
+    h.document.hidden = false;
+    h.document.visibilitychange();
+  }
+  try {
+    h.setAccept(true);
+    await h.probe();
+    await h.connect();
+    n["ssh-disconnect"].onclick();
+    backgroundAndReturn();
+    resolveClose(false);
+    await flush();
+    assert.match(n["ssh-status"].textContent, /^本机连接关闭失败/);
+    backgroundAndReturn();
+    await flush();
+    assert.match(n["ssh-status"].textContent, /^本机连接关闭失败/);
+    assert.equal(n["ssh-return-home"].hidden, false);
+    assert.equal(h.calls.filter(call=>call.cmd==="ssh_shell_close").length, 1);
   } finally { h.restore(); }
 });

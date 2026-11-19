@@ -156,13 +156,42 @@ void main() {
         await tap(key('hosts-add'));
       }
       await tap(key('choose-ssh'));
+      if (stages.contains('target')) {
+        expect(key('direct-secret'), findsNothing);
+        await tap(key('direct-back-hit'));
+        expect(key('choose-ssh').hitTestable(), findsOneWidget);
+        await tap(key('choose-ssh'));
+        expect(tester.widget<FilledButton>(key('direct-probe')).onPressed, isNull);
+      }
       await record('target', {..._sidebar, ..._target});
       print('TARGET_CREDENTIAL_BEFORE_CONFIRM ${key('direct-secret').evaluate().isNotEmpty}');
       await tester.enterText(key('direct-host'), '127.0.0.1');
       await tester.enterText(key('direct-user'), 'fixture');
+      if (stages.contains('target')) {
+        final field = key('direct-port');
+        await tester.enterText(field, '65536');
+        await tester.pump();
+        expect(tester.widget<FilledButton>(key('direct-probe')).onPressed, isNull);
+        await tester.enterText(field, '');
+        await tester.enterText(field, '65535a9');
+        await tester.pump();
+        expect(tester.widget<TextField>(field).controller!.text, '65535');
+      }
       await tester.enterText(key('direct-port'), port!);
       await tap(key('direct-host'));
       await record('target-focused', {..._sidebar, ..._target});
+      if (stages.contains('target')) {
+        final fields = ['direct-host', 'direct-user', 'direct-port'];
+        for (final (index, field) in fields.indexed) {
+          if (index != 0) {
+            await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+            await tester.pump();
+          }
+          final editable = find.descendant(of: key(field), matching: find.byType(EditableText));
+          expect(tester.widget<EditableText>(editable).focusNode.hasFocus, isTrue,
+            reason: 'keyboard focus after $index Tab presses should be $field');
+        }
+      }
       await tap(key('direct-probe'));
       await waitFor(tester, key('direct-trust-key'));
       await tester.pumpAndSettle();
@@ -177,10 +206,27 @@ void main() {
         'trust-confirm': 'direct-trust-key',
         'trust-cancel': 'direct-trust-cancel',
       });
+      if (stages.contains('trust')) {
+        expect(key('direct-secret').hitTestable(), findsNothing);
+        final fingerprint = find.descendant(of: key('direct-key-fingerprint'), matching: find.byType(SelectableText));
+        expect(tester.widget<SelectableText>(fingerprint).data, matches(r'^SHA256:[A-Za-z0-9+/]{43}$'));
+        await tap(key('direct-trust-cancel'));
+        expect(key('direct-secret'), findsNothing);
+        await tap(key('direct-probe'));
+        await waitFor(tester, key('direct-trust-key'));
+      }
       await tap(key('direct-trust-key'));
       await tester.enterText(key('direct-secret'), 'temporary');
       await tester.pumpAndSettle();
       await record('password', {..._sidebar, ..._auth, 'password': 'direct-secret'});
+      if (stages.contains('password')) {
+        expect(tester.widget<TextField>(key('direct-secret')).obscureText, isTrue);
+        await tap(key('ssh-flow-nav-3'));
+        expect(key('hosts-terminal-preferences'), findsOneWidget);
+        await tap(key('home-tab-1'));
+        expect(tester.widget<TextField>(key('direct-secret')).controller!.text, isEmpty);
+        expect(tester.widget<FilledButton>(key('direct-connect')).onPressed, isNull);
+      }
       await enableKeyMode(tester);
       await tester.pumpAndSettle();
       await record('private-key', {
@@ -190,6 +236,16 @@ void main() {
         'paste-key': 'direct-paste-key',
         'passphrase': 'direct-passphrase',
       });
+      if (stages.contains('private-key')) {
+        expect(tester.widget<FilledButton>(key('direct-connect')).onPressed, isNull);
+        await tester.enterText(key('direct-secret'), 'incomplete PEM');
+        await tester.pump();
+        expect(tester.widget<FilledButton>(key('direct-connect')).onPressed, isNull);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(key('direct-secret'), findsNothing);
+        expect(key('direct-host').hitTestable(), findsOneWidget);
+      }
       await tester.pumpWidget(const SizedBox());
       catalog.dispose();
       expect(tester.takeException(), isNull);

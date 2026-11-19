@@ -1,0 +1,44 @@
+Resolving dependencies...
+Downloading packages...
+  asn1lib 1.5.8 (1.6.8 available)
+  equatable 2.1.0 (3.0.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  test_api 0.7.12 (0.7.15 available)
+Got dependencies!
+4 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Upgrading analysis_options.yaml to exclude build and platform directories.
+00:00 +0: loading /private/tmp/herdr-flutter-entry.YSQ3/base-app/test/direct_ssh_keyboard_viewport_test.dart
+00:00 +0: overflow projection identifies the project constructor without exporting widget text (variant: TargetPlatform.iOS)
+00:00 +1: overflow diagnostics preserve direction and pixels and forward the original error
+00:00 +2: iOS keyboard height transitions keep an active SSH viewport valid without replay (variant: TargetPlatform.iOS)
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _TextContainingWidgetFinder:<Found 0 widgets with text containing 已断开: []>
+   Which: means none were found but one was expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///private/tmp/herdr-flutter-entry.YSQ3/base-app/test/direct_ssh_keyboard_viewport_test.dart:194:9)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///private/tmp/herdr-flutter-entry.YSQ3/base-app/test/direct_ssh_keyboard_viewport_test.dart line 194
+The test description was:
+  iOS keyboard height transitions keep an active SSH viewport valid without replay (variant:
+  TargetPlatform.iOS)
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:01 +2 -1: iOS keyboard height transitions keep an active SSH viewport valid without replay (variant: TargetPlatform.iOS) [E]
+  Test failed. See exception logs above.
+  The test description was: iOS keyboard height transitions keep an active SSH viewport valid without replay (variant: TargetPlatform.iOS)
+
+00:01 +2 -1: Some tests failed.
+
+Failing tests:
+  /private/tmp/herdr-flutter-entry.YSQ3/base-app/test/direct_ssh_keyboard_viewport_test.dart: iOS keyboard height transitions keep an active SSH viewport valid without replay (variant: TargetPlatform.iOS)

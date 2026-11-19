@@ -333,7 +333,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   bool get mobileEmptyBoard => MediaQuery.sizeOf(context).width < desktopRailMinWidth && emptyCatalogBoard;
   bool get desktopEmptyBoard => MediaQuery.sizeOf(context).width >= desktopRailMinWidth && emptyCatalogBoard;
 
-  Future<void> openDirectSsh() async {
+  Future<void> openDirectSsh({bool fromChooser = false}) async {
     tabs.select(null);
     if (sshClosedNotice) setState(() { sshClosedNotice = false; sshClosedSucceeded = false; });
     if (sshRouteOpen) {
@@ -348,11 +348,12 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       sshVisible.value = true;
     });
     final navigator = sshNavigator.currentState!;
-    final route = MaterialPageRoute<void>(
+    final route = MaterialPageRoute<DirectSshRouteExit>(
       builder: (_) => DirectSshPage(
         tokens: widget.tokens,
         catalog: catalog,
         sessionVisible: sshVisible,
+        desktopFlowShell: desktopSshFlowShell,
         onSelectDestination: (index) {
           setState(() {
             destination = index;
@@ -369,7 +370,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
         },
       ),
     );
-    await navigator.push<void>(route);
+    final exit = await navigator.push(route);
     await route.completed;
     if (mounted) {
       setState(() {
@@ -377,6 +378,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
         sshVisible.value = false;
         destination = 0;
       });
+      if (fromChooser && exit == DirectSshRouteExit.targetBack) unawaited(chooseConnection());
     }
   }
 
@@ -427,7 +429,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       return desktop ? desktopSshFlowShell(page, (index) => Navigator.pop(context, index)) : page;
     }));
     if (!mounted) return;
-    if (choice == 'ssh') openDirectSsh();
+    if (choice == 'ssh') await openDirectSsh(fromChooser: true);
     if (choice == 'herdr') await open();
     if (choice is int) selectSshFlowDestination(choice);
   }

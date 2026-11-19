@@ -44,6 +44,38 @@ class NativeControlPolicyTests(unittest.TestCase):
                 return self.source[start:index + 1]
         self.fail("unterminated production method: " + signature)
 
+    def test_manual_host_pixel_geometry_and_redacted_categories(self):
+        self.compile_and_run(r'''
+import Foundation
+import CoreGraphics
+let host = "127.0.0.1"
+precondition(NativeHostObservation.ax(nil, expected: host) == .missing)
+precondition(NativeHostObservation.ax("", expected: host) == .empty)
+precondition(NativeHostObservation.ax(NSNumber(value: 2), expected: host) == .nonString)
+precondition(NativeHostObservation.ax(host, expected: host) == .match)
+precondition(NativeHostObservation.ax(host + "0", expected: host) == .different)
+precondition(NativeHostObservation.visual([(host, 1)], expected: host) == .match)
+precondition(NativeHostObservation.visual([(host + "0", 1)], expected: host) == .textPresent)
+precondition(NativeHostObservation.visual([(host, 1), ("other", 1)], expected: host) == .textPresent)
+precondition(NativeHostObservation.visual([(host, 0.1)], expected: host) == .unavailable)
+precondition(NativeHostObservation.visual([], expected: host) == .noTextDetected)
+let screen = CGRect(x: 0, y: 0, width: 440, height: 956)
+let field = CGRect(x: 23.25, y: 216.5, width: 390, height: 44)
+let keyboard = CGRect(x: 0, y: 600, width: 440, height: 356)
+let blocker = CGRect(x: 0, y: 216, width: 24, height: 12)
+let region = NativeHostObservation.region(field, viewport: screen, occlusions: [keyboard], otherWindows: [])!
+precondition(region == field.insetBy(dx: 1, dy: 1))
+precondition(NativeHostObservation.region(field, viewport: screen, occlusions: [blocker], otherWindows: []) == nil)
+precondition(NativeHostObservation.region(field, viewport: screen, occlusions: [], otherWindows: [blocker]) == nil)
+precondition(NativeHostObservation.region(field, viewport: screen, occlusions: [], otherWindows: [.null]) == nil)
+precondition(NativeHostObservation.region(field, viewport: blocker, occlusions: [], otherWindows: []) == nil)
+let pixelSize = CGSize(width: 1320, height: 2868)
+let crop = NativeHostObservation.pixelCrop(region, screen: screen, pixels: pixelSize)
+precondition(crop == CGRect(x: 73, y: 653, width: 1163, height: 125))
+precondition(NativeHostObservation.pixelCrop(region, screen: screen, pixels: CGSize(width: 1320, height: 2867)) == nil)
+precondition(NativeHostObservation.pixelCrop(region, screen: screen.offsetBy(dx: 1, dy: 0), pixels: pixelSize) == nil)
+''')
+
     def test_headerless_fixture_pem_body_outside_editor_is_detected(self):
         self.compile_and_run(r'''
 import Foundation
@@ -591,6 +623,8 @@ final class Observations {
     var treeReads = 0
     var resolved: [Observed] = []
     var checkpoints: [(String, [String: Any])] = []
+    var pixelReads = 0
+    var visualHostReadback: NativeHostObservation.Visual = .match
     var reviewActionChecks = 0
     var beforeTree: (() -> Void)?
     let webSurface = Element()
@@ -675,6 +709,10 @@ final class Adapter {
         try require(actions.count == 2 && Set(actions.map { $0.snapshot.label }) == labels, "native_review_exits_invalid")
     }
     func observedNodes() throws -> [Observed] { observations?.next(rows) ?? rows }
+    func manualHostPixels(_ form: FormControl, expected: String) -> NativeHostObservation.Visual {
+        observations?.pixelReads += 1
+        return observations?.visualHostReadback ?? .unavailable
+    }
     func resolveByPath(_ row: Observed) -> Observed {
         observations?.resolved.append(row)
         return row
@@ -1999,15 +2037,25 @@ let manual = Adapter(app: manualApp, current: LiveControl(snapshot: manualHost, 
 var manualFailure: String?
 do { try manual.fillField("host", "127.0.0.1") } catch let e as Rejected { manualFailure = e.reason }
 let manualTrace = manualSamples.checkpoints.compactMap { $0.1["manualHostEntry"] as? [String: Any] }
-check(manualFailure == "native_input_value_invalid" && manualElement.inputs == ["127.0.0.1"],
-      "native manual host must fail closed after one input on an empty readback")
+check(manualFailure == "native_input_value_invalid" && manualElement.inputs == ["127.0.0.1"] && manualSamples.pixelReads == 1,
+      "a pixel match cannot approve an empty accessibility readback or replay input")
 check(manualTrace.count == 2 &&
       manualTrace[0]["sample"] as? String == "afterTap" && manualTrace[0]["keyboard"] as? String == "visible" &&
       manualTrace[0]["formUIFocus"] as? String == "port" && manualTrace[0]["portReadback"] as? String == "notCompared" &&
-      manualTrace[1]["sample"] as? String == "afterInput" && manualTrace[1]["treeHostReadback"] as? String == "empty" &&
+      manualTrace[0]["visualReadback"] == nil && manualTrace[1]["visualReadback"] as? String == "match" &&
+      manualTrace[1]["sample"] as? String == "afterInput" && manualTrace[1]["treeHostReadback"] as? String == "nil" &&
       manualTrace[1]["liveHostReadback"] as? String == "empty" && manualTrace[1]["portReadback"] as? String == "changed" &&
       manualTrace[1]["userReadback"] as? String == "unchanged",
       "manual host diagnostics report only classified keyboard, focus, and same-owner readback")
+let matchedHostElement = Element()
+let matchedHostSamples = Observations([])
+matchedHostSamples.visualHostReadback = .noTextDetected
+let matchedHost = Adapter(app: manualApp, current: LiveControl(snapshot: manualHost, hittable: true, element: matchedHostElement),
+                          rows: manualRows, blockers: [], observations: matchedHostSamples, nativePhase: "encrypted_key_host")
+do { try matchedHost.fillField("host", "127.0.0.1") }
+catch { failures.append("the visual diagnostic cannot override an exact accessibility match") }
+check(matchedHostElement.inputs == ["127.0.0.1"] && matchedHostSamples.pixelReads == 1,
+      "the matching host uses one input and one diagnostic sample")
 let page = formRows(moved)[1]
 for (live, stored) in [(snapshot(identifier: "ssh-password", label: "密码"), snapshot(label: "密码")),
                        (snapshot(identifier: "ssh-password", label: "密码"), snapshot(identifier: "changed", label: "密码")),

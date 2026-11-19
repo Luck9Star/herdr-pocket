@@ -627,13 +627,15 @@ class GeometryReasonTests(unittest.TestCase):
         first = {'sample': 'afterTap', 'initialKeyboard': 'hidden', 'keyboard': 'visible',
                  'formUIFocus': 'host', 'liveHostUIFocus': True, 'treeHostReadback': 'empty',
                  'liveHostReadback': 'empty', 'portReadback': 'notCompared', 'userReadback': 'notCompared'}
-        second = first | {'sample': 'afterInput', 'formUIFocus': 'port',
+        second = first | {'sample': 'afterInput', 'formUIFocus': 'port', 'treeHostReadback': 'nil',
+                          'liveHostReadback': 'nonString', 'visualReadback': 'match',
                           'portReadback': 'changed', 'userReadback': 'unchanged'}
         for invalid in (
             phase | {'manualHostEntry': second},
             phase | {'manualHostEntry': first | {'input': 'fixture-secret'}},
             phase | {'manualHostEntry': first | {'formUIFocus': 'fixture-secret'}},
             phase | {'manualHostEntry': first | {'liveHostUIFocus': 1}},
+            phase | {'manualHostEntry': first | {'visualReadback': 'match'}},
             phase | {'manualHostEntry': first, 'nativeCheckpoint': 'encrypted_key_passphrase'},
             phase | {'manualHostEntry': first, 'stage': 'native_failure'},
         ):
@@ -641,13 +643,25 @@ class GeometryReasonTests(unittest.TestCase):
                 state.accept(invalid)
             self.assertNotIn('manualHostEntry', state.result)
         state.accept(phase | {'manualHostEntry': first})
-        for invalid in (first, second | {'initialKeyboard': 'visible'}, second | {'userReadback': 'notCompared'}):
+        for invalid in (first, second | {'initialKeyboard': 'visible'}, second | {'userReadback': 'notCompared'},
+                        second | {'treeHostReadback': None}, second | {'liveHostReadback': 'fixture-secret'},
+                        second | {'visualReadback': '127.0.0.1'}, second | {'visualReadback': {'text': 'fixture-secret'}},
+                        second | {'image': 'fixture-secret'}, second | {'frame': [1, 2, 3, 4]},
+                        {k: v for k, v in second.items() if k != 'visualReadback'}):
             with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
                 state.accept(phase | {'manualHostEntry': invalid})
         state.accept(phase | {'manualHostEntry': second})
         with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
             state.accept(phase | {'manualHostEntry': second})
         self.assertEqual(state.result['manualHostEntry'], [first, second])
+        for classification in ios.MANUAL_HOST_READBACKS:
+            detail = {'state': classification, 'samples': 6}
+            state.accept(phase | {'inputReadback': detail})
+            self.assertEqual(state.result['inputReadbacks']['encrypted_key_host'], detail)
+        for classification in ('nil', 'nonString'):
+            with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': 'ordinary_host',
+                                   'inputReadback': {'state': classification, 'samples': 6}})
 
     def test_secret_exposure_diagnostic_only_accepts_bounded_categories(self):
         state = ios.Checkpoints(None, None, self.directory.name, {}, encrypted=object())

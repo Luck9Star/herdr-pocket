@@ -2,6 +2,7 @@ import XCTest
 import Foundation
 import CoreGraphics
 import UIKit
+import Vision
 
 // BEGIN NATIVE FRAME POLICY -- real Foundation/CoreGraphics, no UI substitutes.
 enum NativeFramePolicy {
@@ -273,6 +274,54 @@ enum NativeActiveContext: String {
     case keyboardOpenBefore = "keyboard_open_before", keyboardOpenAfter = "keyboard_open_after"
     case keyboardCloseBefore = "keyboard_close_before", keyboardCloseAfter = "keyboard_close_after"
     case routeBefore = "route_before", routeAfter = "route_after"
+}
+
+enum NativeHostObservation {
+    enum AX: String {
+        case missing = "nil"
+        case empty, nonString, match, different
+    }
+
+    enum Visual: String {
+        case match, unavailable
+        case textPresent = "text_present"
+        case noTextDetected = "no_text_detected"
+    }
+
+    static func ax(_ value: Any?, expected: String) -> AX {
+        guard let value else { return .missing }
+        guard let text = value as? String else { return .nonString }
+        if text == expected { return .match }
+        return text.isEmpty ? .empty : .different
+    }
+
+    static func region(_ field: CGRect, viewport: CGRect, occlusions: [CGRect], otherWindows: [CGRect]) -> CGRect? {
+        guard NativeFramePolicy.valid(field), viewport.contains(field),
+              (occlusions + otherWindows).allSatisfy({
+                  NativeFramePolicy.valid($0) && !NativeFramePolicy.valid(field.intersection($0))
+              }) else { return nil }
+        let interior = field.insetBy(dx: 1, dy: 1)
+        return NativeFramePolicy.valid(interior) ? interior : nil
+    }
+
+    static func pixelCrop(_ region: CGRect, screen: CGRect, pixels: CGSize) -> CGRect? {
+        guard screen.origin == .zero, NativeFramePolicy.valid(screen), NativeFramePolicy.valid(region),
+              screen.contains(region), pixels.width.isFinite, pixels.height.isFinite else { return nil }
+        let scale = (pixels.width / screen.width).rounded()
+        guard (1...4).contains(scale), pixels.width == screen.width * scale,
+              pixels.height == screen.height * scale else { return nil }
+        let left = ceil(region.minX * scale), top = ceil(region.minY * scale)
+        let crop = CGRect(x: left, y: top, width: floor(region.maxX * scale) - left,
+                          height: floor(region.maxY * scale) - top)
+        return NativeFramePolicy.valid(crop) && CGRect(origin: .zero, size: pixels).contains(crop) ? crop : nil
+    }
+
+    static func visual(_ lines: [(text: String, confidence: Float)], expected: String) -> Visual {
+        if lines.isEmpty { return .noTextDetected }
+        let recognized = lines.filter { $0.confidence >= 0.5 && !$0.text.isEmpty }
+        guard !recognized.isEmpty else { return .unavailable }
+        return lines.count == 1 && recognized[0].text == expected ? .match : .textPresent
+    }
 }
 
 enum NativeHomeReadiness {
@@ -853,7 +902,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func observedNodes() throws -> [Observed] {
+    private func observedNodes(reportLimit: Bool = true) throws -> [Observed] {
         var pending: [(any XCUIElementSnapshot, [Int], CGRect?, [Int], [CGRect], [Int])] = [(try app.snapshot(), [], nil, [], [], [])]
         var result: [Observed] = []
         while let (node, path, inheritedWindow, inheritedWindowPath, inheritedWebs, inheritedWebPath) = pending.popLast() {
@@ -864,7 +913,10 @@ final class TauriDirectSSHUITests: XCTestCase {
             let webs = isWeb ? inheritedWebs + [node.frame] : inheritedWebs
             let webPath = isWeb ? path : inheritedWebPath
             result.append(Observed(snapshot: node, path: path, window: window, windowPath: windowPath, webs: webs, webPath: webPath))
-            try require(result.count < 10000, "native_tree_limit")
+            if result.count >= 10000 {
+                if reportLimit { try require(false, "native_tree_limit") }
+                throw NSError(domain: "native_tree_limit", code: 1)
+            }
             for (index, child) in node.children.enumerated().reversed() {
                 pending.append((child, path + [index], window, windowPath, webs, webPath))
             }
@@ -1148,8 +1200,68 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
+    private func manualHostRegion(_ expected: FormControl, screen: CGRect) -> CGRect? {
+        let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        guard app.state == .runningForeground, app.frame == screen, screen.origin == .zero,
+              !app.alerts.firstMatch.exists, !system.alerts.firstMatch.exists,
+              let rows = try? observedNodes(reportLimit: false) else { return nil }
+        let selection = formSelection(rows)
+        guard selection.ownerResolved, let verdict = selection.controls["host"], verdict.reason == "matched",
+              let index = verdict.index else { return nil }
+        let owner = rows[index]
+        guard owner.path == expected.owner.path, sameIdentity(owner.snapshot, expected.owner.snapshot),
+              owner.snapshot.elementType == .textField, owner.snapshot.isEnabled,
+              owner.snapshot.placeholderValue?.isEmpty != false,
+              let scope = controlScope(owner, rows),
+              scope.window.path == expected.window.path, scope.web.path == expected.web.path,
+              sameIdentity(scope.window.snapshot, expected.window.snapshot),
+              sameIdentity(scope.web.snapshot, expected.web.snapshot),
+              scope.window.snapshot.frame == expected.window.snapshot.frame,
+              scope.web.snapshot.frame == expected.web.snapshot.frame,
+              liveOnPath(scope.window) != nil, liveOnPath(scope.web) != nil,
+              let live = liveOnPath(owner), live.hittable, live.snapshot.isEnabled else { return nil }
+        let field = owner.snapshot.frame
+        guard field == live.snapshot.frame, field == expected.live.snapshot.frame,
+              case .success(let viewport) = NativeFramePolicy.viewport(
+                window: owner.window, screen: screen, webAncestors: owner.webs) else { return nil }
+        let keyboards = keyboardFrames().filter { NativeFramePolicy.valid($0.intersection(screen)) }
+        if app.keyboards.firstMatch.exists && keyboards.isEmpty { return nil }
+        let tabs = routeTabsOcclusion(owner, rows, viewport, [field], scrolling: false)
+        let otherWindows = rows.filter { $0.snapshot.elementType == .window && $0.path != scope.window.path }
+            .map { $0.snapshot.frame }
+        return NativeHostObservation.region(field, viewport: viewport,
+            occlusions: statusBarFrames() + keyboards + (tabs.map { [$0] } ?? []), otherWindows: otherWindows)
+    }
+
+    @MainActor
+    private func manualHostPixels(_ form: FormControl, expected: String) -> NativeHostObservation.Visual {
+        // Only the first public loopback host entry has this diagnostic. The
+        // driver publishes only the result category, which never gates the probe.
+        guard nativePhase == "encrypted_key_host", expected == "127.0.0.1" else { return .unavailable }
+        let screen = app.frame
+        guard let region = manualHostRegion(form, screen: screen) else { return .unavailable }
+        let shot = XCUIScreen.main.screenshot().image
+        guard manualHostRegion(form, screen: screen) == region, shot.imageOrientation == .up,
+              let original = shot.cgImage,
+              let crop = NativeHostObservation.pixelCrop(region, screen: screen,
+                pixels: CGSize(width: CGFloat(original.width), height: CGFloat(original.height))),
+              let image = original.cropping(to: crop) else { return .unavailable }
+        let request = VNRecognizeTextRequest()
+        request.usesLanguageCorrection = false
+        do {
+            try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
+            guard let results = request.results else { return .unavailable }
+            let lines = results.compactMap { $0.topCandidates(1).first }.map { ($0.string, $0.confidence) }
+            guard lines.count == results.count else { return .unavailable }
+            return NativeHostObservation.visual(lines, expected: expected)
+        } catch {
+            return .unavailable
+        }
+    }
+
+    @MainActor
     private func reportManualHostEntry(_ form: FormControl, expected: String, initialKeyboard: String,
-                                       beforeInput: FormControl? = nil) throws {
+                                       beforeInput: FormControl? = nil, visual: NativeHostObservation.Visual? = nil) throws {
         let fields: [(String, (any XCUIElementSnapshot)?)] = [
             ("host", form.owner.snapshot), ("port", form.adjacentFields["port"]), ("user", form.adjacentFields["user"]),
         ]
@@ -1163,15 +1275,17 @@ final class TauriDirectSSHUITests: XCTestCase {
         }
         // hasFocus describes UI focus. XCTest's element-scoped typeText
         // separately requires keyboard focus on that element or a descendant.
-        try post("native_progress", ["nativeCheckpoint": nativePhase, "manualHostEntry": [
+        var detail: [String: Any] = [
             "sample": beforeInput == nil ? "afterTap" : "afterInput",
             "initialKeyboard": initialKeyboard, "keyboard": manualHostKeyboard(),
             "formUIFocus": focus.count > 1 ? "multiple" : focus.first ?? "none",
             "liveHostUIFocus": form.live.snapshot.hasFocus,
-            "treeHostReadback": inputReadback(form.owner.snapshot.value, expected: expected),
-            "liveHostReadback": inputReadback(form.live.snapshot.value, expected: expected),
+            "treeHostReadback": NativeHostObservation.ax(form.owner.snapshot.value, expected: expected).rawValue,
+            "liveHostReadback": NativeHostObservation.ax(form.live.snapshot.value, expected: expected).rawValue,
             "portReadback": adjacentReadback("port"), "userReadback": adjacentReadback("user"),
-        ]])
+        ]
+        if let visual { detail["visualReadback"] = visual.rawValue }
+        try post("native_progress", ["nativeCheckpoint": nativePhase, "manualHostEntry": detail])
     }
 
     @MainActor
@@ -1213,11 +1327,17 @@ final class TauriDirectSSHUITests: XCTestCase {
                 let after = try formControl(name, matching: tapped)
                 let readbackState = inputReadback(after.live.snapshot.value, expected: text)
                 if readbackState == "match" || sample == 5 {
+                    let publishedState: String
                     if let initialKeyboard {
-                        try reportManualHostEntry(after, expected: text, initialKeyboard: initialKeyboard, beforeInput: form)
+                        let visual = manualHostPixels(after, expected: text)
+                        try reportManualHostEntry(after, expected: text, initialKeyboard: initialKeyboard,
+                                                  beforeInput: form, visual: visual)
+                        publishedState = NativeHostObservation.ax(after.live.snapshot.value, expected: text).rawValue
+                    } else {
+                        publishedState = readbackState
                     }
                     try post("native_progress", ["nativeCheckpoint": nativePhase,
-                        "inputReadback": ["state": readbackState, "samples": sample + 1]])
+                        "inputReadback": ["state": publishedState, "samples": sample + 1]])
                 }
                 if readbackState == "match" { return }
                 if sample < 5 { Thread.sleep(forTimeInterval: 0.2) }

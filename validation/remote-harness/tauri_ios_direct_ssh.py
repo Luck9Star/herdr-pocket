@@ -73,6 +73,7 @@ GEOMETRY_REASONS = frozenset((
     'scroll_direction_unproven', 'scroll_surface_unhittable', 'queried_unhittable',
     'bound_unhittable', 'scroll_no_progress'))
 MAX_GEOMETRY_REASONS_PER_CHECKPOINT = 24
+MANUAL_HOST_READBACKS = ('nil', 'empty', 'nonString', 'match', 'different')
 MOBILE_PASSWORD_PHASES = frozenset((
     'ordinary_fingerprint', 'ordinary_password', 'key_change_fingerprint',
     'key_change_new_fingerprint', 'key_change_password', 'encrypted_key_fingerprint'))
@@ -1344,18 +1345,20 @@ class Checkpoints:
             invalid = 'tauri_ios_native_diagnostic_invalid'
             detail = payload['manualHostEntry']
             keyboard_states = ('hidden', 'visible', 'unproven')
-            readback_states = ('match', 'empty', 'different', 'unavailable')
+            fields = {'sample', 'initialKeyboard', 'keyboard', 'formUIFocus', 'liveHostUIFocus',
+                      'treeHostReadback', 'liveHostReadback', 'portReadback', 'userReadback'}
             require(set(payload) == {'stage', 'nativeCheckpoint', 'manualHostEntry'}
                     and stage == 'native_progress' and self.failure is None and self.encrypted is not None
                     and payload['nativeCheckpoint'] == self.result.get('nativeCheckpoint') == 'encrypted_key_host'
-                    and type(detail) is dict and set(detail) == {
-                        'sample', 'initialKeyboard', 'keyboard', 'formUIFocus', 'liveHostUIFocus',
-                        'treeHostReadback', 'liveHostReadback', 'portReadback', 'userReadback'}
-                    and detail['sample'] in ('afterTap', 'afterInput')
+                    and type(detail) is dict and detail.get('sample') in ('afterTap', 'afterInput')
+                    and set(detail) == (fields if detail['sample'] == 'afterTap' else fields | {'visualReadback'})
+                    and (detail['sample'] == 'afterTap' or detail['visualReadback'] in
+                         ('match', 'text_present', 'no_text_detected', 'unavailable'))
                     and detail['initialKeyboard'] in keyboard_states and detail['keyboard'] in keyboard_states
                     and detail['formUIFocus'] in ('host', 'port', 'user', 'none', 'multiple')
                     and type(detail['liveHostUIFocus']) is bool
-                    and detail['treeHostReadback'] in readback_states and detail['liveHostReadback'] in readback_states,
+                    and detail['treeHostReadback'] in MANUAL_HOST_READBACKS
+                    and detail['liveHostReadback'] in MANUAL_HOST_READBACKS,
                     invalid)
             trace = self.result.get('manualHostEntry', [])
             sibling_states = ('notCompared',) if not trace else ('unchanged', 'changed', 'unavailable')
@@ -1420,10 +1423,11 @@ class Checkpoints:
                 self.result['secretDiagnostic'] = json.loads(json.dumps(diagnostic))
             if 'inputReadback' in payload:
                 readback = payload['inputReadback']
+                states = MANUAL_HOST_READBACKS if phase == 'encrypted_key_host' else ('match', 'empty', 'different', 'unavailable')
                 require(stage == 'native_progress' and phase.rsplit('_', 1)[-1] in ('host', 'port', 'username')
                         and set(payload) == {'stage', 'nativeCheckpoint', 'inputReadback'}
                         and type(readback) is dict and set(readback) == {'state', 'samples'}
-                        and type(readback['state']) is str and readback['state'] in ('match', 'empty', 'different', 'unavailable')
+                        and type(readback['state']) is str and readback['state'] in states
                         and type(readback['samples']) is int and 1 <= readback['samples'] <= 6,
                         'tauri_ios_native_diagnostic_invalid')
                 self.result.setdefault('inputReadbacks', {})[phase] = dict(readback)

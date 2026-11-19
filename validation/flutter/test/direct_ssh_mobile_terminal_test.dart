@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -135,6 +136,36 @@ void main() {
           }
         }
 
+        void recordNavigationAnchors(String stage) {
+          final tabWidth = width / 4;
+          final tabTop = width == 320 ? 560.0 : 754.0;
+          for (final (id, index) in [('board', 0), ('network', 2)]) {
+            final finder = key('direct-tab-$id');
+            final actual = tester.getRect(finder);
+            final expected = Rect.fromLTWH(
+              index * tabWidth,
+              tabTop,
+              tabWidth,
+              56,
+            );
+            final hit =
+                finder.hitTestable(at: Alignment.center).evaluate().length == 1;
+            debugPrint(
+              'NAV_ANCHOR ${jsonEncode({
+                'board': '$stage-${width.toInt()}',
+                'anchor': 'tab-$id',
+                'actual': [actual.left, actual.top, actual.width, actual.height],
+                'expected': [expected.left, expected.top, expected.width, expected.height],
+                'centerHit': hit,
+              })}',
+            );
+            expect(hit, isTrue, reason: '$stage $id center hit at $width');
+            expect(actual.width, greaterThanOrEqualTo(44));
+            expect(actual.height, greaterThanOrEqualTo(44));
+            rect('direct-tab-$id', expected);
+          }
+        }
+
         final margin = width == 320 ? 16.0 : 24.0;
         final safeTop = inset.top;
         rect(
@@ -178,6 +209,7 @@ void main() {
         ]) {
           expect(key('direct-key-$id').hitTestable(), findsOneWidget);
         }
+        recordNavigationAnchors('terminal-closed');
         expect(key('direct-key-ctrl-d').hitTestable(), findsNothing);
         expect(key('direct-key-enter').hitTestable(), findsNothing);
         await tester.ensureVisible(key('direct-key-enter'));
@@ -302,6 +334,7 @@ void main() {
         await tester.tap(key('direct-tab-settings'));
         await tester.pumpAndSettle();
         expect(key('direct-settings'), findsOneWidget);
+        recordNavigationAnchors('settings-active');
         expect(identical(state.shell, liveShell), isTrue);
         expect(identical(state.terminal, terminal), isTrue);
         expect(

@@ -646,18 +646,96 @@ class ActiveNavigationTests(unittest.TestCase):
         fixture.snapshot.return_value=changed;driver.active_peer(fixture,input_bytes=9)
         with self.assertRaisesRegex(driver.GuiFailure,'direct_active_peer_changed'): driver.active_peer(fixture)
 
+    def test_native_tap_maps_stable_webview_to_android_screen_and_rejects_ambiguity(self):
+        browser=Mock();geometry={'point':[100,120],'rect':[78,98,44,44],
+            'viewport':[400,800],'visual':[0,0,1],'dpr':2,'hit':True}
+        browser.evaluate.return_value=geometry
+        with patch.object(driver,'_read_window_hierarchy',return_value='owned'), \
+             patch.object(driver,'_webview_frames',return_value={(10,40,810,1400)}), \
+             patch.object(driver,'_header_geometry',return_value={'native':{'viewY':40}}), \
+             patch.object(driver,'_framebuffer_png',return_value=(b'',(850,1500))),patch.object(driver,'adb') as adb:
+            driver.native_active_tap(browser,'#ssh-focus')
+            adb.assert_called_once_with('shell','input','tap','210','280')
+            adb.reset_mock();browser.evaluate.side_effect=[geometry,{**geometry,'hit':False}]
+            with self.assertRaisesRegex(driver.GuiFailure,'direct_active_tap_unproven'):
+                driver.native_active_tap(browser,'#ssh-focus')
+            adb.assert_not_called()
+            with self.assertRaisesRegex(driver.GuiFailure,'direct_active_tap_unproven'):
+                driver.native_active_tap(browser,'#ssh-disconnect')
+            adb.assert_not_called()
+
+    def test_preexisting_owned_keyboard_is_dismissed_before_native_focus_tap(self):
+        browser=Mock();fixture=Mock();order=[]
+        def system(visible):
+            order.append(('ime',visible))
+            if len(order)==1: raise driver.GuiFailure('android_system_ime_hide_unconfirmed')
+            return {'diagnostic':{}}
+        def native(b,selector): order.append(('tap',selector))
+        def adb(*args): order.append(('adb',args))
+        with patch.object(driver,'active_view'),patch.object(driver,'active_peer'), \
+             patch.object(driver,'native_active_tap',side_effect=native),patch.object(driver,'system_keyboard',side_effect=system), \
+             patch.object(driver,'adb',side_effect=adb):
+            driver.exercise_active_navigation(browser,fixture)
+        self.assertEqual(order[:5],[('ime',False),('ime',True),('adb',('shell','input','keyevent','KEYCODE_BACK')),
+                                  ('ime',False),('tap','#ssh-focus')])
+
+    def test_preexisting_keyboard_must_be_owned_before_back(self):
+        with patch.object(driver,'active_view'),patch.object(driver,'active_peer'), \
+             patch.object(driver,'system_keyboard',side_effect=[driver.GuiFailure('android_system_ime_hide_unconfirmed'),
+                                                              driver.GuiFailure('android_system_ime_target_mismatch')]), \
+             patch.object(driver,'adb') as adb,patch.object(driver,'native_active_tap') as tap:
+            with self.assertRaisesRegex(driver.GuiFailure,'android_system_ime_target_mismatch'):
+                driver.exercise_active_navigation(Mock(),Mock())
+            adb.assert_not_called();tap.assert_not_called()
+
+    def test_active_view_fails_closed_for_each_false_fact_and_malformed_evidence(self):
+        fixture=Fixture(); good=dict.fromkeys(driver.ACTIVE_FACTS,True);browser=Mock()
+        with patch.object(driver,'wait_for',side_effect=lambda probe,code,timeout: probe() or (_ for _ in ()).throw(driver.GuiFailure(code))):
+            browser.evaluate.return_value=good;driver.active_view(browser,fixture,'ssh')
+            for key in driver.ACTIVE_FACTS:
+                browser.evaluate.return_value={**good,key:False}
+                with self.subTest(key=key),self.assertRaises(driver.GuiFailure) as caught:
+                    driver.active_view(browser,fixture,'ssh')
+                self.assertIs(caught.exception.active_diagnostic[key],False)
+            browser.evaluate.return_value={**good,'unexpected':'private text'}
+            with self.assertRaises(driver.GuiFailure) as caught: driver.active_view(browser,fixture,'ssh')
+            self.assertEqual(caught.exception.active_diagnostic,{})
+
+    def test_diagnostic_keeps_only_bounded_geometry_and_peer_counts(self):
+        fixture=Mock();fixture.snapshot.return_value=self.peer();browser=Mock()
+        geometry={key:[1,2,3,4] for key in ('viewport','title','badge','focus','hide','disconnect')}
+        browser.evaluate.return_value=geometry
+        result=driver.active_diagnostic(browser,fixture)
+        self.assertEqual(result['geometry'],geometry)
+        self.assertEqual(result['peer']['connections'],2)
+        self.assertNotIn('hostKey',result['peer'])
+        browser.evaluate.return_value={**geometry,'secret':'do not export'}
+        self.assertNotIn('geometry',driver.active_diagnostic(browser,fixture))
+        fixture.snapshot.return_value={**self.peer(),'connections':999999}
+        self.assertNotIn('peer',driver.active_diagnostic(browser,fixture))
+
+    def test_failure_records_exact_active_stage(self):
+        browser=Mock();fixture=Mock();progress={}
+        def view(b,f,section,keyboard=False):
+            if section=='network': raise driver.GuiFailure('direct_active_ui_invalid')
+        with patch.object(driver,'active_view',side_effect=view),patch.object(driver,'active_peer'), \
+             patch.object(driver,'system_keyboard',return_value={'diagnostic':{}}),patch.object(driver,'native_active_tap'),patch.object(driver,'active_diagnostic',return_value={}):
+            with self.assertRaises(driver.GuiFailure): driver.exercise_active_navigation(browser,fixture,progress=progress)
+        self.assertEqual(progress['stage'],'active_network')
+
     def test_navigation_checks_each_route_and_native_keyboard_before_peer(self):
         browser=Mock();fixture=Mock();calls=[]
         with patch.object(driver,'active_view',side_effect=lambda b,f,s,keyboard=False:calls.append((s,keyboard))), \
-             patch.object(driver,'active_peer') as peer, patch.object(driver,'system_keyboard') as ime:
+             patch.object(driver,'active_peer') as peer, patch.object(driver,'system_keyboard',return_value={'diagnostic':{}}) as ime, \
+             patch.object(driver,'native_active_tap') as tap:
             result=driver.exercise_active_navigation(browser,fixture)
         self.assertEqual(calls,[('ssh',False),('ssh',True),('ssh',False),('dashboard',False),
             ('ssh',False),('network',False),('ssh',False),('settings',False),('ssh',False)])
         self.assertEqual(peer.call_count,9)
-        self.assertEqual([c.args[0] for c in ime.call_args_list],[True,False])
+        self.assertEqual([c.args[0] for c in ime.call_args_list],[False,True,True,False,False])
+        self.assertEqual([c.args[1] for c in tap.call_args_list],['#ssh-focus','#ssh-hide-keyboard'])
         self.assertTrue(all(result.values()))
-        self.assertEqual([c.args[0] for c in browser.click.call_args_list],['#ssh-focus','#ssh-hide-keyboard',
-             '#show-remote','#nav-terminal','#nav-network','#nav-terminal','#nav-settings','#nav-terminal'])
+        self.assertEqual([c.args[0] for c in browser.click.call_args_list],['#show-remote','#nav-terminal','#nav-network','#nav-terminal','#nav-settings','#nav-terminal'])
 
 
 class HeaderGeometryTests(unittest.TestCase):

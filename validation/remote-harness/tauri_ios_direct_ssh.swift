@@ -104,6 +104,42 @@ enum NativeFramePolicy {
         }
         return frame
     }
+    struct ActiveViewport {
+        let viewport: CGRect?
+        let visible: CGRect?
+        let reason: String?
+    }
+
+    static func activeViewport(window: CGRect?, screen: CGRect, webAncestors: [CGRect], statusBars: [CGRect],
+                               keyboardPresent: Bool, keyboardFrames: [CGRect]) -> ActiveViewport {
+        let raw: CGRect
+        switch viewport(window: window, screen: screen, webAncestors: webAncestors) {
+        case .failure(let issue): return ActiveViewport(viewport: nil, visible: nil, reason: issue.rawValue)
+        case .success(let frame): raw = frame
+        }
+        guard let window, var safe = visible(window: window, screen: screen, webAncestors: webAncestors,
+                                             occlusions: statusBars) else {
+            return ActiveViewport(viewport: raw, visible: nil, reason: "status_bar_viewport_invalid")
+        }
+        let keyboards = unique(keyboardFrames)
+        if keyboardPresent {
+            guard keyboards.count == 1, let keyboard = keyboards.first, valid(keyboard), screen.contains(keyboard),
+                  keyboard.minX == screen.minX, keyboard.maxX == screen.maxX, keyboard.minY >= screen.midY,
+                  screen.maxY - keyboard.maxY < keyboard.height else {
+                return ActiveViewport(viewport: raw, visible: nil, reason: "keyboard_frame_unproven")
+            }
+            // The docked keyboard may stop above the system gesture area.
+            // Only the continuous region above it is usable, never the gap below.
+            let bottom = min(safe.maxY, keyboard.minY)
+            guard bottom > safe.minY else {
+                return ActiveViewport(viewport: raw, visible: nil, reason: "keyboard_covers_viewport")
+            }
+            safe.size.height = bottom - safe.minY
+        } else if !keyboards.isEmpty {
+            return ActiveViewport(viewport: raw, visible: nil, reason: "keyboard_state_changed")
+        }
+        return ActiveViewport(viewport: raw, visible: safe, reason: nil)
+    }
     static func semanticIndex(frames: [CGRect], preferred: [Int], visible: CGRect, clippedControl: Bool) -> Int? {
         guard !frames.isEmpty, frames.allSatisfy(valid), valid(visible) else { return nil }
         // Normal parent/leaf semantics may have distinct containing bounds.
@@ -208,7 +244,7 @@ enum NativeConnectPolicy {
     }
 }
 
-enum NativeActivePage {
+enum NativeActivePage: String {
     case terminal, board, network, settings
 
     var routeAction: (String, String) {
@@ -232,6 +268,13 @@ enum NativeActivePage {
         }
     }
 }
+enum NativeActiveContext: String {
+    case connect, disconnect
+    case keyboardOpenBefore = "keyboard_open_before", keyboardOpenAfter = "keyboard_open_after"
+    case keyboardCloseBefore = "keyboard_close_before", keyboardCloseAfter = "keyboard_close_after"
+    case routeBefore = "route_before", routeAfter = "route_after"
+}
+
 enum NativeHomeReadiness {
     enum State: String {
         case ready, loading, shell, error, alert, unexpected, notForeground = "not_foreground"
@@ -1313,6 +1356,7 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func waitForMobileWitness<Proof>(_ targets: [(String?, String, Bool)], includeOffscreenText: Bool,
+                                    onMissing: (() throws -> Void)? = nil,
                                     prove: ([Observed], [Observed]) throws -> MobileWitnessObservation<Proof>) throws -> Proof {
         let deadline = Date().addingTimeInterval(20)
         var pending = "native_mobile_setup_unproven"
@@ -1332,6 +1376,7 @@ final class TauriDirectSSHUITests: XCTestCase {
             }
             Thread.sleep(forTimeInterval: 0.2)
         } while Date() < deadline
+        if pending == "native_mobile_setup_unproven" { try onMissing?() }
         try require(false, pending, passwordObservation: pendingObservation?())
         throw NSError(domain: pending, code: 1)
     }
@@ -1575,8 +1620,8 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func assertCredentialsInactive(_ page: Observed, _ rows: [Observed]) throws {
-        let visible = try safeFrame([page])
+    private func assertCredentialsInactive(_ page: Observed, _ rows: [Observed], visible activeVisible: CGRect? = nil) throws {
+        let visible = try activeVisible ?? safeFrame([page])
         for (identifier, labels) in [("ssh-password", mobileFlow ? NativeControlPolicy.mobilePasswordLabels : [NativeControlPolicy.desktopPasswordLabel]),
             ("ssh-key", [mobileFlow ? "私钥 PEM（仅本次使用）" : "私钥"]),
             ("ssh-passphrase", [mobileFlow ? "私钥口令（加密私钥需要）" : "私钥口令（可选）"])] {
@@ -1649,12 +1694,11 @@ final class TauriDirectSSHUITests: XCTestCase {
     @MainActor
     private func keyboardFrames() -> [CGRect] {
         app.keyboards.allElementsBoundByIndex.compactMap { liveControl($0)?.snapshot.frame }
-            .filter { NativeFramePolicy.valid($0.intersection(app.frame)) }
     }
 
     @MainActor
     private func nativeOcclusions() -> [CGRect] {
-        NativeFramePolicy.unique(statusBarFrames() + keyboardFrames())
+        NativeFramePolicy.unique(statusBarFrames() + keyboardFrames().filter { NativeFramePolicy.valid($0.intersection(app.frame)) })
     }
 
     @MainActor
@@ -2532,34 +2576,90 @@ final class TauriDirectSSHUITests: XCTestCase {
         return nil
     }
 
+    private struct ActiveLayout {
+        let screen: CGRect
+        let statusBars: [CGRect]
+        let keyboards: [CGRect]
+        let keyboardPresent: Bool
+
+        func viewport(for anchor: Observed) -> NativeFramePolicy.ActiveViewport {
+            NativeFramePolicy.activeViewport(window: anchor.window, screen: screen, webAncestors: anchor.webs,
+                statusBars: statusBars, keyboardPresent: keyboardPresent, keyboardFrames: keyboards)
+        }
+    }
+
+    @MainActor
+    private func activeLayout() -> ActiveLayout {
+        ActiveLayout(screen: app.frame, statusBars: statusBarFrames(), keyboards: keyboardFrames(),
+                     keyboardPresent: app.keyboards.firstMatch.exists)
+    }
+
+    @MainActor
+    private func activeDiagnostic(_ context: NativeActiveContext, _ page: NativeActivePage, _ reason: String,
+                                  layout measured: ActiveLayout? = nil, viewport: NativeFramePolicy.ActiveViewport? = nil,
+                                  frames: [CGRect] = []) throws {
+        let layout = measured ?? activeLayout()
+        let rect = NativeFramePolicy.diagnosticRect
+        try post("native_active_diagnostic", ["nativeCheckpoint": nativePhase, "detail": [
+            "context": context.rawValue, "page": page.rawValue, "reason": reason, "keyboardVisible": layout.keyboardPresent,
+            "screen": rect(layout.screen), "viewport": rect(viewport?.viewport), "visible": rect(viewport?.visible),
+            "statusBars": layout.statusBars.prefix(4).map { rect($0) },
+            "keyboards": layout.keyboards.prefix(4).map { rect($0) },
+            "frames": frames.prefix(5).map { rect($0) },
+        ]])
+    }
+
     @MainActor
     private func activePage(_ page: NativeActivePage, port: Int, owner: RevealedControl,
+                            context: NativeActiveContext = .connect,
                             keyboardAction: (String, String)? = nil) throws -> ([Observed], [Observed]) {
         var expected = page.witnesses(endpoint: target(port))
         if let keyboardAction { expected.append((keyboardAction.0, keyboardAction.1, true)) }
-        let (rows, anchors) = try mobileWitness(expected)
-        guard let scope = controlScope(anchors[0], rows), sameControlScope(scope, owner) else {
+        let (rows, anchors) = try waitForMobileWitness(expected, includeOffscreenText: false,
+            onMissing: { try self.activeDiagnostic(context, page, "page_witness_unproven") }) { .ready(($0, $1)) }
+        let first = anchors[0]
+        guard let scope = controlScope(first, rows), sameControlScope(scope, owner),
+              first.webs.count <= 16, anchors.allSatisfy({
+                  $0.windowPath == first.windowPath && $0.webPath == first.webPath &&
+                  $0.window == first.window && $0.webs == first.webs
+              }) else {
+            try activeDiagnostic(context, page, "owner_unproven", frames: anchors.map { $0.snapshot.frame })
             try require(false, "native_active_owner_unproven")
             throw NSError(domain: "native_active_owner_unproven", code: 1)
         }
-        let visible = try safeFrame(anchors)
-        try require(anchors.allSatisfy { visible.contains($0.snapshot.frame) }, "native_active_page_unproven")
+        let layout = activeLayout(), geometry = layout.viewport(for: first)
+        let frames = anchors.map { $0.snapshot.frame }
+        guard let visible = geometry.visible else {
+            try activeDiagnostic(context, page, geometry.reason ?? "viewport_empty", layout: layout, viewport: geometry, frames: frames)
+            try require(false, "native_visible_frame_invalid")
+            throw NSError(domain: "native_visible_frame_invalid", code: 1)
+        }
+        if !frames.allSatisfy(visible.contains) {
+            try activeDiagnostic(context, page, "page_clipped", layout: layout, viewport: geometry, frames: frames)
+            try require(false, "native_active_page_unproven")
+        }
         if page != .terminal {
             let activeButtons = Set(["ssh-focus", "ssh-hide-keyboard", "ssh-disconnect"])
             let activeLabels = Set(["打开键盘", "收起键盘", "断开连接"])
-            try require(!rows.contains { item in
+            let controls = rows.filter { item in
                 item.webPath == scope.web.path && item.snapshot.elementType == .button &&
                     (activeButtons.contains(item.snapshot.identifier) || activeLabels.contains(item.snapshot.label)) &&
                     NativeFramePolicy.valid(item.snapshot.frame.intersection(visible))
-            }, "native_active_page_unproven")
+            }
+            if !controls.isEmpty {
+                try activeDiagnostic(context, page, "page_conflict", layout: layout, viewport: geometry,
+                                     frames: controls.map { $0.snapshot.frame })
+                try require(false, "native_active_page_unproven")
+            }
         }
         try assertNoSecret(rows.map { $0.snapshot })
-        try assertCredentialsInactive(anchors[0], rows)
+        try assertCredentialsInactive(first, rows, visible: visible)
         return (rows, anchors)
     }
 
     @MainActor
     private func activeAction(_ action: (String, String), rows: [Observed], owner: RevealedControl,
+                              context: NativeActiveContext, page: NativeActivePage = .terminal,
                               route: Bool = false) throws -> (element: XCUIElement, geometry: [String: Any]) {
         let (identifier, label) = action
         let roles: Set<XCUIElement.ElementType> = route ? [.button, .checkBox, .switch, .toggle] : [.button]
@@ -2573,25 +2673,39 @@ final class TauriDirectSSHUITests: XCTestCase {
               roles.contains(candidate.snapshot.elementType), candidate.snapshot.label == label,
               candidate.snapshot.isEnabled, let scope = controlScope(candidate, rows), sameControlScope(scope, owner),
               liveOnPath(scope.window) != nil, let web = liveOnPath(scope.web) else {
+            try activeDiagnostic(context, page, "action_unbound", frames: candidates.map { $0.snapshot.frame })
             try require(false, "native_active_action_unproven")
             throw NSError(domain: "native_active_action_unproven", code: 1)
         }
         let predicate = NSPredicate(format: "identifier == %@ OR label == %@", identifier, label)
         let query = web.element.descendants(matching: candidate.snapshot.elementType).matching(predicate)
         guard query.count == 1, let live = liveControl(query.firstMatch), live.snapshot.isEnabled,
-              sameIdentity(candidate.snapshot, live.snapshot), candidate.snapshot.frame == live.snapshot.frame,
-              let visible = controlVisibleFrame(candidate, live) else {
+              sameIdentity(candidate.snapshot, live.snapshot), candidate.snapshot.frame == live.snapshot.frame else {
+            try activeDiagnostic(context, page, "action_live_unproven", frames: [candidate.snapshot.frame])
             try require(false, "native_active_action_unproven")
             throw NSError(domain: "native_active_action_unproven", code: 1)
         }
         let frame = live.snapshot.frame
-        let bars = statusBarFrames()
-        let geometry = controlGeometry(candidate, [live]) { viewport, _ in
-            route ? nil : self.routeTabsOcclusion(candidate, rows, viewport, [frame], scrolling: false)
+        let layout = activeLayout(), geometry = layout.viewport(for: candidate)
+        guard let visible = geometry.visible, let viewport = geometry.viewport else {
+            try activeDiagnostic(context, page, geometry.reason ?? "viewport_empty",
+                                 layout: layout, viewport: geometry, frames: [frame])
+            try require(false, "native_active_action_unproven")
+            throw NSError(domain: "native_active_action_unproven", code: 1)
         }
-        try require(geometry.failure == nil && live.hittable && NativeFramePolicy.headerStatusBarsValid(bars, screen: app.frame) &&
-                    NativeFramePolicy.headerFrameClear(frame, safe: visible, statusBars: bars), "native_active_action_unproven")
-        return (live.element, ["frame": rect(frame), "visibleFrame": rect(visible), "screenFrame": rect(app.frame),
+        let tabs = route ? nil : routeTabsOcclusion(candidate, rows, viewport, [frame], scrolling: false)
+        let invalid = NativeFramePolicy.interactionFailure([frame], in: visible, occlusions: [], hittable: live.hittable)
+        let bars = layout.statusBars
+        let tabsBlock = tabs.map { NativeFramePolicy.valid($0.intersection(frame)) } ?? false
+        let reason = invalid?.rawValue ?? (tabsBlock ? "route_tabs_occluded" : nil)
+        let clearHeader = NativeFramePolicy.headerStatusBarsValid(bars, screen: layout.screen) &&
+            NativeFramePolicy.headerFrameClear(frame, safe: visible, statusBars: bars)
+        if reason != nil || !clearHeader {
+            try activeDiagnostic(context, page, reason ?? "status_bar_action_invalid", layout: layout,
+                                 viewport: geometry, frames: [frame] + (tabs.map { [$0] } ?? []))
+            try require(false, "native_active_action_unproven")
+        }
+        return (live.element, ["frame": rect(frame), "visibleFrame": rect(visible), "screenFrame": rect(layout.screen),
             "statusBarFrames": bars.map(rect), "role": role(live.snapshot.elementType), "enabled": live.snapshot.isEnabled,
             "hittable": live.hittable, "ownerResolved": true, "centerVisible": visible.contains(CGPoint(x: frame.midX, y: frame.midY)),
             "fullyVisible": visible.contains(frame)])
@@ -2599,33 +2713,42 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func activeKeyboard(open: Bool, port: Int, owner: RevealedControl) throws -> [String: Any] {
-        try require(app.keyboards.firstMatch.exists != open && (!keyboardFrames().isEmpty) != open,
-                    "native_active_action_unproven")
+        let beforeContext: NativeActiveContext = open ? .keyboardOpenBefore : .keyboardCloseBefore
+        let afterContext: NativeActiveContext = open ? .keyboardOpenAfter : .keyboardCloseAfter
+        if app.keyboards.firstMatch.exists == open || (!keyboardFrames().isEmpty) == open {
+            try activeDiagnostic(beforeContext, .terminal, "keyboard_state_changed")
+            try require(false, "native_active_action_unproven")
+        }
         let show = ("ssh-focus", "打开键盘"), hide = ("ssh-hide-keyboard", "收起键盘")
-        let (before, _) = try activePage(.terminal, port: port, owner: owner, keyboardAction: open ? show : hide)
-        let action = try activeAction(open ? show : hide, rows: before, owner: owner)
+        let (before, _) = try activePage(.terminal, port: port, owner: owner, context: beforeContext, keyboardAction: open ? show : hide)
+        let action = try activeAction(open ? show : hide, rows: before, owner: owner, context: beforeContext)
         action.element.tap()
         if open {
-            try require(app.keyboards.firstMatch.waitForExistence(timeout: 10), "native_terminal_keyboard_missing")
+            if !app.keyboards.firstMatch.waitForExistence(timeout: 10) {
+                try activeDiagnostic(afterContext, .terminal, "keyboard_missing")
+                try require(false, "native_terminal_keyboard_missing")
+            }
         } else { try waitForCaptureKeyboardToHide(reportDiagnostic: false) }
-        let (after, _) = try activePage(.terminal, port: port, owner: owner, keyboardAction: open ? hide : show)
-        _ = try activeAction(open ? hide : show, rows: after, owner: owner)
-        try require(app.keyboards.firstMatch.exists == open && (!keyboardFrames().isEmpty) == open,
-                    "native_active_action_unproven")
+        let (after, _) = try activePage(.terminal, port: port, owner: owner, context: afterContext, keyboardAction: open ? hide : show)
+        _ = try activeAction(open ? hide : show, rows: after, owner: owner, context: afterContext)
+        if app.keyboards.firstMatch.exists != open || (!keyboardFrames().isEmpty) != open {
+            try activeDiagnostic(afterContext, .terminal, "keyboard_state_changed")
+            try require(false, "native_active_action_unproven")
+        }
         return action.geometry
     }
 
     @MainActor
     private func activeRoute(from source: NativeActivePage, to destination: NativeActivePage,
                              port: Int, owner: RevealedControl) throws -> [String: Any] {
-        let (before, _) = try activePage(source, port: port, owner: owner)
+        let (before, _) = try activePage(source, port: port, owner: owner, context: .routeBefore)
         try require(!app.keyboards.firstMatch.exists, "native_terminal_keyboard_visible")
-        let action = try activeAction(destination.routeAction, rows: before, owner: owner, route: true)
+        let action = try activeAction(destination.routeAction, rows: before, owner: owner, context: .routeBefore, page: source, route: true)
         action.element.tap()
-        let (after, _) = try activePage(destination, port: port, owner: owner,
+        let (after, _) = try activePage(destination, port: port, owner: owner, context: .routeAfter,
             keyboardAction: destination == .terminal ? ("ssh-focus", "打开键盘") : nil)
         try require(!app.keyboards.firstMatch.exists, "native_terminal_keyboard_visible")
-        if destination == .terminal { _ = try activeAction(("ssh-focus", "打开键盘"), rows: after, owner: owner) }
+        if destination == .terminal { _ = try activeAction(("ssh-focus", "打开键盘"), rows: after, owner: owner, context: .routeAfter) }
         return action.geometry
     }
 
@@ -2676,8 +2799,8 @@ final class TauriDirectSSHUITests: XCTestCase {
         try phase("disconnect")
         try post(stage + "_disconnect_attempt")
         if let owner {
-            let (rows, _) = try activePage(.terminal, port: port, owner: owner)
-            try activeAction(("ssh-disconnect", "断开连接"), rows: rows, owner: owner).element.tap()
+            let (rows, _) = try activePage(.terminal, port: port, owner: owner, context: .disconnect)
+            try activeAction(("ssh-disconnect", "断开连接"), rows: rows, owner: owner, context: .disconnect).element.tap()
         } else { try tap(button("断开连接")) }
         if mobileFlow { try mobileDisconnected() } else { try waitText("已断开") }
         try post(stage + "_disconnected")

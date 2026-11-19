@@ -62,7 +62,8 @@ class TerminalKeyboardPlugin(private val activity: Activity) : Plugin(activity) 
             val top = maxOf(status, stableStatus, cutout, caption, stableCaption)
             val location = IntArray(2)
             view.getLocationOnScreen(location)
-            val windowTop = if (Build.VERSION.SDK_INT >= 30) activity.windowManager.currentWindowMetrics.bounds.top else null
+            val windowBounds = if (Build.VERSION.SDK_INT >= 30) activity.windowManager.currentWindowMetrics.bounds else null
+            val windowTop = windowBounds?.top
             val safeTop = if (windowTop != null) windowTop + top else Rect().also { view.getWindowVisibleDisplayFrame(it) }.top
             val overlap = (safeTop - location[1]).coerceAtLeast(0)
             invoke.resolve(JSObject().apply {
@@ -71,6 +72,17 @@ class TerminalKeyboardPlugin(private val activity: Activity) : Plugin(activity) 
                 if (windowTop != null) {
                     put("windowTopPx", windowTop); put("cutoutPx", cutout)
                     put("captionPx", caption); put("stableCaptionPx", stableCaption)
+                }
+                if (Build.VERSION.SDK_INT >= 30 && windowBounds != null && view.height > 0 && active(view)) {
+                    val ime = WindowInsets.Type.ime()
+                    val visible = insets.isVisible(ime)
+                    put("imeVisible", visible)
+                    val bottom = insets.getInsets(ime).bottom
+                    if (visible && bottom in 1..windowBounds.height()) {
+                        val imeTop = windowBounds.bottom - bottom
+                        put("imeOverlapPx", (location[1] + view.height - imeTop).coerceIn(0, view.height))
+                        put("viewHeightPx", view.height)
+                    }
                 }
             })
         }

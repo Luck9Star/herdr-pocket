@@ -1,0 +1,603 @@
+{
+  "productCommit": "26d8abfcd25d78fa22d5ead31e58bc39cb6e34ca",
+  "designCommit": "79deef0e9c03425f368966e32ff1f1d399a3ac02",
+  "designGeometrySha256": "7577391ebeb70e1c50a388a478dacd4eb2834b1b1cee248361860c7ef3bec848",
+  "measurement": "Flutter widget on real isolated loopback; AppBar top safe area removed for design content band",
+  "rows": [
+    {
+      "width": 320,
+      "state": "trust",
+      "anchor": "independent-verification",
+      "expected": [
+        16,
+        302,
+        288,
+        52
+      ],
+      "raw": [
+        16.0,
+        302.0,
+        288.0,
+        52.0
+      ],
+      "actual": [
+        16.0,
+        302.0,
+        288.0,
+        52.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "centerHit": true,
+      "interaction": "non-interactive geometry",
+      "screenshot": "screens/flutter-before-320-trust.png",
+      "sourceJson": "visual-before-320.json"
+    },
+    {
+      "width": 320,
+      "state": "password",
+      "anchor": "trust-approved",
+      "expected": [
+        16,
+        162,
+        288,
+        44
+      ],
+      "raw": [
+        16.0,
+        162.0,
+        288.0,
+        44.0
+      ],
+      "actual": [
+        16.0,
+        162.0,
+        288.0,
+        44.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "centerHit": true,
+      "interaction": "non-interactive geometry",
+      "screenshot": "screens/flutter-before-320-password.png",
+      "sourceJson": "visual-before-320.json"
+    },
+    {
+      "width": 320,
+      "state": "private-key",
+      "anchor": "trust-approved",
+      "expected": [
+        16,
+        162,
+        288,
+        44
+      ],
+      "raw": [
+        16.0,
+        162.0,
+        288.0,
+        44.0
+      ],
+      "actual": [
+        16.0,
+        162.0,
+        288.0,
+        44.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "centerHit": true,
+      "interaction": "non-interactive geometry",
+      "screenshot": "screens/flutter-before-320-private-key.png",
+      "sourceJson": "visual-before-320.json"
+    },
+    {
+      "width": 320,
+      "state": "key-changed",
+      "anchor": "app-header",
+      "expected": [
+        0,
+        24,
+        320,
+        56
+      ],
+      "raw": [
+        0.0,
+        0.0,
+        320.0,
+        80.0
+      ],
+      "actual": [
+        0.0,
+        24.0,
+        320.0,
+        56.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "centerHit": true,
+      "interaction": "non-interactive geometry",
+      "screenshot": "screens/flutter-before-320-key-changed.png",
+      "sourceJson": "rotation-before-320.json"
+    },
+    {
+      "width": 320,
+      "state": "previous-trust",
+      "anchor": "app-header",
+      "expected": [
+        0,
+        24,
+        320,
+        56
+      ],
+      "raw": [
+        0.0,
+        0.0,
+        320.0,
+        80.0
+      ],
+      "actual": [
+        0.0,
+        24.0,
+        320.0,
+        56.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "centerHit": true,
+      "interaction": "non-interactive geometry",
+      "screenshot": "screens/flutter-before-320-previous-trust.png",
+      "sourceJson": "rotation-before-320.json"
+    },
+    {
+      "width": 320,
+      "state": "previous-trust",
+      "anchor": "back",
+      "expected": [
+        8,
+        30,
+        44,
+        44
+      ],
+      "raw": [
+        8.0,
+        30.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        8.0,
+        30.0,
+        44.0,
+        44.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "centerHit": true,
+      "interaction": "back button",
+      "screenshot": "screens/flutter-before-320-previous-trust.png",
+      "sourceJson": "rotation-before-320.json"
+    },
+    {
+      "width": 320,
+      "state": "recheck-trust",
+      "anchor": "app-header",
+      "expected": [
+        0,
+        24,
+        320,
+        56
+      ],
+      "raw": [
+        0.0,
+        0.0,
+        320.0,
+        80.0
+      ],
+      "actual": [
+        0.0,
+        24.0,
+        320.0,
+        56.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "centerHit": true,
+      "interaction": "non-interactive geometry",
+      "screenshot": "screens/flutter-before-320-recheck.png",
+      "sourceJson": "rotation-before-320.json"
+    },
+    {
+      "width": 320,
+      "state": "recheck-trust",
+      "anchor": "back",
+      "expected": [
+        8,
+        30,
+        44,
+        44
+      ],
+      "raw": [
+        8.0,
+        30.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        8.0,
+        30.0,
+        44.0,
+        44.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "centerHit": true,
+      "interaction": "back button",
+      "screenshot": "screens/flutter-before-320-recheck.png",
+      "sourceJson": "rotation-before-320.json"
+    },
+    {
+      "width": 320,
+      "state": "recheck-trust",
+      "anchor": "independent-verification",
+      "expected": [
+        16,
+        302,
+        288,
+        52
+      ],
+      "raw": [
+        16.0,
+        302.0,
+        288.0,
+        52.0
+      ],
+      "actual": [
+        16.0,
+        302.0,
+        288.0,
+        52.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "centerHit": true,
+      "interaction": "non-interactive geometry",
+      "screenshot": "screens/flutter-before-320-recheck.png",
+      "sourceJson": "rotation-before-320.json"
+    },
+    {
+      "width": 390,
+      "state": "trust",
+      "anchor": "independent-verification",
+      "expected": [
+        24,
+        325,
+        342,
+        52
+      ],
+      "raw": [
+        24.0,
+        325.0,
+        342.0,
+        52.0
+      ],
+      "actual": [
+        24.0,
+        325.0,
+        342.0,
+        52.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "centerHit": true,
+      "interaction": "non-interactive geometry",
+      "screenshot": "screens/flutter-before-390-trust.png",
+      "sourceJson": "visual-before-390.json"
+    },
+    {
+      "width": 390,
+      "state": "password",
+      "anchor": "trust-approved",
+      "expected": [
+        24,
+        185,
+        342,
+        44
+      ],
+      "raw": [
+        24.0,
+        185.0,
+        342.0,
+        44.0
+      ],
+      "actual": [
+        24.0,
+        185.0,
+        342.0,
+        44.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "centerHit": true,
+      "interaction": "non-interactive geometry",
+      "screenshot": "screens/flutter-before-390-password.png",
+      "sourceJson": "visual-before-390.json"
+    },
+    {
+      "width": 390,
+      "state": "private-key",
+      "anchor": "trust-approved",
+      "expected": [
+        24,
+        185,
+        342,
+        44
+      ],
+      "raw": [
+        24.0,
+        185.0,
+        342.0,
+        44.0
+      ],
+      "actual": [
+        24.0,
+        185.0,
+        342.0,
+        44.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "centerHit": true,
+      "interaction": "non-interactive geometry",
+      "screenshot": "screens/flutter-before-390-private-key.png",
+      "sourceJson": "visual-before-390.json"
+    },
+    {
+      "width": 390,
+      "state": "key-changed",
+      "anchor": "app-header",
+      "expected": [
+        0,
+        47,
+        390,
+        56
+      ],
+      "raw": [
+        0.0,
+        0.0,
+        390.0,
+        103.0
+      ],
+      "actual": [
+        0.0,
+        47.0,
+        390.0,
+        56.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "centerHit": true,
+      "interaction": "non-interactive geometry",
+      "screenshot": "screens/flutter-before-390-key-changed.png",
+      "sourceJson": "rotation-before-390.json"
+    },
+    {
+      "width": 390,
+      "state": "previous-trust",
+      "anchor": "app-header",
+      "expected": [
+        0,
+        47,
+        390,
+        56
+      ],
+      "raw": [
+        0.0,
+        0.0,
+        390.0,
+        103.0
+      ],
+      "actual": [
+        0.0,
+        47.0,
+        390.0,
+        56.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "centerHit": true,
+      "interaction": "non-interactive geometry",
+      "screenshot": "screens/flutter-before-390-previous-trust.png",
+      "sourceJson": "rotation-before-390.json"
+    },
+    {
+      "width": 390,
+      "state": "previous-trust",
+      "anchor": "back",
+      "expected": [
+        16,
+        53,
+        44,
+        44
+      ],
+      "raw": [
+        16.0,
+        53.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        16.0,
+        53.0,
+        44.0,
+        44.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "centerHit": true,
+      "interaction": "back button",
+      "screenshot": "screens/flutter-before-390-previous-trust.png",
+      "sourceJson": "rotation-before-390.json"
+    },
+    {
+      "width": 390,
+      "state": "recheck-trust",
+      "anchor": "app-header",
+      "expected": [
+        0,
+        47,
+        390,
+        56
+      ],
+      "raw": [
+        0.0,
+        0.0,
+        390.0,
+        103.0
+      ],
+      "actual": [
+        0.0,
+        47.0,
+        390.0,
+        56.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "centerHit": true,
+      "interaction": "non-interactive geometry",
+      "screenshot": "screens/flutter-before-390-recheck.png",
+      "sourceJson": "rotation-before-390.json"
+    },
+    {
+      "width": 390,
+      "state": "recheck-trust",
+      "anchor": "back",
+      "expected": [
+        16,
+        53,
+        44,
+        44
+      ],
+      "raw": [
+        16.0,
+        53.0,
+        44.0,
+        44.0
+      ],
+      "actual": [
+        16.0,
+        53.0,
+        44.0,
+        44.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "centerHit": true,
+      "interaction": "back button",
+      "screenshot": "screens/flutter-before-390-recheck.png",
+      "sourceJson": "rotation-before-390.json"
+    },
+    {
+      "width": 390,
+      "state": "recheck-trust",
+      "anchor": "independent-verification",
+      "expected": [
+        24,
+        325,
+        342,
+        52
+      ],
+      "raw": [
+        24.0,
+        325.0,
+        342.0,
+        52.0
+      ],
+      "actual": [
+        24.0,
+        325.0,
+        342.0,
+        52.0
+      ],
+      "delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "centerHit": true,
+      "interaction": "non-interactive geometry",
+      "screenshot": "screens/flutter-before-390-recheck.png",
+      "sourceJson": "rotation-before-390.json"
+    }
+  ],
+  "regressionTestCommit": "e69d92bcd7dc8b3b37a3c2410fa51faa8487139c"
+}

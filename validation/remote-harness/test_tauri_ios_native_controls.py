@@ -485,6 +485,7 @@ struct Query {
 }
 struct App {
     let frame: CGRect
+    var keyboardFrame: CGRect? = nil
     let input = Element()
     let keyboard = Element()
     var webViews: Query { Query() }
@@ -595,7 +596,7 @@ final class Adapter {
         [Double(value.minX), Double(value.minY), Double(value.width), Double(value.height)]
     }
     func assertNoSecret(_ rows: [Snapshot]) throws { }
-    func assertCredentialsInactive(_ owner: Observed, _ rows: [Observed]) throws {
+    func assertCredentialsInactive(_ owner: Observed, _ rows: [Observed], visible: CGRect? = nil) throws {
         try require(!rows.contains { $0.snapshot.elementType == .secureTextField && $0.snapshot.isEnabled },
                     "native_credentials_visible_after_connect")
     }
@@ -626,7 +627,7 @@ final class Adapter {
     }
     func liveControl(_ element: XCUIElement) -> LiveControl? {
         if element === app.keyboard && element.exists {
-            let frame = CGRect(x: 0, y: app.frame.height - 284, width: app.frame.width, height: 284)
+            let frame = app.keyboardFrame ?? CGRect(x: 0, y: app.frame.height - 284, width: app.frame.width, height: 250)
             return LiveControl(snapshot: snapshot(.keyboard, frame: frame, label: ""), hittable: true, element: element)
         }
         if element === current.element { return observations?.live(current) ?? current }
@@ -700,7 +701,8 @@ final class Adapter {
             "func waitForCaptureKeyboardToHide(reviewSample:", "func stableCaptureLayout(_ before:",
             "func terminalCaptureFrame(_ anchors:", "struct TerminalHeader {", "func terminalHeader(_ title:", "func screenshot(_ stage:",
             "func connectionRows(_ rows:", "func connectionStatus(_ rows:", "func submitConnection(_ attempt:",
-            "func fillForm(_ name:", "func pageScope(_ item:", "func keyboardFrames()", "func activePage(_ page:",
+            "func fillForm(_ name:", "func pageScope(_ item:", "func keyboardFrames()", "struct ActiveLayout {",
+            "func activeLayout()", "func activeDiagnostic(_ context:", "func activePage(_ page:",
             "func activeAction(_ action:", "func activeRoute(from source:", "func activeKeyboard(open:", "func activeFlow(port:")) + r'''
 }
 let screen = CGRect(x: 0, y: 0, width: 390, height: 844)
@@ -1014,10 +1016,11 @@ func checkActiveFlow() throws {
     let settings = [window, web, settingsTitle, settingsActive, settingsStatus, settingsEndpoint] + tabs
 
     func fixture(_ samples: [[Observed]], badTab: String? = nil, autoFocus: Bool = false,
-                 helpers: [Observed] = []) -> (Adapter, Observations, RevealedControl, [Element]) {
-        let app = App(frame: screen)
+                 helpers: [Observed] = [], keyboard: CGRect? = nil, closeButton: Observed? = nil,
+                 canHide: Bool = true) -> (Adapter, Observations, RevealedControl, [Element]) {
+        let app = App(frame: screen, keyboardFrame: keyboard)
         let observations = Observations(samples)
-        let controls = [disconnect, open, close] + tabs + helpers
+        let controls = [disconnect, open, closeButton ?? close] + tabs + helpers
         var bound: [[Int]: LiveControl] = [:]
         var elements: [Element] = []
         for control in controls {
@@ -1030,7 +1033,8 @@ func checkActiveFlow() throws {
             let adjustedFrame = raw.identifier == badTab ? raw.frame.offsetBy(dx: 0, dy: -20) : raw.frame
             let live = snapshot(raw.elementType, frame: adjustedFrame, identifier: raw.identifier, label: raw.label)
             observations.webSurface.descendantsByRole[raw.elementType, default: []].append(element)
-            bound[control.path] = LiveControl(snapshot: live, hittable: true, element: element)
+            bound[control.path] = LiveControl(snapshot: live, hittable: raw.identifier != "ssh-hide-keyboard" || canHide,
+                                              element: element)
             elements.append(element)
         }
         let anchor = bound[disconnect.path]!
@@ -1074,8 +1078,38 @@ func checkActiveFlow() throws {
         let (invalid, trace, owner, elements) = fixture(samples, badTab: badTab)
         do { try invalid.exerciseActiveRoute(owner); failures.append("unsafe active flow accepted: \(code)") }
         catch let failure as Rejected { check(failure.reason == code, "unexpected active flow verdict: \(failure.reason)") }
-        check(elements.map(\.directTaps).reduce(0, +) == allowedTaps && trace.checkpoints.isEmpty &&
-              invalid.app.input.inputs.isEmpty, "reject the disputed view without extra taps, input, or evidence")
+        check(elements.map(\.directTaps).reduce(0, +) == allowedTaps &&
+              trace.checkpoints.count == 1 && trace.checkpoints[0].0 == "native_active_diagnostic" &&
+              invalid.app.input.inputs.isEmpty, "reject the disputed view without extra taps or input")
+    }
+
+    let crossed = row(snapshot(.button, frame: CGRect(x: 318, y: 540, width: 52, height: 44),
+                               identifier: "ssh-hide-keyboard", label: "收起键盘"), path: close.path)
+    let foreignTerminal = [window, web, otherWeb] + opened.dropFirst(2).map {
+        row($0.snapshot, path: [0, 1, $0.path.last!], web: [0, 1])
+    }
+    let keyboardFailures: [([Observed], CGRect?, Observed?, Bool, String, String)] = [
+        (opened, CGRect(x: 60, y: 560, width: 300, height: 250), nil, true,
+         "native_visible_frame_invalid", "keyboard_frame_unproven"),
+        (opened, CGRect(x: 0, y: 620, width: 390, height: 250), nil, true,
+         "native_visible_frame_invalid", "keyboard_frame_unproven"),
+        (opened, CGRect(x: 0, y: 260, width: 390, height: 240), nil, true,
+         "native_visible_frame_invalid", "keyboard_frame_unproven"),
+        (opened, .zero, nil, true, "native_visible_frame_invalid", "keyboard_frame_unproven"),
+        (terminal + [crossed], nil, crossed, true, "native_active_page_unproven", "page_clipped"),
+        (opened, nil, nil, false, "native_active_action_unproven", "field_unhittable"),
+        (foreignTerminal, nil, nil, true, "native_active_owner_unproven", "owner_unproven"),
+    ]
+    for (arrival, nativeKeyboard, closeButton, canHide, code, reason) in keyboardFailures {
+        let (rejected, trace, owner, controls) = fixture([closed, arrival], keyboard: nativeKeyboard,
+                                                         closeButton: closeButton, canHide: canHide)
+        do { try rejected.exerciseActiveFlow(owner); failures.append("invalid keyboard view accepted: \(reason)") }
+        catch let failure as Rejected { check(failure.reason == code, "wrong rejection for keyboard view: \(failure.reason)") }
+        let detail = trace.checkpoints.first?.1["detail"] as? [String: Any]
+        check(trace.checkpoints.count == 1 && trace.checkpoints.first?.0 == "native_active_diagnostic" &&
+              detail?["context"] as? String == "keyboard_open_after" && detail?["reason"] as? String == reason &&
+              controls.map(\.directTaps) == [0, 1, 0, 0, 0, 0, 0] && rejected.app.input.inputs.isEmpty,
+              "unsafe keyboard geometry must stop after the one real open action and identify its phase")
     }
 
     let (focused, focusedTrace, focusedOwner, focusedElements) = fixture([board, closed], autoFocus: true)

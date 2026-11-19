@@ -265,6 +265,17 @@ class _WindowsKeyTarget implements LinuxTarget {
   Null get rotatedFingerprint => null;
 }
 
+bool windowsDirectSshHomeReady(WidgetTester tester, Finder home) {
+  if (home.evaluate().length != 1) return false;
+  final entry = find.descendant(
+    of: home,
+    matching: control('hosts-direct-ssh'),
+  ).hitTestable();
+  if (entry.evaluate().length != 1) return false;
+  final button = tester.widget(entry);
+  return button is ButtonStyleButton && button.onPressed != null;
+}
+
 Future<void> _runWindowsPublicKey(
   WidgetTester tester,
   _WindowsKeyTarget target,
@@ -278,10 +289,7 @@ Future<void> _runWindowsPublicKey(
   final home = find.byType(HostCatalogPage);
   await waitUi(
     tester,
-    () =>
-        home.evaluate().length == 1 &&
-        control('home-empty-card').hitTestable().evaluate().length == 1 &&
-        control('hosts-direct-ssh').hitTestable().evaluate().length == 1,
+    () => windowsDirectSshHomeReady(tester, home),
     'windows_direct_publickey_home_timeout',
   );
   final catalog = tester.widget<HostCatalogPage>(home);

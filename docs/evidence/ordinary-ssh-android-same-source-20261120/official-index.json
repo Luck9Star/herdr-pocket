@@ -1,0 +1,791 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "2e8c3557e2e51ae62b423f9e25a9f1fc5d72cecf",
+  "android": {
+    "apiLevel": 35,
+    "abi": "x86_64",
+    "systemImageTag": "google_apis",
+    "systemImageRevision": 9,
+    "emulatorVersion": "37.2.13.0",
+    "physicalDevice": false,
+    "physicalImeVerified": false
+  },
+  "runs": [
+    {
+      "client": "flutter",
+      "workflowInput": "standard",
+      "runId": 44573407155,
+      "jobId": 135734306545,
+      "artifactId": 14555283420,
+      "archive": "44573407155-14555283420.zip",
+      "sha256": "9f3b3d77577eed1675fd1ac2007da2f398d3408db1318b7a28efb76d776c761c",
+      "bytes": 676376,
+      "manifest": "direct-ssh-public/result.json",
+      "cases": {
+        "password": {
+          "connectionCount": 2,
+          "hostKeyOrder": [
+            "A",
+            "A"
+          ],
+          "nonAuthenticatedConnections": 1,
+          "authAttempts": 1,
+          "authSuccesses": 1,
+          "ptyRequests": 1,
+          "shellRequests": 1,
+          "inputBytes": 9,
+          "outputBytes": 102,
+          "sessionClosed": true,
+          "allConnectionsClosed": true,
+          "uiDisconnectConfirmed": true,
+          "credentialsCleared": true,
+          "peerClosedBeforeDriverExit": true,
+          "navigationCheckpoints": {
+            "keyboard_shown": {
+              "id": 2,
+              "authAttempts": 1,
+              "authSuccesses": 1,
+              "ptyRequests": 1,
+              "shellRequests": 1,
+              "inputBytes": 0,
+              "markerReceived": false,
+              "closed": false
+            },
+            "keyboard_hidden": {
+              "id": 2,
+              "authAttempts": 1,
+              "authSuccesses": 1,
+              "ptyRequests": 1,
+              "shellRequests": 1,
+              "inputBytes": 0,
+              "markerReceived": false,
+              "closed": false
+            },
+            "board_visible": {
+              "id": 2,
+              "authAttempts": 1,
+              "authSuccesses": 1,
+              "ptyRequests": 1,
+              "shellRequests": 1,
+              "inputBytes": 0,
+              "markerReceived": false,
+              "closed": false
+            },
+            "board_returned": {
+              "id": 2,
+              "authAttempts": 1,
+              "authSuccesses": 1,
+              "ptyRequests": 1,
+              "shellRequests": 1,
+              "inputBytes": 0,
+              "markerReceived": false,
+              "closed": false
+            },
+            "network_visible": {
+              "id": 2,
+              "authAttempts": 1,
+              "authSuccesses": 1,
+              "ptyRequests": 1,
+              "shellRequests": 1,
+              "inputBytes": 0,
+              "markerReceived": false,
+              "closed": false
+            },
+            "network_returned": {
+              "id": 2,
+              "authAttempts": 1,
+              "authSuccesses": 1,
+              "ptyRequests": 1,
+              "shellRequests": 1,
+              "inputBytes": 0,
+              "markerReceived": false,
+              "closed": false
+            },
+            "settings_visible": {
+              "id": 2,
+              "authAttempts": 1,
+              "authSuccesses": 1,
+              "ptyRequests": 1,
+              "shellRequests": 1,
+              "inputBytes": 0,
+              "markerReceived": false,
+              "closed": false
+            },
+            "settings_returned": {
+              "id": 2,
+              "authAttempts": 1,
+              "authSuccesses": 1,
+              "ptyRequests": 1,
+              "shellRequests": 1,
+              "inputBytes": 0,
+              "markerReceived": false,
+              "closed": false
+            }
+          },
+          "screenshot": {
+            "integrationPng": "direct-ssh-public/connected.png",
+            "ocrEngine": "tesseract 5.3.4",
+            "devicePng": "direct-ssh-public/connected-device.png",
+            "proofSequenceVisible": true
+          }
+        },
+        "passwordHostKeyRotation": {
+          "connectionCount": 4,
+          "hostKeyOrder": [
+            "A",
+            "B",
+            "B",
+            "B"
+          ],
+          "nonAuthenticatedConnections": 3,
+          "authAttempts": 1,
+          "authSuccesses": 1,
+          "ptyRequests": 1,
+          "shellRequests": 1,
+          "inputBytes": 9,
+          "outputBytes": 102,
+          "sessionClosed": true,
+          "allConnectionsClosed": true,
+          "oldTrustPreservedAfterCancel": true,
+          "explicitNewTrust": true,
+          "uiDisconnectConfirmed": true,
+          "credentialsCleared": true,
+          "peerClosedBeforeDriverExit": true,
+          "screenshot": {
+            "integrationPng": "direct-ssh-public/rotation-connected.png",
+            "ocrEngine": "tesseract 5.3.4",
+            "devicePng": "direct-ssh-public/rotation-connected-device.png",
+            "proofSequenceVisible": true
+          }
+        }
+      },
+      "members": {
+        "direct-ssh-public/connected-device.png": {
+          "sha256": "1bf9622bea6794190da16b150fb20235d48393ed94727b9ee82cfacfd61f1006",
+          "bytes": 99877,
+          "pixels": [
+            1080,
+            2340
+          ]
+        },
+        "direct-ssh-public/connected.png": {
+          "sha256": "f84a3f235688677518ebeadce024ecf1c9f8d1f9348f05740f5ddce657d17cd1",
+          "bytes": 95903,
+          "pixels": [
+            1080,
+            2340
+          ]
+        },
+        "direct-ssh-public/disconnected.png": {
+          "sha256": "e61fac81d65e94c4089363b9b327bddbc7cb74e9b4e4ae533db9d1c9e31167df",
+          "bytes": 103614,
+          "pixels": [
+            1080,
+            2340
+          ]
+        },
+        "direct-ssh-public/home.png": {
+          "sha256": "b55fe8b2f2b5c0d2e1327795225ee5016f9446b955522e7e27c5b5bc1940e6cf",
+          "bytes": 91529,
+          "pixels": [
+            1080,
+            2340
+          ]
+        },
+        "direct-ssh-public/key-rotation-screen-proof.json": {
+          "sha256": "445eae04d58a46faefb8bc53294c29c0b6e60ee9a4537f944a096af3234f7f3d",
+          "bytes": 1565
+        },
+        "direct-ssh-public/ordinary-screen-proof.json": {
+          "sha256": "463979135f0f744a745e085829081d0aac6fff034705246f4bc8cf1965a70ff5",
+          "bytes": 1564
+        },
+        "direct-ssh-public/result.json": {
+          "sha256": "6c57a17bd8d4cfea2e145be787615072c26e41c11ed6499d0199fedb148b1ddf",
+          "bytes": 13778
+        },
+        "direct-ssh-public/rotation-connected-device.png": {
+          "sha256": "8b24cc179d61a7149db86a832acda82fa5ee1e5e53eb8e5404afe63062c557ca",
+          "bytes": 135764,
+          "pixels": [
+            1080,
+            2340
+          ]
+        },
+        "direct-ssh-public/rotation-connected.png": {
+          "sha256": "bf40d71f0a8edb82e5074e11407e88a5295856b7f379b52fa0b794b6e9aa8f82",
+          "bytes": 74353,
+          "pixels": [
+            1080,
+            2340
+          ]
+        },
+        "direct-ssh-public/rotation-rejected.png": {
+          "sha256": "de603f3b8f93171bcb169f0cda7ff65e6c7ede1fcb646beaad5cbf69565a4ef6",
+          "bytes": 168925,
+          "pixels": [
+            1080,
+            2340
+          ]
+        },
+        "direct-ssh-avd/emulator-version.txt": {
+          "sha256": "1a523c9091747b7bf48a755396278f2eca455352b40c281336f1c3e075607b54",
+          "bytes": 655
+        },
+        "direct-ssh-avd/image.properties": {
+          "sha256": "809a6f5103c048607257f03f18e22dd740137e9009c99d4a496de846b6ee3412",
+          "bytes": 357
+        },
+        "direct-ssh-avd/lifecycle.txt": {
+          "sha256": "4382732c658b78c67d310b55b97b392cb5ba40328ced42755e6b6a43514cf003",
+          "bytes": 283
+        },
+        "direct-ssh-avd/resources-end.json": {
+          "sha256": "79fbff55d703e9b41bcfa322f89c08ba694c723363d83cca0872ffcaada4b86a",
+          "bytes": 295
+        },
+        "direct-ssh-avd/resources-start.json": {
+          "sha256": "40cb36fcf4b60db0495d2792149beaa5925092b4cd38032c76aa3455aebb89b4",
+          "bytes": 295
+        }
+      },
+      "ownedEmulatorExited": true,
+      "ownedTransportAbsent": true,
+      "cleanup": {
+        "reverseRemoved": true,
+        "packageRemoved": true,
+        "ownedForwardsRemoved": true,
+        "fixtureClosed": true,
+        "flutterToolStopped": true,
+        "rawLogsUploaded": false
+      }
+    },
+    {
+      "client": "flutter",
+      "workflowInput": "encrypted-key",
+      "runId": 44573506017,
+      "jobId": 135734676523,
+      "artifactId": 14556390968,
+      "archive": "44573506017-14556390968.zip",
+      "sha256": "7c389716c7782897ba742598953768d8a204a13df61ad25a8180a65221a1c20f",
+      "bytes": 331998,
+      "manifest": "direct-ssh-public/result.json",
+      "cases": {
+        "encryptedKey": {
+          "connectionCount": 2,
+          "hostKeyOrder": [
+            "A",
+            "A"
+          ],
+          "nonAuthenticatedConnections": 1,
+          "authAttempts": 1,
+          "authSuccesses": 1,
+          "ptyRequests": 1,
+          "shellRequests": 1,
+          "inputBytes": 9,
+          "outputBytes": 144,
+          "sessionClosed": true,
+          "allConnectionsClosed": true,
+          "uiDisconnectConfirmed": true,
+          "credentialsCleared": true,
+          "peerClosedBeforeDriverExit": true,
+          "authenticationMethod": "publickey",
+          "clipboardCleared": true,
+          "temporaryKeyRemoved": true,
+          "wrongPassphraseRejectedLocally": true,
+          "screenshot": {
+            "integrationPng": "direct-ssh-public/connected.png",
+            "ocrEngine": "tesseract 5.3.4",
+            "devicePng": "direct-ssh-public/connected-device.png",
+            "proofSequenceVisible": true
+          }
+        }
+      },
+      "members": {
+        "direct-ssh-public/connected-device.png": {
+          "sha256": "aef32ce920c46a04443b5b9b420d88b56b1044c228d37c2dc0f34ffa92ad4b81",
+          "bytes": 105262,
+          "pixels": [
+            1080,
+            2340
+          ]
+        },
+        "direct-ssh-public/connected.png": {
+          "sha256": "43de936be752d17b25703707ec96f882a8aa3dbe1a5b9ff168a72aa16cf62de0",
+          "bytes": 102372,
+          "pixels": [
+            1080,
+            2340
+          ]
+        },
+        "direct-ssh-public/disconnected.png": {
+          "sha256": "a750c0179fb1f7218890a07b1dc8a91f1d5a3d302d1e6b22d6cf251b9cee6341",
+          "bytes": 102995,
+          "pixels": [
+            1080,
+            2340
+          ]
+        },
+        "direct-ssh-public/home.png": {
+          "sha256": "1e53d0c01b20dba216d579ef304b3ee88ef3429b217dba3871920f4348808640",
+          "bytes": 74193,
+          "pixels": [
+            1080,
+            2340
+          ]
+        },
+        "direct-ssh-public/ordinary-screen-proof.json": {
+          "sha256": "c7883b95704139092f4318b273c7135715f5d859d7e0d9c6a05d295937a901d9",
+          "bytes": 1564
+        },
+        "direct-ssh-public/result.json": {
+          "sha256": "37b299f0f7d4c9aebb7a867e1a1c06941d2441e55ad87be40691a06c6198b0ca",
+          "bytes": 4812
+        },
+        "direct-ssh-avd/emulator-version.txt": {
+          "sha256": "1a523c9091747b7bf48a755396278f2eca455352b40c281336f1c3e075607b54",
+          "bytes": 655
+        },
+        "direct-ssh-avd/image.properties": {
+          "sha256": "809a6f5103c048607257f03f18e22dd740137e9009c99d4a496de846b6ee3412",
+          "bytes": 357
+        },
+        "direct-ssh-avd/lifecycle.txt": {
+          "sha256": "4382732c658b78c67d310b55b97b392cb5ba40328ced42755e6b6a43514cf003",
+          "bytes": 283
+        },
+        "direct-ssh-avd/resources-end.json": {
+          "sha256": "b9b9fe2ace31728935d8e78b9decd3ab28e90dd2626a329c2f65ac973c722421",
+          "bytes": 295
+        },
+        "direct-ssh-avd/resources-start.json": {
+          "sha256": "62f2305b40455951af7e6c4cc7fa0def6f5e83b07ff5436cac3c1efd5a18fb9f",
+          "bytes": 295
+        }
+      },
+      "ownedEmulatorExited": true,
+      "ownedTransportAbsent": true,
+      "cleanup": {
+        "reverseRemoved": true,
+        "packageRemoved": true,
+        "ownedForwardsRemoved": true,
+        "fixtureClosed": true,
+        "temporaryKeyRemoved": true,
+        "flutterToolStopped": true,
+        "rawLogsUploaded": false
+      }
+    },
+    {
+      "client": "flutter",
+      "workflowInput": "encrypted-key-rotation",
+      "runId": 44573516056,
+      "jobId": 135734703489,
+      "artifactId": 14554934904,
+      "archive": "44573516056-14554934904.zip",
+      "sha256": "9136d67ff7cfea79216f95ab1a8835da58b71cff308a738ac60db3fa628aa0b1",
+      "bytes": 318397,
+      "manifest": "direct-ssh-public/result.json",
+      "cases": {
+        "encryptedKeyHostKeyRotation": {
+          "connectionCount": 4,
+          "hostKeyOrder": [
+            "A",
+            "B",
+            "B",
+            "B"
+          ],
+          "nonAuthenticatedConnections": 3,
+          "authAttempts": 1,
+          "authSuccesses": 1,
+          "ptyRequests": 1,
+          "shellRequests": 1,
+          "inputBytes": 9,
+          "outputBytes": 102,
+          "sessionClosed": true,
+          "allConnectionsClosed": true,
+          "uiDisconnectConfirmed": true,
+          "credentialsCleared": true,
+          "peerClosedBeforeDriverExit": true,
+          "authenticationMethod": "publickey",
+          "clipboardCleared": true,
+          "temporaryKeyRemoved": true,
+          "oldTrustPreservedAfterCancel": true,
+          "explicitNewTrust": true,
+          "screenshot": {
+            "integrationPng": "direct-ssh-public/rotation-connected.png",
+            "ocrEngine": "tesseract 5.3.4",
+            "devicePng": "direct-ssh-public/rotation-connected-device.png",
+            "proofSequenceVisible": true
+          }
+        }
+      },
+      "members": {
+        "direct-ssh-public/disconnected.png": {
+          "sha256": "7c1cfce52c3d8df86234d4f03a09ef2807062f1584317b67f4306b41b57e030a",
+          "bytes": 104490,
+          "pixels": [
+            1080,
+            2340
+          ]
+        },
+        "direct-ssh-public/result.json": {
+          "sha256": "a0651bbc83c0ac3f4efd6bc2d7977778e2e2cfcf4b9cb8475e25ee62984a642b",
+          "bytes": 8660
+        },
+        "direct-ssh-public/key-rotation-screen-proof.json": {
+          "sha256": "639e7400d034d57eabce74dfbb07f88f115257d83b06e6cb90ed3d7e88354cf4",
+          "bytes": 1568
+        },
+        "direct-ssh-public/home.png": {
+          "sha256": "1e53d0c01b20dba216d579ef304b3ee88ef3429b217dba3871920f4348808640",
+          "bytes": 74193,
+          "pixels": [
+            1080,
+            2340
+          ]
+        },
+        "direct-ssh-public/rotation-connected-device.png": {
+          "sha256": "e795cc667ed351f8e81b1c959b0b37b70709baf05d97c11996981d929f928a84",
+          "bytes": 98381,
+          "pixels": [
+            1080,
+            2340
+          ]
+        },
+        "direct-ssh-public/rotation-connected.png": {
+          "sha256": "93cff64acec016acac507143e6ad47762a22026f50d435c8430ac7cb4352cf96",
+          "bytes": 93477,
+          "pixels": [
+            1080,
+            2340
+          ]
+        },
+        "direct-ssh-avd/emulator-version.txt": {
+          "sha256": "1a523c9091747b7bf48a755396278f2eca455352b40c281336f1c3e075607b54",
+          "bytes": 655
+        },
+        "direct-ssh-avd/image.properties": {
+          "sha256": "809a6f5103c048607257f03f18e22dd740137e9009c99d4a496de846b6ee3412",
+          "bytes": 357
+        },
+        "direct-ssh-avd/lifecycle.txt": {
+          "sha256": "4382732c658b78c67d310b55b97b392cb5ba40328ced42755e6b6a43514cf003",
+          "bytes": 283
+        },
+        "direct-ssh-avd/resources-end.json": {
+          "sha256": "348997c77b894b553f964862b4ab61950998a67005a3661c18b94b85d26ce90a",
+          "bytes": 295
+        },
+        "direct-ssh-avd/resources-start.json": {
+          "sha256": "2622de2016628f8bc0d9dd3c3d68f9e4aa9e7f0825825daedccc97e7130d14fc",
+          "bytes": 295
+        }
+      },
+      "ownedEmulatorExited": true,
+      "ownedTransportAbsent": true,
+      "cleanup": {
+        "reverseRemoved": true,
+        "packageRemoved": true,
+        "ownedForwardsRemoved": true,
+        "fixtureClosed": true,
+        "temporaryKeyRemoved": true,
+        "flutterToolStopped": true,
+        "rawLogsUploaded": false
+      }
+    },
+    {
+      "client": "tauri",
+      "workflowInput": "default",
+      "runId": 44573407306,
+      "jobId": 135734306403,
+      "artifactId": 14556372813,
+      "archive": "44573407306-14556372813.zip",
+      "sha256": "19f41bc08e7d6b486064d4495a6998caf0aab5c1d072c03e1e2f39a2819f3f22",
+      "bytes": 615244,
+      "manifest": "tauri-direct-evidence/manifest.json",
+      "cases": {
+        "password": {
+          "disconnected": true,
+          "passwordCleared": true,
+          "returnedHome": true,
+          "helperKeysExact": true,
+          "ordinaryActive": {
+            "keyboardOpened": true,
+            "keyboardClosed": true,
+            "board": true,
+            "terminalFromBoard": true,
+            "network": true,
+            "terminalFromNetwork": true,
+            "settings": true,
+            "terminalFromSettings": true,
+            "singleAuthenticatedShellWithoutInput": true
+          },
+          "peer": {
+            "authAccepted": true,
+            "ptyRequested": true,
+            "shellRequested": true,
+            "markerReceived": true,
+            "sessionClosed": true
+          },
+          "cleanup": {
+            "browser": true,
+            "application": true,
+            "forward": true,
+            "reverse": true,
+            "fixtureConnections": true
+          },
+          "imeSamples": [
+            "owned_hidden",
+            "owned_visible",
+            "owned_visible",
+            "owned_hidden",
+            "owned_hidden"
+          ],
+          "screenshot": {
+            "devicePng": "tauri-direct-evidence/ssh-terminal-android.png",
+            "webviewPng": "tauri-direct-evidence/ssh-terminal-android-webview-before.png",
+            "ocrEngine": "tesseract 5.3.4",
+            "proofSequenceVisible": true
+          }
+        },
+        "encryptedKey": {
+          "terminalEchoRendered": true,
+          "disconnected": true,
+          "passwordCleared": true,
+          "returnedHome": true,
+          "peer": {
+            "authAccepted": true,
+            "ptyRequested": true,
+            "shellRequested": true,
+            "markerReceived": true,
+            "sessionClosed": true
+          },
+          "cleanup": {
+            "browser": true,
+            "application": true,
+            "forward": true,
+            "reverse": true,
+            "fixtureConnections": true
+          }
+        },
+        "passwordHostKeyRotation": {
+          "connectionCount": 4,
+          "hostKeyOrder": [
+            "A",
+            "B",
+            "B",
+            "B"
+          ],
+          "nonAuthenticatedConnections": 3,
+          "authAttempts": 1,
+          "authSuccesses": 1,
+          "ptyRequests": 1,
+          "shellRequests": 1,
+          "inputBytes": 9,
+          "outputBytes": 102,
+          "sessionClosed": true,
+          "allConnectionsClosed": true,
+          "oldTrustPreservedAfterCancel": true,
+          "reprobePresented": true,
+          "uiDisconnectConfirmed": true,
+          "cleanup": {
+            "browser": true,
+            "application": true,
+            "forward": true,
+            "reverse": true,
+            "fixtureConnections": true
+          },
+          "screenshot": {
+            "devicePng": "tauri-direct-evidence/ssh-rotation-terminal-android.png",
+            "webviewPng": "tauri-direct-evidence/ssh-rotation-terminal-android-webview-before.png",
+            "ocrEngine": "tesseract 5.3.4",
+            "proofSequenceVisible": true
+          },
+          "passwordCleared": true
+        }
+      },
+      "members": {
+        "tauri-direct-evidence/manifest.json": {
+          "sha256": "2d108304dd7271ba6db9087c2a8ec5b024167e0265399bc4c9e89750b68fe764",
+          "bytes": 17818
+        },
+        "tauri-direct-evidence/s10-host-key-change-android.png": {
+          "sha256": "fcbae36b55e1dbd89e073950b652a83c67efdf84848269a459ef29152183d99d",
+          "bytes": 184655,
+          "pixels": [
+            1081,
+            2341
+          ]
+        },
+        "tauri-direct-evidence/ssh-rotation-terminal-android.json": {
+          "sha256": "ee1a2ef16f03bff6957e58d0f16529103e8331fd5508dde095f6bf7f3c4547b5",
+          "bytes": 4144
+        },
+        "tauri-direct-evidence/ssh-rotation-terminal-android-webview-before.png": {
+          "sha256": "b9ab03f4303294dab0d1b1fa638977a08ad8b0c3a09c83b1fecd3a16d2ebb2cf",
+          "bytes": 89393,
+          "pixels": [
+            1081,
+            2341
+          ]
+        },
+        "tauri-direct-evidence/ssh-rotation-terminal-android.png": {
+          "sha256": "d246ba65fbc7a351669b22655aa03048eeca87ab0d204a7d7f4aa54c6a3450d1",
+          "bytes": 159179,
+          "pixels": [
+            1080,
+            2340
+          ]
+        },
+        "tauri-direct-evidence/ssh-terminal-android-webview-before.png": {
+          "sha256": "35b5f8111f818034c9836cf0fcc5bcba7f334d7c473610a9093513a0eacd1390",
+          "bytes": 88046,
+          "pixels": [
+            1081,
+            2341
+          ]
+        },
+        "tauri-direct-evidence/ssh-terminal-android.json": {
+          "sha256": "dc0f46844a6bbe97f34b6709f9c107c7ae5d80b8fd6cc61c182b9237bc5e55a7",
+          "bytes": 4135
+        },
+        "tauri-direct-evidence/ssh-terminal-android.png": {
+          "sha256": "c8114bc2f54bee484182efbc9c1c5574d29bfb5a6b3451a4b82a794f935d1d29",
+          "bytes": 158718,
+          "pixels": [
+            1080,
+            2340
+          ]
+        },
+        "avd-evidence/emulator-version.txt": {
+          "sha256": "1a523c9091747b7bf48a755396278f2eca455352b40c281336f1c3e075607b54",
+          "bytes": 655
+        },
+        "avd-evidence/image.properties": {
+          "sha256": "809a6f5103c048607257f03f18e22dd740137e9009c99d4a496de846b6ee3412",
+          "bytes": 357
+        },
+        "avd-evidence/lifecycle.txt": {
+          "sha256": "4382732c658b78c67d310b55b97b392cb5ba40328ced42755e6b6a43514cf003",
+          "bytes": 283
+        },
+        "avd-evidence/resources-end.json": {
+          "sha256": "3f39261ef5be89407b2298922fda79a5fc94b076c49a35aba3460f5b24cd9cdc",
+          "bytes": 295
+        },
+        "avd-evidence/resources-start.json": {
+          "sha256": "9a10689e09e75d15ed7b2dbd816bad05604b5accff74cb1c3174fa5309356bfa",
+          "bytes": 295
+        }
+      },
+      "ownedEmulatorExited": true,
+      "ownedTransportAbsent": true,
+      "testedApkSha256": "0657613fd0112cf70850e3b9bfd4298c3ee963b5a38f374068044ef0bc0c45a0"
+    },
+    {
+      "client": "tauri",
+      "workflowInput": "encrypted-key-rotation",
+      "runId": 44573527306,
+      "jobId": 135734744145,
+      "artifactId": 14557115765,
+      "archive": "44573527306-14557115765.zip",
+      "sha256": "93711df6f5baa95b1820a1974a33f87404015d9d042bfdd900bd42a98f53101a",
+      "bytes": 393879,
+      "manifest": "tauri-direct-evidence/manifest.json",
+      "cases": {
+        "encryptedKeyHostKeyRotation": {
+          "connectionCount": 4,
+          "hostKeyOrder": [
+            "A",
+            "B",
+            "B",
+            "B"
+          ],
+          "nonAuthenticatedConnections": 3,
+          "authAttempts": 2,
+          "authSuccesses": 1,
+          "ptyRequests": 1,
+          "shellRequests": 1,
+          "inputBytes": 9,
+          "outputBytes": 102,
+          "sessionClosed": true,
+          "allConnectionsClosed": true,
+          "oldTrustPreservedAfterCancel": true,
+          "reprobePresented": true,
+          "uiDisconnectConfirmed": true,
+          "credentialsCleared": true,
+          "cleanup": {
+            "browser": true,
+            "application": true,
+            "forward": true,
+            "reverse": true,
+            "fixtureConnections": true
+          },
+          "screenshot": {
+            "devicePng": "tauri-direct-evidence/ssh-rotation-terminal-android.png",
+            "webviewPng": "tauri-direct-evidence/ssh-rotation-terminal-android-webview-before.png",
+            "ocrEngine": "tesseract 5.3.4",
+            "proofSequenceVisible": true
+          }
+        }
+      },
+      "members": {
+        "tauri-direct-evidence/manifest.json": {
+          "sha256": "45889220d148fb341f5944e958000e7abb2e24223f4eb32c4d46deaf5451c990",
+          "bytes": 10016
+        },
+        "tauri-direct-evidence/ssh-rotation-terminal-android-webview-before.png": {
+          "sha256": "e9acd1e177032ebe9bc8826f31f3e9bb672156d3799b89f342fd1dddb677a5ec",
+          "bytes": 89403,
+          "pixels": [
+            1081,
+            2341
+          ]
+        },
+        "tauri-direct-evidence/s10-host-key-change-android.png": {
+          "sha256": "6ae53298374e5348f6144bee9a8263764ce9c1f4bc540c6622fbf66d7c4e7d87",
+          "bytes": 183284,
+          "pixels": [
+            1081,
+            2341
+          ]
+        },
+        "tauri-direct-evidence/ssh-rotation-terminal-android.json": {
+          "sha256": "fde04b794fc9da8216742624bfbd443a933659eb5247748d2c8d0da44e54651f",
+          "bytes": 4144
+        },
+        "tauri-direct-evidence/ssh-rotation-terminal-android.png": {
+          "sha256": "aa445e86b38a039817b6d3ae56a04df99e3f589f7b57848509923e5f0470ad45",
+          "bytes": 159322,
+          "pixels": [
+            1080,
+            2340
+          ]
+        },
+        "avd-evidence/emulator-version.txt": {
+          "sha256": "1a523c9091747b7bf48a755396278f2eca455352b40c281336f1c3e075607b54",
+          "bytes": 655
+        },
+        "avd-evidence/image.properties": {
+          "sha256": "809a6f5103c048607257f03f18e22dd740137e9009c99d4a496de846b6ee3412",
+          "bytes": 357
+        },
+        "avd-evidence/lifecycle.txt": {
+          "sha256": "4382732c658b78c67d310b55b97b392cb5ba40328ced42755e6b6a43514cf003",
+          "bytes": 283
+        },
+        "avd-evidence/resources-end.json": {
+          "sha256": "d5ef58cbab504c407b0dc7778447572832852301893ea83570157a1208162ff9",
+          "bytes": 295
+        },
+        "avd-evidence/resources-start.json": {
+          "sha256": "3d8266e34466a73cb02790d0bb63a7343c99c6dea10d51e68d94649e96617225",
+          "bytes": 295
+        }
+      },
+      "ownedEmulatorExited": true,
+      "ownedTransportAbsent": true,
+      "testedApkSha256": "5a484a52b6dcfd8857f58e2929a5111320f7c2ded0c9ad16999a79f21cecc78b"
+    }
+  ]
+}

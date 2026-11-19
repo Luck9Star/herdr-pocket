@@ -228,8 +228,11 @@ class SplitDriver:
             const visible=e=>!!e && !e.closest('[hidden]') && !!e.getClientRects().length &&
                 getComputedStyle(e).visibility==='visible';
             const announce=root?.querySelector('[data-role="split-stash-note"]');
-            const views=arguments[0].map(selector=>{
-                const panel=document.querySelector(selector);
+            const panels=arguments[0].map(selector=>document.querySelector(selector));
+            const activeElement=document.activeElement;
+            const owner=panels.findIndex(panel=>visible(panel) && panel.contains(activeElement));
+            const domFocusOwner=!activeElement?'none':owner===0?'panel-a':owner===1?'panel-b':'outside-panels';
+            const views=panels.map(panel=>{
                 if(!visible(panel))return null;
                 const title=[...panel.children].find(e=>e.tagName==='P' && !e.hasAttribute('data-role'));
                 const target=title?.textContent.split(' · ').slice(-2) ?? [];
@@ -240,7 +243,7 @@ class SplitDriver:
                     currentFrame:panel.querySelector('.tab-frame-status')?.textContent.startsWith('当前观察画面。')===true,
                     inputControls:!!panel.querySelector('.tab-mobile-controls')};
             });
-            return {views,split:root?.dataset.split,
+            return {views,domFocusOwner,split:root?.dataset.split,
                 mounted:root?.dataset.role==='workbench-panel' ? 1 :
                     root?.querySelectorAll(':scope > section[data-role="workbench-panel"]').length,
                 splitVisible:visible(document.querySelector('#workbench-split')),
@@ -296,7 +299,8 @@ class SplitDriver:
 
 
 def exercise_window_resize(ui, panels, targets, approvals, check_bytes):
-    # Existing S06 left B focused. Keep it so through the automatic cycle.
+    # Keep B as the selected input target in stock (read-only) observation.
+    # DOM focus is sampled separately because WebDriver may click details.
     active = ('active', 'active')
     paused = ('paused', 'paused')
     narrowed_active = (None, 'active')
@@ -316,7 +320,7 @@ def exercise_window_resize(ui, panels, targets, approvals, check_bytes):
     ui.screenshot('resize-wide-before')
 
     narrow_window = ui.window(NARROW_WIDTH)
-    ui.wait_layout(panels, targets, narrowed_active, b, 'narrow_active')
+    narrowed = ui.wait_layout(panels, targets, narrowed_active, b, 'narrow_active')
     # The suffix is only shown after the native observation enters Paused.
     wait_for(lambda: ui.read("""return [...document.querySelectorAll('#view-tabs button')].filter(
         e=>e.getAttribute('aria-pressed')==='false' && e.textContent.endsWith(' · 观察已暂停')).length;""") == 1,
@@ -372,12 +376,14 @@ def exercise_window_resize(ui, panels, targets, approvals, check_bytes):
     return {'windowRectRoundTrip': True, 'sizes': [before_window, narrow_window, restored_window],
             'panelRectsBeforeAndAfter': [[view['rect'] for view in layout['views']]
                                         for layout in (before, restored)],
-            'originalTargetsAndPositions': True, 'originalFocus': True,
+            'originalTargetsAndPositions': True, 'originalSelectedInputTargetPreserved': True,
+            'domFocusOwnerSamples': [layout['domFocusOwner'] for layout in (before, narrowed, restored)],
             'layoutPauseAcknowledged': True, 'newFullAndAdvancingTicks': True,
             'fixtureTicks': {'wideBefore': initial_ticks, 'narrowPrimary': narrow_tick,
                              'wideRestored': restored_ticks, 'manualPaused': held_ticks,
                              'manualSecondaryAfterResume': manual_resumed_tick},
-            'manualPauseSurvivedRoundTrip': True, 'manualResumeOnlySelected': True,
+            'manualPauseEntry': '返回主机看板', 'manualPauseSurvivedRoundTrip': True,
+            'manualResumeOnlySelected': True,
             'originalPeerAuthenticationCounts': [1, 1], 'zeroInputBytes': True}
 
 

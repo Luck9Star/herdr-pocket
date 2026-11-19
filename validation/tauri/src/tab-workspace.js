@@ -26,13 +26,14 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   const tabs=new RemoteTabs(), root=document.getElementById('tab-workspace');
   const workspacePage=document.getElementById('remote-page');
   const nav=document.getElementById('view-tabs'), body=document.getElementById('view-content');
-  let switching=false, textSelection=null, fontDiagnostics=null, mountedTabs=[];
+  let switching=false, textSelection=null, fontDiagnostics=null, mountedTabs=[], splitNote=null;
   // 桌面分屏（切片 2）：splitOn 只是本地布局意图；能否真的双面板由窗口宽度与标签数共同决定。
   // 分屏绝不发送 PTY resize——每个面板沿用自己连接时选定的观察画布（docs/05:137；transport 层已断言观察不含 resize）。
   let splitOn=false, splitPartnerId=null, splitPause=null, lastWide=globalThis.window?.innerWidth>=900;
   const splitButton=document.getElementById('workbench-split');
   function isWide(){const width=globalThis.window?.innerWidth;return typeof width==='number' && width>=900;}
-  function splitPartner(){if(!splitOn || !isWide())return null;const tab=tabs.get(splitPartnerId);return tab && tab.id!==tabs.activeId ? tab : null;}
+  function intendedPartner(){const tab=splitOn && tabs.get(splitPartnerId);return tab && tab.id!==tabs.activeId ? tab : null;}
+  function splitPartner(){return isWide() ? intendedPartner() : null;}
   function restoreSplitPause(tab){
     if(splitPause?.tab!==tab || splitPause.restoring || splitPartner()!==tab || tab.state!=='paused' || !canResume(tab))return false;
     splitPause.restoring=true;
@@ -139,15 +140,52 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     const pending=tab.directPending && !tab.directPending.invalidated && document.activeElement===tab.terminal?.textarea;
     if(tab.keyboardHide)tab.keyboardHide.disabled=!(editor && document.activeElement===editor) && !pending;
   }
-  function render() {
+  function updateSplitLayout(partner) {
+    body.setAttribute('data-split',partner?'2':'1');
+    updateSplitControl();
+    const stashed=!isWide() && intendedPartner();
+    if(!splitNote && (partner || stashed)){splitNote=document.createElement('p');body.append(splitNote);}
+    if(splitNote){
+      splitNote.hidden=!partner && !stashed;
+      splitNote.dataset.role=partner?'split-note':stashed?'split-stash-note':'';
+      splitNote.textContent=partner
+        ?'分屏只变更本地布局：两个面板各自沿用连接时选定的观察画布，未发送 PTY resize。'
+        :stashed?'分屏空间不足；已保留另一面板状态，窗口变宽后自动恢复。':'';
+    }
+  }
+  function renderWhileEditing(focused) {
+    const partner=splitPartner();
+    // Keep the focused editor attached while changing only the split layout
+    // and the observing panel. Reparenting its DOM loses browser focus.
+    if(focused.splitPanel && body.getAttribute('data-split')!==(partner?'2':'1')){
+      updateSplitLayout(partner);
+      for(const tab of tabs.list())updateTabButton(tab);
+      focused.splitHeader.hidden=!partner;
+    } else updateSplitControl();
+    if(focused.splitPanel){
+      const mountedPartner=mountedTabs.find(tab=>tab!==focused) ?? null;
+      const partnerChanged=mountedPartner!==null && mountedPartner===partner &&
+        (partner.connectionActions.dataset.state!==partner.state ||
+          !!(partner.mobileControls && partner.splitPanel.contains(partner.mobileControls))!==!!partner.inputReady);
+      if(mountedPartner!==partner || partnerChanged){
+        if(mountedPartner){
+          mountedPartner.localViewport.detach();
+          mountedPartner.splitPanel.remove();
+          mountedTabs.splice(mountedTabs.indexOf(mountedPartner),1);
+        }
+        if(partner)renderPanel(partner,false,true);
+      }
+    }
+    renderDashboard(focused);
+  }
+  function render({keepSplitShell=false}={}) {
     if(textSelection && !textSelection.valid()){textSelection.close();textSelection=null;}
     if(fontDiagnostics && !fontDiagnostics.valid()){fontDiagnostics.close(false);fontDiagnostics=null;}
     const focused=tabs.get(tabs.activeId);
-    if(focused?.mode==='direct' && ownsInputFocus(focused,document.activeElement) && !focused.suppressBlur){renderDashboard(focused);return;}
+    if(focused?.mode==='direct' && ownsInputFocus(focused,document.activeElement) && !focused.suppressBlur){renderWhileEditing(focused);return;}
     // 草稿编辑器处于输入法组合态时整页重绘会丢组合缓冲——与 direct 焦点守卫同款：
-    // 推迟到组合结束后的下一次刷新。普通草稿焦点**不**走早退（早退会跳过面板挂载，
-    // harness 需要 #view-content 的直接子节点标题），改为渲染后恢复焦点与选区。
-    if(focused && focused.draftComposing && document.activeElement===focused.draftField){renderDashboard(focused);return;}
+    // 组合期间只更新分屏布局。普通草稿焦点整页渲染后恢复焦点和选区。
+    if(focused && focused.draftComposing && document.activeElement===focused.draftField){renderWhileEditing(focused);return;}
     // 渲染前记住草稿焦点与选区，渲染后恢复，避免整页重绘打断正在输入的草稿。
     const draftFocus=focused&&focused.draftField&&document.activeElement===focused.draftField?focused.draftField:null;
     const draftSelection=draftFocus?{start:draftFocus.selectionStart,end:draftFocus.selectionEnd}:null;
@@ -155,9 +193,9 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     if(focused?.pasteReview && !focused.focusPasteReview)focused.pasteReview=null;
     // Only the currently mounted viewports have visible geometry worth retaining.
     for(const mounted of mountedTabs)mounted.localViewport.detach();mountedTabs.length=0;
-    root.hidden=tabs.list().length===0;nav.replaceChildren();body.replaceChildren();
-    body.setAttribute('data-split',splitPartner()?'2':'1');
-    updateSplitControl();
+    root.hidden=tabs.list().length===0;nav.replaceChildren();body.replaceChildren();splitNote=null;
+    const partner=splitPartner();
+    updateSplitLayout(partner);
     for(const tab of tabs.list()) {
       const button=document.createElement('button');button.type='button';
       tab.navButton=button;updateTabButton(tab);
@@ -166,30 +204,23 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       button.onclick=()=>void select(tab.id);nav.append(button);
     }
     const tab=tabs.get(tabs.activeId);if(!tab){clearPanelMark();return;}
-    const partner=splitPartner();
-    if(partner)clearPanelMark();else markSinglePanel(tab);
-    if(partner){const splitNote=document.createElement('p');splitNote.dataset.role='split-note';splitNote.textContent='分屏只变更本地布局：两个面板各自沿用连接时选定的观察画布，未发送 PTY resize。';body.append(splitNote);}
-    else if(splitOn && !isWide() && splitPartnerId){
-      // D2 窄窗回落：分屏意图保留，仅非焦点面板被收纳（上方 resize 监听在回到宽窗时恢复副面板）；全程不触发远端 resize。
-      const stashed=tabs.get(splitPartnerId);
-      if(stashed && stashed.id!==tabs.activeId){const stashNote=document.createElement('p');stashNote.dataset.role='split-stash-note';stashNote.textContent='分屏空间不足；已保留另一面板状态，窗口变宽后自动恢复。';body.append(stashNote);}
-    }
-    renderPanel(tab,true);
-    if(partner)renderPanel(partner,false);
+    const wrapped=!!partner || (!!intendedPartner() && (keepSplitShell || tab.mode!=='observe'));
+    if(wrapped)clearPanelMark();else markSinglePanel(tab);
+    renderPanel(tab,true,wrapped);
+    if(partner)renderPanel(partner,false,true);
     // 恢复草稿焦点与选区：整页重绘替换了 textarea，重建后焦点会丢（分屏下副面板事件也会触发整页重绘）。
     if(draftFocus&&focused&&focused.draftField&&focused.draftField!==draftFocus){
       try{focused.draftField.focus({preventScroll:true});if(draftSelection)focused.draftField.setSelectionRange(draftSelection.start,draftSelection.end);}catch{}
     }
   }
   // 单个终端面板：focused 面板持有唯一输入焦点（docs/04:82）；非焦点面板保持观察，但输入入口全部禁用，不会静默 no-op。
-  function renderPanel(tab,focused) {
-    // 真分屏才包一层 section：单面板（全部移动端/模拟器路径）的内容直接挂在 #view-content 下——
-    // 标题 <p> 必须是 #view-content 的直接子节点（android_gui.py 的测量按直接子节点取标题）。
-    const split=!!splitPartner();
+  function renderPanel(tab,focused,wrapped) {
+    // Android 单面板测量依赖标题直接挂在 #view-content 下。
     let panel=body;
-    if(split){const section=document.createElement('section');section.className='workbench-panel';section.dataset.role='workbench-panel';section.dataset.tabId=tab.id;section.dataset.focus=String(focused);panel=section;}
-    if(split) {  // 分屏头部：面板标题 + 输入焦点归属（沿用 fixture #split 的面板头范式）
-      const head=document.createElement('div');head.className='panel-head';
+    if(wrapped){const section=document.createElement('section');section.className='workbench-panel';section.dataset.role='workbench-panel';section.dataset.tabId=tab.id;section.dataset.focus=String(focused);panel=section;}
+    tab.splitPanel=wrapped?panel:null;
+    if(wrapped) {
+      const head=document.createElement('div');head.className='panel-head';head.hidden=!splitPartner();tab.splitHeader=head;
       const headTitle=document.createElement('span');headTitle.className='panel-title';
       const headName=document.createElement('strong');headName.textContent=`${hostName(tab.hostId)} · ${tab.target?.paneId || '选择终端'}`;
       const headMeta=document.createElement('small');headMeta.textContent=`${tab.target?.terminalId || '待选择'} · 画布 ${tab.activeCanvas.cols} × ${tab.activeCanvas.rows} · ${focused?'输入焦点':'观察'}`;
@@ -228,7 +259,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     tab.inputModeElement.setAttribute('role','status');tab.inputModeElement.setAttribute('aria-live','polite');
     updateInputMode(tab);
     panel.append(tab.inputModeElement);
-    const controls=document.createElement('div');controls.className='remote-actions tab-connection-actions';controls.dataset.state=tab.state;
+    const controls=document.createElement('div');controls.className='remote-actions tab-connection-actions';controls.dataset.state=tab.state;tab.connectionActions=controls;
     const add=(label,enabled,action)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.disabled=!enabled || switching || !focused;b.onclick=action;controls.append(b);};
     add('连接',native && !!info && tab.reviewed && !tab.invalidated && tab.state==='disconnected' && !tab.closing,()=>void connect(tab));
     add('恢复观察',tab.state==='paused' && !tab.closing,()=>void resume(tab));
@@ -357,7 +388,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     }
     tab.localViewport.mount(viewport,tab.terminal,terminalViewportIdentity(tab.summaryIdentity || hostInfo(tab.hostId),tab.target),!!tab.selectionTextReady);
     mountedTabs.push(tab);
-    if(split)body.append(panel);
+    if(wrapped)body.append(panel);
   }
   function create(hostId,target) {
     if(!native || !hostId || (target && (!target.paneId || !target.terminalId))) throw Error('tab_target_invalid');
@@ -528,6 +559,9 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   async function enableDirect(tab) {
     if(tab.blockedIntent && !tab.blockedVerified)return;
     if(fontDiagnostics?.valid() || textSelection?.valid() || document.hidden || !tab.target || tabs.activeId!==tab.id || tab.state!=='active' || !tab.selectionTextReady || !tab.inputReady || tab.unknown || tab.inputBusy || tab.directPending || !tab.terminal)return;
+    // If direct input starts while the split is stashed, prepare its stable
+    // shell before the existing gesture opens the terminal editor.
+    if(!tab.splitPanel && intendedPartner())render({keepSplitShell:true});
     tab.queue.clear();tab.inputRevision++;tab.inputEpoch=null;tab.mode='observe';updateInputMode(tab);
     const binding=lease(tab),terminal=tab.terminal,target=tab.target;
     const attempt={invalidated:false};tab.directPending=attempt;let invoked=false,granted=false;

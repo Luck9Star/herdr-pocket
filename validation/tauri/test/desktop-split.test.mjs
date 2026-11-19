@@ -9,8 +9,9 @@ import {initTabWorkspace} from '../src/tab-workspace.js';
 // 桌面分屏（切片 2）：多面板同观 + 单一输入焦点 + 不 resize 远端（docs/05:137、docs/04:82）。
 class Element {
   constructor(tag){this.isConnected=true;this.tagName=tag;this.children=[];this.attrs={};this.dataset={};this.value='';this.disabled=false;this.hidden=false;this.textContent='';this.selectionStart=0;this.selectionEnd=0;}
-  append(...xs){for(const x of xs)this.children.push(x);}
-  replaceChildren(...xs){this.children=[];this.append(...xs);}
+  append(...xs){for(const x of xs){x.remove();x.parent=this;this.children.push(x);}}
+  replaceChildren(...xs){for(const x of this.children)x.parent=null;this.children=[];this.append(...xs);}
+  remove(){if(this.parent){this.parent.children=this.parent.children.filter(child=>child!==this);this.parent=null;}}
   setAttribute(k,v){this.attrs[k]=v;}
   getAttribute(k){return this.attrs[k] ?? null;}
   addEventListener(name,fn){this['event_'+name]=fn;}
@@ -244,6 +245,63 @@ test('narrow windows never split: entry hidden, toggle refused, crossing 900px p
     assert.ok(s.nodes['view-content'].children.some(e=>String(e.tagName).toUpperCase()==='P'&&e.textContent.includes(' · w1:p1 · ')),'窄窗回落后标题仍是 #view-content 的直接子节点');
     assert.ok(s.calls.some(c=>c.name==='remote_tab_control'&&c.args.tabId===a&&c.args.action==='pause'),'跨界变窄必须暂停分屏副面板');
     assert.equal(s.nodes['view-content'].getAttribute('data-split'),'1');
+  } finally { s.restore(); }
+});
+
+test('width changes keep the direct editor, lease and original observing peer', async () => {
+  const s=setup({innerWidth:1280});
+  try {
+    const a=await s.openTab('direct-pane-a');
+    const b=await s.openTab('mesh-pane-b');
+    await s.settlePaused(a);
+    s.splitButton.onclick();await s.flush();
+    const fullFrame=(epoch,seq)=>({kind:'frame',epoch,frame:{seq,full:true,cols:80,rows:24,bytes:[65]}});
+    s.send(a,{kind:'observation',snapshot:{epoch:2,phase:'resuming'}});
+    s.send(a,fullFrame(2,1));
+    s.send(a,{kind:'observation',snapshot:{epoch:2,phase:'active'}});
+    s.send(a,{kind:'input_ready',epoch:2,unknown:false,recovery_status:'none'});
+    await s.flush();
+
+    const directButton=s.panelOf(b).all().find(n=>n.tagName==='button'&&n.textContent==='逐键输入');
+    directButton.onclick();await s.flush();
+    const [aTerminal,bTerminal]=s.terminals;
+    const bPanel=s.panelOf(b);
+    assert.equal(globalThis.document.activeElement,bTerminal.textarea);
+    assert.equal(bTerminal.options.disableStdin,false);
+    const start=s.calls.length;
+
+    s.setWidth(700);await s.flush();
+    s.send(a,{kind:'observation',snapshot:{epoch:3,phase:'paused'}});
+    await s.flush();
+    assert.equal(s.panels().length,1);
+    assert.equal(s.panels()[0],bPanel);
+    assert.equal(s.nodes['view-content'].getAttribute('data-split'),'1');
+    assert.ok(s.nodes['view-content'].children.some(n=>n.dataset.role==='split-stash-note'));
+    assert.equal(s.splitButton.hidden,true);
+    assert.equal(globalThis.document.activeElement,bTerminal.textarea);
+    bTerminal.onData('x');await s.flush();
+
+    s.setWidth(1280);await s.flush();
+    assert.equal(s.nodes['view-content'].getAttribute('data-split'),'2');
+    assert.equal(s.panelOf(b),bPanel);
+    assert.equal(globalThis.document.activeElement,bTerminal.textarea);
+    assert.equal(aTerminal.options.disableStdin,true);
+    s.send(a,{kind:'observation',snapshot:{epoch:4,phase:'resuming'}});
+    s.send(a,fullFrame(4,1));
+    s.send(a,{kind:'observation',snapshot:{epoch:4,phase:'active'}});
+    s.send(a,{kind:'input_ready',epoch:4,unknown:false,recovery_status:'none'});
+    await s.flush();
+    assert.equal(s.panelOf(a).all().find(n=>n.className?.split(' ').includes('tab-connection-actions')).dataset.state,'active');
+    assert.equal(s.panelOf(a).all().find(n=>n.className==='tab-mobile-controls').dataset.mode,'observe');
+    assert.equal(globalThis.document.activeElement,bTerminal.textarea);
+    bTerminal.onData('y');await s.flush();
+
+    const actions=s.calls.slice(start);
+    assert.deepEqual(actions.filter(c=>c.name==='remote_tab_control').map(c=>[c.args.tabId,c.args.action]),[[a,'pause'],[a,'resume']]);
+    assert.deepEqual(actions.filter(c=>c.name==='remote_tab_input_send').map(c=>[c.args.tabId,c.args.generation,c.args.epoch,c.args.inputEpoch,c.args.bytes]),[[b,2,1,7,[120]],[b,2,1,7,[121]]]);
+    assert.equal(actions.some(c=>['remote_tab_input_mode','remote_tab_reserve','remote_tab_observe','remote_tab_cancel'].includes(c.name)),false);
+    assert.ok(actions.some(c=>c.name==='remote_tab_ack'&&c.args.tabId===a&&c.args.epoch===4&&c.args.seq===1));
+    assert.deepEqual(s.resizes,[]);
   } finally { s.restore(); }
 });
 

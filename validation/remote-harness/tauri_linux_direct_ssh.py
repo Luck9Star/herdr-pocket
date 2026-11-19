@@ -143,6 +143,7 @@ def terminal_geometry(driver, endpoint):
         const screen = node('#ssh-terminal .xterm-screen');
         if (!visible(screen) || !visible(endpoint) || endpoint.innerText !== arguments[0] ||
             visible(node('#ssh-setup')) || arguments[1].some(selector => node(selector).value !== '') ||
+            document.querySelectorAll('#ssh-terminal .xterm-helper-textarea').length !== 1 ||
             document.activeElement !== node('#ssh-terminal .xterm-helper-textarea') ||
             document.hidden || !document.hasFocus() || devicePixelRatio !== 1 || innerWidth < 960) return null;
         const target = endpoint.getBoundingClientRect();
@@ -260,7 +261,7 @@ def execute(driver, fixture, report):
              'direct_ssh_live_target_mismatched')
 
     report['stage'] = 'input'
-    driver.click('#ssh-focus')
+    driver.click('#ssh-terminal .xterm-screen')
     wait_for(lambda: terminal_geometry(driver, endpoint), 'direct_ssh_input_target_unproven')
     driver.send_test_line()
     require(fixture.wait_for('markerReceived'), 'direct_ssh_marker_not_received')

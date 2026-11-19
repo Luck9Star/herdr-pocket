@@ -128,7 +128,7 @@ Flutter 平台流与节点 GUI 随后在 `d6c4285` 接入，两套当前源码�
 - [ ] **M1-06** 按主机分组的看板、待处理项、同步时间与失去连接状态。
   **待验证。** 看板、会话筛选、同步与陈旧状态已有源码及 Android 配对观察证据。待处理项、掉线和前台刷新需在真实设备组合复测。[同步模型](23-mobile-session-watch.md) · [Android 看板](40-android-paired-dashboard-validation.md) · [看板搜索复测](58-session-handoff-2026-11-09-r2.md)
 - [ ] **M1-07** 手机看板进入多个终端标签并切换；桌面主机侧栏、列表与多标签/分屏工作台，支持窗口调整和键盘导航，始终只有一个明确输入焦点。
-  **待验证。** 手机标签已有实现与 Android 全帧恢复证据。Ubuntu 历史 S06 有 Flutter Widget 和 Tauri GTK 各自的真实双连接结果。Flutter 最新 D2 在合成 Widget 中通过阈值、窗口变化和键盘导航验证。macOS 普通 SSH 单窗口、无界面的双回环已有独立记录，原生窗口内两条真实连接仍待验收。[标签](22-mobile-terminal-tabs.md) · [普通 SSH 实窗](63-design-parity-and-direct-ssh.md) · [S06 与 D2 证据](74-desktop-split-resize.md)
+  **待验证。** 手机标签已有实现与 Android 全帧恢复证据。Ubuntu 历史 S06 有 Flutter Widget 和 Tauri GTK 各自的真实双连接结果。Flutter 最新 D2 在合成 Widget 中通过阈值、窗口变化和键盘导航验证。macOS 普通 SSH 单窗口及无界面双回环已有独立记录，原生双连接在当前签名环境下未验证。[标签](22-mobile-terminal-tabs.md) · [普通 SSH 实窗](63-design-parity-and-direct-ssh.md) · [S06 与 D2 证据](74-desktop-split-resize.md)
 - [x] **M1-08** 从看板进入准确目标，观察终端，区分当前画面与旧画面。
   **已通过。** （2026-11-10 勾选：两壳在 API 35 模拟器完成明确 pane 选择、full/delta 与主动停止，停止后画面正确标记陈旧——[15](15-mobile-gui-validation.md)、run `42659301059`（Flutter）、run `42681783874`（Tauri，`stoppedStale: true`）；为模拟器级证据。）
 - [ ] **M1-09** 五端默认观察，显式进入完整逐键终端，支持快捷键、组合键与交互 TUI；手机提供辅助键、草稿编辑和多行粘贴预览。

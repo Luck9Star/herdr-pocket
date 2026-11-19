@@ -28,7 +28,10 @@ FAILURES = {'private_channel_send_failed', 'private_channel_receive_failed',
             'public_clipboard_write_failed', 'public_pair_field_owner_lost', 'public_pair_window_changed',
             'public_pair_click_geometry_unstable', 'public_pair_focus_image_unavailable', 'public_pair_focus_unproven',
             'public_profile_payload_invalid', 'public_profile_input_missing', 'public_profile_paste_unavailable',
-            'public_profile_preview_unverified', 'public_profile_fill_unconfirmed', 'public_profile_review_bypassed',
+            'public_profile_preview_unverified', 'public_profile_fill_unconfirmed',
+            'public_pair_review_controls_unbound', 'public_pair_review_geometry_unstable',
+            'public_pair_review_pixels_unavailable', 'public_pair_review_state_unconfirmed',
+            'public_pair_create_active_before_review', 'public_pair_create_inactive_after_review',
             'reviewed_host_response_unavailable', 'reviewed_host_response_invalid',
             'peer_close_unconfirmed_while_window_running', 'peer_close_receipt_invalid', 'native_visible_peer_marker_missing',
             'native_visible_peer_marker_mismatch', 'native_visible_tick_invalid',
@@ -95,6 +98,16 @@ def log_facts(text):
         for bits in re.findall(pattern, current, re.M):
             if (bits[3] <= bits[2] and bits[5] <= bits[4]):
                 facts['pairReadback'] = {'control': control, **dict(zip(PAIR_READ_BITS, (b == '1' for b in bits)))}
+    pattern = r'^HP_S06_NATIVE_PAIR_REVIEW=([AB]),(before|after),(unchecked|checked|unknown),([01]),([01])[ \t]*$'
+    review = {}
+    for peer, phase, checkbox, enabled, filled in re.findall(pattern, text, re.M):
+        if phase == 'before':
+            review[peer] = {}
+        if peer in review:
+            review[peer][phase] = {'checkbox': checkbox, 'buttonAXEnabled': enabled == '1',
+                                   'buttonBrandFilled': filled == '1'}
+    if review:
+        facts['targetReview'] = review
     lower = text.lower()
     facts['startupFlags'] = [name for name, patterns in STARTUP.items() if any(p in lower for p in patterns)]
     lines = {int(line) for line in re.findall(r'RunnerTests\.swift:(\d{1,5}):(?:\d+:)?\s*error:', text)}

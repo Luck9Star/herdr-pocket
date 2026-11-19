@@ -239,6 +239,22 @@ class MacosS06Checks(unittest.TestCase):
         self.assertEqual(facts['fixedFailure'], 'public_pair_focus_unproven')
         self.assertNotIn('private', json.dumps(facts))
 
+    def test_target_review_diagnostics_publish_only_fixed_states(self):
+        log = ("HP_S06_NATIVE_PAIR_CONTROL=targetReview\n"
+               "HP_S06_NATIVE_PAIR_REVIEW=A,before,unchecked,1,0\n"
+               "HP_S06_NATIVE_PAIR_REVIEW=A,after,checked,1,1\n"
+               "HP_S06_NATIVE_PAIR_REVIEW=B,after,checked,1,1\n"
+               "HP_S06_NATIVE_PAIR_REVIEW=B,before,unchecked,1,0\n"
+               "HP_S06_NATIVE_PAIR_REVIEW=B,after,unknown,1,1,private-value\n"
+               "HP_S06_NATIVE_PAIR_REVIEW=A,after,private,1,0\n"
+               "HP_S06_NATIVE_FAILURE=public_pair_review_state_unconfirmed\n")
+        facts = log_facts(log)
+        before = {'checkbox': 'unchecked', 'buttonAXEnabled': True, 'buttonBrandFilled': False}
+        after = {'checkbox': 'checked', 'buttonAXEnabled': True, 'buttonBrandFilled': True}
+        self.assertEqual(facts['targetReview'], {'A': {'before': before, 'after': after}, 'B': {'before': before}})
+        self.assertEqual(facts['fixedFailure'], 'public_pair_review_state_unconfirmed')
+        self.assertNotIn('private', json.dumps(facts))
+
     def test_generated_native_focus_color_comes_from_app_tokens(self):
         with tempfile.TemporaryDirectory() as temporary:
             app = Path(temporary)
@@ -278,6 +294,11 @@ context.fill(CGRect(x: 4, y: 0, width: 1, height: 64))
 precondition(!focused())
 context.fill(CGRect(x: 139, y: 0, width: 1, height: 64))
 precondition(focused())
+precondition(MacosS06FocusOutline.filledButton(in: context.makeImage()!, brand: 0x4f46e5) == false)
+context.fill(CGRect(x: 18, y: 0, width: 18, height: 64))
+precondition(MacosS06FocusOutline.filledButton(in: context.makeImage()!, brand: 0x4f46e5) == false)
+context.fill(CGRect(x: 108, y: 0, width: 18, height: 64))
+precondition(MacosS06FocusOutline.filledButton(in: context.makeImage()!, brand: 0x4f46e5) == true)
 ''')
             executable = root / 'check-outline'
             subprocess.run(['swiftc', runner.HERE / 'macos_s06_focus.swift', driver, '-o', executable],

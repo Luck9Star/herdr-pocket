@@ -13,6 +13,7 @@ final class MacosS06UITests: XCTestCase {
         case profileInput, profilePreview, profileFill, provider
         case targetReview, create, copy, response, preview, sourceReview, accept, connect, back
     }
+    private let brand = UInt32("__HP_S06_FOCUS_BRAND__", radix: 16)
     private lazy var app = XCUIApplication()
     private lazy var clipboard = NSPasteboard.general
     private var window: XCUIElement { app.windows.firstMatch }
@@ -185,7 +186,7 @@ final class MacosS06UITests: XCTestCase {
             guard let current = self.currentPairField(label, control: control) else {
                 throw Failure.check("public_pair_field_owner_lost")
             }
-            guard let brand = UInt32("__HP_S06_FOCUS_BRAND__", radix: 16),
+            guard let brand = self.brand,
                   let image = NSBitmapImageRep(data: current.owner.screenshot().pngRepresentation)?.cgImage else {
                 throw Failure.check("public_pair_focus_image_unavailable")
             }
@@ -343,6 +344,87 @@ final class MacosS06UITests: XCTestCase {
         }
     }
 
+    private func explicitlyReviewTarget(index: Int) throws -> XCUIElement {
+        let peer = index == 0 ? "A" : "B"
+        let reviewName = "我已通过可信渠道核验账号、主机公钥与命名会话资料"
+        let createName = "在此设备创建独立身份并生成公开请求"
+        _ = try reveal(reviewName, kind: .checkBox, pair: .targetReview)
+        _ = try reveal(createName, kind: .button, pair: .create)
+        trace("PAIR_CONTROL", PairControl.targetReview.rawValue)
+        let windowFrame = window.frame
+
+        func controls() throws -> (checkbox: XCUIElement, button: XCUIElement) {
+            try require(app.state == .runningForeground && app.windows.count == 1 && window.frame == windowFrame,
+                        "public_pair_window_changed")
+            let boxes = query(reviewName, kind: .checkBox, root: window).allElementsBoundByIndex
+            let buttons = query(createName, kind: .button, root: window).allElementsBoundByIndex
+            guard boxes.count == 1, buttons.count == 1 else {
+                throw Failure.check("public_pair_review_controls_unbound")
+            }
+            let checkbox = boxes[0], button = buttons[0]
+            let checkFrame = checkbox.frame, buttonFrame = button.frame
+            try require(!checkFrame.isEmpty && !buttonFrame.isEmpty
+                && windowFrame.contains(checkFrame) && windowFrame.contains(buttonFrame)
+                && checkbox.isHittable && button.isHittable && checkFrame.maxY <= buttonFrame.minY + 1
+                && (buttonFrame.minX...buttonFrame.maxX).contains(checkFrame.midX),
+                "public_pair_review_geometry_unstable")
+            return (checkbox, button)
+        }
+
+        func checkboxState(_ checkbox: XCUIElement) -> String {
+            switch (checkbox.value as? NSNumber)?.stringValue ?? checkbox.value as? String {
+            case "0": return "unchecked"
+            case "1": return "checked"
+            default: return "unknown"
+            }
+        }
+
+        typealias ReviewState = (checkbox: String, filled: Bool, enabled: Bool)
+        func reviewState(_ controls: (checkbox: XCUIElement, button: XCUIElement)) throws -> ReviewState {
+            let checkbox = checkboxState(controls.checkbox)
+            guard let brand, let image = NSBitmapImageRep(data: controls.button.screenshot().pngRepresentation)?.cgImage,
+                  let filled = MacosS06FocusOutline.filledButton(in: image, brand: brand) else {
+                throw Failure.check("public_pair_review_pixels_unavailable")
+            }
+            return (checkbox, filled, controls.button.isEnabled)
+        }
+
+        func record(_ state: ReviewState, phase: String) {
+            trace("PAIR_REVIEW", "\(peer),\(phase),\(state.checkbox),\(state.enabled ? 1 : 0),\(state.filled ? 1 : 0)")
+        }
+
+        let before = try controls()
+        let checkboxFrame = before.checkbox.frame, buttonFrame = before.button.frame
+        let initial = try reviewState(before)
+        record(initial, phase: "before")
+        try require(initial.checkbox == "unchecked", "public_pair_review_state_unconfirmed")
+        try require(!initial.filled, "public_pair_create_active_before_review")
+        let ready = try controls()
+        try require(ready.checkbox.frame == checkboxFrame && ready.button.frame == buttonFrame
+            && checkboxState(ready.checkbox) == "unchecked", "public_pair_review_geometry_unstable")
+        ready.checkbox.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
+
+        var observed: ReviewState?
+        defer { if let observed { record(observed, phase: "after") } }
+        do {
+            _ = try until("review_transition_wait", seconds: 5) {
+                let current = try controls()
+                try require(current.checkbox.frame == checkboxFrame && current.button.frame == buttonFrame,
+                            "public_pair_review_geometry_unstable")
+                let state = try reviewState(current)
+                observed = state
+                return state.checkbox == "checked" && state.filled ? true : nil
+            }
+        } catch Failure.check("review_transition_wait") {
+            throw Failure.check(observed?.checkbox == "checked" ? "public_pair_create_inactive_after_review"
+                                                               : "public_pair_review_state_unconfirmed")
+        }
+        let verified = try controls()
+        try require(verified.button.frame == buttonFrame && verified.checkbox.frame == checkboxFrame
+            && checkboxState(verified.checkbox) == "checked", "public_pair_review_geometry_unstable")
+        return verified.button
+    }
+
     private func request(_ peer: Peer, index: Int) throws {
         try click("配对添加", in: .main, pair: .entry)
         try importPublicProfile(peer)
@@ -360,11 +442,9 @@ final class MacosS06UITests: XCTestCase {
         trace("PAIR_CONTROL", PairControl.provider.rawValue)
         _ = try reveal("网络 provider（仅配置，入网未知）\n直连配置", publicValue: true)
         _ = try reveal(peer.fingerprint, kind: .staticText, pair: .fingerprint)
-        let create = try reveal("在此设备创建独立身份并生成公开请求", kind: .button, pair: .create)
-        try require(!create.isEnabled, "public_profile_review_bypassed")
-        try click("我已通过可信渠道核验账号、主机公钥与命名会话资料", kind: .checkBox, pair: .targetReview)
+        let create = try explicitlyReviewTarget(index: index)
         mark(index == 0 ? "keyA" : "keyB")
-        try click("在此设备创建独立身份并生成公开请求", pair: .create)
+        create.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
         clipboard.clearContents()
         try click("复制当前公开请求", pair: .copy)
         let request = try until("public_request_unavailable") {

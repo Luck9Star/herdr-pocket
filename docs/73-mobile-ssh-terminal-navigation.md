@@ -83,6 +83,6 @@ Tauri Android R1 在连接阶段报告 `direct_active_ui_invalid`。Tauri iOS R1
 
 ## Tauri Android 原生模拟器 R2 与 R3
 
-两轮在 `active_keyboard_opened` 报 `direct_active_ui_invalid`。R2 记录连接、终端和断开按钮均在，WebView 仍显示「打开键盘」，「收起键盘」的矩形为零，尚未取得系统键盘归属。R3 改用原生触摸，并在触摸前后分别独立确认应用自有 IME 从 `owned_hidden` 到 `owned_visible`。此时 WebView 仍显示「打开键盘」，「收起键盘」的矩形仍为零，CSS 视口维持 393 × 851。R3 因此复现了系统键盘可见但网页状态没有同步的问题，修复和原生复验待完成。
+两轮在 `active_keyboard_opened` 报 `direct_active_ui_invalid`。R2 记录连接、终端和断开按钮均在，WebView 仍显示「打开键盘」，「收起键盘」的矩形为零。R2 驱动检查过本应用键盘可见，失败工件没有保留点击前后的 IME 样本，无法排除键盘是从表单阶段残留的。R3 改用原生触摸，并在触摸前后分别独立确认应用自有 IME 从 `owned_hidden` 到 `owned_visible`。此时 WebView 仍显示「打开键盘」，「收起键盘」的矩形仍为零，CSS 视口维持 393 × 851。R3 因此复现了系统键盘可见但网页状态没有同步的问题，修复和原生复验待完成。
 
 两轮失败时均记录两条连接，其中活动会话有一次认证、一次 PTY、一次 Shell，零输入，仍打开。普通案八步未完成，未取得换钥结果。作业确认移除其创建的模拟器，公开摘要没有主动断开回执或失败画面。R3 的输入法证据仅证明可见性和所属应用。[R2 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44460008448/job/135344209659) · [R2 工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44460008448/artifacts/14499952750) · [R3 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44461890953/job/135350418144) · [R3 工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44461890953/artifacts/14500966515) · [失败差异与哈希](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r2-r3/official-index.json)

@@ -73,7 +73,12 @@
         "closed": false
       },
       "emulatorRemoved": true,
-      "screensArchivedByJob": false
+      "screensArchivedByJob": false,
+      "imeEvidence": {
+        "ownedVisibleCheckedByDriver": true,
+        "clickBeforeAndAfterSamplesArchived": false,
+        "couldExcludeKeyboardCarryOverFromForm": false
+      }
     },
     {
       "round": "R3",

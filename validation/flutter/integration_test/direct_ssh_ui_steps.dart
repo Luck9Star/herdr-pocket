@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,20 +22,38 @@ Future<void> until(
   }
 }
 
+Finder control(String key) => find.byKey(ValueKey(key));
+
 Future<void> tap(
   WidgetTester tester,
   String key, {
   void Function()? beforeTap,
   bool requireEnabled = false,
   Duration timeout = const Duration(seconds: 45),
+}) => tapControl(
+  tester,
+  control(key),
+  key,
+  beforeTap: beforeTap,
+  requireEnabled: requireEnabled,
+  timeout: timeout,
+);
+
+Future<void> tapControl(
+  WidgetTester tester,
+  Finder finder,
+  String name, {
+  void Function()? beforeTap,
+  bool requireEnabled = false,
+  bool reveal = true,
+  Duration timeout = const Duration(seconds: 45),
 }) async {
-  final finder = find.byKey(ValueKey(key));
   final deadline = DateTime.now().add(timeout);
   Rect? lastRect;
   var stable = 0;
   while (DateTime.now().isBefore(deadline)) {
     if (finder.evaluate().length == 1) {
-      await tester.ensureVisible(finder);
+      if (reveal) await tester.ensureVisible(finder);
       await tester.pump(const Duration(milliseconds: 100));
       final enabled =
           !requireEnabled ||
@@ -51,7 +70,7 @@ Future<void> tap(
     }
   }
   beforeTap?.call();
-  if (stable < 2) fail('direct_ssh_control_not_ready_$key');
+  if (stable < 2) fail('direct_ssh_control_not_ready_$name');
   expect(finder.hitTestable(), findsOneWidget);
   await tester.tap(finder);
   await tester.pump(const Duration(milliseconds: 200));
@@ -90,6 +109,108 @@ bool hasMarker(Terminal terminal, String marker) {
     }
   }
   return false;
+}
+
+Future<void> verifyOrdinaryMobileControls(
+  WidgetTester tester,
+  Terminal terminal,
+  String directory,
+  void Function(String) step,
+  void Function(String, Object) publish,
+) async {
+  Future<void> checkpoint(String phase) async {
+    publish('ordinary-mobile-stage.json', {'phase': phase});
+    final reply = File('$directory/ordinary-mobile-$phase-confirmed.json');
+    await until(tester, reply.existsSync);
+    expect(jsonDecode(reply.readAsStringSync()), {
+      'phase': phase,
+      'serverEvidenceAccepted': true,
+    });
+  }
+
+  final terminalView = find.byType(TerminalView);
+  final disconnect = control('direct-disconnect');
+  bool activeTerminal() =>
+      terminalView.hitTestable().evaluate().length == 1 &&
+      disconnect.hitTestable().evaluate().length == 1 &&
+      identical(tester.widget<TerminalView>(terminalView).terminal, terminal);
+
+  // Read the engine's surface metrics, which don't use WidgetTester's mock
+  // input client or view-inset overrides. The app must resize with the IME.
+  final surface = ui.PlatformDispatcher.instance.implicitView!;
+  double terminalHeight() => tester.getRect(terminalView).height;
+  await until(tester, () => activeTerminal() && surface.viewInsets.bottom == 0);
+  final closedHeight = terminalHeight();
+
+  step('keyboard_shown');
+  await toggleOrdinaryKeyboard(tester, show: true);
+  expect(activeTerminal(), isTrue);
+  expect(terminalHeight(), lessThan(closedHeight));
+  final keyboardTop =
+      (surface.physicalSize.height - surface.viewInsets.bottom) /
+      surface.devicePixelRatio;
+  expect(tester.getRect(terminalView).bottom, lessThanOrEqualTo(keyboardTop));
+  await checkpoint('keyboard_shown');
+
+  step('keyboard_hidden');
+  await toggleOrdinaryKeyboard(tester, show: false);
+  expect(activeTerminal(), isTrue);
+  expect(terminalHeight(), closedHeight);
+  await checkpoint('keyboard_hidden');
+
+  for (final (tab, pageAnchor, terminalTab) in [
+    ('board', control('hosts-direct-ssh'), control('home-tab-1')),
+    (
+      'network',
+      control('networks-add'),
+      find.widgetWithText(NavigationDestination, '终端'),
+    ),
+    (
+      'settings',
+      control('direct-settings-active'),
+      control('direct-tab-terminal'),
+    ),
+  ]) {
+    final visible = '${tab}_visible';
+    step(visible);
+    await tapControl(tester, control('direct-tab-$tab'), tab, reveal: false);
+    await until(
+      tester,
+      () =>
+          pageAnchor.hitTestable().evaluate().length == 1 &&
+          terminalView.hitTestable().evaluate().isEmpty,
+    );
+    expect(surface.viewInsets.bottom, 0);
+    await checkpoint(visible);
+
+    final returned = '${tab}_returned';
+    step(returned);
+    await tapControl(tester, terminalTab, returned, reveal: false);
+    await until(tester, activeTerminal);
+    expect(pageAnchor.hitTestable(), findsNothing);
+    expect(surface.viewInsets.bottom, 0);
+    await checkpoint(returned);
+  }
+}
+
+Future<void> toggleOrdinaryKeyboard(
+  WidgetTester tester, {
+  required bool show,
+}) async {
+  final toggle = control('direct-keyboard-toggle');
+  final surface = ui.PlatformDispatcher.instance.implicitView!;
+  expect(tester.widget<IconButton>(toggle).tooltip, show ? '打开键盘' : '收起键盘');
+  await tapControl(tester, toggle, 'direct-keyboard-toggle', reveal: false);
+  await until(
+    tester,
+    () =>
+        (show
+            ? surface.viewInsets.bottom > 0
+            : surface.viewInsets.bottom == 0) &&
+        toggle.hitTestable().evaluate().length == 1 &&
+        tester.widget<IconButton>(toggle).tooltip == (show ? '收起键盘' : '打开键盘'),
+    timeoutReason: 'direct_ssh_keyboard_ui_timeout',
+  );
 }
 
 Future<void> runDirectSshUi(
@@ -196,32 +317,43 @@ Future<void> runDirectSshUi(
   final terminal = tester.widget<TerminalView>(terminalView).terminal;
   step('await_welcome');
   await until(tester, () => hasMarker(terminal, 'POCKET-ANDROID-READY'));
+  await verifyOrdinaryMobileControls(
+    tester,
+    terminal,
+    directory,
+    step,
+    publish,
+  );
   step('input');
-  await tester.tap(terminalView);
-  await tester.pump(const Duration(milliseconds: 300));
+  await toggleOrdinaryKeyboard(tester, show: true);
   // Normal TerminalView debug-client commit, not terminal.onOutput injection
   // and not evidence of physical IME touch/composition.
   tester.testTextInput.enterText('hp-check');
   await tester.pump();
-  final enter = find.widgetWithText(TextButton, 'Enter');
-  await tester.ensureVisible(enter);
-  await tester.tap(enter);
-  await tester.pump();
+  await tapControl(tester, control('direct-key-enter'), 'terminal-enter');
   await until(tester, () => hasMarker(terminal, 'POCKET-ANDROID-SSH-OK'));
+  await toggleOrdinaryKeyboard(tester, show: false);
   await capture('connected');
   step('disconnect');
-  final disconnect = find.widgetWithText(TextButton, '断开');
-  expect(disconnect, findsOneWidget);
   step('disconnect_tap');
-  await tester.tap(disconnect);
+  await tapControl(
+    tester,
+    control('direct-disconnect'),
+    'direct-disconnect',
+    reveal: false,
+  );
   step('disconnect_wait');
   await until(tester, () => find.byType(TerminalView).evaluate().isEmpty);
   step('disconnect_secret');
   final clearedSecret = find.byKey(const ValueKey('direct-secret'));
-  await until(tester, () => find.byKey(const ValueKey('direct-form')).evaluate().length == 1);
+  await until(
+    tester,
+    () => find.byKey(const ValueKey('direct-form')).evaluate().length == 1,
+  );
   expect(clearedSecret, findsNothing);
   final dynamic state = tester.state(find.byType(DirectSshPage));
-  expect(state.secret.text, isEmpty); expect(state.passphrase.text, isEmpty);
+  expect(state.secret.text, isEmpty);
+  expect(state.passphrase.text, isEmpty);
   step('disconnect_status');
   final disconnectedStatus = find.textContaining('已断开');
   await until(tester, () => disconnectedStatus.evaluate().length == 1);
@@ -239,6 +371,8 @@ Future<void> runDirectSshUi(
     'fingerprintMatched': true,
     'explicitTrustRequired': true,
     'realTerminalView': true,
+    'platformKeyboardOpenedAndClosed': true,
+    'boardNetworkSettingsReturnedToSameTerminal': true,
     'normalTextInputCommit': true,
     'remoteEchoVisible': true,
     'disconnectUiConfirmed': true,

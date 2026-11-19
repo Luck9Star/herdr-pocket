@@ -44,6 +44,19 @@ class NativeControlPolicyTests(unittest.TestCase):
                 return self.source[start:index + 1]
         self.fail("unterminated production method: " + signature)
 
+    def test_encrypted_paste_checks_the_draft_before_any_optional_menu_query(self):
+        consent = self.production_method('func tapNativePasteConsent(')
+        draft = self.production_method('func encryptedDraft(')
+        self.assertNotIn('allElementsBoundByIndex', consent)
+        poll = draft.split('repeat {', 1)[1].split('} while Date() < deadline', 1)[0]
+        self.assertLess(poll.index('!credentialEmpty('), poll.index('nativePasteMenu('))
+        self.assertLess(poll.index('!credentialEmpty('), poll.index('tapNativePasteConsent('))
+        self.assertIn('if !confirmed', poll)
+        self.assertIn('!pasteOverlayVisible(rows)', poll)
+        self.assertLess(poll.index('visibleWitness(connection,'), poll.index('.press(forDuration:'))
+        self.assertEqual(draft.count('try tapMobileButton(before.paste,'), 1)
+        self.assertEqual(draft.count('.press(forDuration:'), 1)
+
     def test_production_home_wait_separates_slow_initialization_from_unsafe_navigation(self):
         # Exercise the production launch methods with deterministic XCTest
         # observations and an injectable clock for the cold-start deadline.
@@ -398,6 +411,7 @@ final class XCUIElement {
         case textField = 91, textView = 17, searchField = 42, button = 6
         case stepper = 73, staticText = 12, other = 99, keyboard = 24, alert = 33
         case window = 3, webView = 4, scrollView = 5, group = 13, checkBox = 14, `switch` = 15, toggle = 16, secureTextField = 87
+        case menu = 110, menuItem = 111, popover = 112, sheet = 113
     }
     var taps = 0
     var directTaps = 0
@@ -409,8 +423,10 @@ final class XCUIElement {
     var onTap: (() -> Void)?
     var descendantsByRole: [ElementType: [XCUIElement]] = [:]
     var identity: [String: String] = [:]
+    var descendantQueries = 0
     func descendants(matching role: ElementType) -> Query {
-        Query(allElementsBoundByIndex: descendantsByRole[role] ?? [])
+        descendantQueries += 1
+        return Query(allElementsBoundByIndex: descendantsByRole[role] ?? [])
     }
     func coordinate(withNormalizedOffset: CGVector) -> XCUICoordinate {
         XCUICoordinate(element: self, offset: withNormalizedOffset)
@@ -484,8 +500,10 @@ struct Query {
     }
 }
 struct App {
+    enum State { case runningForeground, other }
     let frame: CGRect
     var keyboardFrame: CGRect? = nil
+    var state: State = .runningForeground
     let input = Element()
     let keyboard = Element()
     var webViews: Query { Query() }
@@ -661,6 +679,11 @@ final class Adapter {
     func chooseAuthMethod(_ method: NativeControlPolicy.AuthMethod, owner: RevealedControl) throws {
         _ = try selectAuthMethod(method, port: 2222, owner: owner)
     }
+    func observePasteConsent(_ owner: RevealedControl) throws -> Bool {
+        guard let candidate = try nativePasteMenu(observedNodes(), owner: owner) else { return false }
+        return try tapNativePasteConsent(candidate.menu, action: candidate.action, owner: owner)
+    }
+    func hasPasteOverlay() -> Bool { pasteOverlayVisible(rows) }
     func auth(_ previous: RevealedControl, ready: Bool = false) throws -> (password: RevealedControl, submit: RevealedControl) {
         try mobileAuth(port: 2222, ready: ready, previous: previous)
     }
@@ -700,6 +723,7 @@ final class Adapter {
             "func visibleWitness(_ rows:", "func waitForMobileWitness<Proof>", "func mobileAuth(port:", "func mobilePassword(in rows:",
             "func mobilePasswordObservation(in rows:", "func encryptedField(_ field:",
             "func authMethodFact(_ node:", "func selectAuthMethod(_ method:",
+            "func pasteOverlayVisible(_ rows:", "func nativePasteMenu(_ rows:", "func tapNativePasteConsent(_ menu:",
             "func controlGeometry(_ owner:", "func controlVisibleFrame(_ owner:", "func routeTabsOcclusion(_ owner:",
             "func reportFormGeometry(_ failure:", "func failControlGeometry(_ failure:",
             "func tap(_ item:", "func fillPassword(_ item:",
@@ -824,6 +848,51 @@ let replacedView = row(passwordControl.web.snapshot, path: [0, 1])
 let replacedAuthOwner = RevealedControl(live: passwordControl.live, owner: passwordControl.owner,
     window: passwordControl.window, web: replacedView)
 check(!authCandidate.sameMobileOwner(confirmation, replacedAuthOwner), "an otherwise equal auth control in a different WebView must fail")
+func pasteConsentCase(raw: Bool = true, menuRole: XCUIElement.ElementType = .menu, actionRole: XCUIElement.ElementType = .menuItem,
+                      label: String = "Paste", windowPath: [Int] = [0], webPath: [Int] = [], copies: Int = 1,
+                      liveMenus: Int = 1, liveActions: Int = 1, enabled: Bool = true, hit: Bool = true,
+                      foreground: Bool = true, liveActionFrame: CGRect? = nil,
+                      outsideMenu: Bool = false) -> (Adapter, Element, Element) {
+    let window = Element(), menu = Element(), action = Element()
+    let menuFrame = CGRect(x: 50, y: 360, width: 200, height: 110)
+    let frame = CGRect(x: outsideMenu ? 10 : 70, y: 400, width: 100, height: 44)
+    let menuSnap = snapshot(menuRole, frame: menuFrame, identifier: "", label: "Context Menu")
+    let rawAction = Snapshot(identifier: "", label: label, elementType: actionRole, frame: frame, isEnabled: enabled)
+    let currentAction = Snapshot(identifier: "", label: label, elementType: actionRole,
+                                 frame: liveActionFrame ?? frame, isEnabled: enabled)
+    menu.identity = ["identifier": "", "label": "Context Menu"]
+    action.identity = ["identifier": "", "label": label]
+    if liveMenus > 0 { window.descendantsByRole[menuRole] = Array(repeating: menu, count: liveMenus) }
+    if liveActions > 0 { menu.descendantsByRole[actionRole] = Array(repeating: action, count: liveActions) }
+    let menuPath = windowPath + [11]
+    let actionPath = menuPath + [0]
+    let rawNodes = [row(menuSnap, path: menuPath, window: windowPath, web: webPath)] + (0..<copies).map {
+        row(rawAction, path: menuPath + [$0], window: windowPath, web: webPath)
+    }
+    let snapshots = raw ? rawNodes : []
+    let controls = [confirmation.window.path: LiveControl(snapshot: confirmation.window.snapshot, hittable: true, element: window),
+                    menuPath: LiveControl(snapshot: menuSnap, hittable: false, element: menu),
+                    actionPath: LiveControl(snapshot: currentAction, hittable: hit, element: action)]
+    let app = App(frame: screen, state: foreground ? .runningForeground : .other)
+    return (Adapter(app: app, current: confirmation.live, rows: [confirmation.window, confirmation.web] + snapshots,
+                    blockers: [], pathControls: controls), window, action)
+}
+let (noMenu, untouchedWindow, untouchedPaste) = pasteConsentCase(raw: false)
+check((try? noMenu.observePasteConsent(confirmation)) == false && untouchedWindow.descendantQueries == 0 && untouchedPaste.taps == 0,
+      "an absent optional menu must make no XCTest query or touch")
+for (driver, window, action) in [pasteConsentCase(), pasteConsentCase(menuRole: .popover, actionRole: .button, label: "粘贴")] {
+    check(driver.hasPasteOverlay() && (try? driver.observePasteConsent(confirmation)) == true &&
+          window.descendantQueries == 1 && action.directTaps == 1,
+          "only a live exact Paste action from the same observed native menu and window is tapped")
+}
+for (driver, window, action) in [pasteConsentCase(menuRole: .alert), pasteConsentCase(label: "Paste and Go"),
+    pasteConsentCase(windowPath: [1]), pasteConsentCase(webPath: [0, 1]), pasteConsentCase(copies: 2),
+    pasteConsentCase(liveMenus: 0), pasteConsentCase(liveActions: 0), pasteConsentCase(liveActions: 2),
+    pasteConsentCase(enabled: false), pasteConsentCase(hit: false), pasteConsentCase(foreground: false),
+    pasteConsentCase(liveActionFrame: movedFrame), pasteConsentCase(outsideMenu: true)] {
+    check((try? driver.observePasteConsent(confirmation)) != true && action.taps == 0,
+          "unproven, obscured, unrelated or ambiguous menus must never be tapped")
+}
 let method = NativeControlPolicy.AuthMethod.key
 let oldFacts = [NativeControlPolicy.Fact(identifier: method.identifier, label: method.label, role: "toggle", value: nil)]
 check(NativeControlPolicy.pageWitness(oldFacts, paths: [[0, 0, 1]], windows: [[0]], webs: [[0, 0]],

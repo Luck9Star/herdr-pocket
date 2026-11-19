@@ -2716,21 +2716,61 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func tapNativePasteConsent() throws -> Bool {
-        // The preceding, bound product Paste tap can bring up WebKit's
-        // isolated Paste menu. Never dismiss an unrelated alert or menu.
-        guard app.state == .runningForeground else { return false }
-        let menus = app.menus.allElementsBoundByIndex + app.popovers.allElementsBoundByIndex
-        let label = NSPredicate(format: "label IN %@", ["Paste", "粘贴"])
-        let candidates = menus.flatMap { menu in
-            menu.descendants(matching: .any).matching(label).allElementsBoundByIndex
-        }.compactMap(liveControl).filter {
-            [.menuItem, .button].contains($0.snapshot.elementType) && $0.snapshot.isEnabled && $0.hittable &&
-                NativeFramePolicy.valid($0.snapshot.frame) && app.frame.contains($0.snapshot.frame)
+    private func pasteOverlayVisible(_ rows: [Observed]) -> Bool {
+        rows.contains { row in
+            let node = row.snapshot
+            return [.alert, .sheet, .menu, .popover].contains(node.elementType) &&
+                NativeFramePolicy.valid(node.frame.intersection(app.frame))
         }
-        try require(candidates.count <= 1, "native_encrypted_key_paste_unproven")
-        if let action = candidates.first { action.element.tap(); return true }
-        return false
+    }
+
+    @MainActor
+    private func nativePasteMenu(_ rows: [Observed], owner: RevealedControl) throws -> (menu: Observed, action: Observed)? {
+        // Inspect the app's real tree first. An optional UIKit context menu
+        // can be absent when the WebKit clipboard call succeeds directly.
+        let menus = rows.filter { [.menu, .popover].contains($0.snapshot.elementType) }
+        let candidates = rows.compactMap { action -> (menu: Observed, action: Observed)? in
+            guard [.menuItem, .button].contains(action.snapshot.elementType),
+                  ["Paste", "粘贴"].contains(action.snapshot.label),
+                  let menu = menus.filter({ action.path.count > $0.path.count && action.path.starts(with: $0.path) })
+                    .max(by: { $0.path.count < $1.path.count }) else { return nil }
+            return (menu, action)
+        }
+        let failure = "native_encrypted_key_paste_unproven"
+        try require(candidates.count <= 1, failure)
+        guard let candidate = candidates.first else { return nil }
+        try require([candidate.menu, candidate.action].allSatisfy {
+            $0.windowPath == owner.window.path && $0.path.starts(with: owner.window.path) &&
+                ($0.webPath.isEmpty || $0.webPath == owner.web.path)
+        } && !connectionRows(rows, in: owner).isEmpty, failure)
+        return candidate
+    }
+
+    @MainActor
+    private func tapNativePasteConsent(_ menu: Observed, action: Observed, owner: RevealedControl) throws -> Bool {
+        guard app.state == .runningForeground, let window = liveOnPath(owner.window),
+              window.snapshot.frame == menu.window, menu.window == action.window else { return false }
+        let failure = "native_encrypted_key_paste_unproven"
+        func rebind(_ row: Observed, in scope: XCUIElement) throws -> LiveControl? {
+            let snapshot = row.snapshot
+            let query = scope.descendants(matching: snapshot.elementType).matching(NSPredicate(format:
+                "identifier == %@ AND label == %@", snapshot.identifier, snapshot.label))
+            let count = query.count
+            try require(count <= 1, failure)
+            guard count == 1, let live = liveControl(query.firstMatch), sameIdentity(snapshot, live.snapshot),
+                  snapshot.frame == live.snapshot.frame else { return nil }
+            return live
+        }
+        guard let boundMenu = try rebind(menu, in: window.element),
+              let boundAction = try rebind(action, in: boundMenu.element),
+              action.snapshot.isEnabled, boundAction.snapshot.isEnabled, boundAction.hittable else { return false }
+        let appBounds = window.snapshot.frame.intersection(app.frame)
+        let menuBounds = boundMenu.snapshot.frame
+        let frame = boundAction.snapshot.frame
+        guard [appBounds, menuBounds, frame].allSatisfy(NativeFramePolicy.valid),
+              appBounds.contains(frame), menuBounds.contains(frame) else { return false }
+        boundAction.element.tap()
+        return true
     }
 
     @MainActor
@@ -2740,6 +2780,9 @@ final class TauriDirectSSHUITests: XCTestCase {
         try require(credentialEmpty(before.pem.live.snapshot) && credentialEmpty(before.passphrase.live.snapshot) &&
                     !before.submit.live.snapshot.isEnabled, "native_encrypted_key_credentials_retained")
         try phase("paste")
+        let beforePaste = try observedNodes()
+        let staleMenu = try nativePasteMenu(beforePaste, owner: before.pem)
+        try require(staleMenu == nil && !pasteOverlayVisible(beforePaste), "native_encrypted_key_paste_unproven")
         try post("encrypted_key_clipboard_" + attempt)
         try tapMobileButton(before.paste, "native_encrypted_key_paste_unproven")
         let deadline = Date().addingTimeInterval(12)
@@ -2747,11 +2790,17 @@ final class TauriDirectSSHUITests: XCTestCase {
         var method = "productPaste"
         let fallbackNotice = "无法读取剪贴板，可在私钥框用系统粘贴。"
         repeat {
-            if !confirmed { confirmed = try tapNativePasteConsent() }
-            if let draft = liveControl(before.pem.live.element), !credentialEmpty(draft.snapshot) { break }
-            if method == "productPaste" {
-                let rows = connectionRows(try observedNodes(), in: owner)
-                if visibleWitness(rows, [("ssh-credential-note", fallbackNotice, false)]) != nil {
+            let rows = try observedNodes()
+            let connection = connectionRows(rows, in: before.pem)
+            let drafts = connection.filter { sameIdentity($0.snapshot, before.pem.owner.snapshot) }
+            if app.state == .runningForeground, drafts.count == 1, let draft = drafts.first {
+                if !credentialEmpty(draft.snapshot) { break }
+                if let candidate = try nativePasteMenu(rows, owner: before.pem) {
+                    if !confirmed {
+                        confirmed = try tapNativePasteConsent(candidate.menu, action: candidate.action, owner: before.pem)
+                    }
+                } else if method == "productPaste", !pasteOverlayVisible(rows),
+                          visibleWitness(connection, [("ssh-credential-note", fallbackNotice, false)]) != nil {
                     // Follow the product's explicit fallback on the still-empty, bound PEM field.
                     let field = try reveal(before.pem.live.element, matching: before.pem, protectRouteTabs: true,
                                            mobileOwnerFailure: "native_encrypted_key_paste_unproven").live

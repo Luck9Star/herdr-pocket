@@ -751,10 +751,15 @@ Future<void> runEncryptedDirectSshUi(
   await tap(tester, 'direct-auth-key');
   await pasteKey();
   final passphrase = control('direct-passphrase');
+  final android = platform == 'android-api35-emulator';
   expect(tester.widget<TextField>(passphrase).obscureText, isTrue);
   await tester.ensureVisible(passphrase);
   await tester.enterText(passphrase, 'invalid-fixture-passphrase');
   await tester.pump();
+  if (android) {
+    step('encrypted_prepare_rejection');
+    await finishAndroidEncryptedPassphrase(tester);
+  }
   await tap(tester, 'direct-connect', requireEnabled: true);
   await until(
     tester,
@@ -772,7 +777,7 @@ Future<void> runEncryptedDirectSshUi(
   config.remove('passphrase');
   await tester.pump();
   expect(tester.widget<TextField>(passphrase).obscureText, isTrue);
-  if (platform == 'android-api35-emulator') {
+  if (android) {
     step('encrypted_prepare_connect');
     await finishAndroidEncryptedPassphrase(tester);
   }

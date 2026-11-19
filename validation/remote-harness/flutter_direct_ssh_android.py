@@ -764,7 +764,7 @@ def encrypted_device_state():
 
 ENCRYPTED_APP_STAGES = ENCRYPTED_UI_PHASES | {
     'fixture_validation', 'encrypted_waiting_private', 'encrypted_home',
-    'encrypted_probe', 'encrypted_review', 'encrypted_rejected',
+    'encrypted_probe', 'encrypted_review', 'encrypted_prepare_rejection', 'encrypted_rejected',
     'encrypted_prepare_connect', 'encrypted_connect', 'encrypted_disconnect',
 }
 

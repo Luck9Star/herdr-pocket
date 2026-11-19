@@ -475,7 +475,8 @@ struct RevealedControl {
 }
 struct Query {
     var allElementsBoundByIndex: [XCUIElement] = []
-    var firstMatch: XCUIElement { XCUIElement() }
+    var count: Int { allElementsBoundByIndex.count }
+    var firstMatch: XCUIElement { allElementsBoundByIndex.first ?? XCUIElement() }
     func matching(_ predicate: NSPredicate) -> Query {
         Query(allElementsBoundByIndex: allElementsBoundByIndex.filter { predicate.evaluate(with: $0.identity) })
     }
@@ -499,8 +500,9 @@ final class XCUIScreen {
 struct Rejected: Error { let reason: String }
 struct Date: Comparable {
     private static var clock: Double = 0
+    static var tick: Double = 25
     private let instant: Double
-    init() { Self.clock += 25; instant = Self.clock }
+    init() { Self.clock += Self.tick; instant = Self.clock }
     private init(_ instant: Double) { self.instant = instant }
     func addingTimeInterval(_ seconds: Double) -> Self { Self(instant + seconds) }
     static func < (lhs: Self, rhs: Self) -> Bool { lhs.instant < rhs.instant }
@@ -511,6 +513,7 @@ final class Observations {
     var occlusionSamples: [[CGRect]]
     var hittableSamples: [Bool]
     var liveReads = 0
+    var treeReads = 0
     var resolved: [Observed] = []
     var checkpoints: [(String, [String: Any])] = []
     var reviewActionChecks = 0
@@ -524,6 +527,7 @@ final class Observations {
         self.hittableSamples = hittableSamples
     }
     func next(_ fallback: [Observed]) -> [Observed] {
+        treeReads += 1
         beforeTree?()
         return trees.isEmpty ? fallback : trees.removeFirst()
     }
@@ -557,6 +561,7 @@ struct Adapter {
     func role(_ type: XCUIElement.ElementType) -> String {
         if type == .secureTextField { return "secureTextField" }
         if type == .staticText { return "staticText" }
+        if type == .button { return "button" }
         return type == .textField ? "textField" : "other"
     }
     func texts(_ node: Snapshot) -> [String] { [node.label, node.value ?? ""] }
@@ -595,11 +600,8 @@ struct Adapter {
         return LiveControl(snapshot: snapshot, hittable: live.hittable, element: live.element)
     }
     func liveControl(_ element: XCUIElement) -> LiveControl? {
-        guard element === current.element else { return nil }
-        return observations?.live(current) ?? current
-    }
-    func uniqueElement(_ query: Query) -> XCUIElement {
-        query.allElementsBoundByIndex.count == 1 ? query.allElementsBoundByIndex[0] : XCUIElement()
+        if element === current.element { return observations?.live(current) ?? current }
+        return pathControls.values.first { $0.element === element }
     }
     func owner(_ snapshot: Snapshot, _ rows: [Observed]) -> Observed? {
         let scopes = rows.filter { $0.window != nil && !$0.webs.isEmpty }.flatMap { row in
@@ -623,6 +625,13 @@ struct Adapter {
     func sameMobileOwner(_ lhs: RevealedControl, _ rhs: RevealedControl) -> Bool {
         sameControlScope(lhs, rhs)
     }
+    func auth(_ previous: RevealedControl, ready: Bool = false) throws -> (password: RevealedControl, submit: RevealedControl) {
+        try mobileAuth(port: 2222, ready: ready, previous: previous)
+    }
+    func authPageOnly() throws -> [Observed] {
+        try mobileWitness([("ssh-step-title", "SSH 账号认证", false), ("ssh-reviewed-endpoint", target(2222), false),
+            ("ssh-approved-note", "本次主机密钥已确认", false), ("ssh-connect", "连接 SSH", true)]).0
+    }
     func button(_ label: String) -> XCUIElement { current.element }
     func submit(_ attempt: NativeConnectPolicy.Attempt, expected: String) throws { try submitConnection(attempt, waitingFor: expected) }
     func fillCurrent(_ text: String) throws { try fillPassword(current.element, text) }
@@ -642,7 +651,9 @@ struct Adapter {
             "func controlIdentityRows(_ current:", "func controlOwner(_ current:",
             "func reveal(_ item:", "func tapForm(_ name:",
             "func mobileLiveControl(_ owner:", "func sameControlScope(_ lhs:",
-            "func mobileControl(_ anchor:", "func tapMobileButton(_ control:",
+            "func sameControlScope(_ scope:", "func mobileControl(_ anchor:", "func mobileBinding(_ anchor:",
+            "func tapMobileButton(_ control:", "enum MobileWitnessObservation<Proof>", "func mobileWitness(_ targets:",
+            "func waitForMobileWitness<Proof>", "func mobileAuth(port:", "func mobilePassword(in rows:",
             "func controlGeometry(_ owner:", "func routeTabsOcclusion(_ owner:",
             "func reportFormGeometry(_ failure:", "func failControlGeometry(_ failure:",
             "func tap(_ item:", "func fillPassword(_ item:",
@@ -765,6 +776,94 @@ let replacedView = row(passwordControl.web.snapshot, path: [0, 1])
 let replacedAuthOwner = RevealedControl(live: passwordControl.live, owner: passwordControl.owner,
     window: passwordControl.window, web: replacedView)
 check(!authCandidate.sameMobileOwner(confirmation, replacedAuthOwner), "an otherwise equal auth control in a different WebView must fail")
+func authFixture(_ fieldSamples: [[Observed]], liveSnapshot: Snapshot = fieldAnchor.snapshot,
+                 scope: [Int] = [0, 0], liveCopies: Int = 1, hits: Bool = true,
+                 ready: Bool = false) -> (Adapter, Observations, Element, Element) {
+    let window = [scope[0]]
+    let submit = Snapshot(identifier: "ssh-connect", label: "连接 SSH", elementType: .button,
+        frame: CGRect(x: 24, y: 550, width: 342, height: 42), isEnabled: ready)
+    let submitRow = row(submit, path: scope + [7], window: window, web: scope)
+    let headings = [("ssh-step-title", "SSH 账号认证"), ("ssh-reviewed-endpoint", "fixture-target"),
+                    ("ssh-approved-note", "本次主机密钥已确认")].enumerated().map { index, name in
+        row(snapshot(.staticText, identifier: name.0, label: name.1), path: scope + [index + 1], window: window, web: scope)
+    }
+    let page = [row(snapshot(.window, frame: screen, label: ""), path: window),
+                row(snapshot(.webView, frame: screen, label: ""), path: scope), submitRow] + headings
+    let observations = Observations(fieldSamples.map { page + $0 })
+    let password = Element(), button = Element()
+    password.identity = ["identifier": liveSnapshot.identifier, "label": liveSnapshot.label]
+    button.identity = ["identifier": submit.identifier, "label": submit.label]
+    observations.webSurface.descendantsByRole[.secureTextField] = Array(repeating: password, count: liveCopies)
+    observations.webSurface.descendantsByRole[.button] = [button]
+    let candidate = Adapter(app: App(frame: screen),
+        current: LiveControl(snapshot: liveSnapshot, hittable: hits, element: password),
+        rows: page + (fieldSamples.last ?? []), blockers: [], observations: observations,
+        pathControls: [submitRow.path: LiveControl(snapshot: submit, hittable: ready, element: button)])
+    return (candidate, observations, password, button)
+}
+func checkAuthObservation() throws {
+    Date.tick = 3
+    defer { Date.tick = 25 }
+    let invalidFrame = row(snapshot(.secureTextField, frame: .zero, label: fieldAnchor.snapshot.label), path: fieldAnchor.path)
+    let changingFrame = row(snapshot(.secureTextField, frame: movedFrame, label: fieldAnchor.snapshot.label), path: fieldAnchor.path)
+    let samples = [[], [invalidFrame], [changingFrame], [fieldAnchor]]
+    let (baseline, before, oldField, _) = authFixture(samples)
+    let earliest = try baseline.authPageOnly()
+    check(before.treeReads == 1 && !earliest.contains { $0.snapshot.elementType == .secureTextField } && oldField.taps == 0,
+          "the original shell witness returns before the password can be resolved")
+    let (updated, after, newField, submit) = authFixture(samples)
+    let proof = try updated.auth(confirmation)
+    check(after.treeReads == 4 && proof.password.live.element === newField && proof.submit.live.element === submit &&
+          newField.taps == 0 && submit.taps == 0 && newField.inputs.isEmpty && after.webSurface.drags.isEmpty,
+          "the actual auth witness must passively wait for the fresh full sheet and stable identity/frame")
+
+    let wrongOwner = row(fieldAnchor.snapshot, path: [0, 1, 4], web: [0, 1])
+    let repeated = row(fieldAnchor.snapshot, path: [0, 0, 8])
+    let insecure = row(snapshot(.textField, label: fieldAnchor.snapshot.label), path: [0, 0, 8])
+    let rawDisabled = row(Snapshot(identifier: "", label: fieldAnchor.snapshot.label, elementType: .secureTextField,
+                                   frame: oldFrame, isEnabled: false), path: fieldAnchor.path)
+    let liveDisabled = rawDisabled.snapshot
+    let noRole = row(snapshot(.staticText, label: fieldAnchor.snapshot.label), path: fieldAnchor.path)
+    let unknown = row(snapshot(.secureTextField, label: "other identity"), path: fieldAnchor.path)
+    let lostWindow = row(fieldAnchor.snapshot, path: [0, 1, 4], web: [0, 1])
+    let lostScope = authFixture([[lostWindow]], scope: [0, 1])
+    let cases = [(authFixture([[unknown]]), "identity_missing", false),
+        (authFixture([[noRole]]), "secure_role_missing", false),
+        (authFixture([[fieldAnchor]], liveCopies: 0), "live_missing", false),
+        (authFixture([[invalidFrame]]), "frame_unsettled", false),
+        (authFixture([[fieldAnchor]], hits: false), "unhittable", false),
+        (authFixture([[fieldAnchor, repeated], [fieldAnchor]]), "raw_ambiguous", true),
+        (authFixture([[fieldAnchor, insecure], [fieldAnchor]]), "wrong_role", true),
+        (authFixture([[wrongOwner], [fieldAnchor]]), "raw_owner_unproven", true),
+        (authFixture([[fieldAnchor]], liveCopies: 2), "live_ambiguous", true),
+        (lostScope, "owner_changed", true),
+        (authFixture([[rawDisabled], [fieldAnchor]]), "native_control_disabled", true),
+        (authFixture([[fieldAnchor]], liveSnapshot: liveDisabled), "native_control_disabled", true)]
+    for ((candidate, samples, password, button), reason, immediate) in cases {
+        let expected = reason.hasPrefix("native_") ? reason : "native_mobile_password_" + reason
+        do { _ = try candidate.auth(confirmation); failures.append("invalid auth observation accepted: \(reason)") }
+        catch let failure as Rejected { check(failure.reason == expected, "wrong failure classification for \(reason)") }
+        check((immediate ? samples.treeReads == 1 : (2...8).contains(samples.treeReads)) &&
+              password.taps == 0 && password.inputs.isEmpty && button.taps == 0 && samples.webSurface.drags.isEmpty,
+              "auth sampling must remain bounded and passive before \(reason)")
+    }
+
+    let offscreen = Snapshot(identifier: "", label: fieldAnchor.snapshot.label, elementType: .secureTextField,
+        frame: oldFrame.offsetBy(dx: 0, dy: 500))
+    let scrolled = row(offscreen, path: fieldAnchor.path)
+    let (scrollCandidate, scrollObs, scrollField, _) = authFixture([[scrolled]], liveSnapshot: offscreen, hits: false)
+    _ = try scrollCandidate.auth(confirmation)
+    check(scrollObs.treeReads == 1 && scrollField.taps == 0 && scrollObs.webSurface.drags.isEmpty,
+          "a stable offscreen field can proceed to the existing reveal guard without touching it during observation")
+    var entered = offscreen
+    entered.value = "••••"
+    let enteredRow = row(entered, path: fieldAnchor.path)
+    let (submitCandidate, submitObs, enteredField, _) = authFixture([[enteredRow]], liveSnapshot: entered, hits: false, ready: true)
+    _ = try submitCandidate.auth(proof.password, ready: true)
+    check(submitObs.treeReads == 1 && enteredField.taps == 0, "submit proof does not need to refocus the password field")
+}
+do { try checkAuthObservation() }
+catch let failure as Rejected { failures.append("auth observation failed before complete evidence: \(failure.reason)") }
 func expectTap(_ frame: CGRect, treeFrame: CGRect? = nil, blockers: [CGRect],
                appFrame: CGRect = screen, windowFrame: CGRect = screen, webAncestors: [CGRect] = [screen],
                hittable: Bool = true, diagnostic: String? = nil, samples: Int = 1, reason: String) {

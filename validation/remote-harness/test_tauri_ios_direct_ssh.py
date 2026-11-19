@@ -1379,6 +1379,27 @@ print("native geometry cases passed")
 
 
 class NativeDiagnosticPublishingTests(unittest.TestCase):
+    def test_mobile_password_failure_codes_are_source_bound_and_export_nothing_else(self):
+        source = (ios.HERE / 'tauri_ios_direct_ssh.swift').read_text()
+        codes = source.split('enum MobilePasswordIssue:', 1)[1].split('var pending:', 1)[0]
+        self.assertEqual(set(re.findall(r'"(native_mobile_password_[a-z_]+)"', codes)), ios.MOBILE_PASSWORD_FAILURES)
+        with tempfile.TemporaryDirectory() as output:
+            for phase in ios.MOBILE_PASSWORD_PHASES:
+                for code in ios.MOBILE_PASSWORD_FAILURES:
+                    payload = {'stage': 'native_failure', 'nativeCheckpoint': phase, 'nativeFailureCode': code}
+                    state = ios.Checkpoints(None, None, output, {})
+                    state.accept(payload)
+                    self.assertEqual(state.result, {'nativeCheckpoint': phase, 'nativeFailureCode': code})
+            payload = {'stage': 'native_failure', 'nativeCheckpoint': 'ordinary_fingerprint',
+                       'nativeFailureCode': 'native_mobile_password_frame_unsettled'}
+            for changed in ({'nativeCheckpoint': 'ordinary_port'}, {'nativeFailureCode': payload['nativeFailureCode'] + ': private'},
+                            {'nativeFailureCode': ['private']}, {'label': 'private'}, {'frame': [0, 0, 10, 10]}):
+                state = ios.Checkpoints(None, None, output, {})
+                with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                    state.accept(payload | changed)
+                self.assertNotIn('nativeFailureCode', state.result)
+                self.assertNotIn('private', json.dumps(state.result))
+
     def test_swift_form_owner_and_geometry_failures_publish_through_real_http(self):
         source = (ios.HERE / 'tauri_ios_direct_ssh.swift').read_text()
         emitted = set(re.findall(r'\btry require\([\s\S]*?,\s*"(native_[a-z_]+)"\)', source))

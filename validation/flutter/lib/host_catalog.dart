@@ -202,6 +202,8 @@ class HostCatalog extends ChangeNotifier {
   int terminalFontSize = 14;
   String revision = '',status = '尚未读取本机主机资料';
   bool ready = false,writing = false;
+  bool _reading = false;
+  bool get reading => _reading;
   bool _disposed = false;
   void _notify() { if (!_disposed) notifyListeners(); }
   @override
@@ -211,7 +213,7 @@ class HostCatalog extends ChangeNotifier {
   Future<void> load() async {
     if (_disposed) return;
     if (writing) throw const RemoteFailure('catalog_busy');
-    final ticket = ++generation; ready = false; _notify();
+    final ticket = ++generation; ready = false; _reading = true; _notify();
     try {
       final raw = await storage.load();
       if (ticket != generation) return;
@@ -253,7 +255,7 @@ class HostCatalog extends ChangeNotifier {
       profiles = List.unmodifiable(loaded); networkProfiles = List.unmodifiable(networks); terminalFontSize = loadedFontSize; revision = raw.revision; ready = true;
       status = profiles.isEmpty ? '没有本机主机资料 · 请明确新增配对' : '已恢复 ${profiles.length} 个本机资料 · 连接前需重新审查';
     } catch (_) { if (ticket == generation) { profiles = const []; networkProfiles = const []; ready = false; status = '资料损坏、存储锁定或不可用 · 已停止，不覆盖原记录或自动创建密钥'; } }
-    if (ticket == generation) _notify();
+    if (ticket == generation) { _reading = false; _notify(); }
   }
   Future<void> _mutate(List<HostProfile> Function(List<HostProfile>) action,{Map<String,dynamic>? pending,bool replacePending=false,VoidCallback? beforeSave,Future<void> Function()? beforeSaveCheck,List<NetworkProfile> Function(List<NetworkProfile>)? networkAction,int? fontSize}) {
     final captured = generation;

@@ -11,7 +11,14 @@ import 'package:integration_test/integration_test.dart';
 import 'package:terminal_view/terminal_view.dart';
 
 import 'direct_ssh_ui_steps.dart'
-    show control, hasMarker, openDirectSshFromHome, tap, tapControl;
+    show
+        control,
+        hasMarker,
+        openDirectSshFromHome,
+        tap,
+        tapControl,
+        verifyLocalClose,
+        verifyReturnHome;
 
 typedef Checkpoint = Future<void> Function(
   String phase,
@@ -136,35 +143,52 @@ Future<void> runLinuxOrdinary(
   }
   final connect = control('direct-connect'),
       password = control('direct-secret');
-  expect(tester.widget<FilledButton>(connect).onPressed, isNull);
-  expect(tester.widget<TextField>(password).obscureText, isTrue);
-  final credential = tester.widget<TextField>(password).controller!;
-  expect(credential.text.isEmpty, isTrue);
+  expect(connect, findsNothing);
+  expect(password, findsNothing);
 
   step('probe');
-  await tap(tester, 'direct-probe');
-  final review = find.byType(AlertDialog);
-  await waitUi(
-    tester,
-    () =>
-        review.evaluate().length == 1 &&
-        control('direct-trust-key').hitTestable().evaluate().length == 1,
-    'linux_direct_review_timeout',
-  );
-  final displayed = tester.widget<SelectableText>(
-    find.descendant(of: review, matching: find.byType(SelectableText)),
-  );
-  final lines = displayed.data?.split('\n') ?? [];
-  const rsaAlgorithms = {'算法 ssh-rsa', '算法 rsa-sha2-256', '算法 rsa-sha2-512'};
+  await tap(tester, 'direct-probe', requireEnabled: true, stableHitPoint: true);
+  final review = control('direct-trust-header');
+  final approve = control('direct-trust-key');
+  await waitUi(tester, () {
+    if (review.evaluate().length != 1 ||
+        approve.hitTestable().evaluate().length != 1) {
+      return false;
+    }
+    final route = ModalRoute.of(tester.element(review));
+    return route?.isCurrent == true &&
+        route?.animation?.status == AnimationStatus.completed;
+  }, 'linux_direct_review_timeout');
   expect(
-    lines.length >= 3 &&
-        lines[0] == '目标 ${target.label}' &&
-        rsaAlgorithms.contains(lines[1]) &&
-        lines[2] == target.fingerprint,
+    control('direct-independent-verification').hitTestable(),
+    findsOneWidget,
+  );
+  expect(connect, findsNothing);
+  expect(password, findsNothing);
+  final presentedFingerprint = find.descendant(
+    of: control('direct-key-fingerprint'),
+    matching: find.byType(SelectableText),
+  );
+  final presentedTarget = control('direct-target-value');
+  final presentedAlgorithm = control('direct-key-algorithm');
+  for (final evidence in [
+    presentedTarget,
+    presentedAlgorithm,
+    presentedFingerprint,
+  ]) {
+    expect(evidence.hitTestable(), findsOneWidget);
+  }
+  final algorithm = tester.widget<SelectableText>(presentedAlgorithm).data;
+  const rsaAlgorithms = {'ssh-rsa', 'rsa-sha2-256', 'rsa-sha2-512'};
+  expect(
+    tester.widget<SelectableText>(presentedTarget).data == target.label &&
+        rsaAlgorithms.contains(algorithm) &&
+        tester.widget<SelectableText>(presentedFingerprint).data ==
+            target.fingerprint,
     isTrue,
     reason: 'linux_direct_fingerprint_or_target_mismatch',
   );
-  await checkpoint('probe', {'algorithm': lines[1].substring(3)});
+  await checkpoint('probe', {'algorithm': algorithm!});
   await tap(
     tester,
     'direct-trust-key',
@@ -175,10 +199,19 @@ Future<void> runLinuxOrdinary(
   step('password');
   await waitUi(
     tester,
-    () => review.evaluate().isEmpty,
+    () =>
+        review.evaluate().isEmpty &&
+        password.hitTestable().evaluate().length == 1 &&
+        connect.evaluate().length == 1 &&
+        ModalRoute.of(tester.element(page))?.isCurrent == true,
     'linux_direct_review_close_timeout',
   );
+  expect(control('direct-trust-approved').hitTestable(), findsOneWidget);
   expect(tester.widget<FilledButton>(connect).onPressed, isNull);
+  final passwordField = tester.widget<TextField>(password);
+  expect(passwordField.obscureText, isTrue);
+  final credential = passwordField.controller!;
+  expect(credential.text.isEmpty, isTrue);
   await tester.ensureVisible(password);
   await tester.enterText(password, target.password);
   await tester.pump();
@@ -270,35 +303,14 @@ Future<void> runLinuxOrdinary(
   await tapControl(tester, disconnect, 'linux_disconnect', reveal: false);
   await waitUi(
     tester,
-    () =>
-        terminalView.evaluate().isEmpty &&
-        bound.evaluate().isEmpty &&
-        control('direct-form').evaluate().length == 1,
+    () => terminalView.evaluate().isEmpty && bound.evaluate().isEmpty,
     'linux_direct_disconnect_timeout',
   );
-  expect(find.text('已断开；未重放输入。'), findsOneWidget);
-  expect(
-    credential.text.isEmpty &&
-        tester.widget<FilledButton>(connect).onPressed == null,
-    isTrue,
-  );
+  await verifyLocalClose(tester, tester.state(page));
   await checkpoint('disconnect', const {});
 
   step('return_home');
-  await tapControl(
-    tester,
-    find.byType(BackButton),
-    'linux_return_home',
-    reveal: false,
-  );
-  await waitUi(
-    tester,
-    () =>
-        page.evaluate().isEmpty &&
-        control('hosts-direct-ssh').hitTestable().evaluate().length == 1,
-    'linux_direct_return_home_timeout',
-  );
-  expect(tester.takeException(), isNull);
+  await verifyReturnHome(tester);
   await checkpoint('complete', const {});
 }
 

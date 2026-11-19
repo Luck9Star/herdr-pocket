@@ -21,6 +21,21 @@ import 'remote_page_test.dart' show PendingAdapter;
 import 'remote_test_data.dart';
 import 'network_identity_test.dart' show MemoryNetworkIdentity,identityReply;
 
+typedef CatalogRead = ({String revision, String contents});
+
+class GatedNetworkCatalogStorage extends MemoryCatalogStorage {
+  final reads = <Completer<CatalogRead>>[];
+  bool gate = false;
+
+  @override
+  Future<CatalogRead> load() {
+    if (!gate) return super.load();
+    final read = Completer<CatalogRead>();
+    reads.add(read);
+    return read.future;
+  }
+}
+
 class CountingDeviceKeys extends TestDeviceKeys {
   CountingDeviceKeys(super.pem);
   int publicCalls = 0;
@@ -64,6 +79,76 @@ Future<void> showNetworkDetails(WidgetTester tester,String id) async {
 }
 
 void main() {
+  testWidgets('desktop live network does not revive a superseded empty read and keeps the editor across widths', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(980, 780);
+    addTearDown(tester.view.reset);
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    final storage = GatedNetworkCatalogStorage();
+    final catalog = HostCatalog(storage: storage, clock: () => 1000);
+    await catalog.load();
+    final stored = HostCatalog(storage: MemoryCatalogStorage(), clock: () => 1000);
+    await stored.load();
+    final profile = testNetwork('tailscale');
+    await stored.addNetwork(profile);
+    final saved = await stored.storage.load();
+    stored.dispose();
+    await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: Builder(builder: (context) {
+      final desktop = MediaQuery.sizeOf(context).width >= 700;
+      return NetworkProfilesPage(catalog: catalog, closeTabs: (_) {},
+        desktopSshSession: desktop ? (tokens: tokens, notice: const Text('普通 SSH 会话保持连接')) : null);
+    })));
+    await tester.pumpAndSettle();
+    final empty = find.byKey(const ValueKey('network-empty-card'));
+    expect(empty, findsOneWidget);
+
+    storage.gate = true;
+    final old = catalog.load(), failing = catalog.load();
+    await tester.pump();
+    expect(find.text('正在重新读取本机网络配置'), findsOneWidget);
+    expect(empty, findsNothing);
+    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('networks-add'))).onPressed, isNull);
+    storage.reads[1].completeError(StateError('test read failure'));
+    await failing;
+    await tester.pump();
+    expect(catalog.reading, isFalse);
+    expect(find.textContaining('资料损坏、存储锁定或不可用'), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('networks-add'))).onPressed, isNull);
+    storage.reads[0].complete((revision: '', contents: ''));
+    await old;
+    await tester.pump();
+    expect(find.textContaining('资料损坏、存储锁定或不可用'), findsOneWidget);
+    expect(empty, findsNothing);
+
+    final superseded = catalog.load(), recovered = catalog.load();
+    storage.reads[2].complete((revision: '', contents: ''));
+    await superseded;
+    tester.view.physicalSize = const Size(390, 844);
+    await tester.pump();
+    expect(catalog.reading, isTrue);
+    expect(find.text('正在重新读取本机网络配置'), findsOneWidget);
+    expect(find.textContaining('暂无网络配置'), findsNothing);
+    storage.reads[3].complete(saved);
+    await recovered;
+    tester.view.physicalSize = const Size(980, 780);
+    await tester.pumpAndSettle();
+    expect(catalog.reading, isFalse);
+    expect(find.byKey(ValueKey('network-card-${profile.id}')), findsOneWidget);
+    expect(empty, findsNothing);
+
+    await tapVisible(tester, 'networks-add');
+    await tester.pumpAndSettle();
+    final draft = find.byKey(const ValueKey('network-label'));
+    await tester.enterText(draft, 'Uncommitted network');
+    tester.view.physicalSize = const Size(390, 844);
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(draft).controller!.text, 'Uncommitted network');
+    expect(catalog.networkProfiles.single.id, profile.id);
+    expect(storage.writes, 0);
+    await tester.pumpWidget(const SizedBox());
+    catalog.dispose();
+  });
+
   testWidgets('status read during pending start cannot clear an unknown start result',(tester) async {
     final catalog = HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
     final profile = testNetwork('easytier'); await catalog.addNetwork(profile);

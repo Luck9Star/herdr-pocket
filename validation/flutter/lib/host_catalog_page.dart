@@ -30,22 +30,33 @@ class HostCatalogPage extends StatefulWidget {
   State<HostCatalogPage> createState() => _HostCatalogPageState();
 }
 class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingObserver {
+  static const desktopRailMinWidth = 700.0;
   static const desktopMinWidth = 960.0;
-  static const desktopSidebarWidth = 224.0;
+  static const wideSidebarWidth = 224.0;
   static const splitWorkspaceMinWidth = 960.0;
+  static const desktopDestinations = [(Icons.dashboard_outlined, '看板'), (Icons.terminal, '终端'),
+    (Icons.language, '网络'), (Icons.settings_outlined, '设置')];
+  bool get canToggleDesktopSidebar => MediaQuery.sizeOf(context).width < desktopMinWidth;
+  bool get desktopSidebarExpanded => !canToggleDesktopSidebar || narrowSidebarExpanded;
+  double get desktopSidebarWidth => desktopSidebarExpanded ? wideSidebarWidth : 64.0;
 
   late final catalog = widget.catalog ?? HostCatalog();
   late final tabs = widget.tabs ?? HostTabs();
   late final summaries = HostTaskSummaries(catalog);
   String? notice;
   bool busy = false;
-  bool sshClosedNotice = false;
+  bool sshClosedNotice = false, sshClosedSucceeded = false;
   final sshNavigator = GlobalKey<NavigatorState>();
   final sshVisible = ValueNotifier<bool>(false);
+  final sshDesktopDestination = ValueNotifier<int>(1);
+  bool sshConnected = false;
   bool sshRouteOpen = false;
+  int sshRouteGeneration = 0;
   int destination = 0;
   bool splitUpdatePending = false;
   bool workspaceWide = false;
+  final sshSidebarPreference = ValueNotifier((narrowExpanded: false, wideCollapsed: false));
+  bool get narrowSidebarExpanded => sshSidebarPreference.value.narrowExpanded;
   final hostSearch = TextEditingController();
   final expandedHostManagement = <String>{};
   HostTaskFilter taskFilter = HostTaskFilter.all;
@@ -62,6 +73,8 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   @override
   void dispose() {
     sshVisible.dispose();
+    sshDesktopDestination.dispose();
+    sshSidebarPreference.dispose();
     hostSearch.dispose();
     WidgetsBinding.instance.removeObserver(this);
     summaries.removeListener(tabChanged);
@@ -80,7 +93,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   }
   Future<void> open([HostProfile? profile]) async {
     if (busy || !catalog.ready || catalog.writing || profile?.enabled == false) return;
-    if (sshClosedNotice) setState(() => sshClosedNotice = false);
+    if (sshClosedNotice) setState(() { sshClosedNotice = false; sshClosedSucceeded = false; });
     if (profile != null && profile.hasIdentity) {
       if (profile.requiresNetworkBinding) { setState(() { notice = '请先通过主机的“选择／解除网络绑定”选择相同 provider 的本机网络，再新建视图；不会使用系统直连。'; }); return; }
       tabs.open(profile,networks:catalog.networkProfiles,adapter:widget.adapterFactory?.call(profile));
@@ -317,65 +330,102 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   bool get ordinaryCatalogStatus => catalog.ready &&
     (catalog.status.startsWith('已恢复 ') || catalog.status == '本机资料已保存 · 不代表主机授权或当前在线');
   bool get largeMobileText => MediaQuery.textScalerOf(context).scale(1) > 1;
-  bool get mobileEmptyBoard => MediaQuery.sizeOf(context).width < 960 && catalog.ready &&
+  bool get emptyCatalogBoard => catalog.ready &&
     catalog.profiles.isEmpty && catalog.pendingCreation == null && tabs.tabs.isEmpty && notice == null &&
     (catalog.status == '没有本机主机资料 · 请明确新增配对' || ordinaryCatalogStatus);
+  bool get mobileEmptyBoard => MediaQuery.sizeOf(context).width < desktopRailMinWidth && emptyCatalogBoard;
+  bool get desktopEmptyBoard => MediaQuery.sizeOf(context).width >= desktopRailMinWidth && emptyCatalogBoard;
+  bool get desktopSshConnected => sshConnected && MediaQuery.sizeOf(context).width >= desktopRailMinWidth;
+  bool get sshFlowSidebarExpanded => canToggleDesktopSidebar
+    ? narrowSidebarExpanded : !sshSidebarPreference.value.wideCollapsed;
 
-  Future<void> openDirectSsh() async {
-    tabs.select(null);
-    if (sshClosedNotice) setState(() => sshClosedNotice = false);
-    if (sshRouteOpen) {
+  void resumeSshTerminal() {
+    setState(() => sshVisible.value = true);
+    sshDesktopDestination.value = 1;
+  }
+
+  void selectDesktopSshDestination(int index) {
+    if (index == 1) {
+      resumeSshTerminal();
+    } else if (index == 3) {
       setState(() => sshVisible.value = true);
-      return;
-    }
-    final mobile = MediaQuery.sizeOf(context).width < 960;
-    if (mobile) {
+      sshDesktopDestination.value = index;
+    } else {
+      sshDesktopDestination.value = index;
+      tabs.select(null);
       setState(() {
-        sshRouteOpen = true;
-        sshVisible.value = true;
+        destination = index;
+        sshVisible.value = false;
       });
     }
-    final navigator = mobile
-        ? sshNavigator.currentState!
-        : Navigator.of(context);
-    final route = MaterialPageRoute<void>(
+  }
+
+  Future<void> openDirectSsh({bool fromChooser = false}) async {
+    tabs.select(null);
+    if (sshClosedNotice) setState(() { sshClosedNotice = false; sshClosedSucceeded = false; });
+    if (sshRouteOpen) {
+      resumeSshTerminal();
+      return;
+    }
+    final generation = ++sshRouteGeneration;
+    // The viewport can cross either breakpoint while the shell is connected.
+    // Keep its route in the same Navigator when the catalog covers it.
+    setState(() {
+      sshRouteOpen = true;
+      sshVisible.value = true;
+    });
+    final navigator = sshNavigator.currentState!;
+    final route = MaterialPageRoute<DirectSshRouteExit>(
       builder: (_) => DirectSshPage(
         tokens: widget.tokens,
         catalog: catalog,
-        sessionVisible: mobile ? sshVisible : null,
-        onSelectDestination: mobile
-            ? (index) {
-                setState(() {
-                  destination = index;
-                  sshVisible.value = false;
-                });
-              }
-            : null,
+        sessionVisible: sshVisible,
+        desktopDestination: sshDesktopDestination,
+        desktopFlowShell: desktopSshFlowShell,
+        onConnectionChanged: (connected) {
+          if (!mounted || sshRouteGeneration != generation) return;
+          setState(() => sshConnected = connected);
+          if (connected) sshDesktopDestination.value = 1;
+        },
+        onSelectDestination: (index) {
+          if (desktopSshConnected) {
+            selectDesktopSshDestination(index);
+            return;
+          }
+          setState(() {
+            destination = index;
+            sshVisible.value = false;
+          });
+        },
         closeCatalogTabs: (ids) {
           for (final id in ids) {
             tabs.closeHost(id);
           }
         },
-        onReturnAfterDisconnect: () {
-          if (mounted) setState(() => sshClosedNotice = true);
+        onReturnAfterDisconnect: (succeeded) {
+          if (mounted && sshRouteGeneration == generation) setState(() { sshClosedNotice = true; sshClosedSucceeded = succeeded; });
         },
       ),
     );
-    await navigator.push<void>(route);
+    final exit = await navigator.push(route);
     await route.completed;
-    if (mobile && mounted) {
+    if (mounted) {
       setState(() {
         sshRouteOpen = false;
+        sshConnected = false;
         sshVisible.value = false;
         destination = 0;
       });
+      if (fromChooser && exit == DirectSshRouteExit.targetBack) unawaited(chooseConnection());
     }
   }
 
   Future<void> chooseConnection() async {
-    if (sshClosedNotice) setState(() => sshClosedNotice = false);
-    final choice = await Navigator.push<String>(context, MaterialPageRoute(builder: (context) {
-      final margin = MediaQuery.sizeOf(context).width < 360 ? 16.0 : 24.0;
+    if (sshClosedNotice) setState(() { sshClosedNotice = false; sshClosedSucceeded = false; });
+    final choice = await Navigator.push<Object>(context, MaterialPageRoute(builder: (context) {
+      final width = MediaQuery.sizeOf(context).width;
+      final desktop = width >= desktopRailMinWidth;
+      final margin = desktop ? 40.0 : width < 360 ? 16.0 : 24.0;
       final large = MediaQuery.textScalerOf(context).scale(1) > 1;
       Widget option(String key, String title, String detail, IconData icon, bool primary, String value) =>
         ConstrainedBox(constraints: const BoxConstraints(minHeight: 100), child: SizedBox(height: large ? null : 100, child: Material(
@@ -395,27 +445,110 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
                 else FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(detail,
                   style: TextStyle(fontSize: 13, letterSpacing: 0, color: widget.tokens.color('textSecondary')))),
               ]))))));
-      return Scaffold(body: SafeArea(child: Column(children: [
+      Widget readingColumn(Widget child) => desktop ? Align(alignment: Alignment.centerLeft,
+        child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 560),
+          child: SizedBox(width: double.infinity, child: child))) : child;
+      final page = Scaffold(body: SafeArea(child: Column(children: [
         Container(key: const ValueKey('choose-header'), height: large ? 72 : 56,
           decoration: BoxDecoration(border: Border(bottom: BorderSide(color: widget.tokens.color('border')))),
-          child: Row(children: [SizedBox(width: margin - 8), SizedBox(width: 44, height: 44,
+          child: Row(children: [SizedBox(width: margin - (desktop ? 32 : 8)), SizedBox(width: 44, height: 44,
             child: IconButton(key: const ValueKey('choose-back'), padding: EdgeInsets.zero, tooltip: '返回',
               onPressed: () => Navigator.pop(context), icon: const Icon(Icons.arrow_back))),
-            const SizedBox(width: 8), const Text('添加主机', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))])),
+            SizedBox(width: desktop ? 12 : 8), const Text('添加主机', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))])),
         Expanded(child: ListView(padding: EdgeInsets.fromLTRB(margin, 24, margin, 24), children: [
-          SizedBox(height: large ? null : 28, child: Transform.translate(offset: Offset(0, large ? 0 : -4),
-            child: const Text('选择连接方式', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 0)))),
+          readingColumn(SizedBox(height: large ? null : 28, child: Transform.translate(offset: Offset(0, large ? 0 : -4),
+            child: const Text('选择连接方式', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 0))))),
           const SizedBox(height: 16),
-          option('choose-ssh', '普通 SSH 终端', '使用服务器密码或已有私钥打开远程 Shell。', Icons.terminal, true, 'ssh'),
+          readingColumn(option('choose-ssh', '普通 SSH 终端', '使用服务器密码或已有私钥打开远程 Shell。', Icons.terminal, true, 'ssh')),
           const SizedBox(height: 12),
-          option('choose-herdr', 'herdr 配对 / 手动连接', '接入 herdr 工作台，查看会话和任务。', Icons.web_asset_outlined, false, 'herdr'),
+          readingColumn(option('choose-herdr', 'herdr 配对 / 手动连接', '接入 herdr 工作台，查看会话和任务。', Icons.web_asset_outlined, false, 'herdr')),
         ])),
       ])));
+      return desktop ? desktopSshFlowShell(page, (index) => Navigator.pop(context, index)) : page;
     }));
     if (!mounted) return;
-    if (choice == 'ssh') openDirectSsh();
+    if (choice == 'ssh') await openDirectSsh(fromChooser: true);
     if (choice == 'herdr') await open();
+    if (choice is int) selectSshFlowDestination(choice);
   }
+
+  void selectSshFlowDestination(int index) {
+    if (desktopSshConnected) {
+      selectDesktopSshDestination(index);
+      return;
+    }
+    if (index == 1 && sshRouteOpen) {
+      resumeSshTerminal();
+      return;
+    }
+    if (index != 1) tabs.select(null);
+    setState(() => destination = index);
+  }
+
+  Widget desktopSshFlowShell(Widget page, ValueChanged<int> select, [int? selected]) => Row(children: [
+    desktopSshFlowSidebar(select, selected), Expanded(child: page),
+  ]);
+
+  Widget desktopSshFlowSidebar(ValueChanged<int> select, int? selected) =>
+    ValueListenableBuilder(valueListenable: sshSidebarPreference, builder: (context, preference, _) {
+      final narrow = MediaQuery.sizeOf(context).width < desktopMinWidth;
+      final expanded = narrow ? preference.narrowExpanded : !preference.wideCollapsed;
+      final navInset = expanded ? 8.0 : 10.0;
+      final tokens = widget.tokens;
+      return Material(color: tokens.color('card'), child: Container(
+          key: const ValueKey('app-sidebar'),
+          width: expanded ? wideSidebarWidth : 64,
+          foregroundDecoration: BoxDecoration(border: Border(right: BorderSide(color: tokens.color('border')))),
+          child: ListView(primary: false, padding: EdgeInsets.fromLTRB(navInset, 8, navInset, 0), children: [
+            Align(alignment: Alignment.centerLeft, child: SizedBox.square(dimension: 44, child: IconButton(
+              key: const ValueKey('sidebar-toggle'),
+              onPressed: () => setState(() => sshSidebarPreference.value = (
+                narrowExpanded: narrow ? !expanded : preference.narrowExpanded,
+                wideCollapsed: narrow ? preference.wideCollapsed : expanded,
+              )),
+              tooltip: expanded ? '收起侧栏' : '展开侧栏',
+              icon: Icon(expanded ? Icons.menu_open : Icons.menu),
+            ))),
+            const SizedBox(height: 16),
+            for (var i = 0; i < desktopDestinations.length; i++) ...[
+              Material(color: selected == i && expanded ? tokens.color('brandSoft') : Colors.transparent,
+                borderRadius: BorderRadius.circular(10), child: InkWell(
+                  key: ValueKey('ssh-flow-nav-$i'), borderRadius: BorderRadius.circular(10),
+                  onTap: () => select(i), child: SizedBox(height: 44, child: Semantics(
+                    label: desktopDestinations[i].$2, button: true, selected: selected == i,
+                    child: Stack(children: [
+                      Center(child: Row(mainAxisAlignment: expanded ? MainAxisAlignment.start : MainAxisAlignment.center, children: [
+                        if (expanded) const SizedBox(width: 14),
+                        Icon(desktopDestinations[i].$1, size: 24, color: tokens.color(selected == i ? 'brand' : 'textSecondary')),
+                        if (expanded) ...[const SizedBox(width: 10), Text(desktopDestinations[i].$2)],
+                      ])),
+                      if (selected != null && i == 1)
+                        Positioned(top: expanded ? 10 : 6, right: expanded ? 22 : 6, child: Semantics(
+                          label: '会话在线',
+                          child: Container(key: const ValueKey('ssh-flow-online'), width: 8, height: 8,
+                            decoration: BoxDecoration(color: tokens.color('successBorder'), shape: BoxShape.circle)),
+                        )),
+                      if (selected != null && i == 1 && expanded)
+                        Positioned(right: 20, top: 21, child: Text('在线', style: TextStyle(fontSize: 11, color: tokens.color('successText')))),
+                    ]))))),
+              const SizedBox(height: 8),
+            ],
+            if (expanded)
+              Padding(padding: const EdgeInsets.fromLTRB(12, 8, 12, 8), child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('主机', style: TextStyle(fontSize: 12, color: tokens.color('textSecondary'))),
+                  const SizedBox(height: 6),
+                  if (!catalog.ready) Text(catalog.reading ? '正在读取本机资料' : catalog.status)
+                  else if (catalog.profiles.isEmpty)
+                    Text('还没有主机 · 从看板添加', style: TextStyle(fontSize: 13, color: tokens.color('textMutedReadable')))
+                  else
+                    for (final profile in orderedHosts)
+                      Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Text(profile.label, maxLines: 1,
+                        overflow: TextOverflow.ellipsis)),
+                ])),
+          ]),
+        ));
+    });
 
   double get cardRadius => ((widget.tokens.data['radii'] as Map)['card'] as num).toDouble();
 
@@ -429,10 +562,10 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
         key: i == 2 ? const ValueKey('hosts-networks') : ValueKey('home-tab-$i'),
         onTap: () {
           if (i == 1 && sshRouteOpen) {
-            setState(() => sshVisible.value = true);
+            resumeSshTerminal();
             return;
           }
-          setState(() { destination = i; sshClosedNotice = false; });
+          setState(() { destination = i; sshClosedNotice = false; sshClosedSucceeded = false; });
           if (i != 1) tabs.select(null);
         },
         child: Semantics(label: entries[i].$2, button: true, selected: i == 0, child: Stack(alignment: Alignment.topCenter, children: [
@@ -448,10 +581,29 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   Widget sshDisconnectedNotice() => Container(key: const ValueKey('home-ssh-closed'),
     constraints: const BoxConstraints(minHeight: 44), alignment: Alignment.centerLeft,
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-    decoration: BoxDecoration(color: widget.tokens.color('brandSoft'), borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: widget.tokens.color('brandBorder'))),
-    child: Semantics(liveRegion: true, child: Text('普通 SSH 已断开',
-      style: TextStyle(color: widget.tokens.color('brand'), fontWeight: FontWeight.bold))));
+    decoration: BoxDecoration(color: widget.tokens.color(sshClosedSucceeded ? 'brandSoft' : 'dangerSoft'), borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: widget.tokens.color(sshClosedSucceeded ? 'brandBorder' : 'dangerBorder'))),
+    child: Semantics(liveRegion: true, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(sshClosedSucceeded ? '本机已断开' : '本机连接关闭失败', key: const ValueKey('home-ssh-closed-title'),
+        style: TextStyle(color: widget.tokens.color(sshClosedSucceeded ? 'brand' : 'dangerText'), fontWeight: FontWeight.bold)),
+      if (!sshClosedSucceeded) Text('会话可能仍在。',
+        style: TextStyle(fontSize: 13, color: widget.tokens.color('textSecondary'))),
+    ])));
+
+  Widget desktopSshNotice(String destinationLabel) {
+    final tokens = widget.tokens;
+    return Container(key: const ValueKey('desktop-ssh-active'),
+      constraints: const BoxConstraints(minHeight: 66),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(color: tokens.color('successSoft'), borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: tokens.color('successBorder'))),
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('普通 SSH 会话保持连接', style: TextStyle(fontWeight: FontWeight.bold, color: tokens.color('successText'))),
+        Text('切到$destinationLabel不会断开。从侧栏「终端」返回原会话，不产生新连接或输入。',
+          style: TextStyle(fontSize: 13, color: tokens.color('textSecondary'))),
+      ]));
+  }
+
   Widget emptyMobileBoard() {
     final margin = MediaQuery.sizeOf(context).width < 360 ? 16.0 : 24.0;
     final large = largeMobileText;
@@ -468,7 +620,10 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       if (sshClosedNotice) ...[
         const SizedBox(height: 12), sshDisconnectedNotice(), const SizedBox(height: 16),
       ] else const SizedBox(height: 28),
-      Container(key: const ValueKey('home-empty-card'), height: large ? null : 268,
+      emptyHostCard(large: large, canAdd: canAdd),
+    ]);
+  }
+  Widget emptyHostCard({required bool large, required bool canAdd}) => Container(key: const ValueKey('home-empty-card'), height: large ? null : 268,
         constraints: const BoxConstraints(minHeight: 268), padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(color: widget.tokens.color('card'), borderRadius: BorderRadius.circular(cardRadius),
           border: Border.all(color: widget.tokens.color('border'))),
@@ -486,11 +641,26 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
             onPressed: openDirectSsh, style: OutlinedButton.styleFrom(foregroundColor: widget.tokens.color('textPrimary'),
               side: BorderSide(color: widget.tokens.color('borderStrong')),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), child: const Text('普通 SSH 终端'))),
-        ])),
+        ]));
+  // direct-ssh-desktop.svg returned-*: content column starts at sidebar+40, capped at 560 wide;
+  // title y16-46, notice y62, empty card y122 with its buttons at y266/y326.
+  Widget emptyDesktopBoard() {
+    final canAdd = !busy && !catalog.writing && catalog.profiles.length < maxHostProfiles;
+    Widget column(Widget child) => Align(alignment: Alignment.centerLeft,
+      child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 560),
+        child: SizedBox(width: double.infinity, child: child)));
+    return ListView(key: const ValueKey('host-catalog-list'), padding: const EdgeInsets.fromLTRB(40, 16, 40, 16), children: [
+      column(const SizedBox(key: ValueKey('home-board-title'), height: 30,
+        child: Text('看板', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, height: 1)))),
+      const SizedBox(height: 16),
+      if (sshClosedNotice) ...[column(sshDisconnectedNotice()), const SizedBox(height: 16)],
+      if (desktopSshConnected) ...[column(desktopSshNotice('看板')), const SizedBox(height: 16)],
+      column(emptyHostCard(large: largeMobileText, canAdd: canAdd)),
     ]);
   }
   Widget board() {
     if (mobileEmptyBoard) return emptyMobileBoard();
+    if (desktopEmptyBoard) return emptyDesktopBoard();
     final ordered = orderedHosts;
     // Derived only from existing reports; filtering never opens or retires a lease.
     final categories = {
@@ -517,6 +687,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       key: const ValueKey('host-catalog-list'),
       padding: const EdgeInsets.all(16),
       children: [
+        if (desktopSshConnected) ...[desktopSshNotice('看板'), const SizedBox(height: 16)],
         Row(
           children: [
             Container(
@@ -851,7 +1022,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       ),
     ],
   );
-  Widget terminalList() => ListView(
+  Widget terminalList() => ListView(key: const ValueKey('terminal'),
     padding: const EdgeInsets.all(16),
     children: [
       Text('终端', style: Theme.of(context).textTheme.headlineSmall),
@@ -954,11 +1125,30 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       ],
     ),
   );
-  Widget desktopSidebar({required bool canSplit}) => Material(color: widget.tokens.color('card'), child: Container(
-    width: desktopSidebarWidth,
-    decoration: BoxDecoration(border: Border(right: BorderSide(color: widget.tokens.color('border')))),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      const Padding(padding: EdgeInsets.all(16), child: Text('Herdr Pocket', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+  Widget desktopSidebar({required bool canSplit}) {
+    return Material(color: widget.tokens.color('card'), child: Container(
+      key: const ValueKey('app-sidebar'),
+      width: desktopSidebarWidth,
+      decoration: BoxDecoration(border: Border(right: BorderSide(color: widget.tokens.color('border')))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (canToggleDesktopSidebar)
+        Padding(padding: const EdgeInsets.fromLTRB(10, 8, 9, 0), child: Row(children: [
+          SizedBox.square(dimension: 44, child: IconButton(
+            key: const ValueKey('sidebar-toggle'),
+            tooltip: desktopSidebarExpanded ? '收起侧栏' : '展开侧栏',
+            onPressed: () => setState(() => sshSidebarPreference.value = (
+              narrowExpanded: !narrowSidebarExpanded, wideCollapsed: sshSidebarPreference.value.wideCollapsed,
+            )),
+            icon: Icon(desktopSidebarExpanded ? Icons.menu_open : Icons.menu),
+          )),
+          if (desktopSidebarExpanded)
+            const Expanded(child: Text('Herdr Pocket', overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+        ]))
+      else
+        const Padding(padding: EdgeInsets.all(16), child: Text('Herdr Pocket', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+      if (!desktopSidebarExpanded) Expanded(child: desktopRail()),
+      if (desktopSidebarExpanded) ...[
       TextButton.icon(key: const ValueKey('hosts-board-tab'),
         onPressed: () { tabs.select(null); setState(() => destination = 0); },
         icon: const Icon(Icons.dashboard_outlined), label: const Text('主机看板')),
@@ -987,11 +1177,39 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
                     ]))),
             ]),
       ])),
+      ListTile(key: const ValueKey('home-tab-1'), leading: const Icon(Icons.terminal), title: const Text('终端'),
+        selected: destination == 1, onTap: () {
+          if (sshRouteOpen) { resumeSshTerminal(); return; }
+          setState(() { destination = 1; sshClosedNotice = false; sshClosedSucceeded = false; });
+        }),
       ListTile(key: const ValueKey('hosts-networks'), leading: const Icon(Icons.language), title: const Text('网络'),
         selected: destination == 2, onTap: () { tabs.select(null); setState(() => destination = 2); }),
-      ListTile(leading: const Icon(Icons.settings_outlined), title: const Text('设置'),
+      ListTile(key: const ValueKey('home-tab-3'), leading: const Icon(Icons.settings_outlined), title: const Text('设置'),
         selected: destination == 3, onTap: () { tabs.select(null); setState(() => destination = 3); }),
+      ],
     ])));
+  }
+  Widget desktopRail() {
+    final entries = desktopDestinations;
+    return ListView(padding: const EdgeInsets.only(left: 10, right: 9), children: [
+        for (var i = 0; i < entries.length; i++)
+          Padding(padding: EdgeInsets.only(top: i == 0 ? 16 : 8), child: Material(
+            color: destination == i ? widget.tokens.color('brandSoft') : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            child: InkWell(
+              key: i == 2 ? const ValueKey('hosts-networks') : ValueKey('home-tab-$i'),
+              onTap: () {
+                if (i == 1 && sshRouteOpen) {
+                  resumeSshTerminal();
+                  return;
+                }
+                setState(() { destination = i; sshClosedNotice = false; sshClosedSucceeded = false; });
+                if (i != 1) tabs.select(null);
+              },
+              child: SizedBox(height: 44, child: Center(child: Semantics(label: entries[i].$2, button: true, selected: destination == i,
+                child: Icon(entries[i].$1, size: 24, color: widget.tokens.color(destination == i ? 'brand' : 'textSecondary')))))))),
+    ]);
+  }
   void syncSplitAvailability(bool canSplit) {
     workspaceWide = canSplit;
     if (splitUpdatePending || tabs.splitAvailable == canSplit) return;
@@ -1004,11 +1222,15 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
 
   @override
   Widget build(BuildContext context) => PopScope(
-    canPop: !sshVisible.value && tabs.activeId == null,
+    canPop: !sshVisible.value && tabs.activeId == null && !desktopSshConnected,
     onPopInvokedWithResult: (didPop, result) {
       if (didPop) return;
       if (sshVisible.value) {
         unawaited(sshNavigator.currentState!.maybePop());
+        return;
+      }
+      if (desktopSshConnected) {
+        resumeSshTerminal();
         return;
       }
       final navigator = tabs.active?.navigator.currentState;
@@ -1027,19 +1249,20 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
             child: ExcludeFocus(
               excluding: sshVisible.value,
               child: Scaffold(
-      bottomNavigationBar: MediaQuery.sizeOf(context).width < desktopMinWidth ?
+      bottomNavigationBar: MediaQuery.sizeOf(context).width < desktopRailMinWidth ?
         (mobileEmptyBoard && destination == 0 && !largeMobileText ? emptyMobileNavigation() : NavigationBar(
         backgroundColor: widget.tokens.color('card'),
         indicatorColor: widget.tokens.color('brandSoft'),
         selectedIndex: destination,
         onDestinationSelected: (index) {
           if (index == 1 && sshRouteOpen) {
-            setState(() => sshVisible.value = true);
+            resumeSshTerminal();
             return;
           }
           setState(() {
             destination = index;
             sshClosedNotice = false;
+            sshClosedSucceeded = false;
           });
           if (index != 1) tabs.select(null);
         },
@@ -1058,25 +1281,28 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       )) : null,
       body: SafeArea(
         child: LayoutBuilder(builder: (context, available) {
-          final desktop = MediaQuery.sizeOf(context).width >= desktopMinWidth;
-          final workspaceWidth = available.maxWidth - (desktop ? desktopSidebarWidth : 0);
+          final desktop = MediaQuery.sizeOf(context).width >= desktopRailMinWidth;
+          final sidebarWidth = desktopSshConnected ? (sshFlowSidebarExpanded ? wideSidebarWidth : 64) : desktopSidebarWidth;
+          final workspaceWidth = available.maxWidth - (desktop ? sidebarWidth : 0);
           final canSplit = desktop && workspaceWidth >= splitWorkspaceMinWidth;
           syncSplitAvailability(canSplit);
           final split = canSplit && tabs.splitAvailable && tabs.active != null && tabs.splitId != null;
           final showingTab = destination == 1 && tabs.active != null;
           bool showFocusControl(HostTab tab) => split || (tab.id == tabs.activeId && !tab.inputEligible.value);
+          final inlineHostTabs = !desktop || desktopSshConnected || !desktopSidebarExpanded;
           return Row(children: [
-          if (desktop) desktopSidebar(canSplit: canSplit),
+          if (desktop) (desktopSshConnected ? desktopSshFlowSidebar(selectDesktopSshDestination, destination)
+            : desktopSidebar(canSplit: canSplit)),
           Expanded(child: Column(
             children: [
-              if (!desktop && tabs.tabs.isNotEmpty && (destination == 0 || destination == 1))
+              if (inlineHostTabs && tabs.tabs.isNotEmpty && (destination == 0 || destination == 1))
                 ConstrainedBox(
                   constraints: BoxConstraints(
                     maxHeight: available.maxHeight * .18,
                   ),
                   child: SingleChildScrollView(child: tabBar()),
                 ),
-              if (tabs.active != null && !desktop)
+              if (tabs.active != null && inlineHostTabs)
                 ConstrainedBox(
                   constraints: BoxConstraints(
                     maxHeight: available.maxHeight * .28,
@@ -1134,7 +1360,9 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
                   Positioned.fill(child: Visibility(visible: !showingTab,
                     maintainState: true, maintainAnimation: true, child: IndexedStack(
                     index: destination, children: [board(), terminalList(),
-                      NetworkProfilesPage(catalog: catalog, closeTabsAndWait:tabs.closeHostsAndWait,closeTabs: (ids) {
+                      NetworkProfilesPage(catalog: catalog, closeTabsAndWait:tabs.closeHostsAndWait,
+                        desktopSshSession: desktopSshConnected ? (tokens: widget.tokens, notice: desktopSshNotice('网络')) : null,
+                        closeTabs: (ids) {
                         for (final id in ids) { tabs.closeHost(id); }
                       }), settings()]))),
                   for (final tab in tabs.tabs)

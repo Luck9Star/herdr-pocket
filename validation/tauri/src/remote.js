@@ -23,7 +23,7 @@ import { pairingCameraRequest,validatePairingCameraResponse,pairingRequestSummar
 import { writePublicRequest } from './public-request-clipboard.js';
 import { invalidatePairReview } from './pairing-lifecycle.js';
 import { dashboardPresentation, paneStatusText } from './dashboard-presentation.js';
-import { initConfigTransfer } from './config-transfer-ui.js';
+import { initConfigTransfer, reviewedImportLeases } from './config-transfer-ui.js';
 import { HostDashboardSummary, hostSummaryIdentity, hostSummaryText, hostCardSummaryText } from './host-dashboard-summary.js';
 import {blockedTargetList} from './blocked-target-list.js';
 import {initDesktopWorkbench} from './desktop-workbench.js';
@@ -928,11 +928,16 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   $('add-herdr').onclick=()=>void openNewHost();
   $('add-ssh').onclick=()=>{ if(!ssh.isActive()) sshBackSection='add'; setHomeSection('ssh'); };
   $('home-open-ssh').onclick=()=>{ if(!ssh.isActive()) sshBackSection='dashboard'; setHomeSection('ssh'); };
-  const closeConfigTransfer=initConfigTransfer({native, invoke, getHosts:()=>hostRecords, getTabImpacts:workspace.tabImpacts, refreshHosts, onAffected:ids=>{workspace.prepareAffected(ids);if(ids.includes(activeHostId))cancel('配置操作涉及此主机；观察已停止，请重新核对。');}, onSettled:ids=>workspace.affected(ids), onApplied:async result=>{
-    const affected=[...result.removedIds,...result.retired.map(h=>h.id)];
-    workspace.affected(affected);
-    if(affected.includes(activeHostId)) { hostNavigation++; cancel('配置已替换；旧观察已停止，新目标需重新配对。'); activeHostId=null; clearSnapshot(); }
-  }});
+  const closeConfigTransfer=initConfigTransfer({native, invoke, getHosts:()=>hostRecords, getTabImpacts:workspace.tabImpacts, refreshHosts,
+    captureLeases:()=>({tabs:workspace.tabLeaseSnapshot(),legacy:{hostId:activeHostId,generation:gate.pendingGeneration}}),
+    createRevokeChannel:()=>new Channel(),
+    onRevoked:(event,snapshot,selected)=>{
+      if(!snapshot || !Array.isArray(event?.hostIds) || !Array.isArray(event?.tabs))return;
+      workspace.prepareLeases(reviewedImportLeases(event,snapshot.tabs,selected));
+      if(Array.isArray(event.legacy) && event.legacy[0]===snapshot.legacy.generation && event.legacy[1]===snapshot.legacy.hostId && activeHostId===snapshot.legacy.hostId && gate.pendingGeneration===snapshot.legacy.generation) {
+        hostNavigation++;cancel('配置操作涉及此主机；观察已停止，请重新核对。');activeHostId=null;
+      }
+    }, onApplied:async()=>{}});
   $('host-return-home').addEventListener('pointerdown',()=>workspace.prepareHide());
   $('show-fixture').addEventListener('pointerdown',()=>workspace.prepareHide());
   $('show-remote').addEventListener('pointerdown',()=>workspace.prepareHide());

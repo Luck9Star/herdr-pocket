@@ -6,10 +6,13 @@ const target=id=>fixture.targets.find(t=>t.id===id);
 import {initTabWorkspace} from '../src/tab-workspace.js';
 class Element {
   constructor(tag){this.isConnected=true;this.tagName=tag;this.children=[];this.attrs={};this.dataset={};this.value='';this.disabled=false;this.hidden=false;this.textContent='';}
-  append(...xs){for(const x of xs)this.children.push(x);}
+  append(...xs){for(const x of xs){x.parent=this;this.children.push(x);}}
   replaceChildren(...xs){this.replaceCount=(this.replaceCount || 0)+1;this.children=[];this.append(...xs);}
   setAttribute(k,v){this.attrs[k]=v;}
-  remove(){this.removed=true;}
+  remove(){this.removed=true;if(this.parent)this.parent.children=this.parent.children.filter(child=>child!==this);}
+  removeAttribute(k){delete this.attrs[k];}
+  querySelectorAll(selector){const selectors=selector.split(',').map(s=>s.trim());return this.all().filter(node=>selectors.some(s=>s.startsWith('.') ? (node.className || '').split(' ').includes(s.slice(1)) : s.startsWith('[') ? Object.hasOwn(node.attrs,s.slice(1,-1)) : node.tagName===s));}
+  cloneNode(deep){const copy=new Element(this.tagName);Object.assign(copy,{className:this.className,textContent:this.textContent,hidden:this.hidden,attrs:{...this.attrs},dataset:{...this.dataset}});if(deep)copy.append(...this.children.map(child=>child.cloneNode(true)));return copy;}
   showModal(){this.previousFocus=document.activeElement;this.open=true;this.modal=true;}
   close(){this.open=false;this.previousFocus?.focus();}
   addEventListener(name,fn){this['event_'+name]=fn;}
@@ -69,8 +72,11 @@ test('MT06 MT12: affected host must close and reopen; unrelated tab stays availa
   const invoke=async()=>{};
   try {
     const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{username:'u',host:id,port:22},hostFingerprint:'key',deviceFingerprint:'device'}),channelFactory:()=>({}),terminalFactory:()=>{}});
-    ui.create(direct.hostId,direct);const b=ui.create(mesh.hostId,mesh);
+    ui.create(direct.hostId,direct);const c=ui.create(direct.hostId,target('direct-pane-c'));const b=ui.create(mesh.hostId,mesh);
     ui.affected([direct.hostId]);await flush();
+    assert.equal(ui.tabImpacts([direct.hostId]).length,2);
+    await ui.select(c);const second=nodes['view-content'].all().find(n=>n.tagName==='input');second.checked=true;second.onchange();
+    assert.equal(nodes['view-content'].all().find(n=>n.textContent==='连接').disabled,true);
     const review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();
     assert.equal(nodes['view-content'].all().find(n=>n.textContent==='连接').disabled,true);
     await ui.select(b);const other=nodes['view-content'].all().find(n=>n.tagName==='input');other.checked=true;other.onchange();
@@ -1281,4 +1287,87 @@ for(const pending of ['ack','pause'])test(`explicit stop retires UI input withou
   h.ui.background();await flush();
   assert.equal(h.calls.filter(c=>c.name==='remote_tab_cancel').length,1,'ordinary background revocation stays hard');
  }finally{h.restore();}
+});
+
+test('import retains the last frame, locks affected tabs and leaves other hosts alone',async()=>{
+  const oldDocument=globalThis.document;
+  const nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content'].map(id=>[id,new Element('div')]));
+  globalThis.document={hidden:false,activeElement:null,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};
+  const calls=[],channels=[],observed=[];let terminal;
+  const invoke=(name,args)=>{calls.push({name,args});if(name==='remote_tab_reserve')return Promise.resolve(9);if(name==='remote_tab_observe'){observed.push(args);return new Promise(()=>{});}return Promise.resolve();};
+  const fakeTerminal=()=>terminal={options:{},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(){},write(bytes,done){this.last=bytes;done();},reset(){},resize(){},dispose(){this.disposed=true;},onData(fn){this.data=fn;}};
+  try {
+    const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{username:'u',host:id,port:22},hostFingerprint:'key',deviceFingerprint:'device'}),channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:fakeTerminal});
+    const a=target('direct-pane-a'),b=target('mesh-pane-b');const old=ui.create(a.hostId,a);
+    const find=label=>nodes['view-content'].all().find(n=>n.textContent===label);
+    let review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();find('连接').onclick();await flush();await flush();
+    const generation=observed[0].generation;channels[0].onmessage({kind:'observation',generation,snapshot:{epoch:1,phase:'starting'}});
+    channels[0].onmessage({kind:'frame',generation,epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});await flush();
+    const oldTerminal=terminal,frame=oldTerminal.last;assert.ok(frame);const other=ui.create(b.hostId,b);
+    await ui.select(other);review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();find('连接').onclick();await flush();await flush();
+    assert.ok(calls.some(c=>c.name==='remote_tab_observe' && c.args.tabId===other));
+    ui.prepareAffected([a.hostId]);ui.affected([a.hostId]);await flush();await ui.select(old);
+    assert.equal(nodes['view-tabs'].children.length,2);assert.equal(oldTerminal.last,frame);assert.equal(oldTerminal.disposed,undefined);
+    assert.equal(find('连接').disabled,true);const count=calls.length;
+    channels[0].onmessage({kind:'frame',generation,epoch:1,frame:{seq:2,full:false,cols:80,rows:24,bytes:[66]}});oldTerminal.data?.('x');await flush();
+    assert.equal(oldTerminal.last,frame);assert.equal(calls.slice(count).filter(c=>c.name==='remote_tab_ack' || c.name==='remote_tab_input_send').length,0);
+    find('关闭此标签').onclick();await flush();assert.equal(oldTerminal.disposed,true);assert.equal(nodes['view-tabs'].children.length,1);
+    assert.ok(!calls.some(c=>c.name==='remote_tab_cancel' && c.args.tabId===other));
+    const fresh=ui.create(a.hostId,a);assert.notEqual(fresh,old);await ui.select(fresh);
+    review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();find('连接').onclick();await flush();await flush();
+    assert.ok(calls.some(c=>c.name==='remote_tab_reserve' && c.args.tabId===fresh));
+    assert.ok(!calls.some(c=>c.name==='remote_tab_reserve' && c.args.tabId===old && c.args.clientGeneration!==observed[0].clientGeneration));
+  } finally {globalThis.document=oldDocument;}
+});
+
+
+test('import freezes visible terminal when a queued parser write finishes after retirement',async()=>{
+  const oldDocument=globalThis.document;
+  const nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content'].map(id=>[id,new Element('div')]));
+  globalThis.document={hidden:false,activeElement:null,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};
+  const calls=[],channels=[],observed=[],pending=[];
+  const invoke=(name,args)=>{calls.push({name,args});if(name==='remote_tab_reserve')return Promise.resolve(9);if(name==='remote_tab_observe'){observed.push(args);return new Promise(()=>{});}return Promise.resolve();};
+  const fakeTerminal=()=>({options:{},parser:{registerOscHandler(){}},textarea:new Element('textarea'),open(host){const helpers=new Element('div');helpers.className='xterm-helpers';const textarea=new Element('textarea');textarea.value='秘密输入';helpers.append(textarea);const composition=new Element('div');composition.textContent='未完成输入';helpers.append(composition);const a11y=new Element('div');a11y.className='xterm-accessibility';a11y.textContent='旧辅助文本';this.screen=new Element('div');this.screen.className='xterm-rows';this.screen.setAttribute('aria-hidden','true');host.append(helpers,a11y,this.screen);},write(bytes,done){pending.push(()=>{this.screen.textContent+=new TextDecoder().decode(bytes);done();});},reset(){},resize(){},dispose(){},onData(){}});
+  try {
+    const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{username:'u',host:id,port:22},hostFingerprint:'key',deviceFingerprint:'device'}),channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:fakeTerminal});
+    const a=target('direct-pane-a');ui.create(a.hostId,a);
+    const review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();nodes['view-content'].all().find(n=>n.textContent==='连接').onclick();await flush();await flush();
+    const generation=observed[0].generation,emit=frame=>channels[0].onmessage({kind:'frame',generation,epoch:1,frame});
+    channels[0].onmessage({kind:'observation',generation,snapshot:{epoch:1,phase:'active'}});
+    emit({seq:1,full:true,cols:80,rows:24,bytes:[65]});pending.shift()();await flush();
+    emit({seq:2,full:false,cols:80,rows:24,bytes:[66]});
+    const screen=()=>nodes['view-content'].all().find(n=>n.className==='xterm-rows').textContent;
+    assert.equal(screen(),'A');ui.prepareAffected([a.hostId]);assert.equal(screen(),'A');
+    const frozen=nodes['view-content'].all().find(n=>n.className==='terminal-host'),rows=frozen.querySelectorAll('.xterm-rows')[0];
+    assert.equal(frozen.inert,undefined);assert.equal(rows.attrs['aria-hidden'],undefined);
+    assert.equal(frozen.querySelectorAll('.xterm-helpers, .xterm-accessibility, input, textarea, [contenteditable]').length,0);
+    const viewport=nodes['view-content'].all().find(n=>n.className==='term-scroll');assert.equal(viewport.attrs.tabindex,'0');assert.equal(viewport.attrs.role,'region');
+    viewport.scrollTop=12;viewport.scrollLeft=0;viewport.clientHeight=260;let prevented=0;
+    const key=key=>viewport.event_keydown({key,preventDefault(){prevented++;}});
+    const inputCount=calls.filter(c=>c.name==='remote_tab_input_send').length;
+    key('ArrowDown');assert.equal(viewport.scrollTop,52);key('PageDown');assert.equal(viewport.scrollTop,312);
+    key('PageUp');assert.equal(viewport.scrollTop,52);key('ArrowUp');assert.equal(viewport.scrollTop,12);
+    key('ArrowRight');assert.equal(viewport.scrollLeft,40);key('ArrowLeft');assert.equal(viewport.scrollLeft,0);
+    key('x');assert.equal(prevented,6);assert.equal(calls.filter(c=>c.name==='remote_tab_input_send').length,inputCount);
+    const ackCount=calls.filter(c=>c.name==='remote_tab_ack').length;pending.shift()();await flush();
+    assert.equal(screen(),'A','late parser completion must not alter the displayed frame');
+    assert.equal(calls.filter(c=>c.name==='remote_tab_ack').length,ackCount);
+  } finally {globalThis.document=oldDocument;}
+});
+
+test('lease retirement ignores tabs connected after the preview and includes unconnected tabs',async()=>{
+  const oldDocument=globalThis.document;
+  const nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content'].map(id=>[id,new Element('div')]));
+  globalThis.document={hidden:false,activeElement:null,getElementById:id=>nodes[id],createElement:tag=>new Element(tag)};
+  const invoke=(name)=>name==='remote_tab_reserve'?Promise.resolve(9):name==='remote_tab_observe'?new Promise(()=>{}):Promise.resolve();
+  try {
+    const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({target:{username:'u',host:id,port:22},hostFingerprint:'key',deviceFingerprint:'device'}),channelFactory:()=>({}),terminalFactory:()=>{}});
+    const a=target('direct-pane-a'),b=target('mesh-pane-b'),id=ui.create(a.hostId,a),other=ui.create(b.hostId,b);
+    const snapshot=ui.tabLeaseSnapshot();assert.deepEqual(snapshot.map(x=>[x.tabId,x.clientGeneration,x.nativeGeneration]),[[id,0,null],[other,0,null]]);
+    const review=nodes['view-content'].all().find(n=>n.tagName==='input');review.checked=true;review.onchange();nodes['view-content'].all().find(n=>n.textContent==='连接').onclick();await flush();await flush();
+    assert.notEqual(ui.tabLeaseSnapshot().find(x=>x.tabId===id).clientGeneration,0);
+    ui.prepareLeases(snapshot);
+    assert.notEqual(ui.tabImpacts([a.hostId])[0].state,'配置已变更');
+    assert.equal(ui.tabImpacts([b.hostId])[0].state,'配置已变更');
+  } finally {globalThis.document=oldDocument;}
 });

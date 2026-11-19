@@ -270,6 +270,16 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     const frameStatus=document.createElement('p');frameStatus.className='tab-frame-status';tab.frameStatusElement=frameStatus;
     frameStatus.textContent=frameStatusText(tab);panel.append(frameStatus);
     const viewport=document.createElement('div');viewport.className='term-scroll';
+    if(tab.invalidated && tab.element){
+      viewport.setAttribute('tabindex','0');viewport.setAttribute('role','region');viewport.setAttribute('aria-label','已停止的终端画面');
+      viewport.addEventListener('keydown',event=>{
+        if(event.altKey || event.ctrlKey || event.metaKey || event.isComposing)return;
+        const step=40, page=viewport.clientHeight || step;
+        const moves={ArrowUp:[0,-step],ArrowDown:[0,step],ArrowLeft:[-step,0],ArrowRight:[step,0],PageUp:[0,-page],PageDown:[0,page]};
+        const move=moves[event.key];if(!move)return;
+        event.preventDefault();viewport.scrollLeft+=move[0];viewport.scrollTop+=move[1];
+      });
+    }
     if(tab.element)viewport.append(tab.element);panel.append(viewport);
     if(focused && tab.pasteReview && !pasteReviewValid(tab,tab.pasteReview))tab.pasteReview=null;
     if(focused && tab.pasteReview) {
@@ -779,7 +789,23 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       };
     });
   }
-  function prepareAffected(ids) {const affected=tabs.affected(ids);for(const tab of affected){retireSplitPause(tab);tab.controlRevision++;if(tab.inputBusy && tab.inflightReview){tab.unknown=true;tab.unknownReview=tab.inflightReview;}tab.diagnostics?.finish('host_selection_changed');retireDirectPending(tab);tab.board.invalidate('configuration_changed');boardEvent(tab,'stale');tab.selectionReady=false;tab.suppressBlur=true;tab.invalidated=true;tab.reviewed=false;tab.message='目标或网络配置已变更，请关闭此标签并新建。';tab.inputRevision++;tab.inputBusy=false;tab.inputEpoch=null;tab.mode='observe';tab.queue.clear();if(tab.terminal)tab.terminal.options.disableStdin=true;tabs.invalidate(tab.id);tab.closing=true;tab.state='disconnected';}render();for(const tab of affected)tab.suppressBlur=false;}
+  function tabLeaseSnapshot() {return tabs.list().map(tab=>({hostId:tab.hostId,tabId:tab.id,clientGeneration:tab.generation,nativeGeneration:tab.live ? tab.nativeGeneration : null}));}
+  function prepareLeases(leases) {
+    const affected=leases.map(({tabId,clientGeneration})=>tabs.get(tabId)).filter((tab,index)=>tab && tab.generation===leases[index].clientGeneration);
+    for(const tab of new Set(affected)){
+      // xterm parses writes asynchronously. Keep the current rendered DOM detached from
+      // its live renderer before invalidating the lease, so late writes cannot repaint it.
+      if(tab.element){
+        const frozen=tab.element.cloneNode(true);
+        // Helpers contain the editable textarea and IME composition; the old a11y
+        // tree may lag the actual DOM renderer. Expose the frozen rendered rows.
+        for(const node of frozen.querySelectorAll('.xterm-helpers, .xterm-accessibility, input, textarea, [contenteditable]'))node.remove();
+        for(const node of frozen.querySelectorAll('[tabindex]'))node.removeAttribute('tabindex');
+        for(const rows of frozen.querySelectorAll('.xterm-rows'))rows.removeAttribute('aria-hidden');
+        tab.element.replaceWith?.(frozen);tab.element=frozen;
+      }
+      retireSplitPause(tab);tab.controlRevision++;if(tab.inputBusy && tab.inflightReview){tab.unknown=true;tab.unknownReview=tab.inflightReview;}tab.diagnostics?.finish('host_selection_changed');retireDirectPending(tab);tab.board.invalidate('configuration_changed');boardEvent(tab,'stale');tab.selectionReady=false;tab.suppressBlur=true;tab.invalidated=true;tab.reviewed=false;tab.message='目标或网络配置已变更，请关闭此标签并新建。';tab.inputRevision++;tab.inputBusy=false;tab.inputEpoch=null;tab.mode='observe';tab.queue.clear();if(tab.terminal)tab.terminal.options.disableStdin=true;tabs.invalidate(tab.id);tab.closing=true;tab.state='disconnected';}render();for(const tab of affected)tab.suppressBlur=false;}
+  function prepareAffected(ids) {const hosts=new Set(ids);prepareLeases(tabLeaseSnapshot().filter(lease=>hosts.has(lease.hostId)));}
   function affected(ids) {for(const tab of tabs.affected(ids)){tab.diagnostics?.finish('host_selection_changed');tab.invalidated=true;tab.reviewed=false;tab.message='目标或网络配置已变更，请关闭此标签并新建。';void cancel(tab);}}
   function systemOffline(message) {
     for(const tab of tabs.list()) {
@@ -836,5 +862,5 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       void pause(partner);
     } else render();
   });
-  render();return {hasTabs:()=>tabs.list().length>0,create,createBlocked,select,tabImpacts,prepareAffected,affected,systemOffline,background,prepareHide,cancelPrepareHide,hide,setFont};
+  render();return {hasTabs:()=>tabs.list().length>0,create,createBlocked,select,tabImpacts,tabLeaseSnapshot,prepareLeases,prepareAffected,affected,systemOffline,background,prepareHide,cancelPrepareHide,hide,setFont};
 }

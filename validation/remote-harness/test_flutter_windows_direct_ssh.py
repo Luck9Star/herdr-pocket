@@ -1,5 +1,7 @@
 import json
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -10,6 +12,47 @@ import flutter_windows_direct_ssh as windows
 
 
 class FlutterWindowsDirectSshTests(unittest.TestCase):
+    def test_native_import_does_not_load_posix_pairing_modules(self):
+        script = '''
+import builtins
+import sys
+from types import SimpleNamespace
+
+real_import = builtins.__import__
+unavailable = {'fcntl', 'pwd', 'pty', 'termios', 'tty', 'grp'}
+
+def import_windows(name, globals=None, locals=None, fromlist=(), level=0):
+    if name.partition('.')[0] in unavailable:
+        raise ModuleNotFoundError(f'No module named {name!r}', name=name)
+    if name == 'sys' and globals and globals.get('__name__') == 'paired_gui':
+        return SimpleNamespace(platform='win32', path=sys.path)
+    return real_import(name, globals, locals, fromlist, level)
+
+builtins.__import__ = import_windows
+import flutter_windows_direct_ssh as windows
+import paired_gui
+
+assert windows.wait_for is paired_gui.wait_for
+assert not {'herdr_pocket_helper.store', 'blocked_fixture'} & sys.modules.keys()
+
+def start_posix_process():
+    with paired_gui.owned_process([], cwd=None, env=None, log=None):
+        raise AssertionError('unexpected process')
+
+for start in (lambda: paired_gui.FixtureApproval(None, None, None),
+              lambda: paired_gui.run_gui(None, None, None, None),
+              start_posix_process):
+    try:
+        start()
+    except paired_gui.GuiFailure as error:
+        assert str(error) == 'paired_gui_posix_required'
+    else:
+        raise AssertionError('POSIX pairing API ran on Windows')
+'''
+        result = subprocess.run([sys.executable, '-c', script], cwd=Path(__file__).resolve().parent,
+                                capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_session_zero_fails_before_opening_a_desktop(self):
         sessions = SimpleNamespace(ProcessIdToSessionId=Mock(return_value=0))
         service = Mock()

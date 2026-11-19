@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../integration_test/direct_ssh_ui_steps.dart' show tapControl;
+import '../integration_test/android_direct_ssh_test.dart'
+    show encryptedFailure, target;
+import '../integration_test/direct_ssh_ui_steps.dart'
+    show finishAndroidEncryptedPassphrase, tapControl;
 
 Future<void> expectNotReady(Future<void> Function() action) async {
   var failed = false;
@@ -65,6 +70,48 @@ class _MovingAuthFormState extends State<MovingAuthForm>
 }
 
 void main() {
+  test('Android device errors export only bounded source locations', () {
+    final locations = encryptedFailure(
+      'encrypted_review',
+      TestFailure('secret-exception-body'),
+      StackTrace.fromString('''
+#0      TestInput (file:///secret-path/secret-source.dart:12:27)
+secret-body (file:///direct_ssh_ui_steps.dart:666:1)
+#1      tap (file:///secret-path/direct_ssh_ui_steps.dart:112:27)
+#2      tap (file:///secret-path/direct_ssh_ui_steps.dart:112:27)
+#3      runEncryptedDirectSshUi (package:herdr_flutter_probe/integration_test/direct_ssh_ui_steps.dart:717:3)
+#4      main.<anonymous closure> (file:///secret-path/android_direct_ssh_test.dart:241:17)
+#5      main.<anonymous closure> (file:///secret-path/android_direct_ssh_test.dart:251:17)
+#6      main.<anonymous closure> (file:///secret-path/android_direct_ssh_test.dart:260:17)
+'''),
+    );
+    expect(locations, {
+      'stage': 'encrypted_review',
+      'code': 'direct_ssh_android_ui_failed',
+      'exceptionClass': 'TestFailure',
+      'sourceLocations': [
+        {'file': 'direct_ssh_ui_steps.dart', 'line': 112},
+        {'file': 'direct_ssh_ui_steps.dart', 'line': 717},
+        {'file': 'android_direct_ssh_test.dart', 'line': 241},
+        {'file': 'android_direct_ssh_test.dart', 'line': 251},
+      ],
+    });
+  });
+
+  test('an actual Dart exception keeps its Android entry source line', () {
+    try {
+      target();
+    } on StateError catch (error, stack) {
+      final diagnostic = encryptedFailure('fixture_validation', error, stack);
+      expect(diagnostic['exceptionClass'], 'StateError');
+      expect(diagnostic['sourceLocations'], [
+        {'file': 'android_direct_ssh_test.dart', 'line': isPositive},
+      ]);
+      return;
+    }
+    fail('Android fixture guard did not reject the widget test runtime');
+  });
+
   for (final reveal in [false, true]) {
     testWidgets(
       'fractional movement in scrollable auth form remains clickable reveal=$reveal',
@@ -213,12 +260,85 @@ void main() {
     expect(clicks, 1);
   });
 
-  for (final mutation in ['moved', 'replaced']) {
+  testWidgets(
+    'Android waits for a late keyboard resize before one connect tap',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(393, 851);
+      addTearDown(tester.view.reset);
+      final events = <String>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ListView(
+              children: [
+                const SizedBox(height: 560),
+                const TextField(
+                  key: ValueKey('direct-passphrase'),
+                  obscureText: true,
+                ),
+                const SizedBox(height: 14),
+                FilledButton(
+                  key: const ValueKey('direct-connect'),
+                  onPressed: () => events.add('tap'),
+                  child: const Text('connect'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('direct-passphrase')),
+        'fixture-passphrase',
+      );
+      expect(tester.view.viewInsets.bottom, 0);
+      Timer(const Duration(milliseconds: 250), () {
+        events.add('ime_open');
+        tester.view.viewInsets = const FakeViewPadding(bottom: 312);
+      });
+      final input = tester.testTextInput;
+      input.log.clear();
+      void closeImeAfterEdit(Duration _) {
+        if (!input.log.any((call) => call.method == 'TextInput.clearClient')) {
+          tester.binding.addPostFrameCallback(closeImeAfterEdit);
+          return;
+        }
+        events.add('editing_done');
+        Timer(const Duration(milliseconds: 150), () {
+          events.add('ime_closed');
+          tester.view.viewInsets = const FakeViewPadding();
+        });
+      }
+
+      tester.binding.addPostFrameCallback(closeImeAfterEdit);
+      await finishAndroidEncryptedPassphrase(tester);
+      await tapControl(
+        tester,
+        find.byKey(const ValueKey('direct-connect')),
+        'direct-connect',
+        requireEnabled: true,
+        stableHitPoint: true,
+        onObservation: (status, _) => events.add(status),
+      );
+      expect(events, [
+        'ime_open',
+        'editing_done',
+        'ime_closed',
+        'unstable',
+        'ready',
+        'tap',
+      ]);
+    },
+  );
+
+  for (final mutation in ['moved', 'action replaced', 'element replaced']) {
     testWidgets('stable point never taps a button $mutation between frames', (
       tester,
     ) async {
       var clicks = 0;
       var changed = false;
+      final seen = <String>[];
       late StateSetter update;
       VoidCallback original = () => clicks++;
       VoidCallback replacement = () => clicks += 100;
@@ -229,10 +349,11 @@ void main() {
               builder: (context, setState) {
                 update = setState;
                 return Transform.translate(
+                  key: ValueKey(changed && mutation == 'element replaced'),
                   offset: Offset(changed && mutation == 'moved' ? 300 : 0, 0),
                   child: FilledButton(
                     key: const ValueKey('connect'),
-                    onPressed: changed && mutation == 'replaced'
+                    onPressed: changed && mutation == 'action replaced'
                         ? replacement
                         : original,
                     child: const Text('connect'),
@@ -252,12 +373,18 @@ void main() {
           stableHitPoint: true,
           timeout: const Duration(seconds: 1),
           onObservation: (status, _) {
-            if (status == 'unstable' && !changed) update(() => changed = true);
+            seen.add(status);
+            if (status == 'unstable') {
+              Timer(const Duration(milliseconds: 150), () {
+                update(() => changed = true);
+              });
+            }
           },
         ),
       );
       expect(changed, isTrue);
       expect(clicks, 0);
+      if (mutation == 'element replaced') expect(seen.last, 'replaced');
     });
   }
 

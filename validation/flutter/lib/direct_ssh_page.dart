@@ -518,7 +518,9 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
             decoration: mobileInput(keyAuth ? '粘贴已有私钥的完整 PEM' : '未填写')))),
       if (keyAuth) ...[const SizedBox(height: 10), SizedBox(height: mobileButtonHeight, child: OutlinedButton(key: const ValueKey('direct-paste-key'),
         style: mobileSecondaryButton, onPressed: busy || pastingKey || !foreground || hostKeyReviewRequired ? null : pastePrivateKey, child: const Text('粘贴私钥'))),
-        if (pasteStatus != null) Semantics(liveRegion: true, child: Text(pasteStatus!, key: const ValueKey('direct-paste-status'))),
+        // Keep the credential field and button at the same sliver indices.
+        pasteStatus == null ? const SizedBox.shrink()
+          : Semantics(liveRegion: true, child: Text(pasteStatus!, key: const ValueKey('direct-paste-status'))),
         const SizedBox(height: 12), mobileField('私钥口令（加密私钥需要）', SizedBox(height: mobileInputHeight,
           child: TextField(key: const ValueKey('direct-passphrase'), controller: passphrase, enabled: !busy && !hostKeyReviewRequired,
             obscureText: true, decoration: mobileInput('未填写')))),

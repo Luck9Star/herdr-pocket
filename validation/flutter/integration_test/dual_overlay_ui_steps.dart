@@ -663,18 +663,34 @@ class DualOverlayUiSteps {
     }
   }
 
+  Future<void> openPairingFromCatalog({String? routeStage}) async {
+    final chooser = find.byKey(const ValueKey('choose-herdr'));
+    final pairing = find.byType(PairingPage);
+    bool isCurrent(Finder finder) {
+      final matches = finder.evaluate();
+      return matches.length == 1 && ModalRoute.of(matches.single)?.isCurrent == true;
+    }
+
+    await showCatalogAdd();
+    await existing.tapStablePointer(tester, find.byKey(const ValueKey('hosts-add')));
+    if (routeStage != null) await stage(routeStage);
+    await existing.until(tester, () {
+      existing.checkPointerError(tester);
+      return isCurrent(pairing) || isCurrent(chooser);
+    }, seconds: 10);
+    if (!isCurrent(pairing)) await existing.tapStablePointer(tester, chooser);
+    await existing.until(tester, () {
+      existing.checkPointerError(tester);
+      return isCurrent(pairing);
+    }, seconds: 10);
+  }
+
   Future<String> pairHost(String role, String profileJson, {String? provider}) async {
     if (!{'et', 'ts'}.contains(role)) throw StateError('dual_role_invalid');
     responseReceived = false;
     responseCheck = null;
     await stage('${role}_pair_profile');
-    await showCatalogAdd();
-    await existing.tapStablePointer(tester, find.byKey(const ValueKey('hosts-add')));
-    if (find.byKey(const ValueKey('choose-herdr')).evaluate().isNotEmpty) {
-      await existing.tapStablePointer(tester, find.byKey(const ValueKey('choose-herdr')));
-    }
-    await stage('${role}_pair_page');
-    await existing.until(tester, () => find.byType(PairingPage).evaluate().length == 1);
+    await openPairingFromCatalog(routeStage: '${role}_pair_page');
     final page = tester.widget<PairingPage>(find.byType(PairingPage));
     expect(page.keys, isNull); expect(page.adapter, isNull);
     final before = page.catalog!.profiles.map((profile) => profile.id).toSet();

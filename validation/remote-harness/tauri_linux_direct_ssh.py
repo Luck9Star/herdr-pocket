@@ -103,6 +103,14 @@ ROTATION_RETAINED_WITNESS = '''const target = node('#ssh-target-fields'), prior 
     arguments[2].every(s => node(s).disabled && node(s).value === '') && node('#ssh-connect').disabled &&
     actionableButton(node('#ssh-probe'), '探测并核对主机密钥');'''
 
+ROTATION_REPROBE_ACTION = '''const review = node('#ssh-trust-review'), cancel = node('#ssh-trust-cancel');
+  return visible(review) && review.contains(cancel) && actionableButton(cancel, '取消核对，保留旧信任');'''
+
+ROTATION_REPROBE_CREDENTIALS = '''return arguments[0].every(selector => {
+  const field = node(selector);
+  return !!field && field.disabled && field.value === '';
+});'''
+
 
 def require(condition, code):
     if not condition:
@@ -356,12 +364,13 @@ def exercise_rotation_review(driver, fixture, endpoint, target_fields, report):
     report['stage'] = 'rotation_reprobe'
     driver.click('#ssh-probe')
     algorithm = fixture.rotated_public_key.split(' ', 1)[0]
-    wait_for(lambda: driver.observe(REVIEW_WITNESS, endpoint, algorithm, fixture.rotated_fingerprint)
-             and driver.observe('const prior = node("#ssh-prior-fingerprint"); return visible(prior) && '
-                                'prior.innerText === "保留的旧指纹：" + arguments[0] && '
-                                'arguments[1].every(s => node(s).disabled && node(s).value === "");',
-                                fixture.fingerprint, SECRET_FIELDS),
+    wait_for(lambda: driver.observe(REVIEW_WITNESS, endpoint, algorithm, fixture.rotated_fingerprint),
              'direct_ssh_rotation_fresh_fingerprint_unproven')
+    # A was checked on the target page after cancellation. The fresh review
+    # hides that page and exposes a distinct action that retains the old trust.
+    require(driver.observe(ROTATION_REPROBE_ACTION), 'direct_ssh_rotation_reprobe_action_unproven')
+    require(driver.observe(ROTATION_REPROBE_CREDENTIALS, SECRET_FIELDS),
+            'direct_ssh_rotation_reprobe_credentials_unproven')
     report['rotation']['freshProbe'] = closed_rotation(fixture, 3)
     driver.click('#ssh-trust-confirm')
     driver.click('#ssh-auth-key')

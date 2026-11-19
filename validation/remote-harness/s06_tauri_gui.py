@@ -7,6 +7,127 @@ import time
 from paired_gui import WebDriver, GuiFailure, bounded_wire, fixture_terminal_id, owned_process, wait_for
 
 
+WINDOW_HEIGHT = 1200
+WIDE_WIDTH = 1440
+NARROW_WIDTH = 700
+
+TICK_ROW_SCRIPT = r"""
+const panel=document.querySelector(arguments[0]);
+const viewport=panel?.querySelector('.term-scroll'), host=viewport?.querySelector('.terminal-host');
+const screen=host?.querySelector('.xterm-screen'), row=screen?.querySelector('.xterm-rows')?.children[22];
+if(!row || !row.getClientRects().length)return {text:null,layout:{reason:'row-missing'}};
+const focus=document.activeElement, selected=panel.dataset.focus;
+const round=value=>Math.round(value*10)/10;
+function hitTarget(x,y){
+    if(x<0 || x>=innerWidth || y<0 || y>=innerHeight)return 'outside-window';
+    const hit=document.elementFromPoint(x,y);
+    if(!hit)return 'no-target';
+    if(host.contains(hit))return 'terminal';
+    // A scrollport hit could be its browser-painted scrollbar area.
+    if(hit===viewport)return 'scrollport';
+    if(hit.closest('.route-tabs'))return 'navigation';
+    if(hit.closest('.terminal-selection'))return 'selection-dialog';
+    if(hit.closest('.tab-mobile-controls'))return 'input-controls';
+    if(panel.contains(hit))return 'panel';
+    return 'outside-panel';
+}
+function measure(){
+    const canvas=screen.getBoundingClientRect(), line=row.getBoundingClientRect(), rect=viewport.getBoundingClientRect();
+    const y=line.top+line.height/2;
+    const left=rect.left+viewport.clientLeft, top=rect.top+viewport.clientTop;
+    const right=left+viewport.clientWidth, bottom=top+viewport.clientHeight;
+    const points=[0,10,29].map(col=>{
+        const x=canvas.left+(col+.5)*canvas.width/80;
+        const inClient=x>=left && x<right && y>=top && y<bottom;
+        return {x:round(x),y:round(y),inClient,target:hitTarget(x,y)};
+    });
+    return {points,rowY:round(y),screenHeight:round(canvas.height),
+        client:{left:round(left),top:round(top),right:round(right),bottom:round(bottom)},
+        clearance:round(Math.min(y-Math.max(top,0),Math.min(bottom,innerHeight)-y)),
+        terminalScrollTop:round(viewport.scrollTop),terminalScrollLeft:round(viewport.scrollLeft),
+        terminalScrollHeight:viewport.scrollHeight,terminalScrollWidth:viewport.scrollWidth,
+        pageScrollY:round(scrollY),windowWidth:innerWidth,windowHeight:innerHeight,
+        devicePixelRatio,visualViewportScale:window.visualViewport?.scale ?? null};
+}
+const initial=measure(), hit=data=>data.points.every(point=>point.inClient && point.target==='terminal');
+// Keep the sample away from an edge where a native scrollbar may overlap it.
+// A regular scroll can only move the row as far as the content allows.
+if(!hit(initial) || initial.clearance<24)
+    row.scrollIntoView({block:'center',inline:'start',behavior:'instant'});
+const final=measure();
+const focusPreserved=document.activeElement===focus && panel.dataset.focus===selected;
+return {text:focusPreserved && hit(final) ? row.textContent.replace(/\u00a0/g,' ').trim() : null,
+    layout:{reason:!focusPreserved?'focus-changed':hit(final)?'row-hit':'row-clipped',initial,final}};
+"""
+
+
+MANUAL_PAUSE_SCRIPT = r"""
+const [selectors,targets,element]=arguments;
+const one=(root,selector)=>{
+    const matches=root.querySelectorAll(selector);
+    return matches.length===1?matches[0]:null;
+};
+const visible=e=>!!e && !e.closest('[hidden]') && getComputedStyle(e).visibility==='visible' &&
+    !!e.getClientRects().length;
+const centerHit=r=>{
+    if(!r||r.width<=0||r.height<=0)return null;
+    const x=r.left+r.width/2, y=r.top+r.height/2;
+    return x>=0&&x<innerWidth&&y>=0&&y<innerHeight?document.elementFromPoint(x,y):null;
+};
+const remote=one(document,'#remote-page'), board=one(document,'#home-dashboard');
+const heading=board?.querySelector('#host-board-intro h2'), showBoard=one(document,'#show-remote');
+const onBoard=visible(heading) && heading.contains(centerHit(heading.getBoundingClientRect())) &&
+    showBoard?.getAttribute('aria-pressed')==='true';
+const onWorkspace=visible(remote) && !visible(document.querySelector('#host-home'));
+const page=document.hidden?'background':onWorkspace?'workspace':
+    onBoard&&!!remote&&!visible(remote)?'dashboard':'other';
+const states=selectors.map((selector,i)=>{
+    const panel=remote&&one(remote, '#view-content '+selector);
+    if(!panel)return {phase:'missing',notice:'none'};
+    const title=panel.querySelector(':scope > p:not([data-role])');
+    const target=title?.textContent.split(' · ').slice(-2) ?? [];
+    if(target.length!==2||!target.every((part,j)=>part===targets[i][j]))return {phase:'unbound',notice:'none'};
+    const phase=one(panel,'.tab-connection-actions')?.dataset.state;
+    const notice=panel.querySelector(':scope > p[role="status"]')?.textContent;
+    return {phase:['disconnected','connecting','starting','active','pausing','paused','resuming','closed'].includes(phase)
+        ?phase:'other',notice:notice==='观察已暂停，SSH 保留；需主动恢复。'?'paused-message':
+        notice==='暂停未确认，连接已取消；不会自动重连。'?'pause-failed-message':'none'};
+});
+const phases=states.map(state=>state.phase), pauseNotices=states.map(state=>state.notice);
+const viewCount=Math.min(remote?.querySelectorAll('#view-content .tab-connection-actions').length ?? 0,3);
+const count=document.querySelectorAll('#host-return-home').length;
+const button=one(document,'#host-return-home');
+const buttonBound=button?.tagName==='BUTTON' && button?.textContent.trim()==='返回主机看板' &&
+    !!button.closest('#remote-page #workbench-main') && button===element;
+const enabled=!!button && !button.matches(':disabled');
+const prepared=page==='workspace' && buttonBound && enabled && visible(button) &&
+    viewCount===2 && phases.length===2 && phases.every(phase=>phase==='active');
+if(prepared)button.scrollIntoView({block:'center',inline:'center',behavior:'instant'});
+const r=visible(button)?button.getBoundingClientRect():null;
+const hit=centerHit(r);
+const hitKind=hit?(button?.contains(hit)?'button':'other'):r?'outside-or-empty':'not-visible';
+const buttonReady=prepared && !!hit && button.contains(hit);
+if(buttonReady){
+    // Read only the fact that the real control received each user event.
+    const events={pointerDown:false,click:false};
+    window.__s06ManualPauseEvents=events;
+    button.addEventListener('pointerdown',e=>events.pointerDown=e.isTrusted,{capture:true,once:true});
+    button.addEventListener('click',e=>events.click=e.isTrusted,{capture:true,once:true});
+}
+const unsafe=['dialog[open]','#remote-setup[open]','.terminal-selection',
+    '#config-transfer','#home-ssh','#home-add','#network-panel'].some(selector=>
+        [...document.querySelectorAll(selector)].some(visible));
+const events=window.__s06ManualPauseEvents;
+const round=value=>Math.round(value);
+return {page,phases,pauseNotices,viewCount,buttonReady,buttonBound:!!buttonBound,buttonEnabled:enabled,
+    buttonCount:Math.min(count,2),
+    buttonRect:r?[r.left,r.top,r.right,r.bottom].map(round):null,hit:hitKind,
+    viewport:[innerWidth,innerHeight],scrollY:round(scrollY),
+    pointerDown:events?.pointerDown===true,trustedClick:events?.click===true,
+    safeScreenshot:!unsafe && (page==='workspace'||page==='dashboard')};
+"""
+
+
 def observed_tick(text, side):
     if not isinstance(text, str) or len(text.encode()) > 65536:
         raise GuiFailure('s06_tauri_visible_text_invalid')
@@ -25,6 +146,41 @@ def require_side_by_side(rectangles):
     left, right = sorted(rectangles, key=lambda r: r['left'])
     if abs(left['top'] - right['top']) > 1 or left['right'] > right['left'] + 1:
         raise GuiFailure('s06_tauri_panels_not_side_by_side')
+
+
+def window_dimensions(rect):
+    if (not isinstance(rect, dict) or any(type(rect.get(name)) is not int or rect[name] <= 0
+                                         for name in ('width', 'height'))):
+        raise GuiFailure('s06_tauri_window_geometry_invalid')
+    return {name: rect[name] for name in ('width', 'height')}
+
+
+def layout_matches(layout, targets, phases, focused):
+    narrow = any(phase is None for phase in phases)
+    if (not isinstance(layout, dict) or layout.get('split') != ('1' if narrow else '2') or
+            layout.get('mounted') != (1 if narrow else 2) or layout.get('splitVisible') is not (not narrow) or
+            layout.get('stashNotice') is not narrow or layout.get('returnVisible') is not True):
+        return False
+    views = layout.get('views')
+    if not isinstance(views, list) or len(views) != len(phases):
+        return False
+    for index, (view, target, phase) in enumerate(zip(views, targets, phases)):
+        if phase is None:
+            if view is not None:
+                return False
+        elif (not isinstance(view, dict) or view.get('target') != list(target) or view.get('phase') != phase or
+              view.get('focused') is not (index == focused) or
+              view.get('currentFrame') is not (phase == 'active') or view.get('inputControls') is not False):
+            return False
+    return True
+
+
+def require_same_positions(before, after):
+    for layout in (before, after):
+        require_side_by_side([view.get('rect') for view in layout['views']])
+    for original, restored in zip(before['views'], after['views']):
+        if any(abs(original['rect'][key] - restored['rect'][key]) > 1 for key in ('left', 'right', 'width')):
+            raise GuiFailure('s06_tauri_split_position_changed')
 
 
 def peer_connection_evidence(approval):
@@ -48,6 +204,7 @@ class SplitDriver:
     def __init__(self, driver, output=None):
         self.driver = driver
         self.output = output
+        self.tick_layouts = {}
 
     def read(self, script, *args):
         return self.driver.call('POST', self.driver.session + '/execute/sync', {'script': script, 'args': list(args)})
@@ -166,6 +323,234 @@ class SplitDriver:
         });''', panels) is True
 
 
+    def window(self, width):
+        """Set the OS window once and wait for a native rect and the WebView to agree."""
+        requested = {'width': width, 'height': WINDOW_HEIGHT}
+        endpoint = self.driver.session + '/window/rect'
+        if window_dimensions(self.driver.call('POST', endpoint, requested)) != requested:
+            raise GuiFailure('s06_tauri_window_size_unconfirmed')
+
+        def observed():
+            os_rect = window_dimensions(self.driver.call('GET', endpoint))
+            viewport = window_dimensions(self.read('return {width:innerWidth,height:innerHeight};'))
+            if os_rect == requested and (viewport['width'] >= 1300 if width == WIDE_WIDTH else viewport['width'] < 900):
+                return {'window': os_rect, 'viewport': viewport}
+            return None
+
+        return wait_for(observed, 's06_tauri_window_viewport_unconfirmed')
+
+    def read_layout(self, panels):
+        return self.read(r"""
+            const root=document.querySelector('#view-content');
+            const visible=e=>!!e && !e.closest('[hidden]') && !!e.getClientRects().length &&
+                getComputedStyle(e).visibility==='visible';
+            const announce=root?.querySelector('[data-role="split-stash-note"]');
+            const panels=arguments[0].map(selector=>document.querySelector(selector));
+            const activeElement=document.activeElement;
+            const owner=panels.findIndex(panel=>visible(panel) && panel.contains(activeElement));
+            const domFocusOwner=!activeElement?'none':owner===0?'panel-a':owner===1?'panel-b':'outside-panels';
+            const views=panels.map(panel=>{
+                if(!visible(panel))return null;
+                const title=[...panel.children].find(e=>e.tagName==='P' && !e.hasAttribute('data-role'));
+                const target=title?.textContent.split(' · ').slice(-2) ?? [];
+                const r=panel.getBoundingClientRect();
+                const rect=Object.fromEntries(['left','right','top','width','height'].map(k=>[k,Math.round(r[k])]));
+                return {target,rect,phase:panel.querySelector('.tab-connection-actions')?.dataset.state,
+                    focused:panel.dataset.focus==='true',
+                    currentFrame:panel.querySelector('.tab-frame-status')?.textContent.startsWith('当前观察画面。')===true,
+                    inputControls:!!panel.querySelector('.tab-mobile-controls')};
+            });
+            return {views,domFocusOwner,split:root?.dataset.split,
+                mounted:root?.dataset.role==='workbench-panel' ? 1 :
+                    root?.querySelectorAll(':scope > section[data-role="workbench-panel"]').length,
+                splitVisible:visible(document.querySelector('#workbench-split')),
+                stashNotice:visible(announce) && announce.textContent.includes('分屏空间不足'),
+                returnVisible:visible(document.querySelector('#host-return-home'))};
+        """, panels)
+
+    def wait_layout(self, panels, targets, phases, focused, stage):
+        def observed():
+            layout = self.read_layout(panels)
+            return layout if layout_matches(layout, targets, phases, focused) else None
+        return wait_for(observed, 's06_tauri_layout_' + stage)
+
+    def rendered_tick(self, panel, side):
+        sample = self.read(TICK_ROW_SCRIPT, panel)
+        layout = sample['layout']
+        self.tick_layouts[side] = layout
+        if layout['reason'] == 'focus-changed':
+            raise GuiFailure('s06_tauri_tick_scroll_changed_focus')
+        return observed_tick(sample['text'], side) if layout['reason'] == 'row-hit' else None
+
+    def ticks(self, panels, sides, floors=None, stage='sample'):
+        self.tick_layouts = {}
+        for side in sides:
+            self.collapse_details(panels[side])
+
+        def current():
+            ticks = [self.rendered_tick(panels[side], side) for side in sides]
+            if not all(type(tick) is int for tick in ticks):
+                return None
+            if floors is not None and not all(tick > floor for tick, floor in zip(ticks, floors)):
+                return None
+            return ticks
+        try:
+            return wait_for(current, 's06_tauri_viewport_ticks_unconfirmed_' + stage, timeout=12)
+        except GuiFailure:
+            if self.output is not None:
+                diagnostic = {'stage': stage, 'sides': self.tick_layouts}
+                (self.output / 's06-tauri-tick-failure.json').write_text(json.dumps(diagnostic, sort_keys=True))
+            raise
+
+    def pause_on_board(self, panels, targets):
+        """Click the real return control once and observe the board and both original tabs."""
+        trace = {'clickSent': False, 'clickReturned': False, 'before': None, 'after': []}
+        endpoint = self.driver.session
+        element_key = 'element-6066-11e4-a52e-4f735466cecf'
+
+        def prepare():
+            controls = self.driver.call('POST', endpoint + '/elements',
+                                        {'using': 'css selector', 'value': '#host-return-home'})
+            element = controls[0] if len(controls) == 1 else None
+            try:
+                sample = self.read(MANUAL_PAUSE_SCRIPT, panels, targets, element)
+            except GuiFailure as error:
+                if str(error) == 'webdriver_sync_stale_element_reference':
+                    return None  # The read is safe to retry. No click was sent.
+                raise
+            trace['before'] = sample
+            return element[element_key] if element and sample['buttonReady'] is True else None
+
+        def observe():
+            sample = self.read(MANUAL_PAUSE_SCRIPT, panels, targets, None)
+            recent = trace['after']
+            if not recent or recent[-1] != sample:
+                recent.append(sample)
+                if len(recent) > 8:
+                    del recent[1]
+            return sample
+
+        def paused_on_board():
+            sample = observe()
+            # The board must really be on screen. The two phases only allow
+            # returning to Terminal, where wait_layout verifies the visible pause.
+            return (sample['page'] == 'dashboard' and sample['viewCount'] == 2 and
+                    sample['phases'] == ['paused', 'paused'])
+
+        try:
+            control = wait_for(prepare, 's06_tauri_manual_pause_control_unconfirmed')
+            trace['clickSent'] = True
+            self.driver.call('POST', endpoint + '/element/' + control + '/click', {})
+            trace['clickReturned'] = True
+            wait_for(paused_on_board, 's06_tauri_manual_pause_unconfirmed')
+        except (GuiFailure, OSError, ValueError):
+            if self.output is not None:
+                trace['screenshotSaved'] = False
+                try:
+                    if observe()['safeScreenshot'] is True:
+                        self.screenshot('manual-pause-failure')
+                        trace['screenshotSaved'] = True
+                except (GuiFailure, OSError, ValueError):
+                    pass  # Keep the original operation failure.
+                (self.output / 's06-tauri-manual-pause-failure.json').write_text(json.dumps(trace, sort_keys=True))
+            raise
+
+    def screenshot(self, name):
+        # The ordinary pairing form may reopen when returning to the workspace.
+        if self.read('return document.querySelector("#remote-setup").open;') is not False:
+            raise GuiFailure('s06_tauri_screenshot_form_visible')
+        png = base64.b64decode(self.driver.call('GET', self.driver.session + '/screenshot'), validate=True)
+        if not png.startswith(b'\x89PNG\r\n\x1a\n') or len(png) > 4_194_304:
+            raise GuiFailure('s06_tauri_screenshot_invalid')
+        (self.output / ('s06-tauri-' + name + '.png')).write_bytes(png)
+
+
+def exercise_window_resize(ui, panels, targets, approvals, check_bytes):
+    # Keep B as the selected input target in stock (read-only) observation.
+    # DOM focus is sampled separately because WebDriver may click details.
+    active = ('active', 'active')
+    paused = ('paused', 'paused')
+    narrowed_active = (None, 'active')
+    narrowed_paused = (None, 'paused')
+    b = 1
+
+    def check_open_peers():
+        if any(peer_connection_evidence(approval) != {'authenticationCount': 1, 'closed': False}
+               for approval in approvals):
+            raise GuiFailure('s06_tauri_resize_did_not_keep_two_original_ssh_connections')
+        check_bytes((b'', b''))
+
+    before_window = ui.window(WIDE_WIDTH)
+    before = ui.wait_layout(panels, targets, active, b, 'wide_before')
+    initial_ticks = ui.ticks(panels, (0, 1), stage='wide_before')
+    check_open_peers()
+    ui.screenshot('resize-wide-before')
+
+    narrow_window = ui.window(NARROW_WIDTH)
+    narrowed = ui.wait_layout(panels, targets, narrowed_active, b, 'narrow_active')
+    # The suffix is only shown after the native observation enters Paused.
+    wait_for(lambda: ui.read("""return [...document.querySelectorAll('#view-tabs button')].filter(
+        e=>e.getAttribute('aria-pressed')==='false' && e.textContent.endsWith(' · 观察已暂停')).length;""") == 1,
+        's06_tauri_resize_partner_pause_unconfirmed')
+    narrow_tick = ui.ticks(panels, (1,), (initial_ticks[1],), 'narrow_active')[0]
+    check_open_peers()
+    ui.screenshot('resize-narrow')
+
+    restored_window = ui.window(WIDE_WIDTH)
+    if restored_window != before_window:
+        raise GuiFailure('s06_tauri_restored_viewport_changed')
+    # Native Active on a resumed epoch is emitted after re-binding the original
+    # target and receiving the xterm callback for the new full. Compare the
+    # visible fixture ticks too, so an old retained canvas is insufficient.
+    restored = ui.wait_layout(panels, targets, active, b, 'wide_restored')
+    require_same_positions(before, restored)
+    restored_ticks = ui.ticks(panels, (0, 1), (initial_ticks[0], narrow_tick), 'wide_restored')
+    check_open_peers()
+    ui.screenshot('resize-wide-restored')
+
+    # Return to the real home board explicitly to pause both observations,
+    # then use the ordinary Terminal navigation to return to their saved tabs.
+    ui.pause_on_board(panels, targets)
+    ui.driver.click('#nav-terminal')
+    if ui.read('return document.querySelector("#remote-setup").open;') is True:
+        ui.named('配对与连接资料', '#remote-setup', 'summary')
+    ui.wait_layout(panels, targets, paused, b, 'manual_paused')
+    held_ticks = ui.ticks(panels, (0, 1), stage='manual_paused')
+    if ui.window(NARROW_WIDTH) != narrow_window:
+        raise GuiFailure('s06_tauri_manual_narrow_viewport_changed')
+    ui.wait_layout(panels, targets, narrowed_paused, b, 'manual_narrow')
+    if ui.window(WIDE_WIDTH) != before_window:
+        raise GuiFailure('s06_tauri_manual_wide_viewport_changed')
+    manual_wide = ui.wait_layout(panels, targets, paused, b, 'manual_wide')
+    require_same_positions(before, manual_wide)
+    if ui.ticks(panels, (0, 1), stage='manual_wide') != held_ticks:
+        raise GuiFailure('s06_tauri_manual_pause_old_frame_changed')
+    check_open_peers()
+    ui.screenshot('resize-manual-paused')
+
+    # Focusing the original secondary is distinct from actively resuming it.
+    ui.focus(panels[0])
+    ui.wait_layout(panels, targets, paused, 0, 'manual_focused')
+    ui.named('恢复观察', panels[0] + ' .tab-connection-actions')
+    ui.wait_layout(panels, targets, ('active', 'paused'), 0, 'manual_resumed')
+    manual_resumed_tick = ui.ticks(panels, (0,), (held_ticks[0],), 'manual_resumed')[0]
+    if ui.ticks(panels, (1,), stage='manual_other_paused') != [held_ticks[1]]:
+        raise GuiFailure('s06_tauri_manual_resume_woke_other_peer')
+    check_open_peers()
+    return {'windowRectRoundTrip': True, 'sizes': [before_window, narrow_window, restored_window],
+            'panelRectsBeforeAndAfter': [[view['rect'] for view in layout['views']]
+                                        for layout in (before, restored)],
+            'originalTargetsAndPositions': True, 'originalSelectedInputTargetPreserved': True,
+            'domFocusOwnerSamples': [layout['domFocusOwner'] for layout in (before, narrowed, restored)],
+            'layoutPauseAcknowledged': True, 'newFullAndAdvancingTicks': True,
+            'fixtureTicks': {'wideBefore': initial_ticks, 'narrowPrimary': narrow_tick,
+                             'wideRestored': restored_ticks, 'manualPaused': held_ticks,
+                             'manualSecondaryAfterResume': manual_resumed_tick},
+            'manualPauseEntry': '返回主机看板', 'manualPauseSurvivedRoundTrip': True,
+            'manualResumeOnlySelected': True,
+            'originalPeerAuthenticationCounts': [1, 1], 'zeroInputBytes': True}
+
+
 def exercise(args, root, env, configs, approvals, expected):
     driver, stage = WebDriver(), 'start'
     ui = SplitDriver(driver, args.output)
@@ -266,10 +651,7 @@ def exercise(args, root, env, configs, approvals, expected):
                 if not ui.visible_frames(panels):
                     ui.failure_screenshot('both')
                     raise GuiFailure('s06_tauri_both_frames_not_visible')
-                png = base64.b64decode(driver.call('GET', driver.session + '/screenshot'), validate=True)
-                if not png.startswith(b'\x89PNG\r\n\x1a\n') or len(png) > 4_194_304:
-                    raise GuiFailure('s06_tauri_screenshot_invalid')
-                (args.output / 's06-tauri-connected.png').write_bytes(png)
+                ui.screenshot('connected')
                 stage = 'input_focus'
                 if guarded:
                     ui.named('逐键输入', panels[1] + ' .tab-mode-actions')
@@ -299,6 +681,11 @@ def exercise(args, root, env, configs, approvals, expected):
                 driver.click(panels[0] + ' .terminal-host'); ui.keyboard('y')
                 driver.click(panels[1] + ' .terminal-host'); ui.keyboard('z')
                 time.sleep(.25); check_bytes(expected)
+                resize_evidence = None
+                if not guarded:
+                    stage = 'window_resize'
+                    targets = [(config['paneId'], fixture_terminal_id(config)) for config in configs]
+                    resize_evidence = exercise_window_resize(ui, panels, targets, approvals, check_bytes)
                 stage = 'close'
                 for panel in panels:
                     ui.focus(panel); ui.named('关闭此标签', panel + ' .tab-connection-actions')
@@ -318,7 +705,8 @@ def exercise(args, root, env, configs, approvals, expected):
                     'sides': [{'visibleFrameSnapshots': 2, 'tickAdvanced': second > first, 'inputAccepted': guarded}
                               for first, second in ticks],
                     'peerAuthenticationCounts': [peer_connection_evidence(a)['authenticationCount'] for a in approvals],
-                    'peersClosedBeforeDriverExit': True, 'frameEvidence': 'public visible-terminal-text UI snapshots; native WebDriver actions'}
+                    'peersClosedBeforeDriverExit': True, 'frameEvidence': 'public visible-terminal-text UI snapshots; native WebDriver actions',
+                    **({'windowResize': resize_evidence} if resize_evidence is not None else {})}
             finally:
                 driver.close()
     except GuiFailure as error:

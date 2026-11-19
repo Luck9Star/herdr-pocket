@@ -1,0 +1,83 @@
+00:00 +0: loading /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_desktop_entry_test.dart
+00:00 +0: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_auth_anchors_test.dart: mobile SSH trust and rotation anchors at 320.0 (variant: TargetPlatform.iOS)
+AUTH_ANCHOR {"state":"trust","width":320.0,"anchor":"independent-verification","raw":[16.0,302.0,288.0,52.0],"actual":[16.0,302.0,288.0,52.0],"expected":[16.0,302.0,288.0,52.0],"centerHit":true}
+AUTH_ANCHOR {"state":"password","width":320.0,"anchor":"trust-approved","raw":[16.0,162.0,288.0,44.0],"actual":[16.0,162.0,288.0,44.0],"expected":[16.0,162.0,288.0,44.0],"centerHit":true}
+AUTH_ANCHOR {"state":"private-key","width":320.0,"anchor":"trust-approved","raw":[16.0,162.0,288.0,44.0],"actual":[16.0,162.0,288.0,44.0],"expected":[16.0,162.0,288.0,44.0],"centerHit":true}
+00:01 +1: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_auth_anchors_test.dart: mobile SSH trust and rotation anchors at 320.0 (variant: TargetPlatform.iOS)
+AUTH_ANCHOR {"state":"key-changed","width":320.0,"anchor":"app-header","raw":[0.0,0.0,320.0,80.0],"actual":[0.0,24.0,320.0,56.0],"expected":[0.0,24.0,320.0,56.0],"centerHit":true}
+AUTH_ANCHOR {"state":"previous-trust","width":320.0,"anchor":"app-header","raw":[0.0,0.0,320.0,80.0],"actual":[0.0,24.0,320.0,56.0],"expected":[0.0,24.0,320.0,56.0],"centerHit":true}
+AUTH_ANCHOR {"state":"previous-trust","width":320.0,"anchor":"back","raw":[8.0,30.0,44.0,44.0],"actual":[8.0,30.0,44.0,44.0],"expected":[8.0,30.0,44.0,44.0],"centerHit":true}
+AUTH_ANCHOR {"state":"recheck-trust","width":320.0,"anchor":"app-header","raw":[0.0,0.0,320.0,80.0],"actual":[0.0,24.0,320.0,56.0],"expected":[0.0,24.0,320.0,56.0],"centerHit":true}
+AUTH_ANCHOR {"state":"recheck-trust","width":320.0,"anchor":"back","raw":[8.0,30.0,44.0,44.0],"actual":[8.0,30.0,44.0,44.0],"expected":[8.0,30.0,44.0,44.0],"centerHit":true}
+AUTH_ANCHOR {"state":"recheck-trust","width":320.0,"anchor":"independent-verification","raw":[16.0,302.0,288.0,52.0],"actual":[16.0,302.0,288.0,52.0],"expected":[16.0,302.0,288.0,52.0],"centerHit":true}
+00:02 +2: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_host_key_change_widget_test.dart: S10 real rotation flow at 320.0
+00:02 +2: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_desktop_return_test.dart: desktop ordinary SSH return 1440.0 chooser=false (variant: TargetPlatform.linux)
+DESKTOP_GEOMETRY 1440.0 feedback=Rect.fromLTRB(264.0, 76.0, 824.0, 142.0) return=Rect.fromLTRB(264.0, 452.0, 824.0, 500.0)
+DESKTOP_GEOMETRY 1440.0 home=Rect.fromLTRB(264.0, 62.0, 824.0, 106.0) empty=Rect.fromLTRB(264.0, 122.0, 824.0, 390.0) sidebar=Rect.fromLTRB(0.0, 0.0, 224.0, 900.0)
+00:02 +3: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_host_key_change_widget_test.dart: S10 real rotation flow at 320.0
+00:02 +3 ~1: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_host_key_change_widget_test.dart: S10 real rotation flow at 320.0
+00:02 +4 ~1: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_host_key_change_widget_test.dart: S10 real rotation flow at 320.0
+00:02 +4 ~1: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_auth_anchors_test.dart: mobile SSH trust and rotation anchors at 390.0 (variant: TargetPlatform.iOS)
+AUTH_ANCHOR {"state":"trust","width":390.0,"anchor":"independent-verification","raw":[24.0,325.0,342.0,52.0],"actual":[24.0,325.0,342.0,52.0],"expected":[24.0,325.0,342.0,52.0],"centerHit":true}
+AUTH_ANCHOR {"state":"password","width":390.0,"anchor":"trust-approved","raw":[24.0,185.0,342.0,44.0],"actual":[24.0,185.0,342.0,44.0],"expected":[24.0,185.0,342.0,44.0],"centerHit":true}
+AUTH_ANCHOR {"state":"private-key","width":390.0,"anchor":"trust-approved","raw":[24.0,185.0,342.0,44.0],"actual":[24.0,185.0,342.0,44.0],"expected":[24.0,185.0,342.0,44.0],"centerHit":true}
+AUTH_ANCHOR {"state":"key-changed","width":390.0,"anchor":"app-header","raw":[0.0,0.0,390.0,103.0],"actual":[0.0,47.0,390.0,56.0],"expected":[0.0,47.0,390.0,56.0],"centerHit":true}
+AUTH_ANCHOR {"state":"previous-trust","width":390.0,"anchor":"app-header","raw":[0.0,0.0,390.0,103.0],"actual":[0.0,47.0,390.0,56.0],"expected":[0.0,47.0,390.0,56.0],"centerHit":true}
+AUTH_ANCHOR {"state":"previous-trust","width":390.0,"anchor":"back","raw":[16.0,53.0,44.0,44.0],"actual":[16.0,53.0,44.0,44.0],"expected":[16.0,53.0,44.0,44.0],"centerHit":true}
+AUTH_ANCHOR {"state":"recheck-trust","width":390.0,"anchor":"app-header","raw":[0.0,0.0,390.0,103.0],"actual":[0.0,47.0,390.0,56.0],"expected":[0.0,47.0,390.0,56.0],"centerHit":true}
+AUTH_ANCHOR {"state":"recheck-trust","width":390.0,"anchor":"back","raw":[16.0,53.0,44.0,44.0],"actual":[16.0,53.0,44.0,44.0],"expected":[16.0,53.0,44.0,44.0],"centerHit":true}
+AUTH_ANCHOR {"state":"recheck-trust","width":390.0,"anchor":"independent-verification","raw":[24.0,325.0,342.0,52.0],"actual":[24.0,325.0,342.0,52.0],"expected":[24.0,325.0,342.0,52.0],"centerHit":true}
+00:03 +5 ~1: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_host_key_change_widget_test.dart: S10 real rotation flow at 320.0
+00:03 +5 ~1: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_desktop_return_test.dart: desktop ordinary SSH return 980.0 chooser=false (variant: TargetPlatform.linux)
+DESKTOP_GEOMETRY 980.0 feedback=Rect.fromLTRB(264.0, 76.0, 824.0, 142.0) return=Rect.fromLTRB(264.0, 452.0, 824.0, 500.0)
+DESKTOP_GEOMETRY 980.0 home=Rect.fromLTRB(264.0, 62.0, 824.0, 106.0) empty=Rect.fromLTRB(264.0, 122.0, 824.0, 390.0) sidebar=Rect.fromLTRB(0.0, 0.0, 224.0, 780.0)
+00:03 +5 ~2: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_host_key_change_widget_test.dart: S10 real rotation flow at 320.0
+00:03 +5 ~3: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_host_key_change_widget_test.dart: S10 real rotation flow at 320.0
+00:03 +6 ~3: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_host_key_change_widget_test.dart: S10 real rotation flow at 320.0
+00:03 +6 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_host_key_change_widget_test.dart: S10 real rotation flow at 320.0
+00:03 +7 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_desktop_entry_test.dart: desktop encrypted private key requires the PEM and passphrase before connecting (variant: TargetPlatform.linux)
+00:04 +8 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_responsive_navigation_test.dart: ordinary SSH keeps its shell across navigation from width 700.0 (variant: TargetPlatform.iOS)
+00:04 +9 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_desktop_return_test.dart: desktop ordinary SSH return 700.0 chooser=false (variant: TargetPlatform.linux)
+DESKTOP_GEOMETRY 700.0 feedback=Rect.fromLTRB(104.0, 76.0, 660.0, 142.0) return=Rect.fromLTRB(104.0, 452.0, 660.0, 500.0)
+DESKTOP_GEOMETRY 700.0 home=Rect.fromLTRB(104.0, 62.0, 660.0, 106.0) empty=Rect.fromLTRB(104.0, 122.0, 660.0, 390.0) sidebar=Rect.fromLTRB(0.0, 0.0, 64.0, 900.0)
+00:04 +10 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_host_key_change_widget_test.dart: S10 real rotation flow at 390.0
+00:05 +11 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_host_key_change_widget_test.dart: S10 real rotation flow at 390.0
+00:05 +12 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_host_key_change_widget_test.dart: S10 real rotation flow at 390.0
+00:05 +12 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_desktop_return_test.dart: desktop ordinary SSH return 700.0 chooser=true (variant: TargetPlatform.linux)
+DESKTOP_GEOMETRY 700.0 feedback=Rect.fromLTRB(104.0, 76.0, 660.0, 142.0) return=Rect.fromLTRB(104.0, 452.0, 660.0, 500.0)
+DESKTOP_GEOMETRY 700.0 home=Rect.fromLTRB(264.0, 62.0, 660.0, 106.0) empty=Rect.fromLTRB(264.0, 122.0, 660.0, 390.0) sidebar=Rect.fromLTRB(0.0, 0.0, 224.0, 900.0)
+00:06 +13 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_host_key_change_widget_test.dart: S10 real rotation flow at 390.0
+00:06 +14 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_host_key_change_widget_test.dart: S10 real rotation flow at 390.0
+00:06 +15 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_host_key_change_widget_test.dart: S10 real rotation flow at 390.0
+00:06 +16 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_host_key_change_widget_test.dart: S10 real rotation flow at 390.0
+00:06 +17 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_return_widget_test.dart: only a user-disconnected shell reports once on empty board (variant: TargetPlatform.iOS)
+00:06 +18 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_return_widget_test.dart: only a user-disconnected shell reports once on empty board (variant: TargetPlatform.iOS)
+00:06 +19 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_return_widget_test.dart: only a user-disconnected shell reports once on empty board (variant: TargetPlatform.iOS)
+00:07 +20 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_return_widget_test.dart: only a user-disconnected shell reports once on empty board (variant: TargetPlatform.iOS)
+00:07 +21 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_return_widget_test.dart: only a user-disconnected shell reports once on empty board (variant: TargetPlatform.iOS)
+00:07 +22 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_split_widget_test.dart: D2 keeps the focused target and restores the original split after a width change
+00:07 +23 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_split_widget_test.dart: D2 keeps the focused target and restores the original split after a width change
+00:07 +24 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_split_widget_test.dart: D2 keeps the focused target and restores the original split after a width change
+00:07 +25 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_split_widget_test.dart: D2 keeps the focused target and restores the original split after a width change
+00:07 +26 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_split_widget_test.dart: D2 keeps the focused target and restores the original split after a width change
+00:07 +27 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_split_widget_test.dart: D2 keeps the focused target and restores the original split after a width change
+00:07 +28 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_split_widget_test.dart: D2 keeps the focused target and restores the original split after a width change
+00:07 +29 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_split_widget_test.dart: D2 keeps the focused target and restores the original split after a width change
+00:07 +30 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_split_widget_test.dart: D2 keeps the focused target and restores the original split after a width change
+00:07 +31 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_split_widget_test.dart: D2 keeps the focused target and restores the original split after a width change
+00:07 +32 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_split_widget_test.dart: D2 keeps the focused target and restores the original split after a width change
+00:08 +33 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_split_widget_test.dart: D2 keeps the focused target and restores the original split after a width change
+00:08 +34 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_split_widget_test.dart: D2 keeps the focused target and restores the original split after a width change
+00:08 +35 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_split_widget_test.dart: D2 keeps the focused target and restores the original split after a width change
+00:08 +36 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_split_widget_test.dart: D2 keeps the focused target and restores the original split after a width change
+00:08 +37 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_split_widget_test.dart: D2 keeps the focused target and restores the original split after a width change
+00:08 +38 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_split_widget_test.dart: D2 keeps the focused target and restores the original split after a width change
+00:08 +39 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_split_widget_test.dart: D2 keeps the focused target and restores the original split after a width change
+00:09 +40 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/host_split_widget_test.dart: D2 keeps the focused target and restores the original split after a width change
+00:11 +41 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_return_widget_test.dart: only a user-disconnected shell reports once on saved-host board (variant: TargetPlatform.iOS)
+00:12 +42 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_return_widget_test.dart: only a user-disconnected shell reports once on saved-host board (variant: TargetPlatform.android)
+00:15 +43 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_return_widget_test.dart: iOS edge swipe commits disconnect only when completed from connection chooser (variant: TargetPlatform.iOS)
+00:16 +44 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_return_widget_test.dart: iOS edge swipe commits disconnect only when completed from saved board (variant: TargetPlatform.iOS)
+00:17 +45 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_return_widget_test.dart: a failed local disconnect keeps its failure on the home board (variant: TargetPlatform.iOS)
+00:17 +46 ~4: /private/tmp/herdr-flutter-entry.YSQ3/app/test/direct_ssh_return_widget_test.dart: a failed local disconnect keeps its failure on the home board (variant: TargetPlatform.android)
+00:17 +47 ~4: All tests passed!

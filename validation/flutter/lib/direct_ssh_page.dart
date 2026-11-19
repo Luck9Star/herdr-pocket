@@ -32,6 +32,8 @@ class DirectSshPage extends StatefulWidget {
     this.sessionVisible,
     this.onSelectDestination,
     this.desktopFlowShell,
+    this.desktopDestination,
+    this.onConnectionChanged,
   });
   final DesignTokens tokens;
   final ValueChanged<bool>? onReturnAfterDisconnect;
@@ -39,7 +41,9 @@ class DirectSshPage extends StatefulWidget {
   final void Function(Set<String>)? closeCatalogTabs;
   final ValueListenable<bool>? sessionVisible;
   final ValueChanged<int>? onSelectDestination;
-  final Widget Function(Widget page, ValueChanged<int> select)? desktopFlowShell;
+  final Widget Function(Widget page, ValueChanged<int> select, [int? selected])? desktopFlowShell;
+  final ValueListenable<int>? desktopDestination;
+  final ValueChanged<bool>? onConnectionChanged;
   @override
   State<DirectSshPage> createState() => _DirectSshPageState();
 }
@@ -50,6 +54,12 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   final targetScroll = ScrollController();
   final terminalFocus = FocusNode();
   GlobalKey<TerminalViewState> terminalViewKey = GlobalKey<TerminalViewState>();
+  final desktopTerminalFocus = FocusNode(debugLabel: 'ordinary SSH desktop input');
+  final desktopTerminalScroll = ScrollController();
+  GlobalKey<TerminalViewState> desktopTerminalKey = GlobalKey<TerminalViewState>();
+  bool restoreDesktopFocus = false;
+  double? parkedDesktopScroll;
+  bool hadDesktopLayout = false;
   final terminalFont = TextEditingController();
   bool settingsActive = false;
   String? settingsNotice;
@@ -139,9 +149,62 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     for (final field in [host, port, user]) { field.addListener(changed); }
     secret.addListener(credentialsChanged); passphrase.addListener(credentialsChanged);
     widget.catalog?.addListener(catalogChanged);
+    widget.desktopDestination?.addListener(desktopDestinationChanged);
   }
   void catalogChanged() {
     if (mounted) setState(() {});
+  }
+
+  void desktopDestinationChanged() {
+    if (!connected || !desktopEntryLayout(context)) return;
+    updateDesktopDestination(widget.desktopDestination!.value);
+  }
+
+  void selectDesktopDestination(int destination) {
+    if (widget.desktopDestination?.value == destination) updateDesktopDestination(destination);
+    widget.onSelectDestination!(destination);
+  }
+
+  void parkDesktopTerminal() {
+    if (desktopTerminalScroll.hasClients && parkedDesktopScroll == null) {
+      final position = desktopTerminalScroll.position;
+      parkedDesktopScroll = position.pixels < position.maxScrollExtent ? position.pixels : null;
+    }
+    if (desktopTerminalFocus.hasFocus) {
+      restoreDesktopFocus = true;
+      desktopTerminalKey.currentState?.closeKeyboard();
+      desktopTerminalFocus.unfocus();
+      // Retire the old editing client so its composition cannot be resumed.
+      desktopTerminalKey = GlobalKey<TerminalViewState>();
+    }
+  }
+
+  void restoreDesktopTerminal() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !foreground || !connected || !desktopEntryLayout(context) ||
+          settingsActive || widget.sessionVisible?.value == false || !desktopTerminalScroll.hasClients) return;
+      if (parkedDesktopScroll case final offset?) {
+        final position = desktopTerminalScroll.position;
+        desktopTerminalScroll.jumpTo(offset.clamp(position.minScrollExtent, position.maxScrollExtent));
+        parkedDesktopScroll = null;
+      }
+      if (restoreDesktopFocus) {
+        restoreDesktopFocus = false;
+        desktopTerminalFocus.requestFocus();
+      }
+    });
+  }
+
+  void updateDesktopDestination(int destination) {
+    if (destination != 1) parkDesktopTerminal();
+    setState(() {
+      settingsActive = destination == 3;
+      if (settingsActive) {
+        terminalFont.text = '${widget.catalog?.terminalFontSize ?? 14}';
+        settingsNotice = null;
+      }
+    });
+    if (destination == 1) restoreDesktopTerminal();
   }
   Terminal createTerminal(int generation) {
     final value = Terminal(maxLines: 2000);
@@ -208,12 +271,17 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   }
 
   void stop({String? message, bool notify = true, bool drainInput = false, bool reportCloseOutcome = false}) {
+    final wasConnected = connected;
     cancelKeyPaste();
     if (busy && connectPhase != DirectSshConnectPhase.idle && connectFailure == null) connectFailure = DirectSshConnectFailure.cancelled;
     epoch++; connected = false; busy = false; pendingTarget = null; activeTarget = null;
     settingsActive = false;
     terminalViewKey.currentState?.closeKeyboard();
     terminalFocus.unfocus();
+    desktopTerminalKey.currentState?.closeKeyboard();
+    desktopTerminalFocus.unfocus();
+    restoreDesktopFocus = false;
+    parkedDesktopScroll = null;
     if (targetScroll.hasClients) targetScroll.jumpTo(0);
     retireTerminal();
     secret.clear(); passphrase.clear();
@@ -259,6 +327,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     }
     if (message != null) status = message;
     if (notify && mounted) setState(() {});
+    if (wasConnected && notify) widget.onConnectionChanged?.call(false);
   }
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -273,15 +342,27 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (pastingKey && !(ModalRoute.of(context)?.isCurrent ?? true)) cancelKeyPaste();
+    final desktop = desktopEntryLayout(context);
+    if (desktop != hadDesktopLayout && connected) {
+      if (desktop) {
+        restoreDesktopTerminal();
+      } else {
+        parkDesktopTerminal();
+      }
+    }
+    hadDesktopLayout = desktop;
   }
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    widget.desktopDestination?.removeListener(desktopDestinationChanged);
     widget.catalog?.removeListener(catalogChanged);
     secret.removeListener(credentialsChanged); passphrase.removeListener(credentialsChanged);
     stop(notify: false);
     targetScroll.dispose();
     terminalFocus.dispose();
+    desktopTerminalFocus.dispose();
+    desktopTerminalScroll.dispose();
     terminalFont.dispose();
     for (final field in [host, port, user, secret, passphrase]) { field.dispose(); }
     super.dispose();
@@ -392,6 +473,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       stderr = localShell.stderr.cast<List<int>>().transform(const Utf8Decoder(allowMalformed: true)).listen((text) { if (generation == epoch && identical(sessionTerminal, terminal)) sessionTerminal.write(text); }, onError: (_) { if (generation == epoch) stop(message: '终端输出错误，连接已关闭。'); });
       unawaited(localShell.done.then((_) { if (generation == epoch) stop(message: '远端 shell 已结束（退出码 ${localShell.exitCode ?? '未知'}）。'); }, onError: (Object _, StackTrace __) { if (generation == epoch) stop(message: '连接中断，输入已停止。'); }));
       setState(() { busy = false; pendingTarget = null; activeTarget = displayTarget; connected = true; status = '已连接 · 输入直接发送到远端 shell'; });
+      widget.onConnectionChanged?.call(true);
     } catch (error) {
       if (generation == epoch) {
         connectFailure = parsingKey ? DirectSshConnectFailure.keyParse
@@ -1209,16 +1291,102 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     );
   }
 
-  Widget mobileActiveSettings() {
+  Widget desktopActivePage() {
+    final tokens = widget.tokens;
+    return widget.desktopFlowShell!(Scaffold(body: SafeArea(child: Column(children: [
+      Container(key: const ValueKey('direct-live-header'), height: 56, width: double.infinity,
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: tokens.color('border')))),
+        child: Stack(children: [
+          Positioned.fill(left: 40, right: 124, child: Align(alignment: Alignment.centerLeft,
+            child: Text(settingsActive ? '设置' : '普通 SSH',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)))),
+          if (!settingsActive)
+            Positioned(top: 4, right: 40, width: 76, height: 44, child: TextButton(
+              key: const ValueKey('direct-desktop-disconnect'),
+              style: TextButton.styleFrom(foregroundColor: tokens.color('dangerText'),
+                backgroundColor: tokens.color('dangerSoft'), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              onPressed: disconnect, child: const Text('断开'))),
+        ])),
+      Expanded(child: IndexedStack(index: settingsActive ? 1 : 0, sizing: StackFit.expand, children: [
+        ExcludeFocus(excluding: settingsActive, child: desktopTerminalWorkspace()),
+        ExcludeFocus(excluding: !settingsActive, child: mobileActiveSettings(desktop: true)),
+      ])),
+    ]))), selectDesktopDestination, settingsActive ? 3 : 1);
+  }
+
+  Widget desktopTerminalWorkspace() {
+    final tokens = widget.tokens;
+    return LayoutBuilder(builder: (context, available) => SingleChildScrollView(primary: false, child: SizedBox(
+      height: available.maxHeight < 152 ? 152 : available.maxHeight,
+      child: Padding(padding: const EdgeInsets.fromLTRB(40, 12, 40, 16), child: Column(children: [
+        SizedBox(key: const ValueKey('direct-terminal-status'), height: 44,
+          child: Semantics(label: status, child: Row(children: [
+            Container(width: 62, height: 24, alignment: Alignment.center,
+              decoration: BoxDecoration(color: tokens.color('successSoft'), borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: tokens.color('successBorder'))),
+              child: Text('已连接', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: tokens.color('successText')))),
+            const SizedBox(width: 10),
+            Expanded(child: SingleChildScrollView(key: const ValueKey('direct-target-scroll'), controller: targetScroll,
+              scrollDirection: Axis.horizontal, child: Text(activeTarget ?? '', key: const ValueKey('direct-active-target'),
+                maxLines: 1, softWrap: false, style: const TextStyle(fontSize: 12, fontFamily: 'ProbeNerd')))),
+          ]))),
+        const SizedBox(height: 8),
+        Expanded(
+          child: Container(
+            key: const ValueKey('direct-terminal-panel'),
+            foregroundDecoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: tokens.color('termBorder')),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: RawScrollbar(
+                key: const ValueKey('direct-terminal-scrollbar'),
+                controller: desktopTerminalScroll,
+                thumbVisibility: true,
+                trackVisibility: true,
+                interactive: true,
+                scrollbarOrientation: ScrollbarOrientation.right,
+                thickness: 6,
+                minThumbLength: 40,
+                radius: const Radius.circular(3),
+                trackRadius: const Radius.circular(3),
+                trackColor: tokens.color('cardSubtle'),
+                thumbColor: tokens.color('textSecondary'),
+                padding: const EdgeInsets.fromLTRB(0, 4, 4, 4),
+                child: ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                  child: TerminalView(
+                    terminal!,
+                    key: desktopTerminalKey,
+                    focusNode: desktopTerminalFocus,
+                    scrollController: desktopTerminalScroll,
+                    theme: tokens.terminalTheme,
+                    padding: const EdgeInsets.fromLTRB(12, 12, 16, 12),
+                    textStyle: TerminalStyle(
+                      fontFamily: 'ProbeNerd',
+                      height: 20 / 14,
+                      fontSize: (widget.catalog?.terminalFontSize ?? 14).toDouble(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ])),
+    )));
+  }
+
+  Widget mobileActiveSettings({bool desktop = false}) {
     final t = widget.tokens;
     final catalog = widget.catalog;
-    return ListView(
+    return entryList(desktop: desktop,
       key: const ValueKey('direct-settings'),
-      padding: EdgeInsets.fromLTRB(mobileMargin, 20, mobileMargin, 24),
       children: [
         Container(
           key: const ValueKey('direct-settings-active'),
-          height: 44,
+          constraints: BoxConstraints(minHeight: desktop ? 66 : 44),
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
@@ -1226,13 +1394,11 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: t.color('successBorder')),
           ),
-          child: Text(
-            '普通 SSH 会话保持连接',
-            style: TextStyle(
-              color: t.color('successText'),
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('普通 SSH 会话保持连接', style: TextStyle(color: t.color('successText'), fontWeight: FontWeight.bold)),
+            if (desktop) Text('切到看板、网络或设置不会断开；显式断开后才结束。',
+              style: TextStyle(fontSize: 13, color: t.color('textSecondary'))),
+          ]),
         ),
         const SizedBox(height: 10),
         mobileTargetCard(activeTarget ?? ''),
@@ -1303,12 +1469,17 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   @override
   Widget build(BuildContext context) {
     final desktopEntry = desktopEntryLayout(context) && !connected && !userDisconnected;
+    final desktopActive = desktopEntryLayout(context) && connected && widget.onSelectDestination != null;
     final authenticating = mobileAuth && !hostKeyReviewRequired;
     return PopScope(
-    canPop: hostKeyChange == null && !settingsActive && !desktopEntry,
+    canPop: hostKeyChange == null && !settingsActive && !desktopEntry && !desktopActive,
     onPopInvokedWithResult: (didPop, result) {
       if (!didPop && settingsActive && connected) {
-        selectMobileTerminal(false);
+        if (desktopActive) {
+          selectDesktopDestination(1);
+        } else {
+          selectMobileTerminal(false);
+        }
       }
       if (!didPop && desktopEntry && hostKeyChange == null) backFromDesktopEntry();
       if (didPop && busy) stop(notify: false);
@@ -1322,7 +1493,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
         }
       }
     },
-    child: desktopEntry ? desktopEntryPage(
+    child: desktopActive ? desktopActivePage() : desktopEntry ? desktopEntryPage(
       title: hostKeyChange != null ? '主机指纹发生变化' : authenticating ? 'SSH 账号认证' : '普通 SSH',
       headerKey: 'direct-page-header', backKey: 'direct-back-hit',
       body: hostKeyChange != null ? mobileHostKeyChangeView(desktop: true)

@@ -87,6 +87,62 @@
           "transportAbsentAtAttempt": 2
         }
       }
+    },
+    "R5": {
+      "runId": 44621326281,
+      "jobId": 135903460824,
+      "sourceSHA": "b3bf32ac170711f7b0dd0f9d6df71901ab808f68",
+      "jobConclusion": "failure",
+      "artifact": {
+        "id": 14578975990,
+        "expiresAtUtc": "2026-12-03T21:53:02Z",
+        "zipSha256": "0a0087914f2951a0df51e8f3c8db50f2d740cfc7e4a049b9bf366de42bb0f82d",
+        "memberSha256": {
+          "tauri-config-document-evidence/manifest.json": "97d98703c5dc2526b1f93d4b88b67a8673871e5a736e0c4096acebe022b7079e",
+          "tauri-config-document-avd-evidence/lifecycle.txt": "110889bf8fe00f4b66566469ab56cf0a5fcd6bca5dc3567774a6fb8ea87b967c"
+        }
+      },
+      "facts": {
+        "androidApi": 35,
+        "scenario": "preferences-only-system-documents-ui",
+        "status": "failed",
+        "stage": "wrong_passphrase",
+        "pickerStep": "downloads_root",
+        "errorCode": "picker_target_unconfirmed",
+        "pickerOpens": 3,
+        "pickerCancelledUnchanged": true,
+        "confirmationAttempts": 0,
+        "confirmationClicks": 0,
+        "cleanup": {
+          "application": true,
+          "debugConnection": true,
+          "debugForward": true,
+          "downloadFolder": true,
+          "hierarchyFile": true
+        },
+        "archive": {
+          "bytes": 126,
+          "version": 2
+        },
+        "preferenceSave": {
+          "dispatch": "returned",
+          "probe": "observed",
+          "click": "target",
+          "pointerDown": "target",
+          "pointerUp": "target",
+          "viewportAtPress": "full",
+          "catalog": "expected",
+          "receipt": "same_success"
+        },
+        "avdLifecycle": {
+          "preflightNoExistingDevice": true,
+          "ownedDeviceStarted": true,
+          "driverExitStatus": 1,
+          "processAliveOnCleanupEntry": true,
+          "processExitStatus": 0,
+          "transportAbsentAtAttempt": 1
+        }
+      }
     }
   },
   "iosManualEncryptedKey": {

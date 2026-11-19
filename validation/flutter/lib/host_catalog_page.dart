@@ -43,6 +43,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   final sshNavigator = GlobalKey<NavigatorState>();
   final sshVisible = ValueNotifier<bool>(false);
   bool sshRouteOpen = false;
+  int sshRouteGeneration = 0;
   int destination = 0;
   bool splitUpdatePending = false;
   bool workspaceWide = false;
@@ -329,6 +330,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
       return;
     }
     final mobile = MediaQuery.sizeOf(context).width < 960;
+    final generation = ++sshRouteGeneration;
     if (mobile) {
       setState(() {
         sshRouteOpen = true;
@@ -357,7 +359,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
           }
         },
         onReturnAfterDisconnect: (succeeded) {
-          if (mounted) setState(() { sshClosedNotice = true; sshClosedSucceeded = succeeded; });
+          if (mounted && sshRouteGeneration == generation) setState(() { sshClosedNotice = true; sshClosedSucceeded = succeeded; });
         },
       ),
     );

@@ -1,0 +1,57 @@
+name: Windows ordinary SSH
+on:
+  workflow_dispatch:
+  # Deliberate run refs also work before the workflow is registered on the default branch.
+  push:
+    branches:
+      - 'codex/windows-ordinary-ssh-run-*'
+permissions:
+  contents: read
+concurrency:
+  group: windows-ordinary-ssh-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  flutter-password:
+    if: startsWith(github.ref, 'refs/heads/codex/')
+    runs-on: windows-2022
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Prepare isolated peer and evidence tools
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          python -m venv "$env:RUNNER_TEMP\direct-ssh-venv"
+          $python = "$env:RUNNER_TEMP\direct-ssh-venv\Scripts\python.exe"
+          & $python -m pip install -r validation/pairing/requirements.txt paramiko==4.0.0 pillow==12.2.0 pywin32==311
+          & $python -m unittest discover -s validation/remote-harness -p test_flutter_windows_direct_ssh.py -v
+          choco install tesseract --version=5.5.3.20260724 --yes --no-progress
+          "$env:ProgramFiles\Tesseract-OCR" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Bootstrap the pinned Flutter SDK in the runner
+        run: python validation/flutter/tool/ci.py bootstrap --destination "$env:RUNNER_TEMP\flutter-sdk"
+      - name: Prepare and verify the Flutter candidate lock
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $app = "$env:RUNNER_TEMP\flutter-gui"
+          python validation/flutter/tool/ci.py prepare --destination $app
+          python validation/flutter/tool/candidate.py apply --destination $app
+          Push-Location $app
+          try { flutter pub get } finally { Pop-Location }
+          python validation/flutter/tool/candidate.py verify-lock --destination $app
+      - name: Exercise ordinary SSH in the visible Windows app
+        run: |
+          & "$env:RUNNER_TEMP\direct-ssh-venv\Scripts\python.exe" validation/remote-harness/flutter_windows_direct_ssh.py --app "$env:RUNNER_TEMP\flutter-gui" --source-sha $env:GITHUB_SHA --output "$env:RUNNER_TEMP\windows-direct-ssh-evidence"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: flutter-windows-direct-ssh-password-${{ github.sha }}
+          path: ${{ runner.temp }}/windows-direct-ssh-evidence/
+          retention-days: 14
+          if-no-files-found: warn

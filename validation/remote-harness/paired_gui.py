@@ -16,10 +16,14 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / 'helper'))
 sys.path.insert(0, str(REPO / 'validation/pairing'))
 from pairing import fingerprint
-from herdr_pocket_helper.store import Host
 from guarded_input import ANDROID_ROUTES, DIRECT, DRAFT, EvidenceError, expected_bytes, mobile_receipts, mobile_tui_evidence
 from paired_tui import validate_report
-from blocked_fixture import BlockedFixtureFailure, bindings as blocked_bindings, snapshot as blocked_snapshot
+
+# The pairing fixture uses POSIX authorization files and a PTY. The Windows
+# ordinary SSH runner only shares the portable evidence helpers in this module.
+if sys.platform != 'win32':
+    from herdr_pocket_helper.store import Host
+    from blocked_fixture import BlockedFixtureFailure, bindings as blocked_bindings, snapshot as blocked_snapshot
 
 
 class GuiFailure(Exception):
@@ -84,6 +88,8 @@ def wait_for(probe, code, *, timeout=25):
 
 @contextmanager
 def owned_process(argv, *, cwd, env, log):
+    if sys.platform == 'win32':
+        raise GuiFailure('paired_gui_posix_required')
     with log.open('wb') as stream:
         proc = subprocess.Popen(argv, cwd=cwd, env=env, stdout=stream,
                                 stderr=subprocess.STDOUT, start_new_session=True)
@@ -113,6 +119,8 @@ def bounded_wire(path, limit=2048):
 
 class FixtureApproval:
     def __init__(self, root, config, host, *, blocked_targets=None):
+        if sys.platform == 'win32':
+            raise GuiFailure('paired_gui_posix_required')
         self.root = root
         self.config = config
         self.host = host
@@ -482,6 +490,8 @@ def run_tauri(args, root, env, config, approval):
 
 
 def run_gui(args, root, env, config):
+    if sys.platform == 'win32':
+        raise GuiFailure('paired_gui_posix_required')
     run_id = os.environ.get('GITHUB_RUN_ID','')
     if (os.environ.get('GITHUB_ACTIONS') != 'true' or not re.fullmatch(r'\d+',run_id) or
             not os.environ.get('GITHUB_REF','').startswith('refs/heads/codex/') or

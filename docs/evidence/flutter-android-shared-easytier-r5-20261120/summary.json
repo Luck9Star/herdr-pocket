@@ -1,0 +1,269 @@
+{
+  "schemaVersion": 1,
+  "runId": 44569648650,
+  "attempts": [
+    {
+      "attempt": 1,
+      "jobId": 135720886765,
+      "artifactId": 14552604296,
+      "zip": "attempt-1-actions-14552604296.zip",
+      "zipBytes": 392,
+      "zipSha256": "66f3e7714cd18f3243ccd554ef7f1c5dc34b43811b7ddb1afe05542558e3c956",
+      "manifestSha256": "a1f599307dfebd46e83039432de6d1cdeb77a082964f02e8b9d0b96ccd2457a3",
+      "schemaVersion": 1,
+      "kind": "flutter-android-dual-overlay",
+      "status": "failed",
+      "errorCode": "device_manifest_missing",
+      "deviceStepOutcome": "skipped",
+      "uiSource": "481e63c21216f9c201113e8e2da310164c5c2b1c",
+      "nativeSource": "547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8",
+      "hostSource": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
+      "scenario": "shared-easytier",
+      "jobFailure": {
+        "step": "Prepare fixed SDK and verify native inputs",
+        "package": "NDK 28.2.13676358",
+        "reason": "zip_unknown_archive"
+      }
+    },
+    {
+      "attempt": 2,
+      "jobId": 135725621442,
+      "artifactId": 14555006892,
+      "zip": "attempt-2-actions-14555006892.zip",
+      "zipBytes": 1377,
+      "zipSha256": "a5fe778cd33f81dc495720a56461c09151a92838d8c9e12e179b11cf6bcf961f",
+      "manifestSha256": "71ece198fcaa06d731b49fee3d1cec1328f5eb2056886c7fb66b668d7b0d76a3",
+      "schemaVersion": 1,
+      "kind": "flutter-android-dual-overlay",
+      "status": "passed",
+      "uiSource": "481e63c21216f9c201113e8e2da310164c5c2b1c",
+      "nativeSource": "547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8",
+      "hostSource": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
+      "hostArtifactId": 14171011473,
+      "hostArtifactSha256": "4bdc54843a9f438896db3717bd002859021fab51cbe60339c35e8a62a5bd6698",
+      "nativeVariant": "test-only-private-ca-x86_64",
+      "apiLevel": 35,
+      "physicalDevice": false,
+      "rawLogsUploaded": false,
+      "cases": [
+        {
+          "status": "passed",
+          "stage": "complete",
+          "scenario": "shared-easytier",
+          "instrumentationApkSha256": "a5b705ccc4e5c0586f938d84a6f43180b859b24529b8d133da28ca7f329105cf",
+          "hostAudits": {
+            "shared_ready": {
+              "a": {
+                "samples": 1,
+                "acceptedSessions": 1,
+                "newSessions": 1,
+                "capturedBytes": 0,
+                "newInputBytes": 0,
+                "exactBytes": true,
+                "authorizationActive": true,
+                "sessions": [
+                  {
+                    "ordinal": 1,
+                    "approvedDevice": true,
+                    "active": true,
+                    "peerClose": "unconfirmed"
+                  }
+                ]
+              },
+              "b": {
+                "samples": 1,
+                "acceptedSessions": 1,
+                "newSessions": 1,
+                "capturedBytes": 0,
+                "newInputBytes": 0,
+                "exactBytes": true,
+                "authorizationActive": true,
+                "sessions": [
+                  {
+                    "ordinal": 1,
+                    "approvedDevice": true,
+                    "active": true,
+                    "peerClose": "unconfirmed"
+                  }
+                ]
+              }
+            },
+            "shared_a_released": {
+              "a": {
+                "samples": 1,
+                "acceptedSessions": 1,
+                "newSessions": 0,
+                "capturedBytes": 0,
+                "newInputBytes": 0,
+                "exactBytes": true,
+                "authorizationActive": true,
+                "sessions": [
+                  {
+                    "ordinal": 1,
+                    "approvedDevice": true,
+                    "active": false,
+                    "peerClose": "peer_eof"
+                  }
+                ]
+              },
+              "b": {
+                "samples": 2,
+                "acceptedSessions": 1,
+                "newSessions": 0,
+                "capturedBytes": 0,
+                "newInputBytes": 0,
+                "exactBytes": true,
+                "authorizationActive": true,
+                "sessions": [
+                  {
+                    "ordinal": 1,
+                    "approvedDevice": true,
+                    "active": true,
+                    "peerClose": "unconfirmed"
+                  }
+                ]
+              }
+            },
+            "shared_b_released": {
+              "a": {
+                "samples": 1,
+                "acceptedSessions": 1,
+                "newSessions": 0,
+                "capturedBytes": 0,
+                "newInputBytes": 0,
+                "exactBytes": true,
+                "authorizationActive": true,
+                "sessions": [
+                  {
+                    "ordinal": 1,
+                    "approvedDevice": true,
+                    "active": false,
+                    "peerClose": "peer_eof"
+                  }
+                ]
+              },
+              "b": {
+                "samples": 1,
+                "acceptedSessions": 1,
+                "newSessions": 0,
+                "capturedBytes": 0,
+                "newInputBytes": 0,
+                "exactBytes": true,
+                "authorizationActive": true,
+                "sessions": [
+                  {
+                    "ordinal": 1,
+                    "approvedDevice": true,
+                    "active": false,
+                    "peerClose": "peer_eof"
+                  }
+                ]
+              }
+            },
+            "shared_node_stopped": {
+              "a": {
+                "samples": 1,
+                "acceptedSessions": 1,
+                "newSessions": 0,
+                "capturedBytes": 0,
+                "newInputBytes": 0,
+                "exactBytes": true,
+                "authorizationActive": true,
+                "sessions": [
+                  {
+                    "ordinal": 1,
+                    "approvedDevice": true,
+                    "active": false,
+                    "peerClose": "peer_eof"
+                  }
+                ]
+              },
+              "b": {
+                "samples": 1,
+                "acceptedSessions": 1,
+                "newSessions": 0,
+                "capturedBytes": 0,
+                "newInputBytes": 0,
+                "exactBytes": true,
+                "authorizationActive": true,
+                "sessions": [
+                  {
+                    "ordinal": 1,
+                    "approvedDevice": true,
+                    "active": false,
+                    "peerClose": "peer_eof"
+                  }
+                ]
+              }
+            }
+          },
+          "auditProgress": {
+            "bothOriginalSshLive": true,
+            "liveProviderRelays": {
+              "a": 1,
+              "b": 1
+            },
+            "survivorFreshFrameOnOriginalSsh": true,
+            "aCloseBeforeBStop": true,
+            "bothClosedBeforeExplicitNodeStop": true,
+            "bothClosedAfterExplicitNodeStop": true,
+            "providerRelaysAfterNodeStop": {
+              "a": 0,
+              "b": 0
+            }
+          },
+          "uiStage": "shared_node_stopped",
+          "ui": {
+            "status": "passed",
+            "scenario": "shared-easytier",
+            "sameReviewedBinding": true,
+            "bothInitialFrames": true,
+            "survivorAdvancedOnOriginalView": true,
+            "noAutomaticInput": true,
+            "bothTabsClosedBeforeNodeStop": true,
+            "nodeExplicitlyStopped": true
+          },
+          "flutterStopped": true,
+          "installedApkSha256": "bdc70134289770ed43b0b24f656d2d353b2474eeb4528375d3ade16edfb0889d",
+          "hostCleanup": true,
+          "sharedStage": "ready",
+          "deviceApi35Verified": true,
+          "hostReady": true,
+          "relayRoles": 2,
+          "reverseMappings": 2,
+          "sharedPeerStreams": {
+            "a": {
+              "acceptedOverlayStreams": 1,
+              "loopbackTcpConnections": 1
+            },
+            "b": {
+              "acceptedOverlayStreams": 1,
+              "loopbackTcpConnections": 1
+            }
+          },
+          "reverseCleanup": {
+            "removedConfirmed": 2,
+            "alreadyAbsent": 0,
+            "problems": []
+          },
+          "sharedCleanup": {
+            "reverseRemoved": true,
+            "relayStopped": true,
+            "controllerStopped": true,
+            "namespaceRemoved": true,
+            "hostPrivateDirectoryRemoved": true,
+            "controlReaderStopped": true,
+            "privateFilesRemoved": true
+          },
+          "packageRemoved": true,
+          "forwardsRestored": true
+        }
+      ],
+      "scenario": "shared-easytier",
+      "sharedTargets": {
+        "a": "easytier",
+        "b": "easytier"
+      }
+    }
+  ]
+}

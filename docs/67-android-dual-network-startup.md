@@ -19,6 +19,12 @@
 
 GitHub 工件保留有限，APK 保留 7 天；过期后须按记录的完整源码与固定构建配置重建，再核对来源和包摘要。历史失败、Go 启动 gate、半关闭 / EOF、空闲读期限及真实页面 A/B 的证据与边界保留在下方；环境清理不替代产品连接关闭审计。
 
+## 2026-11-20 · Flutter 共享 EasyTier 节点双主机
+
+R5 第 2 次运行在 API 35 x86_64 模拟器中通过。Flutter 用同一受审查的 EasyTier 节点连接 A、B。两个实际 EasyTier 对端经测试专用 `adb reverse` 转发，分别桥接受控 SSH/herdr 服务。每侧只有一次批准的 SSH 认证和一条 overlay 流。关闭 A 后，宿主确认 A 的 SSH 正常 EOF，B 在原认证会话与原终端上显示新帧。关闭 B 后，两侧均已确认 EOF，随后用户主动停止原节点，两个转发连接归零，清理完成。两侧终端输入均为 0 字节。[R5 验收、复现及原件](evidence/flutter-android-shared-easytier-r5-20261120/README.md)
+
+R4 在关闭 A 后未取得 A 的对端 EOF。R5 第 1 次运行在准备 NDK 时解压失败，设备步骤跳过。第 2 次使用同一源码通过。覆盖范围为 Flutter Android 模拟器中的共享节点只读观察与释放，实体设备、真实跨网、共享节点上的主动输入和其他 provider 组合仍待验证。[R4 原件](evidence/flutter-android-shared-easytier-r4-20261120/README.md) · [R5 第 1 次作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44569648650/job/135720886765) · [R5 第 2 次作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44569648650/job/135725621442)
+
 <details>
 <summary>修复过程与上一阶段设备快照（历史，不替代当前结果）</summary>
 

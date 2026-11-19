@@ -60,11 +60,11 @@ test('explicit close accepts only a unit or void acknowledgement and names local
     h.resolveOpen('s1');
     await pending;
     h.channel.onmessage({sessionId:'s1', seq:1, kind:'ready'});
-    await h.ssh.close({explicit:true});
+    await h.ssh.close({showOutcome:true});
     const last = h.statuses.at(-1);
     assert.equal(last[0], closed ? '本机已断开；凭据已清空，重连时请重新填写。' : '本机连接关闭失败；会话可能仍在。可返回首页。', name);
     assert.deepEqual(last.slice(1), [
-      false, reason, {closed, explicit:true, remoteReported:false},
+      false, reason, {close:{phase:closed ? 'confirmed' : 'failed', remoteReported:false}},
     ], name);
     h.channel.onmessage({sessionId:'s1', seq:2, kind:'ready'});
     h.ssh.write(new Uint8Array([65]));
@@ -73,20 +73,21 @@ test('explicit close accepts only a unit or void acknowledgement and names local
     assert.equal(h.calls.filter(call => call.command === 'ssh_shell_write').length, 0, name);
   }
 });
-test('an explicit remote exit report only comes from a valid exitStatus or signal', async () => {
+test('ordinary SSH exit only reports a remote ending when the native event carries evidence', async () => {
   for (const [event, reported, message] of [
     [{kind:'exit'}, false, '本机已断开；凭据已清空，重连时请重新填写。'],
     [{kind:'exit', exitStatus:null}, false, '本机已断开；凭据已清空，重连时请重新填写。'],
-    [{kind:'exit', exitStatus:0}, true, '本机已断开；远端已报告结束，凭据已清空。'],
-    [{kind:'exit', exitStatus:2}, true, '本机已断开；远端已报告结束，凭据已清空。'],
+    [{kind:'exit', exitStatus:0}, true, '本机已断开；远端已报告结束，凭据已清空。重连时请重新填写。'],
+    [{kind:'exit', exitStatus:2}, true, '本机已断开；远端已报告结束，凭据已清空。重连时请重新填写。'],
     [{kind:'exit', exitStatus:'0'}, false, '本机已断开；凭据已清空，重连时请重新填写。'],
     [{kind:'exit', exitStatus:-1}, false, '本机已断开；凭据已清空，重连时请重新填写。'],
     [{kind:'exit', exitStatus:4294967296}, false, '本机已断开；凭据已清空，重连时请重新填写。'],
-    [{kind:'exit', exitStatus:4294967295}, true, '本机已断开；远端已报告结束，凭据已清空。'],
-    [{kind:'exit', exitSignal:'TERM'}, true, '本机已断开；远端已报告结束，凭据已清空。'],
+    [{kind:'exit', exitStatus:4294967295}, true, '本机已断开；远端已报告结束，凭据已清空。重连时请重新填写。'],
+    [{kind:'exit', exitSignal:'TERM'}, true, '本机已断开；远端已报告结束，凭据已清空。重连时请重新填写。'],
+    [{kind:'exit', exitSignal:'USR2'}, true, '本机已断开；远端已报告结束，凭据已清空。重连时请重新填写。'],
     [{kind:'exit', exitSignal:'sigterm'}, false, '本机已断开；凭据已清空，重连时请重新填写。'],
     [{kind:'exit', exitSignal:'TERMIT'} , false, '本机已断开；凭据已清空，重连时请重新填写。'],
-    [{kind:'exit', exitSignal:'other'}, false, '本机已断开；凭据已清空，重连时请重新填写。'],
+    [{kind:'exit', exitSignal:'other'}, true, '本机已断开；远端已报告结束，凭据已清空。重连时请重新填写。'],
     [{kind:'exit', exitSignal:'NOT_A_SIGNAL'}, false, '本机已断开；凭据已清空，重连时请重新填写。'],
     [{kind:'exit', exitSignal:'  '}, false, '本机已断开；凭据已清空，重连时请重新填写。'],
     [{kind:'exit'}, false, '本机已断开；凭据已清空，重连时请重新填写。'],
@@ -97,12 +98,33 @@ test('an explicit remote exit report only comes from a valid exitStatus or signa
     await pending;
     h.channel.onmessage({sessionId:'s1', seq:1, kind:'ready'});
     h.channel.onmessage({sessionId:'s1', seq:2, ...event});
-    assert.equal(h.ssh.remoteReported(), reported);
-    await h.ssh.close({explicit:true});
+    await new Promise(resolve=>setImmediate(resolve));
     const last = h.statuses.at(-1);
     assert.equal(last[0], message);
-    assert.equal(last[3].remoteReported, reported);
+    assert.deepEqual(last[3].close, {phase:'confirmed', remoteReported:reported});
   }
+});
+
+test('a close in progress accepts only same-session remote report and waits for local acknowledgement', async () => {
+  let finishClose;
+  const closeReply = new Promise(resolve => { finishClose = resolve; });
+  const h = harness({closeReply});
+  const {pending} = await opening(h);
+  h.resolveOpen('s1');
+  await pending;
+  h.channel.onmessage({sessionId:'s1', seq:1, kind:'ready'});
+  const closing = h.ssh.close({showOutcome:true});
+  h.channel.onmessage({sessionId:'s2', seq:8, kind:'exit', exitStatus:0});
+  h.channel.onmessage({sessionId:'s1', seq:1, kind:'exit', exitStatus:0});
+  assert.deepEqual(h.statuses.at(-1)[3].close, {phase:'pending', remoteReported:false});
+  h.channel.onmessage({sessionId:'s1', seq:2, kind:'exit', exitStatus:0});
+  h.channel.onmessage({sessionId:'s1', seq:3, kind:'data', data:[65]});
+  assert.deepEqual(h.statuses.at(-1)[3].close, {phase:'pending', remoteReported:true});
+  assert.equal(h.ssh.isReady(), false);
+  assert.deepEqual(h.data, []);
+  finishClose(null);
+  await closing;
+  assert.match(h.statuses.at(-1)[0], /^本机已断开；远端已报告结束/);
 });
 test('edits invalidate pin and authentication must be exactly one method',async()=>{
   const h=harness();await h.ssh.probe(target);h.ssh.invalidateReview();await assert.rejects(h.ssh.open(target,{password:'x'},true),/review_required/);

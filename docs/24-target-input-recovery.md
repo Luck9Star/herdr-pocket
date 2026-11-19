@@ -72,3 +72,20 @@ python3 validation/flutter/native/android/tests/run_input_journal_probe.py --kot
 两个脚本只创建自己的临时目录。Android 探针的 `fsync` 桩和 Flutter 通道桩限制不能由检查数量消除。native journal 的 load→save 窗口尚未单独注入 CAS 竞争；共用 catalog 的旧 revision 拒绝和同目标并发已有隔离反例。
 
 下一步实现 Tailscale 的完整原生状态存储、明确授权和可取消字节流，再接 ZeroTier，逐平台验证并发；桌面分屏与键鼠适配随后推进。
+
+## M3-05 Flutter 回环丢回执
+
+2026-11-19，本地以 Flutter 3.47.9 从产品首页进入「设置 → 离线终端实验室 → 手动实验」，在正常连接表单核对临时主机公钥，再观察 A 的完整画面与增量。通过产品草稿预览只确认一次。测试对端先记录 A 的精确 6 字节，然后丢弃这一笔回执。界面显示「发送结果待核实」和原账号、主机、会话、pane 与 terminal，并锁定输入。[脱敏本地结果](evidence/mobile-pair-gui/flutter-input-receipt-recovery-20261119.json)
+
+停止 A 后连接 B，B 的新画面不能解除 A 的锁。重连 A 并取得新完整画面后，才可以人工确认。确认只解除 A 的记录，输入仍处于只读。服务端共核对 3 次认证和关闭，整个 A→B→A 流程始终只有第一次写入。夹具进程退出，回环监听关闭，含临时密钥的专用目录已删除。
+
+本轮使用 macOS 上真实 Flutter Widget 引擎、默认客户端适配器、TCP 和 SSH 公钥认证。herdr RPC 和观察帧来自隔离测试对端，journal 的原生通道使用带租约的内存替身。历史 Rust 回环、既有正常输入证据和此次 Flutter UI 各自成立。安装版 Flutter 与 Tauri、原生 journal 落盘及真实 herdr 输入扩展上的同一故障仍待验证。设备复验需在受控 PTY 记录首笔输入后专门丢失该笔回执，再核对产品界面的原目标和独立对端字节。
+
+从仓库根目录运行。需 POSIX、Python 3.12+、固定 Flutter SDK、Rust 1.96+、Git 和 `ssh-keygen`。工具从所选 Git 提交生成正常 Flutter 工程，无需安装平台设备 SDK。未显式启用夹具时，标准 Widget 套会跳过此案。[定向入口](../validation/flutter/tool/input_receipt_fixture_runner.py) · [Widget 用例](../validation/flutter/test/input_receipt_recovery_widget_test.dart)
+
+```sh
+python3 validation/flutter/tool/input_receipt_fixture_runner.py \
+  --revision 5fc8705d93e6ea5a1d7baf08738d2f855777b1ed
+```
+
+已缓存锁定依赖时，可加 `--offline --terminal-archive /path/to/terminal_view-0.5.0.tar.gz`。脚手架仍核对归档和补丁摘要。结果只公开固定阶段和计数。临时密钥、请求号和原始日志留在专用临时目录，随运行清理。对端只记录字节数和精确匹配结果。可用 `--output` 将脱敏结果存入新文件。

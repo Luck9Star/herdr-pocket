@@ -174,7 +174,7 @@ Tailscale、EasyTier 和 ZeroTier 分别推进，共用 M1 的可信连接与输
 - [ ] **M3-04** 逐格复核三网络与跨 provider 并发矩阵；测试配置切换、同网多主机、停用/删除影响及敏感字段脱敏，并测多标签/桌面分屏下的并发资源与焦点隔离。
   **待验证。** Android 四案与 Linux 两方向只覆盖受控 TS+ET。真实网络、全部 ZeroTier 并发、同网多主机及桌面分屏的资源/焦点仍缺，见 M2。[Android](67-android-dual-network-startup.md) · [Linux](65-dual-overlay-validation.md)
 - [ ] **M3-05** 注入输入已发出但响应不可见的故障，确认进入待核实状态且不自动补发。
-  **待验证。** Mac 隔离 SSH 已注入收包后丢回执，生产 Rust 适配器返回待核实且无重放。仍需产品 UI、真实设备和平台组合证据。[故障注入](16-mobile-input-and-config.md#本地实际证据)
+  **待验证。** Mac 上的生产 Rust 适配器已通过隔离 SSH 丢回执。Flutter 产品界面也已在本地回环中显示原目标待核实，切到 B、重连 A 及人工确认后均无自动补发。两壳的安装版、真实 herdr 输入扩展及平台组合仍待验证。[Rust 故障注入](16-mobile-input-and-config.md#本地实际证据) · [Flutter 回环用例](24-target-input-recovery.md#m3-05-flutter-回环丢回执)
 - [ ] **M3-06** 按 M0.5 固定的设备、负载与预算记录性能；持续输出时能取消观察并返回看板。
   **待验证。** 持续观察与停止已有模拟器样例。待在同等构建模式下确定预算，并按固定设备和持续输出负载测量延迟、帧时间和内存。[观察验收](40-android-paired-dashboard-validation.md) · [性能口径](06-technology-evaluation.md)
 - [ ] **M3-07** 回归同一字体/主题 fixture，验证字体诊断与已验证字体选择；缺字或错位有无图标建议，不改远端配置，不以图标截图替代列宽和输入验收。

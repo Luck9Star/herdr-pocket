@@ -622,6 +622,44 @@ entries['#host-home #home-dashboard'][0].hidden = true; assert.equal(select(), n
 
 
 
+
+class ActiveNavigationTests(unittest.TestCase):
+    def peer(self):
+        return {'connections':2,'sessionClosed':False,'connectionEvents':[
+          {'hostKey':'A','closed':True},
+          {'hostKey':'A','closed':False,'authAccepted':True,'authAttempts':1,'authSuccesses':1,
+           'ptyRequests':1,'shellRequests':1,'inputBytes':0}]}
+
+    def test_peer_gate_rejects_reconnection_extra_auth_pty_input_and_closed(self):
+        import copy
+        facts=self.peer(); fixture=Mock(); fixture.snapshot.return_value=facts
+        driver.active_peer(fixture)
+        for key,value in [('authAttempts',2),('authSuccesses',2),('ptyRequests',2),
+                          ('shellRequests',2),('inputBytes',1),('closed',True),('hostKey','B')]:
+            changed=copy.deepcopy(facts);changed['connectionEvents'][1][key]=value
+            fixture.snapshot.return_value=changed
+            with self.subTest(key=key),self.assertRaisesRegex(driver.GuiFailure,'direct_active_peer_changed'):
+                driver.active_peer(fixture)
+        fixture.snapshot.return_value={**facts,'connections':3}
+        with self.assertRaisesRegex(driver.GuiFailure,'direct_active_peer_changed'): driver.active_peer(fixture)
+        changed=copy.deepcopy(facts);changed['connectionEvents'][1]['inputBytes']=9
+        fixture.snapshot.return_value=changed;driver.active_peer(fixture,input_bytes=9)
+        with self.assertRaisesRegex(driver.GuiFailure,'direct_active_peer_changed'): driver.active_peer(fixture)
+
+    def test_navigation_checks_each_route_and_native_keyboard_before_peer(self):
+        browser=Mock();fixture=Mock();calls=[]
+        with patch.object(driver,'active_view',side_effect=lambda b,f,s,keyboard=False:calls.append((s,keyboard))), \
+             patch.object(driver,'active_peer') as peer, patch.object(driver,'system_keyboard') as ime:
+            result=driver.exercise_active_navigation(browser,fixture)
+        self.assertEqual(calls,[('ssh',False),('ssh',True),('ssh',False),('dashboard',False),
+            ('ssh',False),('network',False),('ssh',False),('settings',False),('ssh',False)])
+        self.assertEqual(peer.call_count,9)
+        self.assertEqual([c.args[0] for c in ime.call_args_list],[True,False])
+        self.assertTrue(all(result.values()))
+        self.assertEqual([c.args[0] for c in browser.click.call_args_list],['#ssh-focus','#ssh-hide-keyboard',
+             '#show-remote','#nav-terminal','#nav-network','#nav-terminal','#nav-settings','#nav-terminal'])
+
+
 class HeaderGeometryTests(unittest.TestCase):
     def setUp(self):
         self.geometry={'viewport':[400,700],'visualViewport':[0,0,1],'dpr':2.0,
@@ -833,6 +871,7 @@ class TerminalScreenshotProofTests(unittest.TestCase):
         const box=(left,top,width,height)=>({left,top,width,height,right:left+width,bottom:top+height});
         let clip=false,occluded=false,shown=true,missing=false;
         globalThis.innerWidth=400;globalThis.innerHeight=700;globalThis.devicePixelRatio=2;
+        let compact=false;globalThis.matchMedia=()=>({matches:compact});
         globalThis.window={visualViewport:{offsetLeft:0,offsetTop:0,scale:1}};
         const parent={parentElement:null,style:{overflowX:'visible',overflowY:'hidden'},
           getBoundingClientRect:()=>box(0,0,400,clip?0:700)};
@@ -841,7 +880,7 @@ class TerminalScreenshotProofTests(unittest.TestCase):
         const screen={parentElement:null,checkVisibility:()=>true,
           getBoundingClientRect:()=>box(10,150,380,500)};
         globalThis.getComputedStyle=e=>e.style;
-        globalThis.document={querySelector:s=>s==='#ssh-target'?(missing?null:target):screen,
+        globalThis.document={querySelector:s=>(s==='#ssh-target'||s==='#ssh-live-endpoint')?(missing?null:target):screen,
           createRange:()=>({selectNodeContents:()=>{},getClientRects:()=>[target.getBoundingClientRect()]}),
           elementFromPoint:()=>occluded?{}:target};
         const values=[eval(expression)];
@@ -849,7 +888,9 @@ class TerminalScreenshotProofTests(unittest.TestCase):
         occluded=true;values.push(eval(expression));occluded=false;
         shown=false;values.push(eval(expression));shown=true;
         target.textContent='fixture@127.0.0.1:9999 · SSH 已连接';values.push(eval(expression));
-        missing=true;values.push(eval(expression));
+        missing=true;values.push(eval(expression));missing=false;
+        compact=true;target.textContent='fixture@127.0.0.1:2222';values.push(eval(expression));
+        target.textContent='fixture@127.0.0.1:9999';values.push(eval(expression));
         process.stdout.write(JSON.stringify(values));
         """.replace('EXPRESSION',json.dumps(expression))
         result=subprocess.run([shutil.which('node'),'-e',script],capture_output=True,text=True,timeout=10,check=True)
@@ -861,6 +902,8 @@ class TerminalScreenshotProofTests(unittest.TestCase):
             self.assertEqual(value['terminal'],[10,150,380,500])
         self.assertFalse(values[4]['targetMatched'])
         self.assertFalse(values[5]['targetVisible']);self.assertEqual(values[5]['viewport'],[400,700])
+        self.assertTrue(values[6]['targetMatched']);self.assertTrue(values[6]['targetVisible'])
+        self.assertFalse(values[7]['targetMatched'])
 
     def test_failed_uiautomator_measurement_still_saves_raw_png_and_public_diagnostics(self):
         gate=Mock()

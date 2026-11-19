@@ -25,7 +25,7 @@ from flutter_linux_direct_ssh import (
     locked_dependencies, read_exchange,
 )
 from paired_gui import GuiFailure, wait_for
-from tauri_linux_direct_ssh import probe_evidence, require, session_evidence
+from tauri_linux_direct_ssh import probe_evidence, require, session_evidence, verify_shell
 from terminal_screenshot_gate import ScreenshotGateError, verify_terminal_screenshot
 
 if sys.platform == 'win32':
@@ -40,6 +40,7 @@ if sys.platform == 'win32':
 
 TEST = 'windows_direct_ssh_test.dart'
 PHASES = ('probe', 'connected', 'capture', 'disconnect', 'complete')
+PUBLICKEY_PHASES = ('probe', 'key_entry', 'connected', 'capture', 'disconnect', 'complete')
 RETURN_STEPS = frozenset('return_home_' + stage for stage in (
     'button_checking', 'button_missing', 'button_multiple', 'button_disabled', 'button_not_hit', 'button_unstable',
     'button_ready', 'button_enabled', 'tap', 'route', 'catalog', 'entry', 'entry_disabled', 'notice',
@@ -449,7 +450,7 @@ def request(process, root, name, report, *, timeout=45):
     return wait_for(available, f'windows_direct_checkpoint_timeout_{name}', timeout=timeout)[0]
 
 
-def exchange(process, job, root, fixture, report, images):
+def exchange(process, job, root, fixture, report, images, *, publickey=False):
     report['checkpoint'] = 'window'
     owner = request(process, root, 'window', report, timeout=900)
     process_id = owner.get('processId')
@@ -459,17 +460,35 @@ def exchange(process, job, root, fixture, report, images):
     hwnd = wait_for(lambda: find_window(process_id), 'windows_direct_visible_window_missing', timeout=20)
     # Keep the test-owned window inside the monitor even with a 1024x768 runner.
     win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
-    for phase in PHASES:
+    probe_view = None
+    def verify_session(facts, *, sent, closed):
+        if publickey:
+            probe_evidence(facts, 2)
+            verify_shell(facts, 2, 'A', sent=sent, closed=closed, publickey=True)
+        else:
+            session_evidence(facts, sent=sent, closed=closed)
+
+    for phase in PUBLICKEY_PHASES if publickey else PHASES:
         report['checkpoint'] = phase
         # Return has separate control and receipt waits in the live app.
         value = request(process, root, phase, report, timeout=100 if phase == 'complete' else 45)
+        if publickey and phase != 'probe':
+            require(framebuffer(hwnd, process_id)[0] == probe_view, 'windows_direct_publickey_view_changed')
         if phase == 'probe':
-            framebuffer(hwnd, process_id)
+            native_view = framebuffer(hwnd, process_id)
+            if publickey:
+                probe_view = native_view[0]
             require(value.keys() == {'algorithm'} and value['algorithm'] in ('ssh-rsa', 'rsa-sha2-256', 'rsa-sha2-512'),
                     'windows_direct_displayed_algorithm_invalid')
             require(fixture.wait_for_connections_closed(1), 'windows_direct_probe_not_closed')
             probe_evidence(fixture.snapshot(), 1)
             report.update(fingerprintMatchedBeforeConfirm=True, displayedHostKeyAlgorithm=value['algorithm'])
+        elif phase == 'key_entry':
+            require(value.keys() == {'privateKeyExact', 'passphraseEmpty'} and all(v is True for v in value.values()),
+                    'windows_direct_publickey_entry_unproven')
+            require(not os.path.lexists(root / 'target.json'), 'windows_direct_target_file_unconsumed')
+            probe_evidence(fixture.snapshot(), 1)
+            report.update(credentialEntry='focusedFlutterTextInput', privateKeyExact=True, passphraseEmpty=True)
         elif phase == 'connected':
             require(value == {}, 'windows_direct_connected_payload_invalid')
             def ready():
@@ -478,26 +497,77 @@ def exchange(process, job, root, fixture, report, images):
                 return facts if len(events) == 2 and events[1]['outputBytes'] > 0 else None
 
             facts = wait_for(ready, 'windows_direct_shell_output_missing', timeout=5)
-            session_evidence(facts, sent=False, closed=False)
+            verify_session(facts, sent=False, closed=False)
             report['fingerprintConfirmed'] = True
         elif phase == 'capture':
-            session_evidence(fixture.snapshot(), sent=True, closed=False)
+            verify_session(fixture.snapshot(), sent=True, closed=False)
             png, evidence = terminal_capture(hwnd, process_id, value, fixture.screen_token)
-            session_evidence(fixture.snapshot(), sent=True, closed=False)
+            verify_session(fixture.snapshot(), sent=True, closed=False)
             images['ordinary-terminal.png'], report['terminal'] = png, evidence
         else:
             require(fixture.wait_for_connections_closed(2), 'windows_direct_peer_close_unconfirmed')
-            session_evidence(fixture.snapshot(), sent=True, closed=True)
+            verify_session(fixture.snapshot(), sent=True, closed=True)
             name = 'disconnect' if phase == 'disconnect' else 'home'
             png, evidence = grab(hwnd, process_id, value, terminal=False)
-            session_evidence(fixture.snapshot(), sent=True, closed=True)
+            verify_session(fixture.snapshot(), sent=True, closed=True)
             images[f'ordinary-{name}.png'], report[f'{name}Outcome'] = png, evidence
         (root / f'{phase}.ok').touch(exist_ok=False)
     require(process.wait(timeout=30) == 0, 'windows_direct_test_failed_after_home')
     report.update(returnedHome=True, credentialFieldsCleared=True)
 
 
-def run(app, source, report, base, images):
+def restrict_fixture_directory(root):
+    import ntsecuritycon
+    import win32security
+
+    token = win32security.OpenProcessToken(win32api.GetCurrentProcess(), ntsecuritycon.TOKEN_QUERY)
+    try:
+        user, _ = win32security.GetTokenInformation(token, win32security.TokenUser)
+    finally:
+        token.Close()
+    acl = win32security.ACL()
+    flags = win32security.CONTAINER_INHERIT_ACE | win32security.OBJECT_INHERIT_ACE
+    mask = ntsecuritycon.FILE_ALL_ACCESS
+    acl.AddAccessAllowedAceEx(acl.GetAclRevision(), flags, mask, user)
+    info = win32security.DACL_SECURITY_INFORMATION
+    kind = win32security.SE_FILE_OBJECT
+    win32security.SetNamedSecurityInfo(str(root), kind, info | win32security.PROTECTED_DACL_SECURITY_INFORMATION,
+                                       None, None, acl, None)
+    descriptor = win32security.GetNamedSecurityInfo(str(root), kind, info)
+    actual = descriptor.GetSecurityDescriptorDacl()
+    code = 'windows_direct_fixture_acl_unproven'
+    require(descriptor.GetSecurityDescriptorControl()[0] & win32security.SE_DACL_PROTECTED
+            and actual is not None and actual.GetAceCount() == 1, code)
+    ace, access, sid = actual.GetAce(0)
+    require(ace == (win32security.ACCESS_ALLOWED_ACE_TYPE, flags) and access == mask
+            and win32security.ConvertSidToStringSid(sid) == win32security.ConvertSidToStringSid(user), code)
+
+
+@contextmanager
+def windows_fixture(*, publickey):
+    options = {'screen_proof': True, 'channel_deadline': time.monotonic() + 1250}
+    if not publickey:
+        with DirectSshFixture(**options) as fixture:
+            yield fixture, {'password': fixture.password}
+        return
+    # Generate the disposable key in memory, independent of user keys or agents.
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from tauri_ios_direct_ssh import SingleCommandFixture
+
+    key = Ed25519PrivateKey.generate()
+    public = key.public_key().public_bytes(serialization.Encoding.OpenSSH, serialization.PublicFormat.OpenSSH)
+    credentials = {'privateKey': key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.OpenSSH,
+                                                   serialization.NoEncryption()).decode('ascii')}
+    del key
+    try:
+        with SingleCommandFixture(client_public_key=public.decode('ascii').split()[1], **options) as fixture:
+            yield fixture, credentials
+    finally:
+        credentials.clear()
+
+
+def run(app, source, report, base, images, *, publickey=False):
     report['checkpoint'] = 'desktop'
     check_desktop()
     user32 = ctypes.windll.user32
@@ -508,27 +578,34 @@ def run(app, source, report, base, images):
     require(flutter and shutil.which('tesseract'), 'windows_direct_toolchain_missing')
     with tempfile.TemporaryDirectory(prefix='hp-flutter-windows-direct-', dir=base) as directory:
         root = Path(directory)
+        if publickey:
+            report['checkpoint'] = 'fixture_privacy'
+            restrict_fixture_directory(root)
+            report['fixtureDirectoryRestricted'] = True
         env = {k: v for k, v in os.environ.items() if not k.startswith('HERDR_') and
                k not in ('SSH_AUTH_SOCK', 'SSH_AGENT_PID')}
         report['checkpoint'] = 'prepare'
         report['sourceVerification'] = prepare(app, source, flutter, root / 'pub.log', env)
         report['checkpoint'] = 'fixture'
-        with DirectSshFixture(screen_proof=True, channel_deadline=time.monotonic() + 1250) as fixture:
+        with windows_fixture(publickey=publickey) as (fixture, credentials):
             report['checkpoint'] = 'fixture_listener'
             listener = report['listener'] = {
                 'ownedBeforeLaunch': windows_loopback_listener_owners(fixture.port) == [(True, os.getpid())],
             }
             require(listener['ownedBeforeLaunch'], 'windows_direct_unowned_peer_listener')
             with (root / 'target.json').open('x', encoding='utf-8') as stream:
-                json.dump({'port': fixture.port, 'fingerprint': fixture.fingerprint, 'password': fixture.password}, stream)
+                json.dump({'port': fixture.port, 'fingerprint': fixture.fingerprint, **credentials}, stream)
+            credentials.clear()
             report['target'] = {'host': '127.0.0.1', 'port': fixture.port, 'username': fixture.username,
                                 'fingerprint': fixture.fingerprint}
             command = [flutter, 'test', '--no-pub', '--reporter', 'expanded', '-d', 'windows',
                        f'--dart-define=HERDR_FLUTTER_WINDOWS_DIRECT_DIR={root}', f'integration_test/{TEST}']
+            if publickey:
+                command.insert(-1, '--dart-define=HERDR_FLUTTER_WINDOWS_DIRECT_PUBLICKEY=true')
             try:
                 with owned_job(command, cwd=app, env=env, log=root / 'flutter.log', report=report) as (process, job):
                     try:
-                        exchange(process, job, root, fixture, report, images)
+                        exchange(process, job, root, fixture, report, images, publickey=publickey)
                     finally:
                         report['peer'] = fixture.snapshot()  # Before any forced process teardown.
                         stage = read_ui_stage(root)
@@ -550,6 +627,8 @@ def run(app, source, report, base, images):
     require(not root.exists(), 'windows_direct_fixture_directory_remains')
     report['cleanup'] = {'ownedProcessJobEmpty': True, 'peerListenerReleased': True,
                          'fixturePasswordCleared': True, 'fixtureDirectoryRemoved': True}
+    if publickey:
+        report['cleanup']['fixtureKeyFileRemoved'] = True
 
 
 def save_partial_crops(output, frames, report):
@@ -586,6 +665,7 @@ def main():
     parser.add_argument('--app', required=True, type=Path)
     parser.add_argument('--source-sha', required=True)
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--publickey-only', action='store_true')
     args = parser.parse_args()
     app, output = args.app.resolve(), args.output.resolve()
     base = Path(os.environ.get('RUNNER_TEMP', tempfile.gettempdir())).resolve()
@@ -596,11 +676,12 @@ def main():
         parser.error('use Windows with a fresh generated scaffold and output under the runner or system temp directory')
     output.mkdir(parents=True, exist_ok=False)
     report = {'schemaVersion': 1, 'sourceSHA': args.source_sha, 'platform': 'Windows Flutter debug Win32',
-              'authentication': 'password', 'scope': 'native Win32 window, Flutter integration test input and desktop pixels',
+              'authentication': 'publickey' if args.publickey_only else 'password',
+              'scope': 'native Win32 window, Flutter integration test input and desktop pixels',
               'interactiveDesktop': False, 'physicalImeVerified': False, 'status': 'failed'}
     images = {}
     try:
-        run(app, args.source_sha, report, base, images)
+        run(app, args.source_sha, report, base, images, publickey=args.publickey_only)
         for name, png in images.items():
             (output / name).write_bytes(png)
         report.update(status='passed', checkpoint='complete')

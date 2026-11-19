@@ -1,6 +1,14 @@
 name: Windows ordinary SSH
 on:
   workflow_dispatch:
+    inputs:
+      authentication:
+        description: Ordinary SSH authentication
+        type: choice
+        options:
+          - password
+          - publickey
+        default: password
   # Deliberate run refs also work before the workflow is registered on the default branch.
   push:
     branches:
@@ -21,6 +29,7 @@ jobs:
         shell: pwsh
     env:
       PYTHONDONTWRITEBYTECODE: '1'
+      WINDOWS_DIRECT_SSH_AUTHENTICATION: ${{ github.event_name == 'workflow_dispatch' && inputs.authentication || 'password' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -47,11 +56,13 @@ jobs:
           python validation/flutter/tool/candidate.py verify-lock --destination $app
       - name: Exercise ordinary SSH in the visible Windows app
         run: |
-          & "$env:RUNNER_TEMP\direct-ssh-venv\Scripts\python.exe" validation/remote-harness/flutter_windows_direct_ssh.py --app "$env:RUNNER_TEMP\flutter-gui" --source-sha $env:GITHUB_SHA --output "$env:RUNNER_TEMP\windows-direct-ssh-evidence"
+          $mode = @()
+          if ($env:WINDOWS_DIRECT_SSH_AUTHENTICATION -eq 'publickey') { $mode += '--publickey-only' }
+          & "$env:RUNNER_TEMP\direct-ssh-venv\Scripts\python.exe" validation/remote-harness/flutter_windows_direct_ssh.py --app "$env:RUNNER_TEMP\flutter-gui" --source-sha $env:GITHUB_SHA --output "$env:RUNNER_TEMP\windows-direct-ssh-evidence" @mode
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: flutter-windows-direct-ssh-password-${{ github.sha }}
+          name: flutter-windows-direct-ssh-${{ env.WINDOWS_DIRECT_SSH_AUTHENTICATION }}-${{ github.sha }}
           path: ${{ runner.temp }}/windows-direct-ssh-evidence/
           retention-days: 14
           if-no-files-found: warn

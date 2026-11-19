@@ -1,6 +1,6 @@
 # Flutter Windows 普通 SSH 密码验收
 
-2026-11-20，Flutter Windows debug 应用在 GitHub `windows-2022` 原生 Win32 窗口完成普通 SSH 密码连接、输入回显、主动断开和返回首页。临时 SSH 服务只监听本机回环，输入由 Flutter integration test 提交。Windows 私钥认证、主机换钥、Tauri、物理键盘与 IME、公开发布包和外部主机仍待另验。
+2026-11-20，Flutter Windows debug 应用在 GitHub `windows-2022` 原生 Win32 窗口完成普通 SSH 密码连接、输入回显、主动断开和返回首页。临时 SSH 服务只监听本机回环，输入由 Flutter integration test 提交。Windows 加密私钥、主机换钥、Tauri、物理键盘与 IME、公开发布包和外部主机仍待另验。 [未加密 Ed25519 私钥 R3](../windows-ordinary-ssh-publickey-20261120/README.md)
 
 | 批次 | 验收源码 | Actions 与原始工件 | 官方 ZIP SHA-256 |
 | --- | --- | --- | --- |

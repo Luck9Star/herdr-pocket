@@ -74,7 +74,8 @@ jobs:
           S06_GUARDED: ${{ inputs.s06_guarded }}
           S06_ROUTE: ${{ inputs.s06_route }}
           S06_IMPORT_REPLACE: ${{ inputs.s06_import_replace }}
-          LINUX_DIRECT_SSH: ${{ inputs.linux_direct_ssh }}
+          LINUX_DIRECT_SSH: ${{ inputs.linux_direct_ssh || 'off' }}
+          INPUT_FIXTURE: ${{ inputs.input_fixture }}
         run: |
           if { [ "$LINUX_DIRECT_SSH" = password ] || [ "$LINUX_DIRECT_SSH" = tauri-key ] || [ "$LINUX_DIRECT_SSH" = tauri-key-rotation ] || [ "$LINUX_DIRECT_SSH" = flutter-password ] || [ "$LINUX_DIRECT_SSH" = flutter-key ] || [ "$LINUX_DIRECT_SSH" = flutter-key-rotation ]; } && { [ "$S06_SPLIT" = true ] || [ "$S06_GUARDED" = true ]; }; then
             echo 'linux_direct_ssh requires both S06 options to be disabled' >&2
@@ -85,7 +86,7 @@ jobs:
             exit 1
           fi
           case "$S06_ROUTE" in flutter|tauri|both|'') ;; *) echo 'invalid s06_route' >&2; exit 1 ;; esac
-          if [ "$S06_IMPORT_REPLACE" = true ] && { [ "$S06_SPLIT" != true ] || [ "$S06_ROUTE" != tauri ] || [ "$S06_GUARDED" = true ] || [ "${{ inputs.input_fixture }}" = true ] || [ "$LINUX_DIRECT_SSH" != off ] && [ -n "$LINUX_DIRECT_SSH" ]; }; then
+          if [ "$S06_IMPORT_REPLACE" = true ] && { [ "$S06_SPLIT" != true ] || [ "$S06_ROUTE" != tauri ] || [ "$S06_GUARDED" = true ] || [ "$INPUT_FIXTURE" = true ] || [ "$LINUX_DIRECT_SSH" != off ]; }; then
             echo 's06_import_replace requires stock tauri s06_split' >&2; exit 1
           fi
       - name: Install isolated helper and loopback sshd dependencies

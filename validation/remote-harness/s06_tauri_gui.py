@@ -1273,12 +1273,19 @@ def exercise_peer_close(ui, panels, approvals):
 
 def exercise_import_replace(ui, driver, root, approvals, tab_ids, check_bytes, expected):
     """Opt-in real SSH import path; the HPKT and target name are public fixtures."""
+    def sample():
+        return [{key: row[key] for key in ('authenticationCount','recognizedCloseCount','resetCount')}
+                for row in peer_close_sample(approvals)]
+    open_peer = {'authenticationCount':1,'recognizedCloseCount':0,'resetCount':0}
+    closed_peer = {'authenticationCount':1,'recognizedCloseCount':1,'resetCount':0}
     fixture = json.loads((Path(__file__).resolve().parents[1] / 'shared/config-transfer-v1.json').read_text())
     archive = root / 's06-import-fixture.hpkt'
     archive.write_bytes(bytes.fromhex(fixture['archiveHex']))
     driver.click('#workbench-split')
     if ui.read('return document.querySelector("#remote-setup").open;'):
         ui.named('配对与连接资料', '#remote-page #remote-setup', '> summary')
+    driver.click('#host-return-home')
+    wait_for(lambda: ui.read('return !document.querySelector("#home-dashboard").hidden;'), 's06_import_board_missing')
     driver.click('#nav-settings'); driver.click('#config-transfer-open')
     field = '#config-transfer input[type="file"]'
     wait_for(lambda: ui.read('return !!document.querySelector(arguments[0]);', field), 's06_import_file_missing')
@@ -1289,11 +1296,15 @@ def exercise_import_replace(ui, driver, root, approvals, tab_ids, check_bytes, e
     wait_for(lambda: ui.read('return !!document.querySelector(".config-preview");'), 's06_import_preview_missing')
     driver.click('input[name="config-choice-0"][value="replace"]')
     ui.screenshot('import-preview')
+    peer_before = sample()
+    if peer_before != [open_peer] * 2:
+        raise GuiFailure('s06_import_peers_not_open_before_apply')
     ui.named('确认应用所选操作', '.config-preview')
     wait_for(lambda: '导入完成' in driver.read('#config-transfer [role="status"]'), 's06_import_apply_unconfirmed', timeout=20)
-    wait_for(lambda: peer_connection_evidence(approvals[0]) == {'authenticationCount':1,'closed':True},
+    wait_for(lambda: sample()[0] == closed_peer,
              's06_import_peer_a_not_closed', timeout=12)
-    if peer_connection_evidence(approvals[1]) != {'authenticationCount':1,'closed':False}:
+    after_apply = sample()
+    if after_apply != [closed_peer, open_peer]:
         raise GuiFailure('s06_import_peer_b_changed')
     ui.named('关闭', '#config-transfer'); driver.click('#nav-terminal')
     if ui.read('return document.querySelector("#remote-setup").open;'):
@@ -1301,35 +1312,47 @@ def exercise_import_replace(ui, driver, root, approvals, tab_ids, check_bytes, e
     driver.click('#view-tabs button:nth-child(1)')
     wait_for(lambda: ui.read('return document.querySelector("#view-content")?.dataset.tabId;') == tab_ids[0],
              's06_import_old_tab_missing')
-    old = ui.read('return document.querySelector("#view-content .xterm-rows")?.innerText || "";')
-    observed_tick(old, 0)
+    old_tick = wait_for(lambda: (value + 1) if (value := ui.rendered_tick('#view-content', 0)) is not None else None,
+                        's06_import_old_frame_not_visible', timeout=12) - 1
     if not ui.read('return [...document.querySelectorAll("#view-content button")].find(b=>b.textContent==="连接")?.disabled === true;'):
         raise GuiFailure('s06_import_old_connect_enabled')
     ui.screenshot('import-old-retained')
     ui.named('关闭此标签', '#view-content')
     wait_for(lambda: ui.read('return document.querySelectorAll("#view-tabs button").length;') == 1,
              's06_import_old_tab_not_closed')
-    if peer_connection_evidence(approvals[1]) != {'authenticationCount':1,'closed':False}:
+    after_old_close = sample()
+    if after_old_close != after_apply:
         raise GuiFailure('s06_import_peer_b_closed_with_a')
     driver.click('#view-tabs button:nth-child(1)')
     wait_for(lambda: ui.read('return document.querySelector("#view-content")?.dataset.tabId;') == tab_ids[1],
              's06_import_survivor_missing')
-    before = observed_tick(ui.read('return document.querySelector("#view-content .xterm-rows")?.innerText || "";'), 1)
+    before = wait_for(lambda: (value + 1) if (value := ui.rendered_tick('#view-content', 1)) is not None else None,
+                      's06_import_survivor_frame_not_visible', timeout=12) - 1
     ui.named('恢复观察', '#view-content')
     def advanced():
-        text = ui.read('return document.querySelector("#view-content .xterm-rows")?.innerText || "";')
-        try: return observed_tick(text, 1) > before
-        except GuiFailure: return False
-    wait_for(advanced, 's06_import_survivor_not_advancing', timeout=12)
-    if peer_connection_evidence(approvals[1]) != {'authenticationCount':1,'closed':False}:
+        value = ui.rendered_tick('#view-content', 1)
+        return value if value is not None and value > before else None
+    after = wait_for(advanced, 's06_import_survivor_not_advancing', timeout=12)
+    if sample() != [closed_peer, open_peer]:
         raise GuiFailure('s06_import_survivor_reconnected')
     ui.screenshot('import-survivor-advanced');check_bytes(expected)
+    before_survivor_close = sample()
+    if before_survivor_close != [closed_peer, open_peer]:
+        raise GuiFailure('s06_import_survivor_changed_before_close')
     ui.named('关闭此标签', '#view-content')
-    wait_for(lambda: all(peer_connection_evidence(a) == {'authenticationCount':1,'closed':True} for a in approvals),
-             's06_import_peers_not_closed', timeout=12)
-    return {'realFileImport':True,'oldFrameRetained':True,'oldConnectDisabled':True,
+    def final_sample():
+        final = sample()
+        return final if final == [closed_peer] * 2 else None
+    final = wait_for(final_sample, 's06_import_peers_not_closed', timeout=12)
+    evidence = {'realFileImport':True,'oldFrameRetained':True,'oldConnectDisabled':True,
             'oldTabManuallyClosed':True,'survivorAdvancedOnOriginalConnection':True,
-            'peersClosedBeforeDriverExit':True}
+            'peersClosedBeforeDriverExit':True, 'oldVisibleTick':old_tick,
+            'survivorVisibleTicks':{'beforeResume':before,'afterResume':after},
+            'peerSamples':{'beforeApply':peer_before,'afterApply':after_apply,
+                           'afterOldTabClose':after_old_close,'beforeSurvivorClose':before_survivor_close,
+                           'afterSurvivorClose':final}}
+    (ui.output / 's06-tauri-import-replace.json').write_text(json.dumps(evidence, sort_keys=True))
+    return evidence
 
 
 def exercise(args, root, env, configs, approvals, expected):
@@ -1490,7 +1513,8 @@ def exercise(args, root, env, configs, approvals, expected):
                     resize_evidence = exercise_window_resize(ui, panels, targets, approvals, check_bytes)
                 stage = 'close'
                 import_evidence = exercise_import_replace(ui, driver, root, approvals, tab_ids, check_bytes, expected) if import_replace else None
-                peer_authentication_counts = [1, 1] if import_replace else exercise_peer_close(ui, panels, approvals)
+                peer_authentication_counts = ([peer['authenticationCount'] for peer in import_evidence['peerSamples']['afterSurvivorClose']]
+                                              if import_replace else exercise_peer_close(ui, panels, approvals))
                 check_bytes(expected)
                 return {**{key: True for key in ('normalHomepage', 'twoReviewedIdentities', 'samePaneDifferentTerminal',
                     'bothVisible', 'independentFrames', 'bothAdvanced', 'singleInputFocus', 'focusDoesNotRestoreInput',

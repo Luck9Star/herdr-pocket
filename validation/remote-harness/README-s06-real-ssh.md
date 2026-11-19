@@ -41,4 +41,4 @@ actionlint .github/workflows/paired-gui-validation.yml
 
 需安装 `validation/pairing/requirements.txt` 才能实际执行九项证据与诊断门槛测试；缺少依赖时会明确跳过。Flutter 用例仅由隔离 runner 设置 `HERDR_S06_*` 环境后运行，常规套会明确跳过。
 
-额外的 Tauri stock 导入验收可显式设置 `s06_split=true`、`s06_route=tauri`、`s06_import_replace=true`，且不启用 `s06_guarded`。它在既有双连接检查之后，通过 Linux 文件输入选择固定测试 HPKT，替换第一台的受控显示名称，检查第一连接关闭、旧画面及手动关标签、第二连接保持原认证并恢复后 tick 递增，最后确认两连接均关闭。参数默认关闭，不改变既有路径。此路径尚需实际 Linux 工作流运行及回读证据；源代码和本机测试不能代替真实 SSH 签收。
+额外的 Tauri stock 导入验收可显式设置 `s06_split=true`、`s06_route=tauri`、`s06_import_replace=true`，且不启用 `s06_guarded`。它在既有双连接检查之后，通过 Linux 文件输入选择固定测试 HPKT，替换第一台的受控显示名称，检查第一连接关闭、旧画面及手动关标签、第二连接保持原认证并恢复后 tick 递增，最后确认两连接均关闭。`s06-tauri-import-replace.json` 和 manifest 中的 `importReplace` 保存每侧认证、正常关闭与重置次数及可见 tick 数值，不保存终端原文或连接资料。参数默认关闭，不改变既有路径。此路径尚需实际 Linux 工作流运行及回读证据；源代码和本机测试不能代替真实 SSH 签收。

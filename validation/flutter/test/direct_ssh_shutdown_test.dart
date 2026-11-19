@@ -169,7 +169,7 @@ void main() {
       TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => DirectSshPage(tokens: tokens,
         onReturnAfterDisconnect: returned.add))), child: const Text('open')))));
     await tester.tap(find.text('open')); await tester.pumpAndSettle();
-    final dynamic state = tester.state(find.byType(DirectSshPage)); final session = _connect(state, <String>[]); await tester.pump();
+    final dynamic state = tester.state(find.byType(DirectSshPage)); _connect(state, <String>[]); await tester.pump();
     await tester.tap(find.widgetWithText(TextButton, '断开')); await tester.pump();
     tester.view.physicalSize = const Size(700, 844); await tester.pump(); await tester.pump(const Duration(milliseconds: 100));
     expect(find.byKey(const ValueKey('direct-closed-feedback')), findsOneWidget);

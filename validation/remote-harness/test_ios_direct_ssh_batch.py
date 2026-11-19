@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import plistlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -11,6 +12,33 @@ import unittest
 from unittest.mock import Mock
 
 import ios_direct_ssh_batch as batch
+
+
+class WorkflowRoutingTests(unittest.TestCase):
+    def test_branch_routes_both_clients_or_a_single_requested_client(self):
+        workflow = (Path(__file__).resolve().parents[2] / '.github/workflows/direct-ssh-ios.yml').read_text()
+        routes = {}
+        for client in ('flutter', 'tauri'):
+            job = re.search(rf'(?ms)^  {client}-ordinary-ssh-ios:\n    if: (.*?)^    runs-on:', workflow)
+            self.assertIsNotNone(job)
+            routes[client] = []
+            for clause in job[1].removeprefix('>-\n').split('&&'):
+                match = re.fullmatch(r"(!?)startsWith\(github\.ref, '([^']+)'\)", clause.strip())
+                self.assertIsNotNone(match, 'expected a branch-prefix condition')
+                routes[client].append(match.groups())
+
+        prefix = 'refs/heads/codex/acceptance/direct-ssh-ios-'
+        for ref, expected in (
+            (prefix + 'both-r1', {'flutter', 'tauri'}),
+            (prefix + 'flutter-only-r1', {'flutter'}),
+            (prefix + 'tauri-only-r1', {'tauri'}),
+            ('refs/heads/main', set()),
+            ('refs/tags/codex/acceptance/direct-ssh-ios-r1', set()),
+        ):
+            with self.subTest(ref=ref):
+                selected = {client for client, clauses in routes.items()
+                            if all(ref.startswith(branch) != bool(negated) for negated, branch in clauses)}
+                self.assertEqual(selected, expected)
 
 
 class PublicEvidenceTests(unittest.TestCase):

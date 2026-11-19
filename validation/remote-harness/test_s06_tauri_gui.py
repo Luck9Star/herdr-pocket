@@ -8,7 +8,7 @@ from unittest.mock import patch
 try:
     from s06_tauri_gui import (SplitDriver, exercise_window_resize, layout_matches, observed_tick,
                                peer_connection_evidence, require_same_positions, require_side_by_side,
-                               window_dimensions, GuiFailure)
+                               window_dimensions, exercise_direct_resize, GuiFailure)
 except ModuleNotFoundError as missing:
     if missing.name != 'cryptography':
         raise
@@ -217,6 +217,92 @@ class TauriSplitEvidenceTests(unittest.TestCase):
         with patch('s06_tauri_gui.peer_connection_evidence', side_effect=evidence):
             with self.assertRaisesRegex(GuiFailure, '^s06_tauri_resize_did_not_keep_two_original_ssh_connections$'):
                 exercise_window_resize(ui, ['a', 'b'], [], [object(), object()], lambda _: None)
+
+    def test_guarded_resize_keeps_the_original_input_or_stops_without_further_actions(self):
+        targets = [('w1:p1', 'term_a001'), ('w1:p1', 'term_b001')]
+        a_rect = dict(left=20, right=120, top=20, width=100, height=400)
+        b_rect = {**a_rect, 'left': 134, 'right': 234}
+        a = {'target': list(targets[0]), 'phase': 'active', 'focused': False,
+             'currentFrame': True, 'inputControls': True, 'rect': a_rect}
+        b = {**a, 'target': list(targets[1]), 'focused': True, 'rect': b_rect}
+        wide = {'views': [a, b], 'split': '2', 'mounted': 2, 'splitVisible': True,
+                'stashNotice': False, 'returnVisible': True, 'domFocusOwner': 'panel-b'}
+        narrow = {**wide, 'views': [None, b], 'split': '1', 'mounted': 1,
+                  'splitVisible': False, 'stashNotice': True}
+
+        def one_poll(probe, code, **kwargs):
+            observed = probe()
+            if not observed:
+                raise GuiFailure(code)
+            return observed
+
+        def fixture(changed=None, *, tick_restored=31, scoped_peer=True):
+            widths, commands, checked_bytes = [], [], []
+            armed = False
+
+            def read(_, __, ___, action):
+                nonlocal armed
+                commands.append(action)
+                if action == 'arm':
+                    armed = True
+                narrow_state = widths == [700]
+                sample = {key: True for key in ('selectedB', 'targetB', 'directB', 'receiptB',
+                                              'originalEditor', 'originalInputState', 'neverBlurred')} | {
+                    'armed': armed, 'aPaused': narrow_state, 'aObserves': not narrow_state,
+                }
+                if narrow_state and changed:
+                    sample.update(changed)
+                return sample
+
+            def window(width):
+                widths.append(width)
+                return {'window': width}
+
+            def read_tick(panel, side, *, scroll):
+                self.assertEqual((panel, side, scroll), ('a', 0, False))
+                return tick_restored if widths else 30
+
+            def peer(_):
+                return {'authenticationCount': 2 if not scoped_peer and widths else 1, 'closed': False}
+
+            driver = SimpleNamespace(output=None, read=read, wait_window=lambda width: {'window': width}, window=window,
+                                     read_layout=lambda _: narrow if widths == [700] else wide, rendered_tick=read_tick)
+            return (driver, widths, commands, checked_bytes, peer)
+
+        for changed, error, resized in (
+            (None, None, [700, 1440]),
+            ({'neverBlurred': False}, 'input_focus_lost_narrow', [700]),
+            ({'originalEditor': False}, 'input_focus_lost_narrow', [700]),
+            ({'selectedB': False}, 'input_focus_lost_narrow', [700]),
+            ({'originalInputState': False}, 'input_focus_lost_narrow', [700]),
+            ({'receiptB': False}, 'input_focus_lost_narrow', [700]),
+            ({'aPaused': False}, 'layout_narrow', [700]),
+        ):
+            with self.subTest(changed=changed):
+                driver, widths, commands, checked, peer = fixture(changed)
+                with (patch('s06_tauri_gui.wait_for', side_effect=one_poll),
+                      patch('s06_tauri_gui.peer_connection_evidence', side_effect=peer)):
+                    if error:
+                        with self.assertRaisesRegex(GuiFailure, '^s06_tauri_direct_resize_' + error + '$'):
+                            exercise_direct_resize(driver, ['a', 'b'], targets, [object(), object()], checked.append)
+                        self.assertNotIn('finish', commands)
+                    else:
+                        proof = exercise_direct_resize(driver, ['a', 'b'], targets, [object(), object()], checked.append)
+                        self.assertEqual(proof['aFixtureTicks'], [30, 31])
+                        self.assertEqual(proof['domFocusOwnerSamples'], ['panel-b'] * 3)
+                        self.assertEqual(proof['peerInputBytesBeforeEscape'], [0, 1])
+                        self.assertEqual(checked, [(b'', b'b')] * 3)
+                        self.assertEqual(commands[-1], 'finish')
+                self.assertEqual(widths, resized)
+                self.assertEqual(commands.count('arm'), 1)
+
+        for options, error in (({'tick_restored': 30}, 'a_tick_wide_restored'),
+                               ({'scoped_peer': False}, 'peer_changed_narrow')):
+            driver, _, _, checked, peer = fixture(**options)
+            with (patch('s06_tauri_gui.wait_for', side_effect=one_poll),
+                  patch('s06_tauri_gui.peer_connection_evidence', side_effect=peer),
+                  self.assertRaisesRegex(GuiFailure, '^s06_tauri_direct_resize_' + error + '$')):
+                exercise_direct_resize(driver, ['a', 'b'], targets, [object(), object()], checked.append)
 
     def test_stale_read_relocates_before_the_only_native_click(self):
         for read in ('textContent', 'displayed', 'enabled'):

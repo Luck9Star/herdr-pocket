@@ -17,6 +17,7 @@ from flutter_linux_direct_ssh import (
     key_rejection_evidence,
     locked_dependencies,
     read_exchange,
+    read_ui_stage,
     rotation_session,
     window_geometry,
 )
@@ -94,6 +95,20 @@ class PrivateExchangeTests(unittest.TestCase):
             (root / 'probe.json').write_text(' ' * 1025)
             with self.assertRaisesRegex(GuiFailure, 'invalid_exchange'):
                 read_exchange(root, 'probe')
+
+    def test_key_retry_diagnostic_uses_only_fixed_stages(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            note = root / 'stage.json'
+            self.assertIsNone(read_ui_stage(root))
+            note.write_text('{"phase":"key_retry_clipboard_seed"}')
+            self.assertEqual(read_ui_stage(root), 'key_retry_clipboard_seed')
+            note.write_text('{"phase":"key_connect_tap"}')
+            self.assertEqual(read_ui_stage(root), 'key_connect_tap')
+            note.write_text('{"phase":"key_retry_pem_readback","value":"unbound data"}')
+            self.assertIsNone(read_ui_stage(root))
+            note.write_text('{"phase":"unrecognized data"}')
+            self.assertIsNone(read_ui_stage(root))
 
     def test_key_negative_checkpoints_require_consumed_material_and_zero_new_connections(self):
         probe = {'id': 1, 'hostKey': 'A', 'closed': True, 'authAttempts': 0,

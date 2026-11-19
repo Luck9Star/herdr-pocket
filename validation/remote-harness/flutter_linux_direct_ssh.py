@@ -38,7 +38,11 @@ from candidate import lock_packages
 TEST = 'linux_direct_ssh_test.dart'
 SHARED_STEPS = 'direct_ssh_ui_steps.dart'
 PHASES = ('home', 'form', 'probe', 'password', 'private_key', 'key_mode_switch', 'key_wrong_passphrase',
-          'key_valid_passphrase', 'key_rotation_reject', 'key_rotation_retain', 'key_rotation_probe', 'connected', 'input', 'capture', 'disconnect', 'return_home')
+          'key_retry_editor', 'key_retry_clipboard_seed', 'key_retry_paste_available', 'key_retry_paste_tap',
+          'key_retry_pem_readback', 'key_retry_paste_feedback', 'key_retry_clipboard_clear',
+          'key_retry_clipboard_empty', 'key_retry_passphrase_required', 'key_valid_passphrase',
+          'key_retry_target_bound', 'key_connect_tap', 'key_rotation_reject', 'key_rotation_retain',
+          'key_rotation_probe', 'connected', 'input', 'capture', 'disconnect', 'return_home')
 PENDING_PIXELS = {'terminal_screenshot_echo_not_visible', 'terminal_screenshot_token_not_visible',
                   'terminal_screenshot_proof_not_adjacent'}
 
@@ -109,6 +113,13 @@ def read_exchange(root, name):
     value = json.loads(path.read_bytes())
     require(isinstance(value, dict), 'flutter_linux_invalid_exchange')
     return value
+
+
+def read_ui_stage(root):
+    stage = read_exchange(root, 'stage')
+    if stage is not None and stage.keys() == {'phase'} and stage['phase'] in PHASES:
+        return stage['phase']
+    return None
 
 
 def window_geometry(raw):
@@ -349,9 +360,9 @@ def run(app, source, report, *, encrypted=False, rotating=False):
                     images = exchange(process, root, fixture, report, encrypted=encrypted, rotating=rotating)
                 finally:
                     report['peer'] = fixture.snapshot()  # Before any forced teardown.
-                    stage = read_exchange(root, 'stage')
-                    if stage is not None and stage.keys() == {'phase'} and stage['phase'] in PHASES:
-                        report['uiStage'] = stage['phase']
+                    stage = read_ui_stage(root)
+                    if stage is not None:
+                        report['uiStage'] = stage
         report['checkpoint'] = 'cleanup'
         require(process.poll() is not None and port_is_released(fixture.port) and fixture.password == '',
                 'flutter_linux_cleanup_unconfirmed')

@@ -95,6 +95,19 @@ Map<String, Object> visiblePixels(
   };
 }
 
+Map<String, Object> outcomePixels(WidgetTester tester, Finder outcome) {
+  final size = tester.view.physicalSize;
+  expect(tester.view.devicePixelRatio, 1);
+  expect(outcome.hitTestable(), findsOneWidget);
+  final rect = tester.getRect(outcome);
+  final left = rect.left.ceil(), top = rect.top.ceil();
+  final right = rect.right.floor(), bottom = rect.bottom.floor();
+  expect(left >= 0 && top >= 0 && right <= size.width && bottom <= size.height &&
+      right > left && bottom > top, isTrue);
+  return {'surface': [size.width.round(), size.height.round()],
+    'outcomeBounds': [left, top, right - left, bottom - top]};
+}
+
 Future<void> runLinuxOrdinary(
   WidgetTester tester,
   LinuxTarget target, {
@@ -294,7 +307,9 @@ Future<void> runLinuxOrdinary(
     tester.widget<FilledButton>(control('direct-probe')).onPressed,
     isNotNull,
   );
-  await checkpoint('disconnect', const {});
+  final outcomeGeometry = outcomePixels(tester, control('direct-closed-feedback'));
+  await checkpoint('disconnect', outcomeGeometry);
+  expect(outcomePixels(tester, control('direct-closed-feedback')), outcomeGeometry);
 
   step('return_home');
   await tapControl(
@@ -316,7 +331,9 @@ Future<void> runLinuxOrdinary(
     '本机已断开',
   );
   expect(tester.takeException(), isNull);
-  await checkpoint('complete', const {});
+  final homeGeometry = outcomePixels(tester, control('home-ssh-closed'));
+  await checkpoint('complete', homeGeometry);
+  expect(outcomePixels(tester, control('home-ssh-closed')), homeGeometry);
 }
 
 void main() {

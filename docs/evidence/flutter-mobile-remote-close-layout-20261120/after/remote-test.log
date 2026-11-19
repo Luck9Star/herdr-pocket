@@ -1,0 +1,4 @@
+00:00 +0: loading /private/tmp/herdr-mobile-remote-fix.8u5bSgZ6/app-py/test/mobile_priority_audit_test.dart
+00:00 +0: product mobile audit 320 remote (variant: TargetPlatform.android)
+00:02 +1: product mobile audit 390 remote (variant: TargetPlatform.android)
+00:03 +2: All tests passed!

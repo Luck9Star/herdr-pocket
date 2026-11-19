@@ -718,9 +718,11 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   Widget mobileTargetForm({bool desktop = false}) {
     final outcome = disconnectOutcomeCopy;
     final failed = closeCleanupFailed;
+    final minFeedbackHeight = !desktop && closeLocalConfirmed && closeRemoteReported &&
+        MediaQuery.sizeOf(context).width < 360 ? 84.0 : 66.0;
     return entryList(desktop: desktop, key: const ValueKey('direct-form'), children: [
     if (userDisconnected && !busy) ...[
-      Container(key: const ValueKey('direct-closed-feedback'), constraints: const BoxConstraints(minHeight: 66),
+      Container(key: const ValueKey('direct-closed-feedback'), constraints: BoxConstraints(minHeight: minFeedbackHeight),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(color: widget.tokens.color(failed ? 'dangerSoft' : 'brandSoft'), borderRadius: BorderRadius.circular(10),
           border: Border.all(color: widget.tokens.color(failed ? 'dangerBorder' : 'brandBorder'))),

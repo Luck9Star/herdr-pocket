@@ -42,7 +42,7 @@ class DirectSshFixture:
     username = 'fixture'
 
     def __init__(self, *, observe_helper_keys=False, rotate_after_probe=False, screen_proof=False,
-                 channel_deadline=None):
+                 channel_deadline=None, client_public_key=None):
         if channel_deadline is not None and (type(channel_deadline) not in (int, float) or
                 not 0 < channel_deadline <= time.monotonic() + 1800 or not math.isfinite(channel_deadline)):
             raise ValueError('invalid_fixture_channel_deadline')
@@ -50,6 +50,7 @@ class DirectSshFixture:
         # Existing Android callers retain their ten-second channel/shell waits
         # and their public event schema.
         self._channel_deadline = channel_deadline
+        self._client_public_key = client_public_key
         self._observe_helper_keys = observe_helper_keys
         self._rotate_after_probe = rotate_after_probe
         # Public, per-peer freshness proof, emitted only by this SSH server.
@@ -258,7 +259,8 @@ class DirectSshFixture:
 
             def check_auth_password(self, username, password):
                 owner._connection_increment(transport, 'authAttempts')
-                accepted = username == owner.username and secrets.compare_digest(password, owner.password)
+                accepted = (owner._client_public_key is None and username == owner.username
+                            and secrets.compare_digest(password, owner.password))
                 if accepted:
                     owner._record('authAccepted')
                     owner._connection_record(transport, 'authAccepted')
@@ -267,7 +269,26 @@ class DirectSshFixture:
 
             def check_auth_publickey(self, username, offered):
                 owner._connection_increment(transport, 'authAttempts')
-                return paramiko.AUTH_FAILED
+                accepted = (owner._client_public_key is not None and username == owner.username
+                            and secrets.compare_digest(offered.get_base64(), owner._client_public_key))
+                return paramiko.AUTH_SUCCESSFUL if accepted else paramiko.AUTH_FAILED
+
+            def get_allowed_auths(self, username):
+                if owner._client_public_key is not None:
+                    return 'publickey'
+                return super().get_allowed_auths(username)
+
+            def check_channel_request(self, kind, channel_id):
+                action = super().check_channel_request(kind, channel_id)
+                if action == paramiko.OPEN_SUCCEEDED and owner._client_public_key is not None:
+                    # An unsigned public-key offer also calls check_auth_publickey.
+                    # Paramiko only reaches this callback after signed authentication.
+                    if not transport.is_authenticated():
+                        return paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
+                    owner._record('authAccepted')
+                    owner._connection_record(transport, 'authAccepted')
+                    owner._connection_record(transport, 'authSuccesses', 1)
+                return action
 
             def check_auth_interactive(self, username, submethods):
                 owner._connection_increment(transport, 'authAttempts')

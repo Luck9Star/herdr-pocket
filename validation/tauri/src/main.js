@@ -5,8 +5,9 @@ import graphemesLicense from '../node_modules/@xterm/addon-unicode-graphemes/LIC
 import './style.css';
 import './connection-entry.css';
 import './direct-ssh-setup.css';
+import './direct-ssh-live.css';
 import { readTheme } from './theme.js';
-import { observeAndroidSshHeader, observeIosSshActions, observeMobileViewport } from './mobile-viewport.js';
+import { observeAndroidSshHeader, observeAndroidSshIme, observeMobileViewport } from './mobile-viewport.js';
 import { initRemote } from './remote.js';
 import { initKeyRouter } from './key-router.js';
 import { initializePasteClipboard } from './mobile-clipboard.js';
@@ -40,11 +41,12 @@ const platformReady = initializePasteClipboard(native);
 void platformReady?.then(() => {
   if (shellPlatform.current() === 'ios') {
     document.documentElement.classList.add('ios-edge-to-edge');
-    observeIosSshActions();
   }
   if (shellPlatform.current() !== 'android') return;
   document.documentElement.classList.add('android-edge-to-edge');
   observeAndroidSshHeader();
+  observeAndroidSshIme(window, document, () => invoke('mobile_system_top_inset'),
+    {getEditor: () => document.querySelector('#ssh-live:not([hidden]) #ssh-terminal .xterm-helper-textarea')});
 });
 observeMobileViewport(undefined, undefined, undefined, native ? async () => {
   await platformReady;

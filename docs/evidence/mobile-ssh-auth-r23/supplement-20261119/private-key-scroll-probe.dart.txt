@@ -1,0 +1,159 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:ui' as ui;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:herdr_flutter_probe/design_tokens.dart';
+import 'package:herdr_flutter_probe/host_catalog.dart';
+import 'package:herdr_flutter_probe/host_catalog_page.dart';
+import 'package:terminal_view/terminal_view.dart';
+
+import 'direct_ssh_widget_test.dart' show waitFor;
+import 'host_catalog_test.dart' show MemoryCatalogStorage;
+import 'host_tabs_widget_test.dart' show tabProfile;
+
+final shot = GlobalKey();
+const out = '/tmp/herdr-r23-private-scroll-20261119';
+const fontRoot = '/tmp/herdr-pocket-r20-design/fonts';
+const primaryFont = 'R20SanFrancisco';
+const chineseFont = 'R20PingFangSC';
+const fallbackFonts = [chineseFont];
+final safePadding = Platform.environment['PROBE_WIDTH'] == '320' ? const FakeViewPadding(top: 24, bottom: 24) : const FakeViewPadding(top: 47, bottom: 34);
+Future<void>? fontsReady;
+
+final results = <String, Object>{};
+Finder by(String value) => find.byKey(ValueKey(value));
+
+Future<void> capture(WidgetTester tester, String name, Map<String, Finder> items) async {
+  await tester.pumpAndSettle();
+  results[name] = {
+    for (final item in items.entries)
+      if (item.value.evaluate().length == 1)
+        item.key: (() {
+          final rect = tester.getRect(item.value);
+          return [rect.left, rect.top, rect.width, rect.height];
+        })(),
+    'safeArea': [tester.view.padding.top, tester.view.padding.bottom],
+    'hitAtCenter': {
+      for (final item in items.entries)
+        if (item.value.evaluate().length == 1) item.key: item.value.hitTestable().evaluate().length == 1,
+    },
+  };
+  final boundary = shot.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+  await tester.runAsync(() async {
+    final image = await boundary.toImage(pixelRatio: 1);
+    final bytes = (await image.toByteData(format: ui.ImageByteFormat.png))!;
+    File('$out/flutter-$name.png').writeAsBytesSync(bytes.buffer.asUint8List());
+    image.dispose();
+    File('$out/flutter.json').writeAsStringSync(const JsonEncoder.withIndent('  ').convert(results));
+  });
+}
+
+Map<String, Finder> homeItems() => {
+  'brand': find.text('Herdr Pocket'), 'pairing': by('hosts-add'), 'ssh': by('hosts-direct-ssh'),
+  'browse': find.text('看板'), 'terminal': find.text('终端'), 'network': find.text('网络'), 'settings': find.text('设置'),
+  'search': by('hosts-search'), 'tabs': find.byType(NavigationBar),
+  'emptyText': find.text('暂无已保存主机 · 使用“配对添加”开始'),
+  'tabBoard': find.byType(NavigationDestination).at(0),
+  'tabTerminal': find.byType(NavigationDestination).at(1),
+  'tabNetwork': find.byType(NavigationDestination).at(2),
+  'tabSettings': find.byType(NavigationDestination).at(3),
+  'brandMark': find.text('HP'),  'host': find.text('Workstation-01'),
+};
+
+Map<String, Finder> formItems() => {
+  'title': find.text('普通 SSH'), 'host': by('direct-host'), 'port': by('direct-port'), 'user': by('direct-user'),
+  'probe': by('direct-probe'), 'password': by('direct-secret'), 'connect': by('direct-connect'),
+  'review': by('direct-trust-key'), 'cancelReview': by('direct-trust-cancel'),
+  'appBar': find.byType(AppBar), 'back': find.byType(BackButton),
+  'status': by('direct-status'),
+
+  'keySwitch': find.byType(SwitchListTile), 'reviewDialog': find.byType(AlertDialog),
+  'reviewCombinedContent': find.textContaining('目标 fixture@', findRichText: true),
+  'reviewDisplayTitle': find.text('核对主机密钥'),
+  'formSurface': by('direct-form'),
+};
+
+Future<void> loadFace(String family, List<String> paths) async {
+  final loader = FontLoader(family);
+  for (final path in paths) {
+    loader.addFont(File(path).readAsBytes().then(ByteData.sublistView));
+  }
+  await loader.load();
+}
+
+Future<void> loadCaptureFonts() async {
+  await loadFace(primaryFont, [for (final weight in [400, 500, 600, 700]) '$fontRoot/SFNS-$weight.ttf']);
+  await loadFace(chineseFont, [for (final weight in [400, 500, 600]) '$fontRoot/PingFangSC-$weight.otf']);
+  await loadFace('MaterialIcons', [
+    '/Users/yangyitian/flutter-3.47.9/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
+  ]);
+  await loadFace('ProbeNerd', [
+    'assets/shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf',
+  ]);
+}
+
+Future<void> mount(WidgetTester tester, HostCatalog catalog) async {
+  tester.view.devicePixelRatio = 1;
+  tester.view.physicalSize = Platform.environment['PROBE_WIDTH'] == '320' ? const Size(320, 640) : const Size(390, 844);
+  tester.view.padding = safePadding;
+  tester.view.viewPadding = safePadding;
+  tester.platformDispatcher.localeTestValue = const Locale('zh', 'CN');
+  final tokens = (await tester.runAsync(() async {
+    await (fontsReady ??= loadCaptureFonts());
+    return DesignTokens.load();
+  }))!;
+  final theme = tokens.theme;
+  final captureTheme = theme.copyWith(
+    platform: TargetPlatform.iOS,
+    textTheme: theme.textTheme.apply(fontFamily: primaryFont, fontFamilyFallback: fallbackFonts),
+    primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: primaryFont, fontFamilyFallback: fallbackFonts),
+    chipTheme: theme.chipTheme.copyWith(labelStyle: theme.chipTheme.labelStyle?.copyWith(
+      fontFamily: primaryFont, fontFamilyFallback: fallbackFonts)),
+    appBarTheme: theme.appBarTheme.copyWith(titleTextStyle: theme.appBarTheme.titleTextStyle?.copyWith(
+      fontFamily: primaryFont, fontFamilyFallback: fallbackFonts)),
+  );
+  await tester.pumpWidget(RepaintBoundary(key: shot, child: MaterialApp(debugShowCheckedModeBanner:false,
+    theme: captureTheme, builder: (context, child) => MediaQuery(data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(Platform.environment['PROBE_SCALE'] == '200' ? 2 : 1)), child: child!), home: HostCatalogPage(tokens: tokens, catalog: catalog, offlineBuilder: (_) => const SizedBox()))));
+  await tester.pumpAndSettle();
+}
+
+void main() {
+ testWidgets('320 private key hint remains reachable', (tester) async {
+  final catalog = HostCatalog(storage: MemoryCatalogStorage(), clock: () => 1000);
+  await mount(tester, catalog);
+  await tester.tap(by('hosts-direct-ssh')); await tester.pumpAndSettle();
+  await tester.enterText(by('direct-host'), '127.0.0.1');
+  await tester.enterText(by('direct-port'), '49856');
+  await tester.enterText(by('direct-user'), 'fixture'); await tester.pump();
+  await tester.tap(by('direct-probe')); await tester.pump();
+  await waitFor(tester, by('direct-trust-key')); await tester.pumpAndSettle();
+  await tester.tap(by('direct-trust-key')); await tester.pumpAndSettle();
+  await tester.tap(by('direct-auth-key')); await tester.pumpAndSettle();
+  final hint = find.text('填写完整私钥后才能连接。');
+  final button = by('direct-connect');
+  final form = by('direct-form');
+  final before = tester.getRect(hint);
+  await tester.drag(form, const Offset(0, -220)); await tester.pumpAndSettle();
+  final after = tester.getRect(hint); final visible = tester.getRect(form);
+  final connect = tester.getRect(button); final back = find.byType(BackButton);
+  final backRect = tester.getRect(back);
+  expect(after.top, greaterThanOrEqualTo(visible.top));
+  expect(after.bottom, lessThanOrEqualTo(visible.bottom));
+  expect(connect.top, greaterThanOrEqualTo(visible.top));
+  expect(connect.bottom, lessThanOrEqualTo(visible.bottom));
+  expect(tester.widget<FilledButton>(button).onPressed, isNull);
+  expect(back.hitTestable(), findsOneWidget);
+  expect(tester.widget<TextField>(by('direct-secret')).controller!.text, isEmpty);
+  expect(tester.widget<TextField>(by('direct-passphrase')).controller!.text, isEmpty);
+  debugPrint('SCROLL_EVIDENCE ${jsonEncode({'before':[before.left,before.top,before.width,before.height], 'after':[after.left,after.top,after.width,after.height], 'form':[visible.left,visible.top,visible.width,visible.height], 'connect':[connect.left,connect.top,connect.width,connect.height], 'connectEnabled':false, 'back':[backRect.left,backRect.top,backRect.width,backRect.height], 'backCenterHit':true})}');
+  await capture(tester,'private-key-scrolled-320',{'hint':hint,'form':form,'connect':button,'back':back});
+  await tester.tap(back); await tester.pumpAndSettle();
+  expect(by('direct-host'),findsOneWidget); expect(by('direct-secret'),findsNothing);
+  expect(tester.takeException(),isNull);
+  await tester.pumpWidget(const SizedBox()); catalog.dispose();
+ },variant:TargetPlatformVariant.only(TargetPlatform.iOS));
+}

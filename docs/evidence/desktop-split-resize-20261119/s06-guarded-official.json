@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "suite": "S06 two real OpenSSH/herdr targets with Flutter Widget",
+  "mode": "guarded",
+  "sourceSHA": "67c5263fbbf1a6bd947c940c5f7ceb4bd160b80d",
+  "status": "passed",
+  "run": 44459280773,
+  "job": 135343613484,
+  "jobURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44459280773/job/135343613484",
+  "artifact": 14499861389,
+  "artifactURL": "https://github.com/Luck9Star/herdr-pocket/actions/runs/44459280773/artifacts/14499861389",
+  "zipSha256": "c36dc479249d9bb225ae7f601d89a309e536422031e142bf5f74c546ce857617",
+  "zipBytes": 21654,
+  "officialFileHashes": {
+    "flutter-pubspec.lock": "1440de0189f3920cd44a4bcdbdcc031e6b295833edeeb92f7b0f8b986ad0f9ac",
+    "manifest.json": "f3a4d2b62219df09c424c33f1466e8a2d875c97aeecd0e7e1fcbd3c66230a8ff",
+    "remote-contract.json": "6624b2bd1fc6672a897db3685e6f3bb0cbbc644cd09353882f3bffc765576d1b",
+    "transport-Cargo.lock": "7e6af346c9693317dbc753ea9a6b25bcdfb0e1559dad1b67d51921a52e978629"
+  },
+  "platform": "Ubuntu 24.04 x86_64 loopback OpenSSH",
+  "runnerImage": {
+    "imageOS": "ubuntu24",
+    "imageVersion": "20261111.127.1"
+  },
+  "openSshVersion": "OpenSSH_9.6p1 Ubuntu-3ubuntu13.20, OpenSSL 3.0.13 30 Jan 2024",
+  "herdr": {
+    "upstreamSHA": "2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01",
+    "patchSHA256": "7f89a79677a456f024bd73555130861cd1b0b47e9d4d69f98d4e18ffc7f1ed8a",
+    "binarySHA256": "8cb39663b4e466006ffb0d68b5efe5be61701446b6c9877bf84cce2c0f762dbc"
+  },
+  "frameEvidence": "widget state after Terminal.write",
+  "peerInputBytes": [
+    9,
+    1
+  ],
+  "checks": {
+    "normalHomepage": true,
+    "twoReviewedIdentities": true,
+    "samePaneDifferentTerminal": true,
+    "bothVisible": true,
+    "independentFrames": true,
+    "bothAdvanced": true,
+    "singleInputFocus": true,
+    "focusDoesNotRestoreInput": true,
+    "lateInputRejected": true,
+    "stoppedBoth": true,
+    "matchedDeviceKeyInSshd": true,
+    "exactRemoteBytes": true,
+    "distinctAuthenticatedDeviceKeys": true,
+    "targetBindingsPreserved": true,
+    "revokedFixtureKeys": true
+  },
+  "sides": [
+    {
+      "connectionCount": 1,
+      "frameCount": 11,
+      "deltaFrames": 9,
+      "inputAccepted": true
+    },
+    {
+      "connectionCount": 1,
+      "frameCount": 13,
+      "deltaFrames": 12,
+      "inputAccepted": true
+    }
+  ],
+  "sharedPtySamples": [
+    {
+      "noObservedResize": true,
+      "initialColumns": 119,
+      "initialRows": 40,
+      "columns": 119,
+      "rows": 40,
+      "changes": 0,
+      "samples": 558,
+      "sampleIntervalMs": 50,
+      "maxSampleGapMs": 84,
+      "elapsedMs": 27981,
+      "readErrors": 0,
+      "captureErrors": 0
+    },
+    {
+      "noObservedResize": true,
+      "initialColumns": 119,
+      "initialRows": 40,
+      "columns": 119,
+      "rows": 40,
+      "changes": 0,
+      "samples": 552,
+      "sampleIntervalMs": 50,
+      "maxSampleGapMs": 63,
+      "elapsedMs": 27652,
+      "readErrors": 0,
+      "captureErrors": 0
+    }
+  ],
+  "cleanup": {
+    "ownedProcessesStopped": true,
+    "ephemeralKeysRemoved": true,
+    "userAuthorizationFilesTouched": false,
+    "rawLogsUploaded": false
+  },
+  "scope": "real Flutter widget, two real SSH/herdr sessions; explicit test signers and memory journals",
+  "physicalImeVerified": false,
+  "unverified": [
+    "macOS native window",
+    "window width transitions on the same remote run",
+    "native pixels",
+    "physical IME",
+    "protected system-store runtime",
+    "real cross-network links"
+  ]
+}

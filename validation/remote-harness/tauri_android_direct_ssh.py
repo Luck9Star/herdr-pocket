@@ -20,7 +20,7 @@ import time
 import uuid
 import xml.etree.ElementTree as ET
 
-from android_gui import AndroidWebView, PACKAGE, SERIAL, adb, dashboard_add_selector
+from android_gui import AndroidWebView, PACKAGE, SERIAL, adb, dashboard_add_selector, system_keyboard, public_ime_diagnostic
 from paired_gui import GuiFailure, wait_for
 from terminal_screenshot_gate import ECHO_MARKER, ScreenshotGateError, verify_terminal_screenshot
 
@@ -51,6 +51,7 @@ DIRECT_ERROR_CODES = frozenset('''
     direct_terminal_webview_capture_failed direct_header_measurement_invalid direct_header_system_overlap direct_header_content_overlap direct_header_geometry_changed
     direct_unowned_or_invalid_device direct_unsafe_fixture direct_return_home_missing direct_return_home_peer_changed
     direct_setup_layout_unproven direct_mobile_setup_unproven direct_probe_peer_unproven
+    direct_active_ui_invalid direct_active_peer_changed direct_active_tap_unproven
     direct_webview_not_ready direct_webview_socket_missing
 '''.split())
 ANDROID_ERROR_CODES = {
@@ -67,6 +68,10 @@ ANDROID_ERROR_CODES = {
     'android_text_input_mismatch': 'direct_android_text_input_mismatch',
     'android_select_option_missing': 'direct_android_select_option_missing',
     'android_select_option_failed': 'direct_android_select_option_failed',
+    'android_system_ime_target_mismatch': 'direct_android_system_ime_target_mismatch',
+    'android_system_ime_evidence_unavailable': 'direct_android_system_ime_evidence_unavailable',
+    'android_system_ime_show_unconfirmed': 'direct_android_system_ime_show_unconfirmed',
+    'android_system_ime_hide_unconfirmed': 'direct_android_system_ime_hide_unconfirmed',
 }
 
 
@@ -87,6 +92,9 @@ DRIVER_STAGES = frozenset({'device_preflight', 'reverse_setup', 'install_app', '
     'webview_socket', 'webview_forward', 'webview_ready', 'rotation_ui', 'open_remote',
     'open_ssh_form', 'enter_host', 'enter_port', 'enter_user', 'probe_host',
     'await_fingerprint', 'review_fingerprint', 'select_key_auth', 'enter_private_key',
+    'active_initial', 'active_keyboard_opened', 'active_keyboard_closed', 'active_board',
+    'active_terminal_from_board', 'active_network', 'active_terminal_from_network',
+    'active_settings', 'active_terminal_from_settings',
     'enter_passphrase', 'enter_password', 'connect', 'terminal_input', 'disconnect', 'return_home', 'cleanup'})
 
 
@@ -104,14 +112,15 @@ def _header_geometry(browser):
             !!hit && (hit===e || e.contains(hit))};
       };
       const vv=window.visualViewport;
+      const compact=matchMedia('(max-width:599px)').matches;
       return {native:{overlapPx:n.overlapPx,systemBottomPx:n.systemBottomPx,viewY:n.viewY,
           statusPx:n.statusPx,stableStatusPx:n.stableStatusPx,windowTopPx:n.windowTopPx,
           cutoutPx:n.cutoutPx,captionPx:n.captionPx,stableCaptionPx:n.stableCaptionPx},
         viewport:[innerWidth,innerHeight],dpr:devicePixelRatio,
         visualViewport:vv?[vv.offsetLeft,vv.offsetTop,vv.scale]:null,scrollY:scrollY,
         appliedTopCss:parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hp-system-top-inset')),
-        header:measure('.app-header'),title:measure('.app-header h1'),button:measure('#host-open-remote'),
-        sshTitle:measure('#ssh-page-heading'),target:measure('#ssh-target'),
+        header:measure(compact?'.ssh-live-header':'.app-header'),title:measure(compact?'#ssh-active-title':'.app-header h1'),button:measure(compact?'#ssh-disconnect':'#host-open-remote'),
+        sshTitle:measure(compact?'#ssh-active-title':'#ssh-page-heading'),target:measure(compact?'#ssh-live-endpoint':'#ssh-target'),
         terminal:measure('.ssh-scroll'),xterm:measure('#ssh-terminal .xterm-screen')};
     })()"""
     try:
@@ -187,7 +196,8 @@ def _header_evidence(geometry, *, origin, image_size):
 def _terminal_geometry(browser, expected_target):
     """Read displayed geometry only; no terminal buffer or application bridge."""
     return browser.evaluate("""(() => {
-      const expected = %s, target = document.querySelector('#ssh-target');
+      const expected = %s, compact=matchMedia('(max-width:599px)').matches,
+        target = document.querySelector(compact?'#ssh-live-endpoint':'#ssh-target');
       const screen = document.querySelector('#ssh-terminal .xterm-screen');
       const visible = e => e && e.checkVisibility({checkOpacity:true,checkVisibilityCSS:true});
       const vv = window.visualViewport;
@@ -213,7 +223,7 @@ def _terminal_geometry(browser, expected_target):
           const hit=document.elementFromPoint(px,py);return hit===target||target.contains(hit);
         });
       });
-      return {targetMatched:target.textContent.trim()===expected+' · SSH 已连接',
+      return {targetMatched:target.textContent.trim()===(compact?expected:expected+' · SSH 已连接'),
         targetVisible,terminalVisible:visible(screen),targetRect:[t.left,t.top,t.width,t.height],
         viewport:[innerWidth,innerHeight],dpr:devicePixelRatio,
         visualViewport:vv?[vv.offsetLeft,vv.offsetTop,vv.scale]:[0,0,1],
@@ -587,6 +597,171 @@ def require_first_probe(fixture):
         raise GuiFailure('direct_probe_peer_unproven')
 
 
+def active_peer(fixture, input_bytes=0):
+    """Require the original probe and one live authenticated shell with exact input."""
+    peer=fixture.snapshot()
+    events=peer.get('connectionEvents')
+    if (peer.get('connections') != 2 or not isinstance(events,list) or len(events) != 2
+            or events[0].get('hostKey') != 'A' or events[0].get('closed') is not True
+            or events[1].get('hostKey') != 'A' or events[1].get('closed') is not False
+            or peer.get('sessionClosed') is not False or events[1].get('authAccepted') is not True
+            or events[1].get('authAttempts') != 1 or events[1].get('authSuccesses') != 1
+            or events[1].get('ptyRequests') != 1 or events[1].get('shellRequests') != 1
+            or events[1].get('inputBytes') != input_bytes):
+        raise GuiFailure('direct_active_peer_changed')
+
+
+ACTIVE_FACTS = frozenset(('route','live','title','badge','target','control','disconnect',
+                          'keyboardState','sectionContent','navSelected'))
+
+
+def active_diagnostic(browser, fixture):
+    """Bounded geometry and peer counters only; never collect text or identifiers."""
+    result={}
+    try:
+        value=browser.evaluate(r"""(()=>{
+          const rect=id=>{const e=id==='ssh-connected-badge'?document.querySelector('.ssh-connected-badge'):document.getElementById(id);const r=e?.getBoundingClientRect();
+            return r?[r.x,r.y,r.width,r.height].map(Math.round):null;};
+          const v=visualViewport;return {viewport:[innerWidth,innerHeight,v?.offsetTop,v?.height].map(Math.round),
+            title:rect('ssh-active-title'),badge:rect('ssh-connected-badge'),focus:rect('ssh-focus'),
+            hide:rect('ssh-hide-keyboard'),disconnect:rect('ssh-disconnect')};
+        })()""")
+        keys=('viewport','title','badge','focus','hide','disconnect')
+        if (isinstance(value,dict) and set(value)==set(keys) and
+            all((key!='viewport' and item is None) or
+                (isinstance(item,list) and len(item)==4 and all(type(x) is int and -100000<=x<=100000 for x in item))
+                for key,item in value.items())):
+            result['geometry']=value
+    except (GuiFailure,ValueError,TypeError): pass
+    try:
+        peer=fixture.snapshot();events=peer.get('connectionEvents'); keys=('authAttempts','authSuccesses','ptyRequests','shellRequests','inputBytes')
+        if (type(peer.get('connections')) is int and 0<=peer['connections']<=100 and
+                isinstance(events,list) and len(events)==2 and isinstance(events[1],dict) and
+                all(type(events[1].get(k)) is int and 0<=events[1][k]<=100000 for k in keys) and
+                type(events[1].get('closed')) is bool):
+            result['peer']={'connections':peer['connections'],**{k:events[1][k] for k in keys},'closed':events[1]['closed']}
+    except (AttributeError,KeyError,TypeError,ValueError): pass
+    return result
+
+
+def active_view(browser, fixture, section, keyboard=False):
+    """Check the actual route, endpoint and controls; expose only fixed booleans."""
+    expected=f'{fixture.username}@127.0.0.1:{fixture.port}'
+    expression=r"""(function ordinaryActive(){
+      const spec=%s,one=id=>document.getElementById(id);
+      const shown=e=>!!e&&!e.hidden&&e.checkVisibility({checkOpacity:true,checkVisibilityCSS:true});
+      const tabs=document.querySelector('.route-tabs');
+      const bottomInset=parseFloat(getComputedStyle(tabs).paddingBottom);
+      const hit=e=>{if(!shown(e)||e.disabled)return false;const r=e.getBoundingClientRect(),v=visualViewport;
+        if(!v||!Number.isFinite(bottomInset)||bottomInset<0||r.width<=0||r.height<=0||r.left<0||r.top<v.offsetTop||r.right>innerWidth||r.bottom>v.offsetTop+v.height-bottomInset)return false;
+        const h=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return h===e||e.contains(h);};
+      const route=one('home-'+spec.section),live=one('ssh-live'),target=one('ssh-live-endpoint');
+      const ssh=spec.section==='ssh',title=one('ssh-active-title'),badge=document.querySelector('.ssh-connected-badge');
+      const control=one(spec.keyboard?'ssh-hide-keyboard':'ssh-focus');
+      const focused=document.activeElement===document.querySelector('#ssh-terminal .xterm-helper-textarea');
+      const panel=one('network-panel'),heading=panel?.querySelector(':scope > h2');
+      const networkButton=[...(panel?.querySelectorAll(':scope > button')||[])].find(e=>e.textContent.trim()==='新增网络配置');
+      const sectionContent=ssh || (spec.section==='dashboard'?shown(one('home-dashboard')):
+        spec.section==='network'?shown(panel)&&shown(heading)&&heading.textContent.trim()==='网络配置'&&shown(networkButton):
+        spec.section==='settings'?shown(one('ssh-settings-active'))&&one('ssh-settings-active').textContent.trim()==='普通 SSH 会话保持连接'&&
+          shown(one('ssh-settings-endpoint'))&&one('ssh-settings-endpoint').textContent.trim()===spec.target:false);
+      return {route:shown(route),live:!!live&&!live.hidden,
+        title:!ssh||shown(title)&&title.textContent.trim()==='普通 SSH',
+        badge:!ssh||hit(badge)&&badge.textContent.trim()==='已连接',
+        target:!ssh||shown(target)&&target.textContent.trim()===spec.target,
+        control:!ssh||hit(control),disconnect:!ssh||hit(one('ssh-disconnect')),
+        keyboardState:!ssh||(spec.keyboard?focused&&!shown(tabs):!focused),
+        sectionContent,navSelected:ssh||one('nav-'+spec.section)?.getAttribute('aria-pressed')==='true'||
+          spec.section==='dashboard'&&one('show-remote').getAttribute('aria-pressed')==='true'};
+    })()""" % json.dumps({'section':section,'target':expected,'keyboard':keyboard})
+    last={}
+    def inspect():
+        value=browser.evaluate(expression)
+        if isinstance(value,dict) and set(value)==ACTIVE_FACTS and all(type(v) is bool for v in value.values()):
+            last.update(value)
+            return all(value.values())
+        return False
+    try:
+        wait_for(inspect,'direct_active_ui_invalid',timeout=60)
+    except GuiFailure as error:
+        error.active_diagnostic=dict(last)
+        raise
+
+
+def native_active_tap(browser, selector):
+    """Tap only the observed active SSH controls through Android's input dispatcher."""
+    if selector not in ('#ssh-focus','#ssh-hide-keyboard'):
+        raise GuiFailure('direct_active_tap_unproven')
+    expression=r"""(()=>{const e=document.querySelector(%s),r=e?.getBoundingClientRect(),v=visualViewport;
+      if(!e||e.disabled||!e.checkVisibility({checkOpacity:true,checkVisibilityCSS:true})||!r||!v)return null;
+      const x=r.left+r.width/2,y=r.top+r.height/2,h=document.elementFromPoint(x,y);
+      return {point:[x,y],rect:[r.left,r.top,r.width,r.height],viewport:[innerWidth,innerHeight],
+        visual:[v.offsetLeft,v.offsetTop,v.scale],dpr:devicePixelRatio,hit:h===e||e.contains(h)};})()""" % json.dumps(selector)
+    try:
+        before=browser.evaluate(expression);frames=_webview_frames(_read_window_hierarchy())
+        header=_header_geometry(browser);_,image_size=_framebuffer_png()
+        after=browser.evaluate(expression);frames_after=_webview_frames(_read_window_hierarchy())
+        if before!=after or not isinstance(before,dict) or before.get('hit') is not True or len(frames)!=1 or frames!=frames_after: raise ValueError()
+        point=before['point'];rect=before['rect'];viewport=before['viewport'];visual=before['visual'];dpr=before['dpr']
+        vals=[*point,*rect,*viewport,*visual,dpr]
+        if (len(point)!=2 or len(rect)!=4 or len(viewport)!=2 or visual!=[0,0,1] or
+            any(type(v) not in (int,float) or not math.isfinite(v) or abs(v)>100000 for v in vals) or
+            dpr<=0 or any(v<=0 for v in viewport) or rect[2]<=0 or rect[3]<=0 or not (0<=point[0]<viewport[0] and 0<=point[1]<viewport[1])): raise ValueError()
+        left,top,right,bottom=next(iter(frames));iw,ih=image_size
+        if not (0<=left<right<=iw and 0<=top<bottom<=ih and
+                abs((right-left)/viewport[0]/dpr-1)<=0.03 and header['native']['viewY']==top): raise ValueError()
+        x=round(left+point[0]*dpr);y=round(top+point[1]*dpr)
+        if not (left<=x<right and top<=y<bottom): raise ValueError()
+    except (AttributeError,KeyError,TypeError,ValueError,OverflowError,ET.ParseError):
+        raise GuiFailure('direct_active_tap_unproven') from None
+    adb('shell','input','tap',str(x),str(y))
+
+
+def exercise_active_navigation(browser, fixture, *, progress=None, ime_checks=None):
+    """Native IME observations plus bounded peer facts across actual route clicks."""
+    def observe(stage,section,keyboard=False):
+        if progress is not None: progress['stage']=stage
+        try:
+            active_view(browser,fixture,section,keyboard=keyboard)
+            active_peer(fixture)
+        except GuiFailure as error:
+            error.active_context=active_diagnostic(browser,fixture)
+            raise
+    def ime(visible):
+        sample=system_keyboard(visible)
+        if ime_checks is not None:
+            ime_checks.append(public_ime_diagnostic(sample.get('diagnostic')))
+        return sample
+    observe('active_initial','ssh')
+    try:
+        ime(False)
+    except GuiFailure as error:
+        if str(error)!='android_system_ime_hide_unconfirmed': raise
+        ime(True)  # Only a confirmed owned keyboard makes Back an IME dismissal.
+        adb('shell','input','keyevent','KEYCODE_BACK')
+        ime(False)
+    if progress is not None: progress['stage']='active_keyboard_opened'
+    native_active_tap(browser,'#ssh-focus')
+    ime(True)
+    observe('active_keyboard_opened','ssh',True)
+    ime(True)
+    if progress is not None: progress['stage']='active_keyboard_closed'
+    native_active_tap(browser,'#ssh-hide-keyboard')
+    ime(False)
+    observe('active_keyboard_closed','ssh')
+    ime(False)
+    for section,selector,label in (('dashboard','#show-remote','board'),('network','#nav-network','network'),('settings','#nav-settings','settings')):
+        if progress is not None: progress['stage']='active_'+label
+        browser.click(selector)
+        observe('active_'+label,section)
+        if progress is not None: progress['stage']='active_terminal_from_'+label
+        browser.click('#nav-terminal')
+        observe('active_terminal_from_'+label,'ssh')
+    return {'keyboardOpened':True,'keyboardClosed':True,'board':True,'terminalFromBoard':True,
+            'network':True,'terminalFromNetwork':True,'settings':True,'terminalFromSettings':True,
+            'singleAuthenticatedShellWithoutInput':True}
+
+
 def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, progress=None):
     """Use actual CDP click/keyboard events and independently check the peer."""
     if progress is not None: progress['stage']='open_remote'
@@ -643,8 +818,24 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
              '已连接' in (browser.read('#ssh-status') or ''), 'direct_ready_missing', timeout=60)
     if browser.evaluate("!!document.querySelector('#ssh-password').value || !!document.querySelector('#ssh-key').value || !!document.querySelector('#ssh-passphrase').value"):
         raise GuiFailure('direct_credentials_retained')
+    active_navigation = None
+    ime_checks=[]
+    if staged and not encrypted_key:
+        try:
+            active_navigation = exercise_active_navigation(browser,fixture,progress=progress,ime_checks=ime_checks)
+        except GuiFailure as error:
+            if not hasattr(error,'active_context'): error.active_context=active_diagnostic(browser,fixture)
+            error.ime_checks=ime_checks
+            error.ime_failure=public_ime_diagnostic(getattr(error,'system_ime_diagnostic',None))
+            raise
     if progress is not None: progress['stage']='terminal_input'
-    browser.click('#ssh-focus')
+    if active_navigation:
+        native_active_tap(browser,'#ssh-focus')
+        system_keyboard(True)
+        active_view(browser,fixture,'ssh',keyboard=True)
+        active_peer(fixture)
+    else:
+        browser.click('#ssh-focus')
     wait_for(lambda: browser.evaluate("document.activeElement === document.querySelector('#ssh-terminal .xterm-helper-textarea')"),
              'direct_terminal_focus_missing')
     browser.call('Input.insertText', {'text': fixture.marker})
@@ -654,6 +845,8 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
              'direct_peer_input_missing', timeout=60)
     wait_for(lambda: browser.evaluate("[...document.querySelectorAll('#ssh-terminal .xterm-rows > div')].some(e=>e.textContent.includes(%s))" % json.dumps(fixture.echo_marker)),
              'direct_terminal_echo_missing', timeout=60)
+    if active_navigation:
+        active_peer(fixture,input_bytes=9)
     terminal_proof=(capture_terminal_proof(browser,fixture,evidence_dir,stem='ssh-terminal-android')
                     if getattr(fixture,'screen_token',None) and not encrypted_key else None)
     if not encrypted_key:
@@ -695,6 +888,7 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
     return {'fingerprintReviewed':True,'credentialReviewPreserved':True,'connected':True,
             'terminalInputReceived':True,'terminalEchoRendered':True,'disconnected':True,
             'passwordCleared':True, 'returnedHome':True, **({'helperKeysExact':True} if not encrypted_key else {}),
+            **({'ordinaryActive':active_navigation,'activeImeChecks':ime_checks} if active_navigation else {}),
             **({'terminalScreenshot':terminal_proof} if terminal_proof else {}),
             'peer':{k:True for k in ('authAccepted','ptyRequested','shellRequested','markerReceived','sessionClosed')}}
 
@@ -985,6 +1179,16 @@ def main():
         report['phase']='complete'
         report['status']='passed'
     except GuiFailure as error:
+        diagnostic=getattr(error,'active_diagnostic',None)
+        if isinstance(diagnostic,dict) and set(diagnostic)==ACTIVE_FACTS and all(type(v) is bool for v in diagnostic.values()):
+            report['activeDiagnostic']=diagnostic
+        context=getattr(error,'active_context',None)
+        if isinstance(context,dict): report['activeContext']=context
+        ime_checks=getattr(error,'ime_checks',None)
+        if isinstance(ime_checks,list) and len(ime_checks)<=6:
+            report['activeImeChecks']=[public_ime_diagnostic(item) for item in ime_checks]
+        ime_failure=public_ime_diagnostic(getattr(error,'ime_failure',None))
+        if ime_failure: report['activeImeFailure']=ime_failure
         report['errorCode']=public_driver_error(error)
         if progress.get('stage') in DRIVER_STAGES: report['failureStage']=progress['stage']
     except Exception:

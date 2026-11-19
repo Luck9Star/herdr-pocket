@@ -112,7 +112,9 @@ jobs:
           if-no-files-found: warn
 
   tauri-ordinary-ssh-ios:
-    if: startsWith(github.ref, 'refs/heads/codex/acceptance/direct-ssh-ios-')
+    if: >-
+      startsWith(github.ref, 'refs/heads/codex/acceptance/direct-ssh-ios-') &&
+      !startsWith(github.ref, 'refs/heads/codex/acceptance/direct-ssh-ios-flutter-only-')
     runs-on: macos-15
     timeout-minutes: 90
     env:

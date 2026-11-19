@@ -1,0 +1,379 @@
+{
+  "schemaVersion": 1,
+  "sourceLogSha256": {
+    "flutterVisualPeer": "296ea486292377b929c732ae42f35961368f088955c981355c5445069325ab7c",
+    "flutterNavigationPeer": "26d3cb01d0325a04081d83ffef0eb4cc94d187a0a2aca418a3a064579e9d93a3"
+  },
+  "runs": [
+    {
+      "shell": "flutter",
+      "phase": "before",
+      "width": 320,
+      "captureSession": {
+        "probe": {
+          "auth": 0,
+          "pty": 0,
+          "closed": true
+        },
+        "session": {
+          "auth": 1,
+          "pty": 1,
+          "inputs": [
+            "audit-probe",
+            "Enter"
+          ],
+          "closed": true
+        }
+      },
+      "navigation": {
+        "reachable": false,
+        "routesUnavailable": [
+          "board",
+          "network",
+          "settings"
+        ]
+      }
+    },
+    {
+      "shell": "flutter",
+      "phase": "after",
+      "width": 320,
+      "captureSession": {
+        "probe": {
+          "auth": 0,
+          "pty": 0,
+          "closed": true
+        },
+        "session": {
+          "auth": 1,
+          "pty": 1,
+          "inputs": [
+            "audit-probe",
+            "Enter"
+          ],
+          "closed": true
+        }
+      },
+      "navigation": {
+        "reachable": true,
+        "probe": {
+          "auth": 0,
+          "pty": 0,
+          "closed": true
+        },
+        "session": {
+          "auth": 1,
+          "pty": 1,
+          "inputs": [
+            "Ctrl-D",
+            "Enter",
+            "before",
+            "Enter",
+            "board",
+            "Enter",
+            "network",
+            "Enter",
+            "after"
+          ],
+          "closed": true
+        },
+        "routes": [
+          "board",
+          "network",
+          "settings"
+        ],
+        "settingsReturn": "system-back",
+        "returnedOriginalShellAndTerminal": true,
+        "separateWidgetRun": true
+      },
+      "echoImage": {
+        "file": "screens/flutter-after-320-terminal-echo.png",
+        "pixels": [
+          320,
+          640
+        ],
+        "sourceSha256": "86e98ee9ffaa49fc9f862783c74a4368b9b88176ec247783adafa7a9d8dadca3",
+        "archiveSha256": "86e98ee9ffaa49fc9f862783c74a4368b9b88176ec247783adafa7a9d8dadca3",
+        "pixelSha256": "eb630bff20602381554845ac21e90e506fdb9f99fd262869b81dcc2b63fbb16c",
+        "removedChunks": []
+      }
+    },
+    {
+      "shell": "tauri",
+      "phase": "before",
+      "width": 320,
+      "captureSession": {
+        "probe": {
+          "auth": 0,
+          "pty": 0,
+          "shell": 0,
+          "closed": true
+        },
+        "session": {
+          "auth": 1,
+          "pty": 1,
+          "shell": 1,
+          "inputs": [
+            "X",
+            "Esc",
+            "Tab",
+            "Up",
+            "Down",
+            "Left",
+            "Right",
+            "Ctrl-C",
+            "Y"
+          ],
+          "closed": true
+        },
+        "routes": [
+          "settings",
+          "board",
+          "network"
+        ],
+        "oneShellHandle": true,
+        "hiddenTerminalInputExcludedFromServer": true,
+        "pageAwayMarkers": "scripted frontend terminal events"
+      },
+      "navigation": {
+        "reachable": true,
+        "routes": [
+          "settings",
+          "board",
+          "network"
+        ]
+      }
+    },
+    {
+      "shell": "tauri",
+      "phase": "after",
+      "width": 320,
+      "captureSession": {
+        "probe": {
+          "auth": 0,
+          "pty": 0,
+          "shell": 0,
+          "closed": true
+        },
+        "session": {
+          "auth": 1,
+          "pty": 1,
+          "shell": 1,
+          "inputs": [
+            "X",
+            "Esc",
+            "Tab",
+            "Up",
+            "Down",
+            "Left",
+            "Right",
+            "Ctrl-C",
+            "Y"
+          ],
+          "closed": true
+        },
+        "routes": [
+          "settings",
+          "board",
+          "network"
+        ],
+        "oneShellHandle": true,
+        "hiddenTerminalInputExcludedFromServer": true,
+        "pageAwayMarkers": "scripted frontend terminal events"
+      },
+      "navigation": {
+        "reachable": true,
+        "routes": [
+          "settings",
+          "board",
+          "network"
+        ]
+      }
+    },
+    {
+      "shell": "flutter",
+      "phase": "before",
+      "width": 390,
+      "captureSession": {
+        "probe": {
+          "auth": 0,
+          "pty": 0,
+          "closed": true
+        },
+        "session": {
+          "auth": 1,
+          "pty": 1,
+          "inputs": [
+            "audit-probe",
+            "Enter"
+          ],
+          "closed": true
+        }
+      },
+      "navigation": {
+        "reachable": false,
+        "routesUnavailable": [
+          "board",
+          "network",
+          "settings"
+        ]
+      }
+    },
+    {
+      "shell": "flutter",
+      "phase": "after",
+      "width": 390,
+      "captureSession": {
+        "probe": {
+          "auth": 0,
+          "pty": 0,
+          "closed": true
+        },
+        "session": {
+          "auth": 1,
+          "pty": 1,
+          "inputs": [
+            "audit-probe",
+            "Enter"
+          ],
+          "closed": true
+        }
+      },
+      "navigation": {
+        "reachable": true,
+        "probe": {
+          "auth": 0,
+          "pty": 0,
+          "closed": true
+        },
+        "session": {
+          "auth": 1,
+          "pty": 1,
+          "inputs": [
+            "Ctrl-D",
+            "Enter",
+            "before",
+            "Enter",
+            "board",
+            "Enter",
+            "network",
+            "Enter",
+            "after"
+          ],
+          "closed": true
+        },
+        "routes": [
+          "board",
+          "network",
+          "settings"
+        ],
+        "settingsReturn": "terminal-tab",
+        "returnedOriginalShellAndTerminal": true,
+        "separateWidgetRun": true
+      },
+      "echoImage": {
+        "file": "screens/flutter-after-390-terminal-echo.png",
+        "pixels": [
+          390,
+          844
+        ],
+        "sourceSha256": "2e054472f7fc1b95ce4ee3de2f387f716336dd263afbfb430898d38e50ee15c9",
+        "archiveSha256": "2e054472f7fc1b95ce4ee3de2f387f716336dd263afbfb430898d38e50ee15c9",
+        "pixelSha256": "4251828760a8f97c973f093eb5dd910f2012b44f0fba91b478e78f24c499a7f7",
+        "removedChunks": []
+      }
+    },
+    {
+      "shell": "tauri",
+      "phase": "before",
+      "width": 390,
+      "captureSession": {
+        "probe": {
+          "auth": 0,
+          "pty": 0,
+          "shell": 0,
+          "closed": true
+        },
+        "session": {
+          "auth": 1,
+          "pty": 1,
+          "shell": 1,
+          "inputs": [
+            "X",
+            "Esc",
+            "Tab",
+            "Up",
+            "Down",
+            "Left",
+            "Right",
+            "Ctrl-C",
+            "Y"
+          ],
+          "closed": true
+        },
+        "routes": [
+          "settings",
+          "board",
+          "network"
+        ],
+        "oneShellHandle": true,
+        "hiddenTerminalInputExcludedFromServer": true,
+        "pageAwayMarkers": "scripted frontend terminal events"
+      },
+      "navigation": {
+        "reachable": true,
+        "routes": [
+          "settings",
+          "board",
+          "network"
+        ]
+      }
+    },
+    {
+      "shell": "tauri",
+      "phase": "after",
+      "width": 390,
+      "captureSession": {
+        "probe": {
+          "auth": 0,
+          "pty": 0,
+          "shell": 0,
+          "closed": true
+        },
+        "session": {
+          "auth": 1,
+          "pty": 1,
+          "shell": 1,
+          "inputs": [
+            "X",
+            "Esc",
+            "Tab",
+            "Up",
+            "Down",
+            "Left",
+            "Right",
+            "Ctrl-C",
+            "Y"
+          ],
+          "closed": true
+        },
+        "routes": [
+          "settings",
+          "board",
+          "network"
+        ],
+        "oneShellHandle": true,
+        "hiddenTerminalInputExcludedFromServer": true,
+        "pageAwayMarkers": "scripted frontend terminal events"
+      },
+      "navigation": {
+        "reachable": true,
+        "routes": [
+          "settings",
+          "board",
+          "network"
+        ]
+      }
+    }
+  ]
+}

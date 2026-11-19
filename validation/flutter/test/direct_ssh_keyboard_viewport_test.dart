@@ -141,10 +141,12 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.byKey(const ValueKey('hosts-direct-ssh')));
         await tester.pumpAndSettle();
-        final home = tester.element(
-          find.byType(HostCatalogPage, skipOffstage: false),
+        final direct = tester.element(find.byType(DirectSshPage));
+        expect(ModalRoute.of(direct)?.isCurrent, isTrue);
+        expect(
+          find.byKey(const ValueKey('hosts-direct-ssh')).hitTestable(),
+          findsNothing,
         );
-        expect(ModalRoute.of(home)?.isCurrent, isFalse);
         final dynamic state = tester.state(find.byType(DirectSshPage));
         final shell = ClosingShell();
         state.setState(() {

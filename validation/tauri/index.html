@@ -158,8 +158,22 @@
     </div>
   </section>
   <section id="ssh-live" hidden aria-label="普通 SSH 会话">
-    <p id="ssh-target" class="ssh-target"></p>
-    <button id="ssh-hide-keyboard" type="button" disabled>收起键盘</button>
+    <header class="ssh-live-header">
+      <h2 id="ssh-active-title">普通 SSH</h2>
+      <button id="ssh-disconnect" type="button" aria-label="断开连接"><span class="ssh-compact-control">断开</span><span class="ssh-wide-control">断开连接</span></button>
+    </header>
+    <div class="ssh-live-status">
+      <span class="ssh-compact-control ssh-connected-badge" role="status">已连接</span>
+      <p id="ssh-target" class="ssh-target"><bdi id="ssh-live-endpoint"></bdi><span class="ssh-wide-control"> · SSH 已连接</span></p>
+      <button id="ssh-focus" type="button" aria-label="打开键盘" disabled>
+        <svg class="ssh-compact-control connection-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 5 H21 V17 H3 Z M6 9 H8 M10 9 H12 M14 9 H16 M18 9 H19 M8 13 H16"/></svg>
+        <span class="ssh-wide-control">打开键盘</span>
+      </button>
+      <button id="ssh-hide-keyboard" type="button" aria-label="收起键盘" disabled>
+        <svg class="ssh-compact-control connection-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 5 H21 V17 H3 Z M6 9 H8 M10 9 H12 M14 9 H16 M18 9 H19 M8 13 H16 M9 19 L12 22 L15 19"/></svg>
+        <span class="ssh-wide-control">收起键盘</span>
+      </button>
+    </div>
     <div id="ssh-terminal-output" class="term-scroll ssh-scroll" role="region" aria-label="SSH 终端输出" tabindex="0"><div id="ssh-terminal" class="terminal-host"></div></div>
     <div id="ssh-helper-keys" class="ssh-helper-keys" role="group" aria-label="终端辅助键">
       <button type="button" data-ssh-key="esc" disabled>Esc</button>
@@ -170,12 +184,14 @@
       <button type="button" data-ssh-key="right" aria-label="右方向键" disabled>→</button>
       <button type="button" data-ssh-key="ctrl-c" disabled>Ctrl-C</button>
     </div>
-    <div class="ssh-options"><button id="ssh-focus" type="button" disabled>打开键盘</button><button id="ssh-disconnect" type="button">断开连接</button></div>
   </section>
 </section>
 <section id="home-terminal" hidden><h2>终端</h2><p>选择主机并连接后，可在终端标签中观察会话。</p><button id="terminal-to-board" type="button">选择主机</button></section>
 <section id="home-network" hidden><h2>网络</h2><p id="network-preview-note" hidden>浏览器预览无法读取或管理本机网络配置，请使用测试安装包。</p><button id="network-open" type="button">打开网络配置</button><section id="network-panel" class="config-transfer" aria-label="网络配置" hidden></section></section>
-<section id="home-settings" hidden><h2>设置</h2><section class="host-save"><label>终端字号（10–28）<input id="terminal-font-size" type="number" min="10" max="28" step="1" value="14" inputmode="numeric"></label><button id="terminal-font-save" type="button">保存字号</button><p id="terminal-font-status" role="status" aria-live="polite"></p></section><button id="config-transfer-open" type="button">导入 / 导出配置</button><section id="config-transfer" class="config-transfer" aria-labelledby="config-transfer-title" hidden></section><button id="show-fixture" disabled aria-pressed="false" type="button">离线终端实验室</button>
+<section id="home-settings" hidden><h2 class="ssh-settings-header">设置</h2>
+<p id="ssh-settings-active" class="ssh-compact-control" role="status" hidden>普通 SSH 会话保持连接</p>
+<div id="ssh-settings-target" class="ssh-compact-control" hidden><p>本次连接目标</p><bdi id="ssh-settings-endpoint"></bdi></div>
+<section class="host-save"><label>终端字号（10–28）<input id="terminal-font-size" type="number" min="10" max="28" step="1" value="14" inputmode="numeric"></label><button id="terminal-font-save" type="button">保存字号</button><p id="terminal-font-status" role="status" aria-live="polite"></p></section><button id="config-transfer-open" type="button">导入 / 导出配置</button><section id="config-transfer" class="config-transfer" aria-labelledby="config-transfer-title" hidden></section><button id="show-fixture" disabled aria-pressed="false" type="button">离线终端实验室</button>
 <p class="remote-help">默认观察；输入需显式发送，布局调整不改变远端尺寸。</p><p class="remote-help">Android 配对资料存于本应用 no-backup 目录。Linux/macOS 测试身份只保留在进程内，重启后不可恢复；移除本机资料不会撤销主机上的授权。</p>
 <details class="terminal-notices">
   <summary>终端组件许可</summary>

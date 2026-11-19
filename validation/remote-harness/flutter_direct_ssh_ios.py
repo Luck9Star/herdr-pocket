@@ -18,20 +18,21 @@ import tempfile
 import time
 import uuid
 
-from flutter_direct_ssh_android import (safe_failure, verify_prepared, ROTATION_PUBLIC_FIELDS,
-                                       ROTATION_PHASES, checked_rotation_stage, rotation_checkpoint)
+from flutter_direct_ssh_android import (PUBLIC_FIELDS as FIELDS, ROTATION_PUBLIC_FIELDS, ROTATION_PHASES,
+                                       ORDINARY_MOBILE_PHASES, Failure as SharedFailure, checked_rotation_stage,
+                                       ordinary_mobile_checkpoint, ordinary_session_evidence,
+                                       require_ordinary_mobile_checkpoints, rotation_checkpoint,
+                                       safe_failure, verify_prepared)
 
 PACKAGE = 'dev.herdr.herdrFlutterProbe'
 TARGET = 'integration_test/ios_direct_ssh_test.dart'
-FIELDS = {'schemaVersion', 'platform', 'homepageEntry', 'fingerprintMatched', 'explicitTrustRequired',
-          'realTerminalView', 'normalTextInputCommit', 'remoteEchoVisible', 'disconnectUiConfirmed',
-          'credentialsCleared', 'physicalImeVerified'}
 STAGES = {'home', 'target', 'probe', 'authenticate', 'secret_entry', 'screenshot_wait', 'connect_tap', 'connect_preflight',
           'await_terminal', 'await_welcome', 'input', 'disconnect', 'disconnect_tap', 'disconnect_wait',
           'disconnect_secret', 'disconnect_status', 'disconnect_exception', 'disconnect_complete',
           'peer_confirmed', 'report_data_set', 'return_home', 'returned_home'}
 STAGES.update({'rotation_' + name for name in ('home', 'initial_probe', 'rejected', 'cancelled',
                                               'fresh_probe', 'authenticate', 'input', 'disconnect', 'complete')})
+STAGES.update(ORDINARY_MOBILE_PHASES)
 LOG_MARKERS = {'xcodeBuildCompleted': 'Xcode build done.',
                'buildError': 'Failed to build iOS app',
                'launchError': 'Error launching application on',
@@ -560,6 +561,7 @@ def run(app, output, env):
     screens = {}
     rotation = {'checkpoints': {}}
     report['rotation'] = rotation
+    mobile = report['ordinaryMobileCheckpoints'] = {}
     private_values = (fixture.password, fixture.username, fixture.fingerprint, rotation_fixture.password,
                       rotation_fixture.fingerprint, rotation_fixture.rotated_fingerprint, '127.0.0.1',
                       str(app), str(base))
@@ -680,6 +682,18 @@ def run(app, output, env):
                                 pending.write_text(json.dumps({'phase': phase_name, 'stage': count,
                                                                'serverEvidenceAccepted': True}))
                                 pending.replace(pending.with_suffix('.json'))
+                        mobile_stage = read_json(exchange / 'ordinary-mobile-stage.json')
+                        if mobile_stage is not None:
+                            checkpoint = ordinary_mobile_checkpoint(fixture, mobile_stage, mobile)
+                            if checkpoint is not None:
+                                phase_name, evidence = checkpoint
+                                phase = 'ordinary_mobile_' + phase_name
+                                if process.poll() is not None:
+                                    raise Failure('ios_driver_exited_before_mobile_confirmation')
+                                mobile[phase_name] = evidence
+                                pending = exchange / ('ordinary-mobile-' + phase_name + '-confirmed.new')
+                                pending.write_text(json.dumps({'phase': phase_name, 'serverEvidenceAccepted': True}))
+                                pending.replace(pending.with_suffix('.json'))
                         request = read_json(exchange / 'screenshot-request.json')
                         if (not screenshot_attempted and safe_screenshot_request(request, stage)
                                 and process.poll() is None):
@@ -699,6 +713,7 @@ def run(app, output, env):
                     public = read_json(exchange / 'result.json') if exchange else None
                     if public is not None:
                         report['device'] = check_result(public)
+                        require_ordinary_mobile_checkpoints(mobile)
                         if (set(screens) != {'ordinary', 'key-rotation'} or
                                 not all(value['accepted'] for value in screens.values()) or not review_captured):
                             raise Failure('ios_screen_proof_missing')
@@ -708,6 +723,7 @@ def run(app, output, env):
                         if (not fixture.wait_for('markerReceived') or not fixture.wait_for('sessionClosed') or
                                 not fixture.wait_for_connections_closed(2) or process.poll() is not None):
                             raise Failure('ios_peer_input_or_ui_close_missing')
+                        ordinary_session_evidence(fixture, closed=True)
                         pending = exchange / 'peer-confirmed.new'
                         pending.write_text(json.dumps({'protocolAccepted': True, 'peerClosedBeforeDriverExit': True}))
                         pending.replace(exchange / 'peer-confirmed.json')
@@ -757,11 +773,7 @@ def run(app, output, env):
                 report['protocol'] = fixture.snapshot()
                 if not all(report['protocol'][name] for name in ('authAccepted', 'ptyRequested', 'shellRequested', 'markerReceived', 'sessionClosed')):
                     raise Failure('ios_protocol_evidence_incomplete')
-                ordinary_events = report['protocol']['connectionEvents']
-                if (len(ordinary_events) != 2 or ordinary_events[0]['authAttempts'] != 0 or
-                        ordinary_events[0]['inputBytes'] != 0 or ordinary_events[1]['authAttempts'] != 1 or
-                        ordinary_events[1]['inputBytes'] != 9):
-                    raise Failure('ios_ordinary_replayed_input_or_auth')
+                ordinary_session_evidence(fixture, closed=True)
                 rotation['protocol'] = rotation_fixture.snapshot()
                 rotation['finalEvidence'] = rotation_fixture.rotation_evidence(4)
                 accepted = rotation['finalEvidence']['acceptedSession']
@@ -769,7 +781,7 @@ def run(app, output, env):
                     raise Failure('ios_rotation_replayed_input_or_auth')
                 report['status'] = 'passed'
     except Exception as error:
-        primary = str(error) if isinstance(error, Failure) else 'ios_runner_failed'
+        primary = str(error) if isinstance(error, (Failure, SharedFailure)) else 'ios_runner_failed'
         report['failureCode'] = primary
         report['diagnostic'] = safe_failure(error, phase)
     finally:

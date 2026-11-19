@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 2,
+  "status": "passed",
+  "captureEngine": "adb exec-out screencap -p",
+  "image": "ime-keyboard-opened-native.png",
+  "imageSha256": "148c3c89c5e11b2bd7bc59522c307a469cef4a920cbdaf688590d1322fb46682",
+  "imageSize": [
+    1080,
+    2340
+  ],
+  "terminalBounds": [
+    99,
+    500,
+    875,
+    769
+  ],
+  "ocrEngine": "tesseract 5.3.4",
+  "markerVisible": true,
+  "domGates": {
+    "activeTerminalLive": true,
+    "endpointMatched": true,
+    "connectedBadge": true,
+    "authFormHidden": true,
+    "credentialControlsEmpty": true,
+    "terminalReadyOnly": true
+  },
+  "foregroundHeld": true,
+  "installTemporary": true,
+  "inputSent": false,
+  "credentialsOnScreen": false,
+  "fixedGeometry": {
+    "geometry": {
+      "viewport": [
+        393,
+        851,
+        0,
+        851
+      ],
+      "title": [
+        24,
+        64,
+        75,
+        26
+      ],
+      "badge": [
+        24,
+        128,
+        62,
+        24
+      ],
+      "focus": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "hide": [
+        325,
+        118,
+        44,
+        44
+      ],
+      "disconnect": [
+        309,
+        55,
+        60,
+        44
+      ]
+    },
+    "peer": {
+      "connections": 2,
+      "authAttempts": 1,
+      "authSuccesses": 1,
+      "ptyRequests": 1,
+      "shellRequests": 1,
+      "inputBytes": 0,
+      "closed": false
+    }
+  }
+}

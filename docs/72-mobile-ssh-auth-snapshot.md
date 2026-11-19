@@ -55,6 +55,18 @@ R7 验收范围为受控回环密码认证与 XCTest 输入。活动终端在三
 
 长期归档保留三张 1320 × 2868 的系统截图。PNG 仅移除 EXIF 和文本块，解码像素一致。终端内的 `POCKET-ANDROID-SSH-OK` 是共用夹具的回显标记。[普通终端](evidence/mobile-ssh-auth-r23/tauri-ios-r7/ordinary-terminal.png) · [换钥核对](evidence/mobile-ssh-auth-r23/tauri-ios-r7/key-change-review.png) · [换钥后终端](evidence/mobile-ssh-auth-r23/tauri-ios-r7/key-change-terminal.png) · [来源、哈希与脱敏结果](evidence/mobile-ssh-auth-r23/tauri-ios-r7/official-index.json)
 
+[后续活动终端与切页验证](73-mobile-ssh-terminal-navigation.md)记录两壳在本地回环中的看板、网络和设置往返，以及同尺寸键盘开合对照。
+
+## Flutter Android 加密私钥独立验收
+
+2026-11-19，[R5 作业 135408718366](https://github.com/Luck9Star/herdr-pocket/actions/runs/44479715559/job/135408718366)在 Android API 35 模拟器通过加密 OpenSSH Ed25519 私钥路径，源码为 `36a9228df84e344ff9f9f4b4e2fecd92dd177246`。此前上表的 Flutter Android R2 已覆盖普通密码和主机换钥；R5 是独立私钥单项，并未重复换钥。
+
+| 入口和认证 | 指纹确认与错误口令 | 正确私钥与会话 | 图像与清理 |
+| --- | --- | --- | --- |
+| 真实首页进入，粘贴临时加密私钥并输入遮罩口令 | 首次核对前和错误口令后，首条探测均为零认证、零 PTY；错误口令本地拒绝 | 第二条连接仅一次公钥认证、一次 PTY 和 shell，服务端记录 9 字节输入与回显，主动断开且会话在驱动退出前关闭 | Flutter 和设备原图均通过独立 OCR 检查；凭据、剪贴板、临时输入、密钥、包、reverse、forward 和 fixture 清理均获记录 |
+
+[证据索引、原图、结构化结果、哈希及 R1–R4 停点](evidence/flutter-android-encrypted-key-r5-20261119/README.md)。[原始 Actions 工件 14508621605](https://github.com/Luck9Star/herdr-pocket/actions/runs/44479715559/artifacts/14508621605) 的 ZIP SHA256 为 `b796cc238e1775384c836242d3212ec8d03c1d024267a43462fcaf3bd178199f`。终端输入使用 Flutter 测试文本输入；物理键盘、系统中文 IME、实体设备和跨网不属于该次通过范围。
+
 ## R22 Android 设备证据
 
 两次作业使用受控 API 35 x86_64 模拟器与回环 SSH，均完成普通连接、主机密钥变化、终端回显和断开。两次使用不同源码，原始 ZIP 已完整重新下载并计算 SHA256。[可复核的运行、工件及内部结果索引](evidence/mobile-ssh-auth-r23/r22-actions.json)
@@ -82,7 +94,9 @@ R7 验收范围为受控回环密码认证与 XCTest 输入。活动终端在三
 
 Flutter 在 Widget Navigator 上复现旧版断开后边缘拖动无法开始，修复后验证取消拖动保留页面、完成拖动才返回并显示一次反馈。系统返回和按键同样复核。该修复覆盖 6 项返回测试和 11 项定向回归，该批记录来自 Widget，原生手势仍待单独实点复验。Tauri 驱动使用当前页面的精确密码标签。本地原生驱动测试发现 628 项，跳过 5 项，失败 0 项。Swift 语法解析及 7 项针对性检查通过。
 
-两壳均采用 320×640（上 24、下 24 pt）及 390×844（上 47、下 34 pt）。Flutter 140 个已量应用锚点在 2 pt 内，18 个源未量锚点单列。Tauri 158 个已量应用锚点最大偏差 1 pt。坐标与中心命中记录见[本地量测和四对截图](evidence/mobile-ssh-auth-r23/README.md)。物理键盘、中文 IME、原生状态栏与键盘几何、活动终端与设置往返、实体设备、外网与五平台就绪仍待补证。
+两壳均采用 320×640（上 24、下 24 pt）及 390×844（上 47、下 34 pt）。原 R23 中 Flutter 的 140 个已量应用锚点在 2 pt 内，18 个源未量锚点单列；Tauri 158 个已量应用锚点最大偏差 1 pt。原始坐标与中心命中记录见[本地量测和四对截图](evidence/mobile-ssh-auth-r23/README.md)。
+
+2026-11-19，Flutter 在产品提交 `26d8abfcd25d78fa22d5ead31e58bc39cb6e34ca` 补量原先缺失的 18 项，两档各 9 项，逐坐标偏差均为 0 pt；定向测试提交 `e69d92bcd7dc8b3b37a3c2410fa51faa8487139c`。原 140 项与独立补采的 18 项合计覆盖 158 个应用锚点，并非同一次采样；[补测矩形、原尺寸截图与哈希](evidence/mobile-ssh-auth-r23/supplement-20261119/README.md)保留独立来源。物理键盘、中文 IME、原生状态栏与键盘几何、原生设备上的活动终端与设置往返、实体设备、外网与五平台就绪仍待补证；相关本地验证见 [docs/73](73-mobile-ssh-terminal-navigation.md)。
 
 ## 恢复与回滚
 

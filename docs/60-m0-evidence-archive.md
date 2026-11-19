@@ -75,6 +75,7 @@
 | 2026-11-19 | [Flutter S06 guarded](https://github.com/Luck9Star/herdr-pocket/actions/runs/44475148214/job/135395559119) | `20261111.127.1` | APT 日志、[工件 14505924753](https://github.com/Luck9Star/herdr-pocket/actions/runs/44475148214/artifacts/14505924753) |
 
 - 两份 S06 工件均来自 `c9410f96703041113414b31eb4bf5de98f3bbc57`。各 ZIP 的 SHA-256 与 GitHub API 摘要一致（stock `968a736c6f37e03158d1169c2c5fd6f9a5a026519371b5645a82674707dc26fe`，guarded `d22f63d6d3a8d4ca5d91f3ff0f149417a924dfd705bdbcf2f91fa941015c01b2`），各自 `SHA256SUMS` 四项均通过。两份 manifest 的 `openSshVersion` 均为 `OpenSSH_9.6p1 Ubuntu-3ubuntu13.20, OpenSSL 3.0.13 30 Jan 2024`。[实际二进制取版本代码](https://github.com/Luck9Star/herdr-pocket/blob/c9410f96703041113414b31eb4bf5de98f3bbc57/validation/remote-harness/run-ci.py#L395-L399)
+- 较早的 `67c5263` S06 回环记录也保存了相同的 `openSshVersion`。两份脱敏摘要分别对应 [stock](evidence/desktop-split-resize-20261119/s06-stock-official.json) 镜像 `20261116.133.1` 与 [guarded](evidence/desktop-split-resize-20261119/s06-guarded-official.json) 镜像 `20261111.127.1`。
 - Ubuntu Noble 的对应源包于 2026-10-14 发布至 Security、2026-10-21 发布至 Updates。原始源码 tarball 和 Ubuntu 打包 tarball 的 SHA-256 均与固定 `.dsc` 一致。归档中的上游 `LICENCE` 和打包 `debian/copyright` 分别与上游固定 tag 和 Ubuntu 发布的版权文本逐字节一致。未比对 runner 上二进制的 SHA-256。[Security 发布记录](https://api.launchpad.net/1.0/ubuntu/+archive/primary/+sourcepub/18835136) · [Updates 发布记录](https://api.launchpad.net/1.0/ubuntu/+archive/primary/+sourcepub/18890837)
 
 ### 1.5 工具链锁点与共享 fixture

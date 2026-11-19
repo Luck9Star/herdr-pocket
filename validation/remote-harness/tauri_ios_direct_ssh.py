@@ -1041,7 +1041,7 @@ class Checkpoints:
     def __init__(self, ordinary, rotation, output, result, *, encrypted=None, clipboard=None):
         self.ordinary, self.rotation, self.output, self.result = ordinary, rotation, Path(output), result
         self.encrypted, self.clipboard = encrypted, clipboard
-        self.stages = STAGES if encrypted is None else (*STAGES[:-1], *ENCRYPTED_KEY_STAGES, 'complete')
+        self.stages = STAGES if encrypted is None else (*ENCRYPTED_KEY_STAGES, *STAGES)
         self.index, self.failure = 0, None
         self.clipboard_dirty = False
         self.disconnects = set()
@@ -1189,7 +1189,7 @@ class Checkpoints:
         if stage == 'ordinary_active':
             case = self.result['cases']['ordinary']
             trace = case.get('activeFlow', [])
-            require(self.failure is None and self.index == STAGES.index('ordinary_input')
+            require(self.failure is None and self.index == self.stages.index('ordinary_input')
                     and set(payload) == {'stage', 'step', 'keyboardVisible', 'action'}
                     and len(trace) < len(ORDINARY_ACTIVE_STEPS) and payload['step'] == ORDINARY_ACTIVE_STEPS[len(trace)]
                     and payload['keyboardVisible'] is (payload['step'] == 'keyboard_opened'), 'tauri_ios_active_order_invalid')
@@ -1322,7 +1322,7 @@ class Checkpoints:
                         'rotation_refused': ('key_change_connect', 'key_change_review'),
                         'rotation_approved': ('key_change_connect', 'key_change_input')}
             require(self.failure is None and phase == expected[attempt][0]
-                    and self.index == STAGES.index(expected[attempt][1])
+                    and self.index == self.stages.index(expected[attempt][1])
                     and attempt not in self.result.get('connectDiagnostics', {}),
                     'tauri_ios_connect_diagnostic_invalid')
             fixture = self.ordinary if attempt == 'ordinary' else self.rotation
@@ -1408,13 +1408,13 @@ class Checkpoints:
                 self.result['nativeFailureCode'] = code
                 self.failure = 'tauri_ios_native_check_failed'
             elif phase == 'ordinary_connect':
-                require(self.index == STAGES.index('ordinary_input'), 'tauri_ios_checkpoint_order_invalid')
+                require(self.index == self.stages.index('ordinary_input'), 'tauri_ios_checkpoint_order_invalid')
                 initial_probe_evidence(self.ordinary)
             elif phase == 'key_change_connect':
-                if self.index == STAGES.index('key_change_review'):
+                if self.index == self.stages.index('key_change_review'):
                     initial_probe_evidence(self.rotation)
                 else:
-                    require(self.index == STAGES.index('key_change_input'), 'tauri_ios_checkpoint_order_invalid')
+                    require(self.index == self.stages.index('key_change_input'), 'tauri_ios_checkpoint_order_invalid')
                     try:
                         self.rotation.rotation_evidence(3)
                     except ValueError:
@@ -1663,6 +1663,8 @@ def run(project, app, output, *, source_sha=None, env=None, include_encrypted_ke
         require(state.index == len(state.stages) and state.failure is None, 'tauri_ios_checkpoints_incomplete')
         expected_cases = {'ordinary', 'keyChange'} | ({'encryptedKey'} if include_encrypted_key else set())
         expected_images = set(PNG_FILES) | ({ENCRYPTED_KEY_PNG} if include_encrypted_key else set())
+        require({name for name, case in result['cases'].items() if case['status'] == 'passed'} == expected_cases,
+                'tauri_ios_cases_incomplete')
         require(set(result.get('homeEntry', {})) == expected_cases, 'tauri_ios_home_entry_incomplete')
         require(set(result['artifacts']) == expected_images, 'tauri_ios_artifacts_incomplete')
         result['status'] = 'passed'

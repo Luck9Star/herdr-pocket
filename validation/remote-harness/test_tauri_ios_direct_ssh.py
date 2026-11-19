@@ -423,6 +423,45 @@ class ScreenshotContractTests(unittest.TestCase):
             with self.assertRaisesRegex(ios.Failure, 'replay'):
                 state.capture('ordinary_terminal', payload, self.fixture)
 
+    def test_encrypted_terminal_and_case_stay_publishable_after_a_later_failure(self):
+        from ios_direct_ssh_batch import publish_evidence
+        from types import SimpleNamespace
+        data, payload = self.screenshot()
+        criteria = {'imageSha256': hashlib.sha256(data).hexdigest(), 'markerVisible': True,
+                    'tokenVisible': True, 'proofSequenceVisible': True}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            public = root / 'public'
+            public.mkdir()
+            cases = {key: {'status': 'not_run'} for key in ('ordinary', 'keyChange', 'encryptedKey')}
+            report = {'status': 'failed', 'sourceSHA': 'a' * 40, 'artifacts': {}, 'cases': cases}
+            fixture = SimpleNamespace(**vars(self.fixture), wait_for_connections_closed=lambda *_a, **_k: True)
+            state = ios.Checkpoints(None, None, public, report, encrypted=fixture)
+            state.accept({'stage': 'encrypted_key_form'})
+            # Supply only the synthetic inputs to the existing peer and OCR gates.
+            state.index = state.stages.index('encrypted_key_terminal')
+            with patch.object(ios, 'encrypted_key_session', return_value={'connectionsClosed': True}), \
+                    patch.object(ios, 'verify_terminal_screenshot', return_value=criteria) as gate:
+                state.accept({'stage': 'encrypted_key_terminal', **payload})
+                state.accept({'stage': 'encrypted_key_disconnect_attempt'})
+                state.accept({'stage': 'encrypted_key_disconnected'})
+                with self.assertRaisesRegex(ios.Failure, 'checkpoint_order_invalid'):
+                    state.accept({'stage': 'ordinary_form'})
+                state.accept({'stage': 'encrypted_key_returned_home'})
+            gate.assert_called_once_with(data, expected_token=self.fixture.screen_token, bounds=[20, 200, 400, 300])
+            state.accept({'stage': 'ordinary_form'})
+            state.accept({'stage': 'native_failure', 'nativeCheckpoint': 'ordinary_launch',
+                          'nativeFailureCode': 'native_app_launch_failed'})
+            state.finalize_cases()
+            self.assertEqual({key: case['status'] for key, case in cases.items()},
+                             {'encryptedKey': 'passed', 'ordinary': 'failed', 'keyChange': 'not_run'})
+            ios.write_json(public / 'result.json', report)
+            verified = root / 'verified'
+            self.assertEqual(publish_evidence(public, verified, shell='tauri', source_sha='a' * 40, include_encrypted_key=True),
+                             {'result.json', 'encrypted-key-terminal.png', 'encrypted-key-terminal-ocr.json'})
+            self.assertEqual((verified / 'encrypted-key-terminal.png').read_bytes(), data)
+            self.assertEqual(json.loads((verified / 'encrypted-key-terminal-ocr.json').read_text()), criteria)
+
     def test_unknown_identity_or_unsafe_geometry_saves_no_public_png(self):
         _, payload = self.screenshot()
         for change in ({'identityVerified': False}, {'noCredentialsVisible': False},
@@ -749,20 +788,22 @@ class ConnectDiagnosticTests(unittest.TestCase):
         fixture=SimpleNamespace(snapshot=lambda:{'connections':4, 'connectionsClosed':False,
                     'connectionEvents':[{'id':4,'hostKey':'B','authAttempts':1,'authSuccesses':0,
                                          'password':'never-export-this','phase':'await_channel'}]})
-        for attempt,phase,next_stage in [('ordinary','ordinary_connect','ordinary_input'),
-                                          ('rotation_refused','key_change_connect','key_change_review'),
-                                          ('rotation_approved','key_change_connect','key_change_input')]:
-            with self.subTest(attempt=attempt):
-                state=ios.Checkpoints(fixture,fixture,'/tmp',{})
-                state.index=ios.STAGES.index(next_stage)
-                event={'stage':'native_connect_diagnostic','nativeCheckpoint':phase,'detail':self.detail(attempt)}
-                state.accept(event)
-                report=state.result['connectDiagnostics'][attempt]
-                self.assertEqual(report['peerAtDiagnostic']['connections'],4)
-                self.assertEqual(report['peerAtDiagnostic']['events'][0]['authAttempts'],1)
-                self.assertNotIn('never-export-this',json.dumps(state.result))
-                self.assertEqual(state.index,ios.STAGES.index(next_stage))
-                with self.assertRaisesRegex(ios.Failure,'connect_diagnostic_invalid'): state.accept(event)
+        for encrypted in (None, object()):
+            for attempt, phase, next_stage in [('ordinary', 'ordinary_connect', 'ordinary_input'),
+                                               ('rotation_refused', 'key_change_connect', 'key_change_review'),
+                                               ('rotation_approved', 'key_change_connect', 'key_change_input')]:
+                with self.subTest(attempt=attempt, encrypted=encrypted is not None):
+                    state = ios.Checkpoints(fixture, fixture, '/tmp', {}, encrypted=encrypted)
+                    state.index = state.stages.index(next_stage)
+                    event = {'stage': 'native_connect_diagnostic', 'nativeCheckpoint': phase, 'detail': self.detail(attempt)}
+                    state.accept(event)
+                    report = state.result['connectDiagnostics'][attempt]
+                    self.assertEqual(report['peerAtDiagnostic']['connections'], 4)
+                    self.assertEqual(report['peerAtDiagnostic']['events'][0]['authAttempts'], 1)
+                    self.assertNotIn('never-export-this', json.dumps(state.result))
+                    self.assertEqual(state.index, state.stages.index(next_stage))
+                    with self.assertRaisesRegex(ios.Failure, 'connect_diagnostic_invalid'):
+                        state.accept(event)
 
     def test_reject_private_text_invalid_types_replays_and_wrong_phase(self):
         good=self.detail('rotation_approved')
@@ -1714,6 +1755,22 @@ class RealLoopbackCheckpointsTests(unittest.TestCase):
         self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': 'ordinary_connect'})
         return self.session(self.ordinary, marker=False)
 
+    def test_legacy_authorization_and_activity_gates_use_the_encrypted_batch_order(self):
+        self.state = ios.Checkpoints(self.ordinary, self.rotation, self.directory.name, self.result, encrypted=object())
+        self.state.index = self.state.stages.index('ordinary_form')
+        peer, channel = self.ordinary_ready()
+        self.state.accept(self.active_step('keyboard_opened'))
+        self.assertEqual(self.result['cases']['ordinary']['activeFlow'][0]['peer']['inputBytes'], 0)
+        self.close_protocol(self.ordinary, peer, channel)
+        self.probe(self.rotation)
+        self.state.index = self.state.stages.index('key_change_review')
+        self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': 'key_change_connect'})
+        self.probe(self.rotation)
+        self.probe(self.rotation)
+        self.state.index = self.state.stages.index('key_change_input')
+        self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': 'key_change_connect'})
+        self.assertEqual([e['authAttempts'] for e in self.rotation.snapshot()['connectionEvents']], [0, 0, 0])
+
     def test_complete_native_checkpoint_order_against_real_aabb_and_abbb_peers(self):
         peer, channel = self.ordinary_ready()
         steps = ('keyboard_opened', 'keyboard_closed', 'board', 'terminal_from_board',
@@ -2055,7 +2112,7 @@ class EncryptedKeyFixtureTests(unittest.TestCase):
     def test_encrypted_flow_retains_default_two_cases_and_disables_automatic_captures_only_on_request(self):
         self.assertEqual(ios.Checkpoints(None, None, '/unused', {}).stages, ios.STAGES)
         expanded = ios.Checkpoints(None, None, '/unused', {}, encrypted=object()).stages
-        self.assertEqual(expanded, (*ios.STAGES[:-1], *ios.ENCRYPTED_KEY_STAGES, 'complete'))
+        self.assertEqual(expanded, (*ios.ENCRYPTED_KEY_STAGES, *ios.STAGES))
         for config in ({}, {'encryptedPort': 12345, 'encryptedFingerprint': 'SHA256:fixture', 'encryptedAlgorithm': 'ssh-rsa'}):
             with self.subTest(config=config), tempfile.TemporaryDirectory() as directory:
                 ios.prepare_driver(directory, config)
@@ -2063,6 +2120,28 @@ class EncryptedKeyFixtureTests(unittest.TestCase):
                 settings = spec['schemes']['PocketUI']['test']
                 self.assertEqual(settings.get('captureScreenshotsAutomatically'), False if config else None)
                 self.assertEqual(json.loads((Path(directory) / 'UITests/Fixture.json').read_text()), config)
+
+    def test_optional_native_case_starts_first_and_cold_launches_ordinary_after_success(self):
+        source = (ios.HERE / 'tauri_ios_direct_ssh.swift').read_text().split('func testOrdinaryAndKeyChange()', 1)[1]
+        self.assertLess(source.index('if let encryptedPort = config["encryptedPort"] as? Int'),
+                        source.index('try exerciseEncryptedKey(port: encryptedPort)'))
+        transition = source.split('try exerciseEncryptedKey(port: encryptedPort)', 1)[1].split('try post("ordinary_form")', 1)[0]
+        self.assertRegex(transition, r'app\.terminate\(\)\s+scenario = "ordinary"')
+        self.assertLess(source.index('try returnOrdinaryHome("ordinary")'), source.index('try post("key_change_form")'))
+        self.assertLess(source.index('try terminal("key_change"'), source.index('try post("complete")'))
+
+    def test_opt_in_prevents_ordinary_launch_and_batch_completion_before_encrypted_case(self):
+        cases = {key: {'status': 'not_run'} for key in ('ordinary', 'keyChange', 'encryptedKey')}
+        state = ios.Checkpoints(None, None, '/unused', {'cases': cases}, encrypted=object())
+        for stage in ('ordinary_form', 'key_change_form', 'complete'):
+            with self.assertRaisesRegex(ios.Failure, 'checkpoint_order_invalid'):
+                state.accept({'stage': stage})
+        state.accept({'stage': 'encrypted_key_form'})
+        state.accept({'stage': 'native_failure', 'nativeCheckpoint': 'encrypted_key_launch',
+                      'nativeFailureCode': 'native_app_launch_failed'})
+        state.finalize_cases()
+        self.assertEqual({key: case['status'] for key, case in cases.items()},
+                         {'ordinary': 'not_run', 'keyChange': 'not_run', 'encryptedKey': 'failed'})
 
     def test_authorized_in_order_clipboard_and_passphrase_stages_never_export_credentials(self):
         import paramiko

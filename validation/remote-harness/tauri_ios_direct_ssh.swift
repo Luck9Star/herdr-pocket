@@ -3128,6 +3128,11 @@ final class TauriDirectSSHUITests: XCTestCase {
         app = XCUIApplication(bundleIdentifier: config["bundleIdentifier"] as! String)
         XCUIDevice.shared.orientation = .portrait
         defer { app.terminate() }
+        if let encryptedPort = config["encryptedPort"] as? Int {
+            try exerciseEncryptedKey(port: encryptedPort)
+            app.terminate()
+            scenario = "ordinary"
+        }
         let ordinaryPort = config["ordinaryPort"] as! Int
         try post("ordinary_form")
         try launchForm(port: ordinaryPort)
@@ -3196,10 +3201,6 @@ final class TauriDirectSSHUITests: XCTestCase {
         try post("key_change_password_b")
         let activeRotation = try connect(password: config["rotationPassword"] as! String, mobileOwner: rotatedOwner)
         try terminal("key_change", port: port, owner: activeRotation)
-        if let encryptedPort = config["encryptedPort"] as? Int {
-            app.terminate()
-            try exerciseEncryptedKey(port: encryptedPort)
-        }
         try post("complete")
     }
 }

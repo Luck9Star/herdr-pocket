@@ -282,6 +282,31 @@ enum NativeControlPolicy {
         identifier == "ssh-password" || label == desktopPasswordLabel || label == mobilePasswordLabel
     }
 
+    enum MobilePasswordIssue: String, Error {
+        case identityMissing = "native_mobile_password_identity_missing"
+        case secureRoleMissing = "native_mobile_password_secure_role_missing"
+        case wrongRole = "native_mobile_password_wrong_role"
+        case rawAmbiguous = "native_mobile_password_raw_ambiguous"
+        case rawOwner = "native_mobile_password_raw_owner_unproven"
+        case liveOwner = "native_mobile_password_live_owner_unproven"
+        case liveMissing = "native_mobile_password_live_missing"
+        case liveUnreadable = "native_mobile_password_live_unreadable"
+        case liveAmbiguous = "native_mobile_password_live_ambiguous"
+        case liveIdentity = "native_mobile_password_live_identity_mismatch"
+        case ownerChanged = "native_mobile_password_owner_changed"
+        case frameUnsettled = "native_mobile_password_frame_unsettled"
+        case unhittable = "native_mobile_password_unhittable"
+        case disabled = "native_control_disabled"
+
+        var pending: Bool {
+            switch self {
+            case .identityMissing, .secureRoleMissing, .liveMissing, .liveUnreadable, .frameUnsettled, .unhittable:
+                return true
+            default: return false
+            }
+        }
+    }
+
     struct Fact {
         let identifier: String
         let label: String
@@ -531,6 +556,10 @@ final class TauriDirectSSHUITests: XCTestCase {
         let owner: Observed
         let window: Observed
         let web: Observed
+    }
+    private enum MobileWitnessObservation<Proof> {
+        case ready(Proof)
+        case pending(String)
     }
     private struct TerminalHeader {
         let nodes: [Observed]
@@ -1071,7 +1100,7 @@ final class TauriDirectSSHUITests: XCTestCase {
             let rows = try observedNodes()
             guard let owner = controlOwner(current.snapshot, rows), let scope = controlScope(owner, rows),
                   liveOnPath(scope.window) != nil, let web = liveOnPath(scope.web),
-                  let bound = queryMayBind ? mobileLiveControl(owner, in: web) : liveOnPath(owner) else {
+                  let bound = queryMayBind ? (try? mobileLiveControl(owner, in: web).get()) : liveOnPath(owner) else {
                 try require(false, ownerFailure)
                 throw NSError(domain: ownerFailure, code: 1)
             }
@@ -1206,7 +1235,14 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func mobileWitness(_ targets: [(String?, String, Bool)], includeOffscreenText: Bool = false) throws -> ([Observed], [Observed]) {
+        try waitForMobileWitness(targets, includeOffscreenText: includeOffscreenText) { .ready(($0, $1)) }
+    }
+
+    @MainActor
+    private func waitForMobileWitness<Proof>(_ targets: [(String?, String, Bool)], includeOffscreenText: Bool,
+                                    prove: ([Observed], [Observed]) throws -> MobileWitnessObservation<Proof>) throws -> Proof {
         let deadline = Date().addingTimeInterval(20)
+        var pending = "native_mobile_setup_unproven"
         repeat {
             let rows = try observedNodes()
             let displayed = rows.filter { NativeFramePolicy.valid($0.snapshot.frame) &&
@@ -1218,44 +1254,66 @@ final class TauriDirectSSHUITests: XCTestCase {
             }
             if let matches = NativeControlPolicy.pageWitness(facts, paths: displayed.map(\.path),
                 windows: displayed.map(\.windowPath), webs: displayed.map(\.webPath), targets: targets) {
-                return (rows, matches.map { displayed[$0] })
+                switch try prove(rows, matches.map { displayed[$0] }) {
+                case .ready(let proof): return proof
+                case .pending(let reason): pending = reason
+                }
+            } else {
+                pending = "native_mobile_setup_unproven"
             }
             Thread.sleep(forTimeInterval: 0.2)
         } while Date() < deadline
-        try require(false, "native_mobile_setup_unproven")
-        throw NSError(domain: "native_mobile_setup_unproven", code: 1)
+        try require(false, pending)
+        throw NSError(domain: pending, code: 1)
     }
 
     @MainActor
-    private func mobileLiveControl(_ owner: Observed, in web: LiveControl) -> LiveControl? {
+    private func mobileLiveControl(_ owner: Observed, in web: LiveControl) -> Result<LiveControl, NativeControlPolicy.MobilePasswordIssue> {
         // WebKit can flatten intermediary AX nodes in XCUI's child queries.
         // Re-query the role inside the proven WebView and require a unique
         // live element that agrees with the raw snapshot identity and frame.
         let snapshot = owner.snapshot
-        guard [.button, .secureTextField].contains(snapshot.elementType) else { return nil }
+        guard [.button, .secureTextField].contains(snapshot.elementType) else { return .failure(.liveIdentity) }
         let match = snapshot.identifier.isEmpty ? NSPredicate(format: "label == %@", snapshot.label) :
             NSPredicate(format: "identifier == %@", snapshot.identifier)
-        guard let queried = liveControl(uniqueElement(web.element.descendants(matching: snapshot.elementType).matching(match))),
-              sameIdentity(snapshot, queried.snapshot), NativeFramePolicy.valid(snapshot.frame),
-              snapshot.frame == queried.snapshot.frame else { return nil }
-        return queried
+        let query = web.element.descendants(matching: snapshot.elementType).matching(match)
+        let matches = query.count
+        guard matches <= 1 else { return .failure(.liveAmbiguous) }
+        guard matches == 1 else { return .failure(.liveMissing) }
+        guard let queried = liveControl(query.firstMatch) else { return .failure(.liveUnreadable) }
+        guard sameIdentity(snapshot, queried.snapshot) else { return .failure(.liveIdentity) }
+        guard NativeFramePolicy.valid(snapshot.frame), snapshot.frame == queried.snapshot.frame else { return .failure(.frameUnsettled) }
+        return .success(queried)
     }
 
     @MainActor
     private func sameControlScope(_ lhs: RevealedControl, _ rhs: RevealedControl) -> Bool {
-        lhs.window.path == rhs.window.path && lhs.web.path == rhs.web.path &&
-            sameIdentity(lhs.window.snapshot, rhs.window.snapshot) && sameIdentity(lhs.web.snapshot, rhs.web.snapshot)
+        sameControlScope((lhs.window, lhs.web), rhs)
+    }
+
+    @MainActor
+    private func sameControlScope(_ scope: (window: Observed, web: Observed), _ previous: RevealedControl) -> Bool {
+        scope.window.path == previous.window.path && scope.web.path == previous.web.path &&
+            sameIdentity(scope.window.snapshot, previous.window.snapshot) && sameIdentity(scope.web.snapshot, previous.web.snapshot)
     }
 
     @MainActor
     private func mobileControl(_ anchor: Observed, _ rows: [Observed], _ ownerFailure: String) throws -> RevealedControl {
-        guard let scope = controlScope(anchor, rows), liveOnPath(scope.window) != nil, let web = liveOnPath(scope.web),
-              let queried = mobileLiveControl(anchor, in: web),
-              let owner = controlOwner(queried.snapshot, rows), owner.path == anchor.path else {
+        guard case .success(let bound) = mobileBinding(anchor, rows) else {
             try require(false, ownerFailure)
             throw NSError(domain: ownerFailure, code: 1)
         }
-        return RevealedControl(live: queried, owner: owner, window: scope.window, web: scope.web)
+        return bound
+    }
+
+    @MainActor
+    private func mobileBinding(_ anchor: Observed, _ rows: [Observed]) -> Result<RevealedControl, NativeControlPolicy.MobilePasswordIssue> {
+        guard let scope = controlScope(anchor, rows) else { return .failure(.rawOwner) }
+        guard let owner = controlOwner(anchor.snapshot, rows), owner.path == anchor.path else { return .failure(.rawAmbiguous) }
+        guard liveOnPath(scope.window) != nil, let web = liveOnPath(scope.web) else { return .failure(.liveOwner) }
+        return mobileLiveControl(owner, in: web).map {
+            RevealedControl(live: $0, owner: owner, window: scope.window, web: scope.web)
+        }
     }
 
     @MainActor
@@ -1297,32 +1355,68 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func mobileAuth(port: Int, ready: Bool, previous: RevealedControl) throws -> (password: RevealedControl, submit: RevealedControl) {
-        let (rows, anchors) = try mobileWitness([("ssh-step-title", "SSH 账号认证", false),
+        try waitForMobileWitness([("ssh-step-title", "SSH 账号认证", false),
             ("ssh-reviewed-endpoint", target(port), false), ("ssh-approved-note", "本次主机密钥已确认", false),
-            ("ssh-connect", "连接 SSH", true)], includeOffscreenText: ready)
-        let submit = anchors[3]
-        try require(submit.snapshot.isEnabled == ready, "native_review_lock_invalid")
-        let fields = rows.filter { row in
+            ("ssh-connect", "连接 SSH", true)], includeOffscreenText: ready) { rows, anchors in
+            let submit = anchors[3]
+            try require(submit.snapshot.isEnabled == ready, "native_review_lock_invalid")
+            let password: RevealedControl
+            switch mobilePassword(in: rows, submit: submit, previous: previous, requireHittable: !ready) {
+            case .success(let control): password = control
+            case .failure(let issue):
+                if issue.pending { return .pending(issue.rawValue) }
+                try require(false, issue.rawValue)
+                throw issue
+            }
+            let current = password.live.snapshot
+            if !ready || current.value != nil {
+                try require(NativeControlPolicy.credentialEmpty(current.value, placeholder: current.placeholderValue) != ready,
+                            "native_review_lock_invalid")
+            }
+            try assertNoSecret(rows.map { $0.snapshot })
+            let submitControl = try mobileControl(submit, rows, "native_mobile_submit_owner_unproven")
+            try require(submitControl.live.snapshot.isEnabled == ready, "native_review_lock_invalid")
+            return .ready((password, submitControl))
+        }
+    }
+
+    @MainActor
+    private func mobilePassword(in rows: [Observed], submit: Observed, previous: RevealedControl, requireHittable: Bool)
+        -> Result<RevealedControl, NativeControlPolicy.MobilePasswordIssue> {
+        guard let scope = controlScope(submit, rows) else { return .failure(.rawOwner) }
+        guard sameControlScope(scope, previous) else { return .failure(.ownerChanged) }
+        let named = rows.filter { row in
             let field = row.snapshot
-            return field.elementType == .secureTextField && (field.identifier == "ssh-password" ||
-                ((field.identifier.isEmpty || field.identifier == field.label) && field.label == NativeControlPolicy.mobilePasswordLabel))
+            return field.identifier == "ssh-password" ||
+                ((field.identifier.isEmpty || field.identifier == field.label) && field.label == NativeControlPolicy.mobilePasswordLabel)
         }
-        let ownerFailure = "native_mobile_password_owner_unproven"
-        guard fields.count == 1, let field = fields.first,
-              field.windowPath == submit.windowPath, field.webPath == submit.webPath else {
-            try require(false, ownerFailure)
-            throw NSError(domain: ownerFailure, code: 1)
+        let fields = named.filter { $0.snapshot.elementType == .secureTextField }
+        guard fields.count <= 1, named.filter({ $0.snapshot.identifier == "ssh-password" }).count <= 1 else {
+            return .failure(.rawAmbiguous)
         }
-        let password = try mobileControl(field, rows, ownerFailure)
-        try require(sameControlScope(password, previous), ownerFailure)
-        let current = password.live.snapshot
-        try require(current.isEnabled, "native_control_disabled")
-        if !ready || current.value != nil {
-            try require(NativeControlPolicy.credentialEmpty(current.value, placeholder: current.placeholderValue) != ready,
-                        "native_review_lock_invalid")
+        guard !named.contains(where: { [.textField, .searchField, .textView].contains($0.snapshot.elementType) }) else {
+            return .failure(.wrongRole)
         }
-        try assertNoSecret(rows.map { $0.snapshot })
-        return (password, try mobileControl(submit, rows, "native_mobile_submit_owner_unproven"))
+        guard let field = fields.first else { return .failure(named.isEmpty ? .identityMissing : .secureRoleMissing) }
+        guard field.windowPath == submit.windowPath, field.webPath == submit.webPath else { return .failure(.rawOwner) }
+        guard field.snapshot.isEnabled else { return .failure(.disabled) }
+        return mobileBinding(field, rows).flatMap { password in
+            guard password.live.snapshot.isEnabled else { return .failure(.disabled) }
+            // After password entry the keyboard can scroll the field away.
+            // The submit action has its own fresh geometry and hit test.
+            guard requireHittable else { return .success(password) }
+            let frame = password.live.snapshot.frame
+            let geometry = controlGeometry(field, [password.live]) { viewport, _ in
+                routeTabsOcclusion(field, rows, viewport, [frame], scrolling: false)
+            }
+            switch geometry.failure {
+            // A real, stable offscreen frame can be revealed before touching
+            // the field, using the existing guarded scrolling path.
+            case nil, .fieldOutside, .fieldOccluded: return .success(password)
+            case .fieldUnhittable: return .failure(.unhittable)
+            default: return .failure(.frameUnsettled)
+            }
+        }
     }
 
     @MainActor

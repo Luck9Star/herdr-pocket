@@ -54,6 +54,13 @@ GEOMETRY_REASONS = frozenset((
     'scroll_direction_unproven', 'scroll_surface_unhittable', 'queried_unhittable',
     'bound_unhittable', 'scroll_no_progress'))
 MAX_GEOMETRY_REASONS_PER_CHECKPOINT = 24
+MOBILE_PASSWORD_PHASES = frozenset((
+    'ordinary_fingerprint', 'ordinary_password', 'key_change_fingerprint',
+    'key_change_new_fingerprint', 'key_change_password'))
+MOBILE_PASSWORD_FAILURES = frozenset('native_mobile_password_' + reason for reason in (
+    'identity_missing', 'secure_role_missing', 'wrong_role', 'raw_ambiguous',
+    'raw_owner_unproven', 'live_owner_unproven', 'live_missing', 'live_unreadable',
+    'live_ambiguous', 'live_identity_mismatch', 'owner_changed', 'frame_unsettled', 'unhittable'))
 NATIVE_FAILURES = frozenset((
     'native_tree_limit', 'native_expected_text_missing', 'native_control_missing',
     'native_control_not_visible', 'native_control_disabled', 'native_unexpected_existing_input',
@@ -76,7 +83,7 @@ NATIVE_FAILURES = frozenset((
     'native_form_control_unproven', 'native_form_control_changed', 'native_terminal_keyboard_visible',
     'native_terminal_header_unproven', 'native_mobile_setup_unproven',
     'native_mobile_confirmation_owner_unproven', 'native_mobile_password_owner_unproven',
-    'native_mobile_submit_owner_unproven', 'native_mobile_return_owner_unproven'))
+    'native_mobile_submit_owner_unproven', 'native_mobile_return_owner_unproven')) | MOBILE_PASSWORD_FAILURES
 HOME_MEMBERS = frozenset(('brand', 'headerAdd', 'emptyAdd', 'homeHeading', 'emptyHeading',
                          'zeroHosts', 'ordinaryShortcut', 'addHeading', 'sshOption'))
 COMPACT_HOME_MEMBERS = {'emptyDescription', 'compactShortcut'}
@@ -1084,7 +1091,10 @@ class Checkpoints:
                 self.result.setdefault('nativeInputRoles', {})[phase] = payload['nativeInputRole']
             if stage == 'native_failure':
                 code = payload.get('nativeFailureCode')
-                require(code in NATIVE_FAILURES, 'tauri_ios_native_diagnostic_invalid')
+                require(type(code) is str and code in NATIVE_FAILURES
+                        and (code not in MOBILE_PASSWORD_FAILURES or (
+                            phase in MOBILE_PASSWORD_PHASES and set(payload) == {'stage', 'nativeCheckpoint', 'nativeFailureCode'})),
+                        'tauri_ios_native_diagnostic_invalid')
                 self.result['nativeFailureCode'] = code
                 self.failure = 'tauri_ios_native_check_failed'
             elif phase == 'ordinary_connect':

@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/config_transfer.dart';
 import 'package:herdr_flutter_probe/config_transfer_page.dart';
@@ -39,6 +40,7 @@ void main() {
     final first = await addHost('开发','development.invalid');
     final second = await addHost('验证','validation.invalid');
     final unrelated = await addHost('旁路','unrelated.invalid');
+    await catalog.add(HostProfile.imported(portable(label:first.label,host:'unpaired.invalid'),1000));
     final writes = disk.writes;
     const password = 'fixture archive passphrase';
     final archive = (await tester.runAsync(() => encryptPortableConfig(password,PortableConfig.fromJson({
@@ -93,20 +95,51 @@ void main() {
     });
     await tester.pumpAndSettle();
 
+    Finder picker(int index) => find.byKey(ValueKey('transfer-choice-$index'));
+    Finder arrow(int index) => find.descendant(of:picker(index),matching:find.byIcon(Icons.arrow_drop_down));
     Future<void> choose(int index,String title) async {
-      await tapVisible(tester,'transfer-choice-$index');
+      await tester.ensureVisible(picker(index));
+      await tester.pumpAndSettle();
+      expect(arrow(index).hitTestable(),findsOneWidget);
+      await tester.tap(arrow(index).hitTestable());
       await tester.pumpAndSettle();
       final item = find.text(title).hitTestable().last;
       expect(item,findsOneWidget);
       await tester.tap(item);
       await tester.pumpAndSettle();
     }
-    const replace = '替换全部所列冲突（原身份停用保留）';
+    Future<void> expectFullChoice(int index,String title) async {
+      final field = picker(index);
+      await tester.ensureVisible(field);
+      await tester.pumpAndSettle();
+      final selected = find.descendant(of:field,matching:find.text(title)).hitTestable();
+      final dropdownArrow = arrow(index).hitTestable();
+      expect(selected,findsOneWidget);
+      expect(dropdownArrow,findsOneWidget);
+      final paragraph = tester.renderObject<RenderParagraph>(selected);
+      expect(paragraph.getMaxIntrinsicWidth(double.infinity),lessThanOrEqualTo(paragraph.size.width+0.01));
+      final viewport = tester.getRect(find.descendant(
+        of:find.byType(ConfigTransferPage),matching:find.byType(SingleChildScrollView),
+      ));
+      final bounds = tester.getRect(field).intersect(viewport);
+      final icon = tester.getRect(dropdownArrow);
+      expect(bounds.intersect(icon),icon);
+      final glyphs = paragraph.getBoxesForSelection(TextSelection(baseOffset:0,extentOffset:title.length));
+      expect(glyphs,isNotEmpty);
+      for (final glyph in glyphs) {
+        final painted = glyph.toRect().shift(paragraph.localToGlobal(Offset.zero));
+        expect(bounds.intersect(painted),painted);
+        expect(painted.right,lessThan(icon.left));
+      }
+    }
+    const replace = '替换全部冲突';
     const keep = '保留本机／跳过此条';
     const add = '添加新条目（不复用身份）';
     final impact = find.byKey(const ValueKey('transfer-impact'));
     Finder affected(HostTab tab) => find.descendant(of:impact,matching:find.byKey(ValueKey('transfer-affected-tab-${tab.id}')));
     expect(impact,findsNothing);
+    expect(find.textContaining('替换时停用资料并保留本机身份'),findsNWidgets(2));
+    expect(find.textContaining('未配对，替换时移除资料'),findsOneWidget);
     await choose(0,replace);
     expect(impact,findsOneWidget);
     expect(affected(originalTabs[0]),findsOneWidget);
@@ -119,9 +152,14 @@ void main() {
     expect(find.descendant(of:impact,matching:find.text('以上标签当前均不能从本机输入。')),findsOneWidget);
     expect(find.descendant(of:impact,matching:find.textContaining('fixture-device-handle')),findsNothing);
 
+    tester.view.physicalSize = const Size(390, 844);
+    await tester.pumpAndSettle();
+    await expectFullChoice(0,replace);
     tester.view.physicalSize = const Size(320, 740);
     await tester.pumpAndSettle();
+    await expectFullChoice(0,replace);
     await choose(1,replace);
+    await expectFullChoice(1,replace);
     expect(affected(originalTabs[2]),findsOneWidget);
     expect(find.descendant(of:affected(originalTabs[2]),matching:find.textContaining('· 验证 · pane-c')),findsOneWidget);
     await choose(0,add);
@@ -129,6 +167,7 @@ void main() {
     expect(affected(originalTabs[1]),findsNothing);
     expect(affected(originalTabs[2]),findsOneWidget);
     await choose(1,keep);
+    await expectFullChoice(1,keep);
     expect(impact,findsNothing);
     await choose(0,replace);
     expect(affected(originalTabs[0]),findsOneWidget);

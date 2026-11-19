@@ -183,13 +183,14 @@ class _ConfigTransferPageState extends State<ConfigTransferPage> {
           crossAxisAlignment:CrossAxisAlignment.stretch,children:[
             Text(plan!.hosts[index].label),
             SelectableText('${hostProviderLabel(plan!.hosts[index].provider)}\n${plan!.hosts[index].target.entries.map((e) => '${e.key}: ${e.value}').join('\n')}'),
-            Text(plan!.conflicts[index].isEmpty ? '没有同名或相同目标冲突' : '冲突：${plan!.conflicts[index].map((p) => '${p.label} · ${p.hasIdentity ? '含本机身份，替换会停用保留' : '未配对资料'}').join('；')}'),
+            Text(plan!.conflicts[index].isEmpty ? '没有同名或相同目标冲突'
+              : '冲突：\n${plan!.conflicts[index].map((p) => '${p.label} · ${p.hasIdentity ? '替换时停用资料并保留本机身份' : '未配对，替换时移除资料'}').join('\n')}'),
             DropdownButtonFormField<ConfigImportAction>(key:ValueKey('transfer-choice-$index'),initialValue:choices[index],
               isExpanded:true,
               hint:const Text('请明确选择处理方式'),items:[
                 const DropdownMenuItem(value:ConfigImportAction.add,child:Text('添加新条目（不复用身份）')),
                 const DropdownMenuItem(value:ConfigImportAction.keep,child:Text('保留本机／跳过此条')),
-                if (plan!.conflicts[index].isNotEmpty) const DropdownMenuItem(value:ConfigImportAction.replace,child:Text('替换全部所列冲突（原身份停用保留）')),
+                if (plan!.conflicts[index].isNotEmpty) const DropdownMenuItem(value:ConfigImportAction.replace,child:Text('替换全部冲突')),
               ],onChanged:available && !busy ? (value) => setState(() { choices[index] = value; reviewed = false; }) : null),
           ]))),
         for (var index = 0; index < (plan!.config?.networks.length ?? 0); index++) Card(child:Padding(padding:const EdgeInsets.all(12),child:Column(

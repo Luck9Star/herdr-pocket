@@ -652,10 +652,14 @@ Future<void> runEncryptedDirectSshUi(
   required Future<void> Function(String) capture,
   Future<void> Function()? afterTrust,
   bool rotating = false,
+  Future<void> Function(String)? captureRotationRejected,
 }) async {
+  final exchangeName = rotating && platform == 'ios-simulator'
+      ? 'encrypted-rotation'
+      : 'encrypted';
   Future<void> checkpoint(String phase) async {
-    publish('encrypted-stage.json', {'phase': phase});
-    final confirmation = File('$directory/encrypted-$phase-confirmed.json');
+    publish('$exchangeName-stage.json', {'phase': phase});
+    final confirmation = File('$directory/$exchangeName-$phase-confirmed.json');
     await until(tester, confirmation.existsSync);
     expect(jsonDecode(confirmation.readAsStringSync()), {
       'phase': phase,
@@ -800,10 +804,14 @@ Future<void> runEncryptedDirectSshUi(
       checkpoint: (phase, _) => checkpoint(phase),
       confirmHome: confirmHome,
       initialReview: () => checkpoint('review'),
+      captureRejected: captureRotationRejected,
       rejectedConnect: () async {
+        if (afterTrust != null) await afterTrust();
         await fillEncryptedCredentials();
-        step('encrypted_prepare_rejection');
-        await finishAndroidEncryptedPassphrase(tester);
+        if (android) {
+          step('encrypted_prepare_rejection');
+          await finishAndroidEncryptedPassphrase(tester);
+        }
         final dynamic state = tester.state(find.byType(DirectSshPage));
         expect(state.fingerprint, config['fingerprint']);
         await tap(
@@ -864,6 +872,7 @@ Future<void> runEncryptedDirectSshUi(
   final dynamic state = tester.state(find.byType(DirectSshPage));
   if (rotating) {
     expect(state.fingerprint, config['rotatedFingerprint']);
+    if (ios) step('encrypted_connect');
     await fillEncryptedCredentials();
   } else {
     await pasteKey();
@@ -1026,8 +1035,8 @@ Future<void> runEncryptedDirectSshUi(
     'clipboardCleared': true,
     'physicalImeVerified': false,
   };
-  publish('encrypted-result.json', report);
-  final confirmation = File('$directory/encrypted-peer-confirmed.json');
+  publish('$exchangeName-result.json', report);
+  final confirmation = File('$directory/$exchangeName-peer-confirmed.json');
   await until(tester, confirmation.existsSync);
   expect(jsonDecode(confirmation.readAsStringSync()), {
     'protocolAccepted': true,

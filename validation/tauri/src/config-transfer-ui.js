@@ -17,6 +17,12 @@ export function reviewedImportLeases(event, snapshot, selected) {
   const ids=new Set(event.hostIds.filter(id=>selected.includes(id)));
   return snapshot.filter(lease=>ids.has(lease.hostId) && (lease.nativeGeneration===null || event.tabs.some(row=>Array.isArray(row) && row[0]===lease.tabId && row[1]===lease.clientGeneration && row[2]===lease.nativeGeneration && row[3]===lease.hostId)));
 }
+export function reviewedImportLegacy(event, reviewed, current) {
+  const lease=event?.legacy;
+  return Array.isArray(lease) && !!reviewed && !!current && lease[0]===reviewed.generation && lease[2]===reviewed.hostId &&
+    (reviewed.nativeGeneration===null || lease[1]===reviewed.nativeGeneration) &&
+    (current.nativeGeneration===null || lease[1]===current.nativeGeneration) && current.hostId===reviewed.hostId && current.generation===reviewed.generation;
+}
 export function previewIsCurrent(requestEpoch, currentEpoch) { return requestEpoch === currentEpoch; }
 export function validExportPassword(value) {
   const points = Array.from(value);

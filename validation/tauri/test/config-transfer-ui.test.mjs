@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildImportChoices, reviewedImportLeases, previewIsCurrent, validExportPassword, exportIfCurrent, initConfigTransfer } from '../src/config-transfer-ui.js';
+import { buildImportChoices, reviewedImportLeases, reviewedImportLegacy, previewIsCurrent, validExportPassword, exportIfCurrent, initConfigTransfer } from '../src/config-transfer-ui.js';
 const entries = [{ index: 0, conflicts: [{ id: 'a' }, { id: 'b' }] }, { index: 1, conflicts: [] }];
 test('requires an explicit choice per entry and replaces every conflict', () => {
   assert.throws(() => buildImportChoices(entries, new Map([[0, 'replace']])));
@@ -206,4 +206,12 @@ test('revocation is retained when storage fails after native confirmation', asyn
     panel.descendants().find(n=>n.name==='config-choice-0' && n.value==='replace').onchange();await button('确认应用所选操作').onclick();
     assert.equal(revoked.length,1);assert.deepEqual(revoked[0].snapshot,[{tabId:'old',clientGeneration:2}]);assert.ok(panel.descendants().some(n=>n.textContent.includes('重新预览并审查')));
   } finally {globalThis.document=oldDocument;globalThis.window=oldWindow;}
+});
+
+test('legacy revoke matches both client and known native attempt generations',()=>{
+  const event={legacy:[3,8,'a']},reviewed={hostId:'a',generation:3,nativeGeneration:8};
+  assert.equal(reviewedImportLegacy(event,reviewed,{...reviewed}),true);
+  assert.equal(reviewedImportLegacy(event,reviewed,{...reviewed,nativeGeneration:9}),false);
+  assert.equal(reviewedImportLegacy(event,{...reviewed,nativeGeneration:9},reviewed),false);
+  assert.equal(reviewedImportLegacy(event,reviewed,{...reviewed,generation:4}),false);
 });

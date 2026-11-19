@@ -18,7 +18,7 @@ struct Pending {
     revision: String,
     archive: ArchiveV2,
     created: Instant,
-    active: Option<(u64, String)>,
+    active: Option<(u64, u64, String)>,
     active_tabs: Vec<(String,u64,u64,Option<String>)>,
 }
 
@@ -47,20 +47,21 @@ pub struct Preview {
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Revoked { host_ids: Vec<String>, tabs: Vec<(String,u64,u64,Option<String>)>, legacy: Option<(u64,String)> }
+pub struct Revoked { host_ids: Vec<String>, tabs: Vec<(String,u64,u64,Option<String>)>, legacy: Option<(u64,u64,String)> }
 
-fn reviewed_owners(flow: &RemoteFlow, reviewed: &Option<(u64,String)>, reviewed_tabs: &[(String,u64,u64,Option<String>)], ids: &[String]) -> Result<Revoked,String> {
+fn reviewed_owners(flow: &RemoteFlow, reviewed: &Option<(u64,u64,String)>, reviewed_tabs: &[(String,u64,u64,Option<String>)], ids: &[String]) -> Result<Revoked,String> {
     let affected = |entry: &&(String,u64,u64,Option<String>)| entry.3.as_ref().is_some_and(|id| ids.contains(id));
     let current = flow.tabs.owners();
     if current.iter().filter(affected).ne(reviewed_tabs.iter().filter(affected)) {return Err("transfer_active_changed".into());}
-    let legacy=flow.owner.zip(flow.host_id.clone()).filter(|(_,id)|ids.contains(id));
+    let affected_legacy=flow.owner.zip(flow.host_id.clone()).filter(|(_,id)|ids.contains(id));
+    let legacy=affected_legacy.map(|(owner,id)|flow.attempt.map(|attempt|(owner,attempt,id)).ok_or("transfer_active_changed")).transpose()?;
     if legacy.is_some() && legacy.as_ref()!=reviewed.as_ref() {return Err("transfer_active_changed".into());}
     Ok(Revoked {host_ids:ids.to_vec(), tabs:current.into_iter().filter(|entry|entry.3.as_ref().is_some_and(|id|ids.contains(id))).collect(), legacy})
 }
-fn stop_replaced_host(flow: &mut RemoteFlow, gate: &mut AttemptGate, reviewed: &Option<(u64,String)>, reviewed_tabs: &[(String,u64,u64,Option<String>)], ids: &[String]) -> Result<Revoked,String> {
+fn stop_replaced_host(flow: &mut RemoteFlow, gate: &mut AttemptGate, reviewed: &Option<(u64,u64,String)>, reviewed_tabs: &[(String,u64,u64,Option<String>)], ids: &[String]) -> Result<Revoked,String> {
     let captured=reviewed_owners(flow,reviewed,reviewed_tabs,ids)?;
     for (tab,owner,generation,_) in &captured.tabs {flow.tabs.cancel(tab,*owner,*generation);}
-    if let Some((owner,_))=&captured.legacy {flow.cancel(*owner,gate);}
+    if let Some((owner,_,_))=&captured.legacy {flow.cancel(*owner,gate);}
     Ok(captured)
 }
 async fn wait_retired(flow:&Arc<Mutex<RemoteFlow>>, targets:&[(String,u64,u64)], legacy:Option<(u64,u64)>, timeout:Duration)->Result<(),String> {
@@ -131,10 +132,10 @@ pub async fn config_preview(
     let archive = archive?;
     let ticket = random_public_id().map_err(str::to_string)?;
     let flow = flow.lock().map_err(|_| "state_unavailable")?;
-    let active = flow.owner.zip(flow.host_id.clone());
+    let active = flow.owner.zip(flow.attempt).zip(flow.host_id.clone()).map(|((owner,attempt),id)|(owner,attempt,id));
     let active_tabs = flow.tabs.owners();
     let mut active_host_ids:Vec<String>=active_tabs.iter().filter_map(|t|t.3.clone()).collect();
-    if let Some((_,id))=&active {active_host_ids.push(id.clone());}
+    if let Some((_,_,id))=&active {active_host_ids.push(id.clone());}
     active_host_ids.sort();active_host_ids.dedup();
     let plan = hosts.preview_v2(&archive)?;
     *transfers
@@ -151,7 +152,7 @@ pub async fn config_preview(
     Ok(Preview {
         ticket,
         plan,
-        active_host_id: active.map(|(_, id)| id),
+        active_host_id: active.map(|(_, _, id)| id),
         active_host_ids,
     })
 }
@@ -194,7 +195,7 @@ pub async fn config_apply(
             let reviewed=reviewed_owners(&f,&pending.active,&pending.active_tabs,&ids)?;
             on_revoke.send(reviewed).map_err(|_|"transfer_revoke_unavailable".to_owned())?;
             let owners=stop_replaced_host(&mut f,&mut g,&pending.active,&pending.active_tabs,&ids)?;
-            let legacy=owners.legacy.as_ref().and_then(|(owner,_)|f.attempt.map(|attempt|(*owner,attempt)));
+            let legacy=owners.legacy.as_ref().map(|(owner,attempt,_)|(*owner,*attempt));
             captured=Some((owners,legacy));
             Err("transfer_preflight_complete".into())
         })
@@ -228,7 +229,7 @@ mod tests {
         assert!(!cancel.is_cancelled());
         assert!(matches!(stop_replaced_host(&mut flow, &mut gate, &None, &[], &["one".into()]), Err(e) if e=="transfer_active_changed"));
         assert!(!cancel.is_cancelled());
-        let reviewed = Some((1, "one".into()));
+        let reviewed = Some((1, generation, "one".into()));
         stop_replaced_host(&mut flow, &mut gate, &reviewed, &[], &["one".into()]).unwrap();
         assert!(cancel.is_cancelled());
         flow.finish(1, generation, &mut gate);
@@ -248,10 +249,25 @@ mod tests {
         let finishing=flow.clone();let task=tokio::spawn(async move {tokio::time::sleep(Duration::from_millis(30)).await;finishing.lock().unwrap().tabs.finish("old",1,generation);});
         assert_eq!(commit_after_retirement(&flow,&targets,None,Duration::from_secs(1),||{committed.set(true);Ok(())}).await,Ok(()));task.await.unwrap();assert!(committed.get());assert!(!other.is_cancelled());
     }
+    #[test]
+    fn import_rejects_reused_legacy_client_generation_with_new_attempt() {
+        let mut flow=RemoteFlow::default();let mut gate=AttemptGate::default();
+        let (old,_)=flow.begin(3,&mut gate).unwrap();flow.host_id=Some("host-a".into());
+        let reviewed=Some((3,old,"host-a".into()));flow.finish(3,old,&mut gate);
+        let (new,cancel)=flow.begin(3,&mut gate).unwrap();flow.host_id=Some("host-a".into());
+        assert_ne!(old,new);
+        assert!(matches!(stop_replaced_host(&mut flow,&mut gate,&reviewed,&[],&["host-a".into()]),Err(e) if e=="transfer_active_changed"));
+        assert!(!cancel.is_cancelled());
+    }
+    #[test]
+    fn import_rejects_missing_legacy_attempt_before_revocation() {
+        let mut flow=RemoteFlow::default();flow.owner=Some(3);flow.host_id=Some("host-a".into());
+        assert!(matches!(reviewed_owners(&flow,&Some((3,1,"host-a".into())),&[],&["host-a".into()]),Err(e) if e=="transfer_active_changed"));
+    }
     #[tokio::test]
     async fn import_waits_for_legacy_connection_without_a_js_tab() {
         let flow=Arc::new(Mutex::new(RemoteFlow::default()));let mut gate=AttemptGate::default();
-        let attempt={let mut f=flow.lock().unwrap();let (attempt,_)=f.begin(3,&mut gate).unwrap();f.host_id=Some("host-a".into());stop_replaced_host(&mut f,&mut gate,&Some((3,"host-a".into())),&[],&["host-a".into()]).unwrap();attempt};
+        let attempt={let mut f=flow.lock().unwrap();let (attempt,_)=f.begin(3,&mut gate).unwrap();f.host_id=Some("host-a".into());stop_replaced_host(&mut f,&mut gate,&Some((3,attempt,"host-a".into())),&[],&["host-a".into()]).unwrap();attempt};
         assert_eq!(wait_retired(&flow,&[],Some((3,attempt)),Duration::from_millis(30)).await,Err("transfer_retirement_pending".into()));
         flow.lock().unwrap().finish(3,attempt,&mut gate);
         assert_eq!(wait_retired(&flow,&[],Some((3,attempt)),Duration::from_millis(30)).await,Ok(()));

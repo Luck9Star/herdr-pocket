@@ -274,22 +274,30 @@ class ScaffoldTests(unittest.TestCase):
         self.assertEqual(helper.count('app.typeText(value)'), 1)
         self.assertNotIn('phase: "sentinel"', helper)
 
-    def test_ordinary_sentinel_requires_exact_system_text_field_value_after_real_edit(self):
+    def test_ordinary_sentinel_replaces_the_retained_address_using_the_same_system_text_field(self):
         swift = (Path(__file__).parent / 'macos_secure_xcuitest.swift').read_text()
         helper = swift[swift.index('private func ordinaryValues'):swift.index('private func verifyFingerprint')]
-        self.assertIn('$0.elementType == .textField', helper)
-        self.assertIn('$0.value as? String', helper)
-        self.assertIn('values.contains(sentinel)', helper)
-        self.assertLess(helper.index('tap(app, address)'), helper.index('app.typeKey("a"'))
-        self.assertLess(helper.index('app.typeKey(XCUIKeyboardKey.delete'), helper.index('XCTAssertTrue(addressCleared,'))
-        self.assertLess(helper.index('XCTAssertTrue(addressCleared,'), helper.index('app.typeText(sentinel)'))
-        self.assertEqual(helper.count('app.typeText(sentinel)'), 1)
-        after_type = helper[helper.index('app.typeText(sentinel)'):]
+        self.assertIn('let node = try address.snapshot()', helper)
+        self.assertIn('node.elementType == .textField', helper)
+        self.assertIn('return node.value as? String', helper)
+        self.assertIn('window.descendants(matching: .any).matching(identifier: addressLabel)', helper)
+        self.assertIn('XCTAssertEqual(addresses.count, 1', helper)
+        self.assertIn('retained?[0] == true && retained?[1] == true && retained?[3] == true && retained?[8] == false', helper)
+        self.assertIn('XCTAssertFalse(try ordinaryValue(address) == sentinel', helper)
+        self.assertLess(helper.index('tap(app, address)'), helper.index('trailing.click(forDuration:'))
+        self.assertLess(helper.index('trailing.click(forDuration:'), helper.index('address.typeText(sentinel)'))
+        self.assertEqual(helper.count('address.typeText(sentinel)'), 1)
+        self.assertNotIn('XCUIKeyboardKey.delete', helper)
+        after_type = helper[helper.index('address.typeText(sentinel)'):]
         self.assertNotIn('targetDiagnostics(', after_type)
-        self.assertIn('ordinaryValues(try snapshotNodes(app))', after_type)
+        self.assertIn('seen = try ordinaryValue(address) == sentinel', after_type)
         self.assertIn('XCTAssertTrue(seen,', after_type)
         masking = swift[swift.index('func testSystemMasking'):swift.index('func testPasswordSSH')]
-        self.assertLess(masking.index('try verifyOrdinarySentinel('), masking.index('mark("ordinarySentinelObserved")'))
+        returned = masking[masking.index('clickEntryBack(app, phase: "maskingBack")'):]
+        self.assertLess(returned.index('try verifyClearedCredentials'), returned.index('try verifyOrdinarySentinel'))
+        self.assertLess(returned.index('try verifyOrdinarySentinel'), returned.index('try assertNoSecrets'))
+        self.assertLess(returned.index('try assertNoSecrets'), returned.index('mark("ordinarySentinelObserved")'))
+        self.assertNotIn('reopenSSH(', returned)
 
     def test_fingerprint_mouse_fallback_requires_unique_visible_target_and_actual_confirmation(self):
         swift=(Path(__file__).parent/'macos_secure_xcuitest.swift').read_text()

@@ -262,39 +262,53 @@ final class SecureCredentialUITests: XCTestCase {
         nodes.filter { $0.elementType == .textField }.compactMap { $0.value as? String }.filter { !$0.isEmpty }
     }
 
-    private func ordinaryMetrics(_ app: XCUIApplication, sentinel: String) throws -> Bool {
-        let nodes = try snapshotNodes(app)
-        let values = ordinaryValues(nodes)
-        let seen = !sentinel.isEmpty && values.contains(sentinel)
-        print("HP_XCUI_ORDINARY=nodes:\(min(nodes.count,10000)),values:\(min(values.count,10000)),sentinel:\(seen ? 1 : 0)")
-        fflush(stdout)
-        return seen
+    private func ordinaryValue(_ address: XCUIElement) throws -> String? {
+        let node = try address.snapshot()
+        guard node.elementType == .textField else { return nil }
+        return node.value as? String
     }
 
-    private func verifyOrdinarySentinel(_ app: XCUIApplication, address: XCUIElement) throws {
-        tap(app, address)
-        app.typeKey("a", modifierFlags: .command)
-        app.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])
-        let clearDeadline = Date().addingTimeInterval(5)
-        var addressCleared = false
-        repeat {
-            // Confirm the keyboard clear reached the real address; the subsequent readback is AX only.
-            addressCleared = try targetDiagnostics(app, phase: "sentinelClear", emit: false)?[8] == true
-            if addressCleared { break }
-            usleep(100_000)
-        } while Date() < clearDeadline
-        XCTAssertTrue(addressCleared, "ordinary field sentinel not read back: address was not cleared")
+    private func ordinaryMetrics(_ app: XCUIApplication, sentinelObserved: Bool = false) throws {
+        let nodes = try snapshotNodes(app)
+        let values = ordinaryValues(nodes)
+        print("HP_XCUI_ORDINARY=nodes:\(min(nodes.count,10000)),values:\(min(values.count,10000)),sentinel:\(sentinelObserved ? 1 : 0)")
+        fflush(stdout)
+    }
+
+    private func verifyOrdinarySentinel(_ app: XCUIApplication) throws {
+        let window = app.windows.firstMatch
+        let addresses = window.descendants(matching: .any).matching(identifier: addressLabel)
+            .descendants(matching: .textField)
+        let address = addresses.firstMatch
+        XCTAssertTrue(address.waitForExistence(timeout: 15), "named address group or ordinary input missing")
+        let retained = try targetDiagnostics(app, phase: "sentinelRetained", emit: false)
+        XCTAssertTrue(retained?[0] == true && retained?[1] == true && retained?[3] == true && retained?[8] == false,
+                      "ordinary field sentinel not read back: target was not retained")
+        XCTAssertEqual(addresses.count, 1, "named address group or ordinary input missing")
+        XCTAssertTrue(address.isEnabled, "requested control is disabled")
 
         let nonce = UUID().uuidString.lowercased().filter { $0 != "-" }
         let sentinel = "hpaddress" + String(nonce.prefix(16))
-        app.typeText(sentinel)
-        let valueDeadline = Date().addingTimeInterval(8)
+        XCTAssertFalse(try ordinaryValue(address) == sentinel, "ordinary field sentinel unexpectedly present before editing")
+        tap(app, address)
+
+        // The retained address is a short, single line. Drag from after its end to before its
+        // start and replace the selection once through the focused system text field.
+        let trailing = address.coordinate(withNormalizedOffset: CGVector(dx: 0.96, dy: 0.5))
+        let leading = address.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.5))
+        XCTAssertTrue(stableHit(address) && window.frame.contains(trailing.screenPoint) &&
+                      window.frame.contains(leading.screenPoint), "requested control is not hittable")
+        trailing.click(forDuration: 0.05, thenDragTo: leading)
+        address.typeText(sentinel)
+
+        let deadline = Date().addingTimeInterval(8)
+        var seen = false
         repeat {
-            let values = ordinaryValues(try snapshotNodes(app))
-            if values.contains(sentinel) { break }
+            seen = try ordinaryValue(address) == sentinel
+            if seen { break }
             usleep(100_000)
-        } while Date() < valueDeadline
-        let seen = try ordinaryMetrics(app, sentinel: sentinel)
+        } while Date() < deadline
+        try ordinaryMetrics(app, sentinelObserved: seen)
         print("HP_XCUI_INPUT=phase:sentinel,target:\(seen ? 1 : 0)")
         fflush(stdout)
         XCTAssertTrue(seen, "ordinary field sentinel not read back: system text field value")
@@ -630,7 +644,7 @@ final class SecureCredentialUITests: XCTestCase {
         launchSSH(app, stage: "maskingHomepage")
         let address = element(app, addressLabel).descendants(matching: .textField).firstMatch
         XCTAssertTrue(address.waitForExistence(timeout: 15), "named address group or ordinary input missing")
-        _ = try ordinaryMetrics(app, sentinel: "")
+        try ordinaryMetrics(app)
         try enterTarget(app, host: "127.0.0.1", port: port, username: username, phase: "masking")
         try probeAndReview(app, fingerprint: fingerprint, phase: "masking")
         let passwordField = secureField(app, "direct-secret")
@@ -674,9 +688,9 @@ final class SecureCredentialUITests: XCTestCase {
         mark("maskingScanCompleted")
 
         clickEntryBack(app, phase: "maskingBack")
-        XCTAssertTrue(address.waitForExistence(timeout: 15), "named address group or ordinary input missing")
         try verifyClearedCredentials(app)
-        try verifyOrdinarySentinel(app, address: address)
+        try verifyOrdinarySentinel(app)
+        try assertNoSecrets(app, [password, phrase])
         mark("ordinarySentinelObserved")
         app.terminate()
     }

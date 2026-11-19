@@ -783,12 +783,12 @@ test("mobile private key gate checks a complete envelope and recognized encrypte
 
 test("an acknowledged explicit close announces once and preserves the mobile target", async () => {
   const announced = [];
-  const h = setup({compact:true,onBack:closed=>announced.push(closed)});
+  const h = setup({compact:true,onBack:(...args)=>announced.push(args)});
   const n = h.nodes;
   try {
     assert.equal(n["ssh-closed-feedback"].hidden,true);
     n["ssh-step-back"].onclick();
-    assert.deepEqual(announced,[false]);
+    assert.deepEqual(announced,[[null,false]]);
     h.setAccept(true);
     await h.probe();
     n["ssh-trust-confirm"].onclick();
@@ -799,6 +799,9 @@ test("an acknowledged explicit close announces once and preserves the mobile tar
     await flush();
     assert.equal(h.calls.filter(call=>call.cmd==="ssh_shell_close").length,1);
     assert.equal(n["ssh-closed-feedback"].hidden,false);
+    assert.equal(n["ssh-closed-title"].textContent,"本机已断开");
+    assert.equal(n["ssh-closed-detail"].textContent,"凭据已清空，重连时请重新填写。");
+    assert.equal(n["ssh-return-home"].hidden,false);
     assert.equal(n["ssh-password"].value,"");
     assert.equal(n["ssh-host"].value,"127.0.0.1");
     assert.equal(n["ssh-user"].value,"tester");
@@ -806,13 +809,13 @@ test("an acknowledged explicit close announces once and preserves the mobile tar
     n["ssh-return-home"].onclick();
     n["ssh-return-home"].onclick();
     assert.equal(n["ssh-closed-feedback"].hidden,true);
-    assert.deepEqual(announced,[false,true]);
+    assert.deepEqual(announced,[[null,false],["confirmed",true]]);
   } finally { h.restore(); }
 });
 
 test("an unconfirmed close is reported without creating a home disconnect notice", async () => {
   const announced = [];
-  const h = setup({compact:true,failClose:true,onBack:closed=>announced.push(closed)});
+  const h = setup({compact:true,failClose:true,onBack:(...args)=>announced.push(args)});
   const n = h.nodes;
   try {
     h.setAccept(true);
@@ -821,11 +824,13 @@ test("an unconfirmed close is reported without creating a home disconnect notice
     await h.connect();
     n["ssh-disconnect"].onclick();
     await flush();
-    assert.match(n["ssh-status"].textContent,/无法确认/);
-    assert.equal(n["ssh-closed-feedback"].hidden,true);
-    assert.equal(n["ssh-return-home"].hidden,true);
-    n["ssh-step-back"].onclick();
-    assert.deepEqual(announced,[false]);
+    assert.match(n["ssh-status"].textContent,/本机连接关闭失败/);
+    assert.equal(n["ssh-closed-feedback"].hidden,false);
+    assert.equal(n["ssh-closed-title"].textContent,"本机连接关闭失败");
+    assert.equal(n["ssh-closed-detail"].textContent,"会话可能仍在。可返回首页。");
+    assert.equal(n["ssh-return-home"].hidden,false);
+    n["ssh-return-home"].onclick();
+    assert.deepEqual(announced,[["failed",true]]);
   } finally { h.restore(); }
 });
 
@@ -848,8 +853,8 @@ for (const [outcome, options] of [
       n["ssh-disconnect"].onclick();
       await flush();
 
-      assert.equal(n["home-ssh"].dataset.sshClose, confirmed ? "confirmed" : "unconfirmed");
-      assert.match(n["ssh-status"].textContent, confirmed ? /^已断开/ : /^远端关闭未确认/);
+      assert.equal(n["home-ssh"].dataset.sshClose, confirmed ? "confirmed" : "failed");
+      assert.match(n["ssh-status"].textContent, confirmed ? /^本机已断开/ : /^本机连接关闭失败/);
       assert.deepEqual(h.tops.at(-1), [0, 0]);
       assert.equal(n["ssh-live"].hidden, true);
       assert.equal(n["ssh-return-home"].hidden, false);
@@ -858,14 +863,15 @@ for (const [outcome, options] of [
       assert.ok(["ssh-password", "ssh-key", "ssh-passphrase"].every(id => n[id].value === ""));
 
       h.setCompact(true);
-      assert.equal(n["ssh-closed-feedback"].hidden, !confirmed);
-      assert.equal(n["ssh-return-home"].hidden, !confirmed);
+      assert.equal(n["ssh-closed-feedback"].hidden, false);
+      assert.equal(n["ssh-closed-title"].textContent, confirmed ? "本机已断开" : "本机连接关闭失败");
+      assert.equal(n["ssh-return-home"].hidden, false);
       h.setCompact(false);
       assert.equal(n["ssh-return-home"].hidden, false);
-      assert.equal(n["home-ssh"].dataset.sshClose, confirmed ? "confirmed" : "unconfirmed");
+      assert.equal(n["home-ssh"].dataset.sshClose, confirmed ? "confirmed" : "failed");
       n["ssh-return-home"].onclick();
       n["ssh-return-home"].onclick();
-      assert.deepEqual(announced, [[confirmed, true]]);
+      assert.deepEqual(announced, [[confirmed ? "confirmed" : "failed", true]]);
       assert.equal(n["ssh-return-home"].hidden, true);
       assert.equal(h.openCalls().length, 1);
       assert.equal(h.calls.filter(call=>call.cmd==="ssh_shell_close").length, 1);
@@ -893,10 +899,10 @@ test("desktop page visibility cleanup preserves a pending and resolved explicit 
     backgroundAndReturn();
     resolveClose(false);
     await flush();
-    assert.match(n["ssh-status"].textContent, /^远端关闭未确认/);
+    assert.match(n["ssh-status"].textContent, /^本机连接关闭失败/);
     backgroundAndReturn();
     await flush();
-    assert.match(n["ssh-status"].textContent, /^远端关闭未确认/);
+    assert.match(n["ssh-status"].textContent, /^本机连接关闭失败/);
     assert.equal(n["ssh-return-home"].hidden, false);
     assert.equal(h.calls.filter(call=>call.cmd==="ssh_shell_close").length, 1);
   } finally { h.restore(); }

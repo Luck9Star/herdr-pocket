@@ -867,9 +867,14 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     }});
   let sshBackSection = 'dashboard';
   const ssh = initDirectSshUI({native, invoke, clipboardRead, keyboardRequest, terminalCursor:theme.terminal.cursor,
-    onBack: (disconnected, returnToDashboard) => {
-      navigateHome(disconnected || returnToDashboard ? 'dashboard' : sshBackSection);
-      if (disconnected) $('host-ssh-disconnected').hidden = false;
+    onBack: (outcome, returnToDashboard) => {
+      const confirmed = outcome === true || outcome === 'confirmed';
+      const failed = outcome === 'failed';
+      navigateHome(confirmed || failed || returnToDashboard ? 'dashboard' : sshBackSection);
+      if (confirmed || failed) {
+        $('host-ssh-disconnected').hidden = false;
+        $('host-ssh-disconnected').textContent = failed ? '本机连接关闭失败' : '本机已断开';
+      }
     },
     channelFactory:()=>new Channel(), terminalFactory:options=>createUnicodeTerminal(Terminal,options)});
   function setHomeSection(section) {

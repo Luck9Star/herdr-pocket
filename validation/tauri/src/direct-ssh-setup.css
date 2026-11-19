@@ -21,7 +21,7 @@
     font-size:0.875rem;
     line-height:1.375rem;
   }
-  #home-ssh[data-ssh-close="unconfirmed"] #ssh-status {
+  #home-ssh[data-ssh-close="failed"] #ssh-status {
     border-color:var(--hp-warningBorder);
     background:var(--hp-warningSoft);
     color:var(--hp-warningText);

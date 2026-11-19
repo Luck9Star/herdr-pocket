@@ -76,9 +76,8 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   const controller = createDirectSsh({invoke, channelFactory,
     onStatus: (message, ready, reason, details) => {
       const desktopClose = details?.explicit && !compact();
-      if (details?.explicit) {
-        closeResult = details.closed ? 'confirmed' : 'unconfirmed';
-        if (desktopClose && !details.closed) message = '远端关闭未确认。本次本地会话已结束，凭据已清空。';
+      if (details?.explicit && details.closed !== undefined) {
+        closeResult = details.closed ? 'confirmed' : 'failed';
       }
       $('ssh-status').textContent = message;
       $('ssh-disconnect').disabled = !ready;
@@ -140,16 +139,21 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     delete mobileSection.dataset.sshClose;
     if (!compact()) {
       delete mobileSection.dataset.sshStep;
-      const ended = closeResult !== null && closeResult !== 'pending';
+      const ended = closeResult === 'confirmed' || closeResult === 'failed';
       if (ended) mobileSection.dataset.sshClose = closeResult;
-      $('ssh-target-fields').hidden = false;
-      $('ssh-closed-feedback').hidden = true;
+      $('ssh-closed-feedback').hidden = closeResult !== 'confirmed' && closeResult !== 'failed';
       $('ssh-return-home').hidden = !ended;
       $('ssh-credentials').hidden = false;
       $('ssh-reviewed-target').hidden = true;
       $('ssh-trust-review').hidden = true;
       $('ssh-probe').textContent = '探测主机指纹';
       $('ssh-connect').textContent = '连接 / 重新连接';
+      if (closeResult === 'confirmed' || closeResult === 'failed') {
+        $('ssh-closed-title').textContent = $('ssh-status').textContent.split('；')[0];
+        $('ssh-closed-detail').textContent = closeResult === 'confirmed'
+          ? ($('ssh-status').textContent.includes('远端已报告结束') ? '远端已报告结束，凭据已清空。' : '凭据已清空，重连时请重新填写。')
+          : '会话可能仍在。可返回首页。';
+      }
       return;
     }
     const confirmed = evidence && $('ssh-review').checked;
@@ -157,8 +161,15 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     mobileSection.dataset.sshStep = step;
     $('ssh-step-title').textContent = confirmed ? 'SSH 账号认证' : evidence ? '核对主机密钥' : '普通 SSH';
     $('ssh-target-fields').hidden = step !== 'target';
-    $('ssh-closed-feedback').hidden = closeResult !== 'confirmed';
-    $('ssh-return-home').hidden = closeResult !== 'confirmed';
+    const endedMobile = closeResult === 'confirmed' || closeResult === 'failed';
+    $('ssh-closed-feedback').hidden = !endedMobile;
+    $('ssh-return-home').hidden = !endedMobile;
+    if (endedMobile) {
+      $('ssh-closed-title').textContent = $('ssh-status').textContent.split('；')[0];
+      $('ssh-closed-detail').textContent = closeResult === 'confirmed'
+        ? ($('ssh-status').textContent.includes('远端已报告结束') ? '远端已报告结束，凭据已清空。' : '凭据已清空，重连时请重新填写。')
+        : '会话可能仍在。可返回首页。';
+    }
     $('ssh-credentials').hidden = step !== 'auth';
     $('ssh-reviewed-target').hidden = step === 'target';
     $('ssh-trust-review').hidden = step !== 'trust';
@@ -279,16 +290,16 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     };
     $('ssh-trust-cancel').onclick = cancelTrust;
     const leaveTarget = (returnToDashboard = false) => {
-      const confirmed = closeResult === 'confirmed';
+      const outcome = closeResult === 'confirmed' ? 'confirmed' : closeResult === 'failed' ? 'failed' : null;
       clearSecrets();
       resetReview();
       closeResult = null;
       showSetupNotice(false);
       refreshStep();
-      onBack?.(confirmed, returnToDashboard);
+      onBack?.(outcome, returnToDashboard);
     };
     $('ssh-return-home').onclick = () => {
-      if (closeResult === 'confirmed' || (!compact() && closeResult === 'unconfirmed')) leaveTarget(true);
+      if (closeResult === 'confirmed' || closeResult === 'failed') leaveTarget(true);
     };
     $('ssh-step-back').onclick = () => {
       if (controller.isActive() || submitting) {

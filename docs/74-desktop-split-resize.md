@@ -202,6 +202,8 @@ R1 未确认最终关闭。R2 云端通过，本机显式等待取消时仍复�
 
 ## Tauri 分屏键盘退出与窗口变化
 
+**Guarded R12 单次通过（Ubuntu 24.04 原生 GTK，两条真实回环 SSH）。** 2026-11-20，原生窗口经历 1440→700→1440，B 三次采样均保留原编辑器和焦点，A 因布局暂停并在回宽后以同一目标的新完整帧恢复只读。可信退出组合键只消费一次。随后通过界面依次关闭 A、B，A 关闭时 B 仍在线。退出驱动前两侧各认证一次、各有合格关闭记录、均无 reset，原 socket 均已消失。首键对端字节为 0／1，最终为 9／1，两个远端 PTY 均无尺寸变化。手动暂停仍由下文 stock R7 独立覆盖，其他平台及手机真机仍需对应验收。[R12 原 ZIP、阶段证据与 SHA-256](evidence/tauri-gtk-guarded-r12-20261120/README.md)
+
 **D1 逐键退出通过（Ubuntu 24.04 原生 GTK，固定宽屏，隔离 SSH/herdr）。** 2026-11-19，guarded R6 在 `c14af9d0bec0a5451318378bf5abaf1c94fd25b9` 上从首页配对两条连接。B 收到明确输入的 1 字节后，真实 WebDriver 键盘按下一次 `Ctrl+Shift+F6`。焦点移到 A 原有的「设为输入焦点」按钮，当前选中的终端保持 B，B 退出逐键输入，两侧均处于只读观察，原目标和连接保留。随后 A 明确发送一次草稿，SSH 对端最终收到 9／1 字节，退出驱动前两条连接均已关闭。guarded R7 在 `5e50a4d` 的固定 1440 × 1200 原生窗口复验通过，六项退出断言、9／1 字节及两条原 SSH 的关闭均独立核对。[guarded R6 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44524014037/job/135562342657) · [原件、六项断言与复核方法](evidence/tauri-gtk-focus-resize-r6-20261119/README.md) · [guarded R7 原件](evidence/tauri-gtk-focus-resize-r7-20261119/README.md#guarded-原生逐键退出) · [guarded R7 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44533705204/job/135596416871)
 
 **D2 逐键期间收窄与回宽通过（WebKit 和 Chromium，受控 IPC）。** 1440 → 700 → 1440 时，B 保留原 xterm 编辑器、DOM 焦点及输入资格。A 因布局暂停，回宽后等待同一目标的新完整帧，再恢复只读观察。手动暂停的 A 在回宽后仍保持暂停。两种浏览器都运行生产前端和 xterm，连接、输入受理与帧由夹具提供。[D2 原图、报告与复跑](evidence/tauri-active-input-split-resize-20261119/README.md) · [D1 浏览器修前后](evidence/tauri-desktop-focus-escape-20261119/README.md)
@@ -211,3 +213,7 @@ R1 未确认最终关闭。R2 云端通过，本机显式等待取消时仍复�
 驱动实际点击「返回主机看板」与「终端」，两侧手动暂停在第二轮窄宽往返中保持，旧画面不推进。显式选中 A 后点击「恢复观察」，仅 A 收到新完整帧，B 继续暂停。两侧各认证一次、各收到零字节，分别在驱动退出前关闭。两个远端 PTY 均保持 119 × 40，采样均未观察到尺寸变化，临时授权、进程与密钥已清理。[R7 门槛和修前／修后原图](evidence/tauri-gtk-focus-resize-r7-20261119/README.md#修前与修后的原图)
 
 R6 在手动离页后能确认两侧暂停，返回时 A 被读为断开，B 仍暂停。受控 IPC 的 Chromium 和 WebKit 复现了过期帧确认误取消原连接。`5e50a4d` 按当前连接和观察周期处理帧确认，迟到结果不影响保留的连接，当前周期的确认失败仍会断开。[R6 断点](evidence/tauri-gtk-focus-resize-r6-20261119/README.md#stock-窗口往返与手动暂停断点) · [R7 修复与复跑](evidence/tauri-gtk-focus-resize-r7-20261119/README.md#修复范围与复跑)
+
+**Guarded R8–R10 均未完成原生 GTK 逐键窗口往返。** R8 停在等待首键到达服务端，缺少独立的逐侧字节记录。R9 在 B 的原编辑器确认可信首键和匹配回执，SSH 对端 A／B 收到 0／1 字节，随后在收窄时失焦。R10 安置了独占 Xvfb 的指针，B 原编辑器收到可信 `keydown`，A／B 对端均收到 0 字节，停在首键阶段，尚未收窄。R10 的窗口焦点保持、原观察恢复与手动暂停由本地 WebKitGTK 组件对照覆盖，连接与输入受理来自隔离 IPC 夹具。[三轮原 ZIP、SHA-256 与组件对照](evidence/tauri-gtk-guarded-r8-r10-20261119/README.md)
+
+**Guarded R11 完成逐键窗口往返，停在对端关闭核验。** 原生 GTK 作业确认 B 的可信首键和回执，SSH 对端 A／B 收到 0／1 字节。按冻结驱动的执行顺序，随后通过了原编辑器保持、A 只读恢复、退出逐键及输入隔离检查。两标签已移除，工作台隐藏，退出驱动前未确认两条原 SSH 均已关闭。R11 工件未留逐侧关闭数据，也未单独落盘窗口往返和组合键样本。[R11 原 ZIP、SHA-256 与断点](evidence/tauri-gtk-guarded-r11-20261119/README.md)

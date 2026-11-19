@@ -3,12 +3,13 @@ import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 try:
     from s06_tauri_gui import (SplitDriver, exercise_window_resize, layout_matches, observed_tick,
                                peer_connection_evidence, require_same_positions, require_side_by_side,
-                               window_dimensions, GuiFailure)
+                               window_dimensions, exercise_direct_resize, exercise_peer_close, peer_close_sample,
+                               owned_xvfb, park_xvfb_pointer, GuiFailure)
 except ModuleNotFoundError as missing:
     if missing.name != 'cryptography':
         raise
@@ -17,6 +18,142 @@ except ModuleNotFoundError as missing:
 
 @unittest.skipIf(observed_tick is None, 'pairing requirements are installed in the native GUI workflow')
 class TauriSplitEvidenceTests(unittest.TestCase):
+    def test_first_key_requires_same_ready_editor_and_records_both_peer_byte_counts(self):
+        ready = {'originalTargetsActive': True, 'selectedB': True, 'originalEditorB': True,
+                 'aReadOnly': True, 'documentFocused': True, 'bEditorFocused': True,
+                 'bModeReady': True, 'bEditorWritable': True, 'bMode': 'direct',
+                 'bReceipt': 'absent', 'armed': True, 'keyDowns': 0}
+        before = {**ready, 'bModeReady': False, 'bEditorFocused': False, 'bMode': 'observe',
+                  'bEditorWritable': False, 'bReadOnly': True, 'armed': False}
+        after = {**ready, 'bReceipt': 'matched', 'keyDowns': 1, 'trustedKeyOnOriginalB': True,
+                 'events': {'keydown': {'atDocument': 1, 'trustedOriginal': 1, 'fixtureCharacter': 1,
+                                       'usableLegacyCode': 1, 'composed': 1, 'preventedAtDocument': 0,
+                                       'atEditorAfterHandlers': 1, 'preventedAtEditor': 1,
+                                       'text': 'private-key-event'},
+                            'beforeinput': {'atDocument': 65, 'trustedOriginal': True},
+                            'private-event-kind': {'atDocument': 1}},
+                 'ipcTiming': {'calibrated': True, 'completedSendResources': 1, 'url': 'private-ipc-url'}}
+
+        def one_poll(probe, code, **kwargs):
+            value = probe()
+            if not value:
+                raise GuiFailure(code)
+            return value
+
+        for states, received, error, sends in (
+            ([before, ready, after, after], (b'', b'b'), None, 1),
+            *[([before, {**ready, changed: False}, before], (b'', b''),
+               'direct_key_not_ready', 0) for changed in (
+                   'documentFocused', 'originalTargetsActive', 'originalEditorB', 'selectedB',
+                   'aReadOnly', 'bEditorFocused', 'bModeReady', 'bEditorWritable', 'armed')],
+            ([before, ready, after], (b'', b''), 'direct_input_missing', 1),
+            ([before, ready, after], (b'', b'private-payload'), 'direct_peer_bytes_mismatch', 1),
+            ([before, ready, after], (b'b', b'b'), 'direct_peer_bytes_mismatch', 1),
+            ([before, ready, ready], None, 'webdriver_actions_unknown_error', 1),
+            *[([before, ready, {**after, **changed}, {**after, **changed}],
+               (b'', b'b'), 'direct_key_delivery_unconfirmed', 1) for changed in (
+                   {'keyDowns': 0}, {'keyDowns': 2}, {'keyDowns': True},
+                   {'trustedKeyOnOriginalB': False}, {'bReceipt': 'other'},
+               )],
+        ):
+            with self.subTest(error=error, ready=states[1]), tempfile.TemporaryDirectory() as directory:
+                output = Path(directory)
+                wires = tuple(output / side for side in ('a', 'b'))
+                for wire in wires:
+                    wire.write_bytes(b'')
+
+                def key(value):
+                    self.assertEqual(value, 'b')
+                    if received is None:
+                        raise GuiFailure('webdriver_actions_unknown_error')
+                    for wire, data in zip(wires, received):
+                        wire.write_bytes(data)
+
+                ui = SplitDriver(SimpleNamespace(), output)
+                with (patch.object(ui, 'read', side_effect=states) as read,
+                      patch.object(ui, 'named') as named, patch.object(ui, 'keyboard', side_effect=key) as keys,
+                      patch('s06_tauri_gui.wait_for', side_effect=one_poll)):
+                    if error:
+                        code = error if error.startswith('webdriver_') else 's06_tauri_' + error
+                        with self.assertRaisesRegex(GuiFailure, '^' + code + '$'):
+                            ui.first_direct_key(['a', 'b'], [('p', 'a'), ('p', 'b')], wires)
+                    else:
+                        ui.first_direct_key(['a', 'b'], [('p', 'a'), ('p', 'b')], wires)
+                named.assert_called_once_with('逐键输入', 'b .tab-mode-actions')
+                self.assertEqual(keys.call_count, sends)
+                self.assertEqual(read.call_args_list[-1].args[-1], 'finish')
+                artifact = (output / 's06-tauri-first-direct-key.json').read_text()
+                self.assertNotIn('private-payload', artifact)
+                self.assertNotIn('private-', artifact)
+                evidence = json.loads(artifact)
+                self.assertEqual(evidence['keyboardAttempted'], bool(sends))
+                self.assertEqual(evidence['peerBefore'], [
+                    {'byteCount': 0, 'match': 'empty'}, {'byteCount': 0, 'match': 'empty'}])
+                self.assertEqual([peer['byteCount'] for peer in evidence['peerAfter']],
+                                 [len(data) for data in (received or (b'', b''))])
+                if sends:
+                    self.assertEqual(evidence['beforeKey']['keyDowns'], 0)
+                    self.assertEqual(evidence['beforeKey']['ipcTiming'], {
+                        'calibrated': False, 'status': 'unavailable', 'completedSendResources': None})
+                else:
+                    self.assertEqual(evidence['stage'], 'before_key')
+                if error is None:
+                    sample = evidence['afterKey']
+                    self.assertEqual(sample['events']['keydown']['preventedAtEditor'], 1)
+                    self.assertIsNone(sample['events']['beforeinput']['atDocument'])
+                    self.assertIsNone(sample['events']['beforeinput']['trustedOriginal'])
+                    self.assertEqual(sample['ipcTiming'], {
+                        'calibrated': True, 'status': 'observed', 'completedSendResources': 1})
+
+    def test_only_the_matching_ancestor_owned_xvfb_can_be_prepared(self):
+        with tempfile.TemporaryDirectory() as directory:
+            proc = Path(directory)
+            env = {'DISPLAY': ':103', 'XAUTHORITY': '/tmp/xvfb-run.fixture/Xauthority'}
+            wrapper, server, session = (proc / str(pid) for pid in (100, 101, 102))
+            for process in (wrapper, server, session):
+                process.mkdir()
+            (session / 'cmdline').write_bytes(b'dbus-run-session\0')
+            (session / 'status').write_text('PPid:\t100\n')
+            (wrapper / 'cmdline').write_bytes(b'/bin/sh\0/usr/bin/xvfb-run\0-a\0')
+            children = wrapper / 'task/100/children'
+            children.parent.mkdir(parents=True)
+            children.write_text('101 102 ')
+            argv = server / 'cmdline'
+            matching = b'Xvfb\0:103\0-nolisten\0tcp\0-auth\0/tmp/xvfb-run.fixture/Xauthority\0'
+            argv.write_bytes(matching)
+            self.assertTrue(owned_xvfb(env, proc=proc, parent=102))
+            self.assertFalse(owned_xvfb({**env, 'DISPLAY': 'localhost:103'}, proc=proc, parent=102))
+            self.assertFalse(owned_xvfb({**env, 'DISPLAY': ':104'}, proc=proc, parent=102))
+            self.assertFalse(owned_xvfb({**env, 'XAUTHORITY': '/tmp/another'}, proc=proc, parent=102))
+            argv.write_bytes(matching.replace(b'\0tcp\0', b'\0unix\0'))
+            self.assertFalse(owned_xvfb(env, proc=proc, parent=102))
+
+    def test_owned_xvfb_parks_pointer_without_clicking_or_changing_focus(self):
+        lib = MagicMock()
+        lib.XOpenDisplay.return_value = 1
+        lib.XDefaultRootWindow.return_value = 2
+        lib.XWarpPointer.return_value = 1
+
+        def input_focus(_, focus, __):
+            focus._obj.value = 1  # X11 PointerRoot
+
+        lib.XGetInputFocus.side_effect = input_focus
+        with (patch('s06_tauri_gui.owned_xvfb', return_value=True),
+              patch('s06_tauri_gui.ctypes.CDLL', return_value=lib)):
+            with park_xvfb_pointer({'DISPLAY': ':103'}) as parked:
+                self.assertTrue(parked)
+                lib.XCloseDisplay.assert_not_called()
+            lib.XWarpPointer.assert_called_once_with(1, 0, 2, 0, 0, 0, 0, 300, 100)
+            lib.XSetInputFocus.assert_not_called()
+            lib.XSync.assert_called_once_with(1, 0)
+            lib.XCloseDisplay.assert_called_once_with(1)
+
+        with (patch('s06_tauri_gui.owned_xvfb', return_value=False),
+              patch('s06_tauri_gui.ctypes.CDLL') as loader):
+            with park_xvfb_pointer({'DISPLAY': ':103'}) as parked:
+                self.assertFalse(parked)
+            loader.assert_not_called()
+
     def test_two_dom_panels_must_actually_share_a_row_without_overlap(self):
         a = dict(left=0, right=100, top=20, width=100, height=400)
         b = dict(left=114, right=214, top=20, width=100, height=500)
@@ -67,7 +204,7 @@ class TauriSplitEvidenceTests(unittest.TestCase):
 
         def one_poll(probe, code, **kwargs):
             result = probe()
-            if result is not True:
+            if not result:
                 raise GuiFailure(code)
             return result
 
@@ -78,7 +215,7 @@ class TauriSplitEvidenceTests(unittest.TestCase):
                  'bothReadOnly': True, 'keyCount': 1, 'trustedConsumedChord': True}
         with (patch.object(ui, 'read', side_effect=[before, {**before, 'armed': True}, after]) as read,
               patch('s06_tauri_gui.wait_for', side_effect=one_poll)):
-            ui.escape_direct_input(['a', 'b'], [('pane-a', 'terminal-a'), ('pane-b', 'terminal-b')])
+            self.assertEqual(ui.escape_direct_input(['a', 'b'], [('pane-a', 'terminal-a'), ('pane-b', 'terminal-b')]), after)
         self.assertEqual([call.args[-1] for call in read.call_args_list], [False, True, False])
         self.assertEqual(calls, [('POST', '/session/test/actions', {'actions': [{
             'type': 'key', 'id': 's06-native-keyboard', 'actions': [
@@ -217,6 +354,92 @@ class TauriSplitEvidenceTests(unittest.TestCase):
         with patch('s06_tauri_gui.peer_connection_evidence', side_effect=evidence):
             with self.assertRaisesRegex(GuiFailure, '^s06_tauri_resize_did_not_keep_two_original_ssh_connections$'):
                 exercise_window_resize(ui, ['a', 'b'], [], [object(), object()], lambda _: None)
+
+    def test_guarded_resize_keeps_the_original_input_or_stops_without_further_actions(self):
+        targets = [('w1:p1', 'term_a001'), ('w1:p1', 'term_b001')]
+        a_rect = dict(left=20, right=120, top=20, width=100, height=400)
+        b_rect = {**a_rect, 'left': 134, 'right': 234}
+        a = {'target': list(targets[0]), 'phase': 'active', 'focused': False,
+             'currentFrame': True, 'inputControls': True, 'rect': a_rect}
+        b = {**a, 'target': list(targets[1]), 'focused': True, 'rect': b_rect}
+        wide = {'views': [a, b], 'split': '2', 'mounted': 2, 'splitVisible': True,
+                'stashNotice': False, 'returnVisible': True, 'domFocusOwner': 'panel-b'}
+        narrow = {**wide, 'views': [None, b], 'split': '1', 'mounted': 1,
+                  'splitVisible': False, 'stashNotice': True}
+
+        def one_poll(probe, code, **kwargs):
+            observed = probe()
+            if not observed:
+                raise GuiFailure(code)
+            return observed
+
+        def fixture(changed=None, *, tick_restored=31, scoped_peer=True):
+            widths, commands, checked_bytes = [], [], []
+            armed = False
+
+            def read(_, __, ___, action):
+                nonlocal armed
+                commands.append(action)
+                if action == 'arm':
+                    armed = True
+                narrow_state = widths == [700]
+                sample = {key: True for key in ('selectedB', 'targetB', 'directB', 'receiptB',
+                                              'originalEditor', 'originalInputState', 'neverBlurred')} | {
+                    'armed': armed, 'aPaused': narrow_state, 'aObserves': not narrow_state,
+                }
+                if narrow_state and changed:
+                    sample.update(changed)
+                return sample
+
+            def window(width):
+                widths.append(width)
+                return {'window': width}
+
+            def read_tick(panel, side, *, scroll):
+                self.assertEqual((panel, side, scroll), ('a', 0, False))
+                return tick_restored if widths else 30
+
+            def peer(_):
+                return {'authenticationCount': 2 if not scoped_peer and widths else 1, 'closed': False}
+
+            driver = SimpleNamespace(output=None, read=read, wait_window=lambda width: {'window': width}, window=window,
+                                     read_layout=lambda _: narrow if widths == [700] else wide, rendered_tick=read_tick)
+            return (driver, widths, commands, checked_bytes, peer)
+
+        for changed, error, resized in (
+            (None, None, [700, 1440]),
+            ({'neverBlurred': False}, 'input_focus_lost_narrow', [700]),
+            ({'originalEditor': False}, 'input_focus_lost_narrow', [700]),
+            ({'selectedB': False}, 'input_focus_lost_narrow', [700]),
+            ({'originalInputState': False}, 'input_focus_lost_narrow', [700]),
+            ({'receiptB': False}, 'input_focus_lost_narrow', [700]),
+            ({'aPaused': False}, 'layout_narrow', [700]),
+        ):
+            with self.subTest(changed=changed):
+                driver, widths, commands, checked, peer = fixture(changed)
+                with (patch('s06_tauri_gui.wait_for', side_effect=one_poll),
+                      patch('s06_tauri_gui.peer_connection_evidence', side_effect=peer)):
+                    if error:
+                        with self.assertRaisesRegex(GuiFailure, '^s06_tauri_direct_resize_' + error + '$'):
+                            exercise_direct_resize(driver, ['a', 'b'], targets, [object(), object()], checked.append)
+                        self.assertNotIn('finish', commands)
+                    else:
+                        proof = exercise_direct_resize(driver, ['a', 'b'], targets, [object(), object()], checked.append)
+                        self.assertEqual(proof['aFixtureTicks'], [30, 31])
+                        self.assertEqual(proof['domFocusOwnerSamples'], ['panel-b'] * 3)
+                        self.assertEqual(proof['peerInputBytesBeforeEscape'], [0, 1])
+                        self.assertEqual(checked, [(b'', b'b')] * 3)
+                        self.assertEqual(commands[-1], 'finish')
+                self.assertEqual(widths, resized)
+                self.assertEqual(commands.count('arm'), 1)
+
+        for options, error in (({'tick_restored': 30}, 'a_tick_wide_restored'),
+                               ({'scoped_peer': False}, 'peer_changed_narrow')):
+            driver, _, _, checked, peer = fixture(**options)
+            with (patch('s06_tauri_gui.wait_for', side_effect=one_poll),
+                  patch('s06_tauri_gui.peer_connection_evidence', side_effect=peer),
+                  self.assertRaisesRegex(GuiFailure, '^s06_tauri_direct_resize_' + error + '$')):
+                exercise_direct_resize(driver, ['a', 'b'], targets, [object(), object()], checked.append)
 
     def test_stale_read_relocates_before_the_only_native_click(self):
         for read in ('textContent', 'displayed', 'enabled'):
@@ -433,9 +656,66 @@ class TauriSplitEvidenceTests(unittest.TestCase):
             for log, count, done in [(other, 0, False), (accepted, 1, False),
                     (closed + accepted, 1, False), (accepted + closed.replace('40123', '40124'), 1, False),
                     (accepted + closed, 1, True), (accepted + 'Connection closed by 127.0.0.1 port 40123\n', 1, True),
+                    (accepted + 'Connection closed by 127.0.0.1 port 40123 [preauth]\n', 1, False),
+                    (accepted + other.replace('40124', '40123') + closed, 1, False),
+                    (accepted + 'Disconnected from user stranger 127.0.0.1 port 40123\n', 1, False),
                     (accepted + accepted, 2, False)]:
                 (root / 'sshd.log').write_text(log)
                 self.assertEqual(peer_connection_evidence(approval), {'authenticationCount': count, 'closed': done})
+
+    def test_auth_bound_reset_and_socket_state_are_diagnostics_only(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            approval = SimpleNamespace(root=root, config={'username': 'fixture', 'port': 30333}, fingerprint='SHA256:reviewed')
+            log = root / 'sshd.log'
+            log.write_text('Accepted publickey for fixture from 127.0.0.1 port 40123 ssh2: ED25519 SHA256:reviewed\n')
+            with patch('s06_tauri_gui.loopback_tcp_states', return_value={(30333, 40123): '01', (30333, 40124): '06'}):
+                self.assertEqual(peer_close_sample([approval]), [
+                    {'authenticationCount': 1, 'recognizedCloseCount': 0, 'resetCount': 0, 'socketState': 'established'}])
+            with log.open('ab') as handle:
+                handle.write(b'Read error from remote host 127.0.0.1 port 40123: Connection reset by peer\r\n')
+            with patch('s06_tauri_gui.loopback_tcp_states', return_value={}):
+                self.assertEqual(peer_close_sample([approval]), [
+                    {'authenticationCount': 1, 'recognizedCloseCount': 0, 'resetCount': 1, 'socketState': 'absent'}])
+            self.assertEqual(peer_connection_evidence(approval), {'authenticationCount': 1, 'closed': False})
+            with log.open('ab') as handle:
+                handle.write(b'Disconnected from user fixture 127.0.0.1 port 40123\r\n')
+            with patch('s06_tauri_gui.loopback_tcp_states', return_value={}):
+                self.assertEqual(peer_close_sample([approval]), [
+                    {'authenticationCount': 1, 'recognizedCloseCount': 1, 'resetCount': 1, 'socketState': 'absent'}])
+
+    def test_close_reports_both_clicks_and_peers_before_driver_exit(self):
+        active = {'authenticationCount': 1, 'recognizedCloseCount': 0, 'resetCount': 0, 'socketState': 'established'}
+        closed = {**active, 'recognizedCloseCount': 1, 'socketState': 'absent'}
+        reset = {**active, 'resetCount': 1, 'socketState': 'absent'}
+
+        def one_poll(probe, code, **kwargs):
+            if code.endswith('peer_close_unconfirmed'):
+                self.assertEqual(kwargs['timeout'], 12)
+            if not probe():
+                raise GuiFailure(code)
+            return True
+
+        for end, error in (([closed, closed], None), ([closed, reset], 'peer_close_unconfirmed'),
+                           ([closed, {**closed, 'resetCount': 1}], 'peer_close_unconfirmed'),
+                           ([closed, {**active, 'socketState': 'absent'}], 'peer_close_unconfirmed'),
+                           ([closed, {**closed, 'authenticationCount': 2}], 'peer_close_unconfirmed')):
+            with self.subTest(end=end), tempfile.TemporaryDirectory() as temp:
+                ui = SimpleNamespace(output=Path(temp), focus=MagicMock(), named=MagicMock(), read=MagicMock(return_value=True))
+                samples = [[active, active], [active, active], [closed, active], [closed, active], end, end]
+                with (patch('s06_tauri_gui.peer_close_sample', side_effect=samples),
+                      patch('s06_tauri_gui.wait_for', side_effect=one_poll)):
+                    if error:
+                        with self.assertRaisesRegex(GuiFailure, '^s06_tauri_' + error + '$'):
+                            exercise_peer_close(ui, ['a', 'b'], ['unused-a', 'unused-b'])
+                    else:
+                        self.assertEqual(exercise_peer_close(ui, ['a', 'b'], ['unused-a', 'unused-b']), [1, 1])
+                self.assertEqual([call.args for call in ui.named.call_args_list], [
+                    ('关闭此标签', 'a .tab-connection-actions'), ('关闭此标签', 'b .tab-connection-actions')])
+                report = json.loads((ui.output / 's06-tauri-peer-close.json').read_text())
+                self.assertEqual(report['final'], end)
+                self.assertTrue(report['workspaceHidden'])
+                self.assertTrue(all(step['panelRemoved'] for step in report['steps']))
 
 
 if __name__ == '__main__':

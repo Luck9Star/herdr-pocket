@@ -1,6 +1,10 @@
 """Native GTK S06 driver. Reuses WebDriver and the reviewed two-peer fixture."""
 import base64
+from contextlib import contextmanager, nullcontext
+import ctypes
 import json
+import os
+from pathlib import Path
 import re
 import time
 
@@ -10,6 +14,74 @@ from paired_gui import WebDriver, GuiFailure, bounded_wire, fixture_terminal_id,
 WINDOW_HEIGHT = 1200
 WIDE_WIDTH = 1440
 NARROW_WIDTH = 700
+
+
+def owned_xvfb(env, *, proc=Path('/proc'), parent=None):
+    """Match the Xvfb child of our own xvfb-run wrapper and its authorization file."""
+    display, authority = env.get('DISPLAY', ''), env.get('XAUTHORITY', '')
+    if not re.fullmatch(r':[0-9]+', display) or not authority:
+        return False
+
+    def argv(pid):
+        return [os.fsdecode(arg) for arg in (proc / str(pid) / 'cmdline').read_bytes().split(b'\0') if arg]
+
+    pid = os.getppid() if parent is None else parent
+    try:
+        while pid > 1:
+            if any(Path(arg).name == 'xvfb-run' for arg in argv(pid)[:2]):
+                children = (proc / str(pid) / 'task' / str(pid) / 'children').read_text().split()
+                for child in children:
+                    try:
+                        args = argv(child)
+                    except FileNotFoundError:
+                        continue
+                    if (len(args) >= 2 and Path(args[0]).name == 'Xvfb' and args[1] == display and
+                            ('-auth', authority) in zip(args, args[1:]) and
+                            ('-nolisten', 'tcp') in zip(args, args[1:])):
+                        return True
+                return False
+            status = (proc / str(pid) / 'status').read_text()
+            pid = int(re.search(r'^PPid:\s+([0-9]+)$', status, re.MULTILINE)[1])
+    except (OSError, TypeError, ValueError):
+        return False
+    return False
+
+
+@contextmanager
+def park_xvfb_pointer(env):
+    if not owned_xvfb(env):
+        yield False
+        return
+    try:
+        x11 = ctypes.CDLL('libX11.so.6')  # A runtime dependency of Xvfb.
+    except OSError as error:
+        raise GuiFailure('s06_tauri_xvfb_x11_unavailable') from error
+    display_type, window_type, integer = ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int
+    x11.XOpenDisplay.argtypes, x11.XOpenDisplay.restype = [ctypes.c_char_p], display_type
+    x11.XDefaultRootWindow.argtypes, x11.XDefaultRootWindow.restype = [display_type], window_type
+    x11.XGetInputFocus.argtypes = [display_type, ctypes.POINTER(window_type), ctypes.POINTER(integer)]
+    x11.XWarpPointer.argtypes = [display_type, window_type, window_type, integer, integer,
+                               ctypes.c_uint, ctypes.c_uint, integer, integer]
+    x11.XSync.argtypes, x11.XCloseDisplay.argtypes = [display_type, integer], [display_type]
+    display = x11.XOpenDisplay(env['DISPLAY'].encode())
+    if not display:
+        raise GuiFailure('s06_tauri_xvfb_display_unavailable')
+    try:
+        focus, revert_to = window_type(), integer()
+        x11.XGetInputFocus(display, ctypes.byref(focus), ctypes.byref(revert_to))
+        parked = focus.value == 1  # PointerRoot is the bare Xvfb default.
+        if parked:
+            # At the default point (960, 700), a 700px window moves out from
+            # under the pointer and Xvfb sends a real blur. Park before launch.
+            root = x11.XDefaultRootWindow(display)
+            if not x11.XWarpPointer(display, 0, root, 0, 0, 0, 0, 300, 100):
+                raise GuiFailure('s06_tauri_xvfb_pointer_setup_failed')
+            x11.XSync(display, 0)
+        # Xvfb resets the pointer when the last client disconnects.
+        yield parked
+    finally:
+        x11.XCloseDisplay(display)
+
 
 TICK_ROW_SCRIPT = r"""
 const panel=document.querySelector(arguments[0]);
@@ -52,12 +124,143 @@ function measure(){
 const initial=measure(), hit=data=>data.points.every(point=>point.inClient && point.target==='terminal');
 // Keep the sample away from an edge where a native scrollbar may overlap it.
 // A regular scroll can only move the row as far as the content allows.
-if(!hit(initial) || initial.clearance<24)
+if(arguments[1] !== false && (!hit(initial) || initial.clearance<24))
     row.scrollIntoView({block:'center',inline:'start',behavior:'instant'});
 const final=measure();
 const focusPreserved=document.activeElement===focus && panel.dataset.focus===selected;
 return {text:focusPreserved && hit(final) ? row.textContent.replace(/\u00a0/g,' ').trim() : null,
     layout:{reason:!focusPreserved?'focus-changed':hit(final)?'row-hit':'row-clipped',initial,final}};
+"""
+
+
+FIRST_DIRECT_KEY_SCRIPT = r"""
+const [panels, targets, action] = arguments;
+const kinds = ['keydown', 'keypress', 'beforeinput', 'input', 'keyup', 'compositionstart', 'compositionend'];
+const count = (sample, name) => { sample[name] = Math.min(sample[name] + 1, 64); };
+const one = (root, selector) => {
+    const matches = root?.querySelectorAll(selector);
+    return matches?.length === 1 ? matches[0] : null;
+};
+const root = one(document, '#view-content');
+const views = panels.map(selector => one(root, ':scope > ' + selector));
+const [a, b] = views;
+const visible = element => !!element && !element.closest('[hidden]') &&
+    !!element.getClientRects().length && getComputedStyle(element).visibility === 'visible';
+const originalTargetsActive = !document.hidden && !document.querySelector('dialog[open]') &&
+    visible(one(document, '#remote-page')) && root?.dataset.split === '2' &&
+    root.querySelectorAll(':scope > [data-role="workbench-panel"]').length === 2 &&
+    views.every((view, index) => visible(view) &&
+        one(view, ':scope > .panel-head + p')?.textContent.split(' · ').slice(-2)
+            .join(' · ') === targets[index].join(' · ') &&
+        one(view, '.tab-connection-actions')?.dataset.state === 'active');
+const selectedB = a?.dataset.focus === 'false' && b?.dataset.focus === 'true';
+const [aEditor, editor] = views.map(view => one(view, '.terminal-host textarea.xterm-helper-textarea'));
+const aReadOnly = aEditor?.readOnly === true && aEditor.getAttribute('inputmode') === 'none' &&
+    one(a, '.tab-mobile-controls')?.dataset.mode === 'observe';
+const bReadOnly = editor?.readOnly === true && editor.getAttribute('inputmode') === 'none';
+const bEditorWritable = visible(editor) && !editor.disabled && !editor.readOnly &&
+    editor.getAttribute('inputmode') === 'text';
+const bEditorFocused = !!editor && document.activeElement === editor;
+const documentFocused = document.hasFocus();
+const controls = one(b, '.tab-mobile-controls');
+const bMode = controls?.dataset.mode;
+const bModeReady = visible(controls) && bMode === 'direct' &&
+    one(controls, ':scope > p[role="status"]')?.textContent === '逐键输入已启用；每次输入单独发送。';
+const receipt = one(b, '[data-role="input-receipt"]:not([hidden]) > p')?.textContent;
+const bReceipt = !receipt ? 'absent' :
+    receipt.includes(` · pane：${targets[1][0]} · terminal：${targets[1][1]} · 受理 1 字节。`) ? 'matched' : 'other';
+
+let record = window.__s06FirstDirectKey;
+if (action === 'prepare' && !record && originalTargetsActive && selectedB && aReadOnly &&
+    visible(editor) && bReadOnly && bMode === 'observe' && bReceipt === 'absent') {
+    record = {editor, keyDowns: 0, matched: false, modeResources: 0, sendResources: 0,
+        events: Object.fromEntries(kinds.map(kind => [kind, {atDocument: 0, trustedOriginal: 0,
+            fixtureCharacter: 0, usableLegacyCode: 0, composed: 0, whileComposing: 0, preventedAtDocument: 0,
+            atEditorAfterHandlers: 0, preventedAtEditor: 0}]))};
+    // The mode grant calibrates custom-protocol resource timing in this WebView.
+    // The native fallback may have no resource entry, which stays unavailable.
+    try {
+        const runtime = window.__TAURI_INTERNALS__;
+        const mode = runtime.convertFileSrc('remote_tab_input_mode', 'ipc');
+        const send = runtime.convertFileSrc('remote_tab_input_send', 'ipc');
+        record.countResources = entries => {
+            for (const entry of entries) {
+                if (entry.name === mode) count(record, 'modeResources');
+                if (entry.name === send) count(record, 'sendResources');
+            }
+        };
+        record.resources = new PerformanceObserver(list => record.countResources(list.getEntries()));
+        record.resources.observe({type: 'resource'});
+    } catch {
+        record.resources = null;
+    }
+    window.__s06FirstDirectKey = record;
+}
+const originalEditorB = !!record && editor === record.editor;
+if (action === 'arm' && originalEditorB && !record.onCapture && originalTargetsActive && selectedB && aReadOnly &&
+    documentFocused && bEditorFocused && bEditorWritable && bModeReady && bReceipt === 'absent') {
+    const original = event => event.isTrusted && document.hasFocus() && event.target === record.editor &&
+        document.activeElement === record.editor && !record.editor.readOnly &&
+        record.editor.getAttribute('inputmode') === 'text';
+    const plain = event => !event.repeat && !event.isComposing &&
+            !event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey &&
+            event.key === 'b';
+    // Observe on either side of the existing target handlers without changing
+    // the event. No key value, text, resource URL or IPC payload is retained.
+    record.onCapture = event => {
+        const kind = event.type;
+        if (kind === 'keydown') {
+            record.keyDowns++;
+            record.matched = plain(event) && original(event);
+        }
+        if (event.target !== record.editor) return;
+        const sample = record.events[kind];
+        count(sample, 'atDocument');
+        if (event.defaultPrevented) count(sample, 'preventedAtDocument');
+        if (!original(event)) return;
+        count(sample, 'trustedOriginal');
+        if (event.composed) count(sample, 'composed');
+        if (event.isComposing) count(sample, 'whileComposing');
+        if (kind === 'keydown' || kind === 'keyup') {
+            if (plain(event)) count(sample, 'fixtureCharacter');
+            if (event.keyCode === 66) count(sample, 'usableLegacyCode');
+        } else if (kind === 'keypress') {
+            if (plain(event)) count(sample, 'fixtureCharacter');
+            if (event.charCode === 98 || (event.which == null && event.keyCode === 98))
+                count(sample, 'usableLegacyCode');
+        } else if ((kind === 'beforeinput' || kind === 'input') &&
+                   event.inputType === 'insertText' && event.data === 'b' && !event.isComposing) {
+            count(sample, 'fixtureCharacter');
+        }
+    };
+    record.onEditor = event => {
+        if (!original(event)) return;
+        const sample = record.events[event.type];
+        count(sample, 'atEditorAfterHandlers');
+        if (event.defaultPrevented) count(sample, 'preventedAtEditor');
+    };
+    for (const kind of kinds) {
+        document.addEventListener(kind, record.onCapture, {capture: true, passive: true});
+        record.editor.addEventListener(kind, record.onEditor, {capture: true, passive: true});
+    }
+}
+if (record?.resources) record.countResources(record.resources.takeRecords());
+const result = {originalTargetsActive, selectedB, originalEditorB, aReadOnly, bReadOnly,
+    documentFocused, bEditorFocused, bEditorWritable, bModeReady, bMode, bReceipt,
+    armed: !!record?.onCapture, keyDowns: record?.keyDowns ?? 0, trustedKeyOnOriginalB: record?.matched === true,
+    events: record?.events ?? null, ipcTiming: {calibrated: (record?.modeResources ?? 0) > 0,
+        completedSendResources: record?.sendResources ?? 0}};
+if (action === 'finish' && record) {
+    if (record.onCapture) {
+        for (const kind of kinds) {
+            document.removeEventListener(kind, record.onCapture, true);
+            record.editor.removeEventListener(kind, record.onEditor, true);
+        }
+    }
+    record.resources?.disconnect();
+    delete window.__s06FirstDirectKey;
+}
+return result;
 """
 
 
@@ -117,6 +320,78 @@ return {originalTargetsActive, selectedB, directXterm, bReceiptMatched, aFocusBu
     bothReadOnly: xterms.every((item, index) => !!item?.readOnly &&
         item.getAttribute('inputmode') === 'none' && modes[index] === 'observe'),
     keyCount: record?.count ?? 0, trustedConsumedChord: record?.matched === true};
+"""
+
+
+DIRECT_RESIZE_SCRIPT = r"""
+const [panels, targets, action] = arguments;
+const one = (root, selector) => {
+    const matches = root?.querySelectorAll(selector);
+    return matches?.length === 1 ? matches[0] : null;
+};
+const root = one(document, '#view-content');
+const [a,b] = panels.map(selector => one(root, ':scope > ' + selector));
+const editor = one(b, '.terminal-host textarea.xterm-helper-textarea');
+const controls = one(b, '.tab-mobile-controls');
+const connection = one(b, '.tab-connection-actions');
+const receipt = one(b, '[data-role="input-receipt"]:not([hidden]) > p')?.textContent;
+const aTab = one(document, '#view-tabs button[aria-pressed="false"]');
+const selectedB = b?.dataset.focus === 'true' && b.getClientRects().length > 0 &&
+    one(document, '#view-tabs button[aria-pressed="true"]') !== null;
+const targetB = one(b, ':scope > .panel-head + p')?.textContent.split(' · ').slice(-2).join(' · ') ===
+    targets[1].join(' · ');
+const directB = !!editor && !document.hidden && !document.querySelector('dialog[open]') &&
+    document.hasFocus() && document.activeElement === editor && !editor.readOnly && editor.getAttribute('inputmode') === 'text' &&
+    controls?.dataset.mode === 'direct' && connection?.dataset.state === 'active';
+const receiptB = receipt?.includes(` · pane：${targets[1][0]} · terminal：${targets[1][1]} · 受理 1 字节。`) === true;
+const aEditor = one(a, '.terminal-host textarea.xterm-helper-textarea');
+const aObserves = one(a, '.tab-mobile-controls')?.dataset.mode === 'observe' &&
+    aEditor?.readOnly === true && aEditor.getAttribute('inputmode') === 'none';
+let record = window.__s06DirectResize;
+if (action === 'arm' && !record && root?.dataset.split === '2' &&
+    selectedB && targetB && directB && receiptB && aTab && aObserves) {
+    record = {editor, controls, connection, receipt, aTab, firstBlur: null, changed: false};
+    record.onBlur = () => { record.firstBlur ??= {
+        width: innerWidth, documentFocused: document.hasFocus(), editorAttached: editor.isConnected
+    }; };
+    editor.addEventListener('blur', record.onBlur, {passive: true});
+    const check = mutations => {
+        record.changed ||= mutations.some(m =>
+            (m.type === 'childList' && [...m.removedNodes].some(node => node.contains(editor))) ||
+            (m.target === editor && m.attributeName === 'readonly' && m.oldValue !== null) ||
+            (m.target === editor && m.attributeName === 'inputmode' && m.oldValue !== 'text') ||
+            (m.target === controls && m.attributeName === 'data-mode' && m.oldValue !== 'direct') ||
+            (m.target === b && m.attributeName === 'data-focus' && m.oldValue !== 'true') ||
+            (m.target === connection && m.attributeName === 'data-state' && m.oldValue !== 'active'));
+    };
+    const watcher = new MutationObserver(check);
+    watcher.observe(root, {subtree: true, childList: true, attributes: true, attributeOldValue: true,
+        attributeFilter: ['readonly','inputmode','data-mode','data-focus','data-state']});
+    record.drain = () => check(watcher.takeRecords());
+    record.stop = () => {
+        watcher.disconnect();
+        editor.removeEventListener('blur', record.onBlur);
+    };
+    window.__s06DirectResize = record;
+}
+record?.drain();
+const singleB = root?.matches(panels[1]) === true;
+const actualB = b ?? (singleB ? root : null);
+const result = {armed: !!record, selectedB, targetB, directB, receiptB, aObserves,
+    originalEditor: !!record && record.editor === editor,
+    originalInputState: !!record && record.controls === controls && record.connection === connection &&
+        record.receipt === receipt && !record.changed,
+    neverBlurred: !!record && !record.firstBlur,
+    aPaused: !!record && aTab === record.aTab && aTab.textContent.endsWith(' · 观察已暂停'),
+    diagnostic: {width: innerWidth, documentFocused: document.hasFocus(), split: root?.dataset.split,
+        singleB, wrappedB: !!b, originalEditorAttached: record?.editor.isConnected === true,
+        actualBMode: one(actualB, '.tab-mobile-controls')?.dataset.mode,
+        firstBlur: record?.firstBlur ?? null}};
+if (action === 'finish' && record) {
+    record.stop();
+    delete window.__s06DirectResize;
+}
+return result;
 """
 
 
@@ -214,7 +489,7 @@ def window_dimensions(rect):
     return {name: rect[name] for name in ('width', 'height')}
 
 
-def layout_matches(layout, targets, phases, focused):
+def layout_matches(layout, targets, phases, focused, *, guarded=False):
     narrow = any(phase is None for phase in phases)
     if (not isinstance(layout, dict) or layout.get('split') != ('1' if narrow else '2') or
             layout.get('mounted') != (1 if narrow else 2) or layout.get('splitVisible') is not (not narrow) or
@@ -229,7 +504,7 @@ def layout_matches(layout, targets, phases, focused):
                 return False
         elif (not isinstance(view, dict) or view.get('target') != list(target) or view.get('phase') != phase or
               view.get('focused') is not (index == focused) or
-              view.get('currentFrame') is not (phase == 'active') or view.get('inputControls') is not False):
+              view.get('currentFrame') is not (phase == 'active') or view.get('inputControls') is not guarded):
             return False
     return True
 
@@ -242,21 +517,72 @@ def require_same_positions(before, after):
             raise GuiFailure('s06_tauri_split_position_changed')
 
 
+def peer_log_evidence(approval):
+    """Keep the authenticated source ports private to the peer observer."""
+    text = bounded_wire(approval.root / 'sshd.log', 2_097_152).decode(errors='replace').replace('\r\n', '\n')
+    username = re.escape(approval.config['username'])
+    accepted = (r'^Accepted publickey for ' + username + r' from 127\.0\.0\.1 port ([0-9]{1,5}) ssh2: ED25519 ' +
+                re.escape(approval.fingerprint or '') + r'(?=\s|$)')
+    connections = []
+    for match in re.finditer(accepted, text, re.MULTILINE):
+        port = int(match[1])
+        if not 1 <= port <= 65535:
+            continue
+        peer = rf'127\.0\.0\.1 port {port}'
+        remainder = text[match.end():]
+        reuse = re.search(rf'^(?:Connection from|Accepted [^\n]* from) {peer}(?=\s|$)', remainder, re.MULTILINE)
+        session = remainder[:reuse.start()] if reuse else remainder
+        closed = re.search(rf'^(?:Received disconnect from {peer}:|'
+                           rf'Disconnected from user {username} {peer}(?=\s|$)|'
+                           rf'Connection closed by (?:user {username} )?{peer}(?=\s|$))[^\n]*$',
+                           session, re.MULTILINE)
+        # An authenticated transport reset explains a missing graceful record.
+        # It cannot satisfy the close gate.
+        reset = re.search(rf'^Read error from remote host {peer}: Connection reset by peer$', session, re.MULTILINE)
+        connections.append((port, bool(closed and '[preauth]' not in closed[0]), bool(reset)))
+    return connections
+
+
 def peer_connection_evidence(approval):
-    """Match only this reviewed key's loopback SSH connection and peer close."""
-    text = bounded_wire(approval.root / 'sshd.log', 2_097_152).decode(errors='replace')
-    pattern = (r'Accepted publickey for ' + re.escape(approval.config['username']) +
-               r' from 127\.0\.0\.1 port ([0-9]+) ssh2: ED25519 ' +
-               re.escape(approval.fingerprint or '') + r'(?:\s|$)')
-    accepted = list(re.finditer(pattern, text))
-    closed = True
-    for match in accepted:
-        port = re.escape(match[1])
-        closing = (r'(?:Received disconnect from 127\.0\.0\.1 port ' + port +
-                   r':|Disconnected from user [^\n]+ 127\.0\.0\.1 port ' + port +
-                   r'(?:\s|$)|Connection closed by (?:user [^\n]+ )?127\.0\.0\.1 port ' + port + r'(?:\s|$))')
-        closed = closed and re.search(closing, text[match.end():]) is not None
-    return {'authenticationCount': len(accepted), 'closed': bool(accepted) and closed}
+    connections = peer_log_evidence(approval)
+    return {'authenticationCount': len(connections), 'closed': bool(connections) and all(row[1] for row in connections)}
+
+
+def loopback_tcp_states(path=Path('/proc/net/tcp')):
+    """Snapshot only IPv4 loopback tuples on the sshd's network namespace."""
+    try:
+        with path.open(encoding='ascii') as source:
+            text = source.read(2_097_153)
+        if len(text) > 2_097_152 or 'local_address' not in text.split('\n', 1)[0]:
+            return None
+        result = {}
+        for line in text.splitlines()[1:]:
+            columns = line.split()
+            if len(columns) < 4:
+                return None
+            local, remote, state = columns[1:4]
+            if local.startswith('0100007F:') and remote.startswith('0100007F:'):
+                result[int(local[9:], 16), int(remote[9:], 16)] = state
+        return result
+    except (OSError, ValueError):
+        return None
+
+
+def peer_close_sample(approvals):
+    sockets = loopback_tcp_states()
+    rows = []
+    for approval in approvals:
+        connections = peer_log_evidence(approval)
+        listener = approval.config.get('port')
+        socket_state = 'unavailable'
+        if sockets is not None and type(listener) is int and len(connections) == 1:
+            state = sockets.get((listener, connections[0][0]))
+            socket_state = ('absent' if state is None else 'established' if state == '01' else
+                            'closing' if state in ('04', '05', '06', '07', '08', '09', '0B') else 'other')
+        rows.append({'authenticationCount': min(len(connections), 64),
+                     'recognizedCloseCount': min(sum(row[1] for row in connections), 64),
+                     'resetCount': min(sum(row[2] for row in connections), 64), 'socketState': socket_state})
+    return rows
 
 
 class SplitDriver:
@@ -302,8 +628,98 @@ class SplitDriver:
         self.driver.call('POST', self.driver.session + '/actions', {'actions': [
             {'type': 'key', 'id': 's06-native-keyboard', 'actions': actions}]})
 
+    def first_direct_key(self, panels, targets, wires):
+        ready = ('originalTargetsActive', 'selectedB', 'originalEditorB', 'aReadOnly',
+                 'documentFocused', 'bEditorFocused', 'bEditorWritable', 'bModeReady', 'armed')
+        boolean_fields = (*ready, 'bReadOnly', 'trustedKeyOnOriginalB')
+        event_kinds = ('keydown', 'keypress', 'beforeinput', 'input', 'keyup', 'compositionstart', 'compositionend')
+        event_fields = ('atDocument', 'trustedOriginal', 'fixtureCharacter', 'usableLegacyCode', 'composed', 'whileComposing',
+                        'preventedAtDocument', 'atEditorAfterHandlers', 'preventedAtEditor')
+        report = {'stage': 'before_mode', 'keyboardAttempted': False,
+                  'beforeMode': None, 'beforeKey': None, 'afterKey': None}
+
+        def bounded_count(value):
+            return value if type(value) is int and 0 <= value <= 64 else None
+
+        def read(action):
+            state = self.read(FIRST_DIRECT_KEY_SCRIPT, panels, targets, action)
+            if not isinstance(state, dict):
+                raise GuiFailure('s06_tauri_direct_key_observation_invalid')
+            events = state.get('events')
+            stages = {kind: {field: bounded_count(events[kind].get(field)) for field in event_fields}
+                      for kind in event_kinds if isinstance(events, dict) and isinstance(events.get(kind), dict)}
+            timing = state.get('ipcTiming')
+            calibrated = isinstance(timing, dict) and timing.get('calibrated') is True
+            sends = bounded_count(timing.get('completedSendResources')) if isinstance(timing, dict) else None
+            observed = calibrated or bool(sends)
+            return {**{field: state.get(field) is True for field in boolean_fields},
+                    'bMode': state.get('bMode') if state.get('bMode') in ('observe', 'draft', 'direct') else None,
+                    'bReceipt': state.get('bReceipt') if state.get('bReceipt') in ('absent', 'matched', 'other') else None,
+                    'keyDowns': bounded_count(state.get('keyDowns')), 'events': stages,
+                    'ipcTiming': {'calibrated': calibrated, 'status': 'observed' if observed else 'unavailable',
+                                  'completedSendResources': sends if observed else None}}
+
+        def peer_inputs():
+            result = []
+            for index, wire in enumerate(wires):
+                try:
+                    data = bounded_wire(wire, 4096)
+                except (GuiFailure, OSError):
+                    result.append({'byteCount': None, 'match': 'unavailable'})
+                else:
+                    match = 'empty' if not data else 'expected' if index == 1 and data == b'b' else 'other'
+                    result.append({'byteCount': len(data), 'match': match})
+            return result
+
+        def arm():
+            current = report['beforeKey'] = read('arm')
+            return (all(current[field] for field in ready) and current['bMode'] == 'direct' and
+                    current['bReceipt'] == 'absent' and current['keyDowns'] == 0)
+
+        def received():
+            a, b = (peer['match'] for peer in peer_inputs())
+            if a != 'empty' or b not in ('empty', 'expected'):
+                raise GuiFailure('s06_tauri_direct_peer_bytes_mismatch')
+            return b == 'expected'
+
+        def confirmed():
+            current = report['afterKey'] = read('sample')
+            return (all(current[field] for field in ready) and current['bMode'] == 'direct' and
+                    current['bReceipt'] == 'matched' and current['keyDowns'] == 1 and current['trustedKeyOnOriginalB'])
+
+        try:
+            report['peerBefore'] = peer_inputs()
+            if any(peer['match'] != 'empty' for peer in report['peerBefore']):
+                raise GuiFailure('s06_tauri_direct_peer_bytes_mismatch')
+            before = report['beforeMode'] = read('prepare')
+            if not all(before[field] for field in ('originalEditorB', 'aReadOnly', 'bReadOnly')):
+                raise GuiFailure('s06_tauri_direct_key_original_editor_missing')
+            self.named('逐键输入', panels[1] + ' .tab-mode-actions')
+            report['stage'] = 'before_key'
+            wait_for(arm, 's06_tauri_direct_key_not_ready')
+            report['peerBefore'] = peer_inputs()
+            if any(peer['match'] != 'empty' for peer in report['peerBefore']):
+                raise GuiFailure('s06_tauri_direct_peer_bytes_mismatch')
+            report['stage'] = 'native_key'
+            report['keyboardAttempted'] = True
+            self.keyboard('b')
+            report['stage'] = 'peer_input'
+            wait_for(received, 's06_tauri_direct_input_missing')
+            report['stage'] = 'key_receipt'
+            wait_for(confirmed, 's06_tauri_direct_key_delivery_unconfirmed')
+            report['stage'] = 'confirmed'
+        finally:
+            try:
+                report['afterKey'] = read('finish')
+            except (GuiFailure, OSError):
+                pass
+            if self.output is not None:
+                report['peerAfter'] = peer_inputs()
+                (self.output / 's06-tauri-first-direct-key.json').write_text(json.dumps(report, sort_keys=True))
+
     def escape_direct_input(self, panels, targets):
         before = ('originalTargetsActive', 'selectedB', 'directXterm', 'bReceiptMatched', 'aFocusButtonReady')
+        after = ('originalTargetsActive', 'selectedB', 'aFocusButtonFocused', 'bothReadOnly', 'trustedConsumedChord')
 
         def ready(arm=False):
             evidence = self.read(DIRECT_EXIT_SCRIPT, panels, targets, arm)
@@ -312,10 +728,10 @@ class SplitDriver:
 
         def escaped():
             evidence = self.read(DIRECT_EXIT_SCRIPT, panels, targets, False)
-            return (isinstance(evidence, dict) and type(evidence.get('keyCount')) is int and
-                    evidence['keyCount'] == 1 and all(evidence.get(key) is True for key in (
-                        'originalTargetsActive', 'selectedB', 'aFocusButtonFocused',
-                        'bothReadOnly', 'trustedConsumedChord')))
+            if (isinstance(evidence, dict) and type(evidence.get('keyCount')) is int and
+                    evidence['keyCount'] == 1 and all(evidence.get(key) is True for key in after)):
+                return {key: evidence[key] for key in (*after, 'keyCount')}
+            return None
 
         # The independent peer has received b. Wait for the matching local
         # receipt as well, so this exit cannot interrupt an in-flight send.
@@ -324,7 +740,7 @@ class SplitDriver:
             raise GuiFailure('s06_tauri_direct_escape_not_armed')
         # W3C WebDriver key values for F6, Control and Shift. Send exactly once.
         self.keyboard('\ue036', modifiers=('\ue009', '\ue008'))
-        wait_for(escaped, 's06_tauri_direct_escape_unconfirmed')
+        return wait_for(escaped, 's06_tauri_direct_escape_unconfirmed')
 
     def focus(self, panel):
         if self.read('return document.querySelector(arguments[0])?.dataset.focus;', panel) != 'true':
@@ -413,6 +829,11 @@ class SplitDriver:
         endpoint = self.driver.session + '/window/rect'
         if window_dimensions(self.driver.call('POST', endpoint, requested)) != requested:
             raise GuiFailure('s06_tauri_window_size_unconfirmed')
+        return self.wait_window(width)
+
+    def wait_window(self, width):
+        requested = {'width': width, 'height': WINDOW_HEIGHT}
+        endpoint = self.driver.session + '/window/rect'
 
         def observed():
             os_rect = window_dimensions(self.driver.call('GET', endpoint))
@@ -472,8 +893,8 @@ class SplitDriver:
             return layout if layout_matches(layout, targets, phases, focused) else None
         return wait_for(observed, 's06_tauri_layout_' + stage)
 
-    def rendered_tick(self, panel, side):
-        sample = self.read(TICK_ROW_SCRIPT, panel)
+    def rendered_tick(self, panel, side, *, scroll=True):
+        sample = self.read(TICK_ROW_SCRIPT, panel, scroll)
         layout = sample['layout']
         self.tick_layouts[side] = layout
         if layout['reason'] == 'focus-changed':
@@ -703,8 +1124,155 @@ def exercise_window_resize(ui, panels, targets, approvals, check_bytes):
             'originalPeerAuthenticationCounts': [1, 1], 'zeroInputBytes': True}
 
 
+def exercise_direct_resize(ui, panels, targets, approvals, check_bytes):
+    before_fields = ('selectedB', 'targetB', 'directB', 'receiptB', 'aObserves')
+    retained_fields = ('armed', 'selectedB', 'targetB', 'directB', 'receiptB',
+                       'originalEditor', 'originalInputState', 'neverBlurred')
+    active = ('active', 'active')
+    stage, last, diagnostic = 'wide_before', {}, None
+
+    def safe_focus_sample(sample):
+        width = sample.get('width')
+        return {'width': width if type(width) is int and 0 < width <= 16384 else None,
+                'documentFocused': sample.get('documentFocused') is True}
+
+    def read(action):
+        nonlocal last, diagnostic
+        result = ui.read(DIRECT_RESIZE_SCRIPT, panels, targets, action)
+        if not isinstance(result, dict):
+            raise GuiFailure('s06_tauri_direct_resize_observation_invalid')
+        last = {key: result.get(key) is True for key in (*retained_fields, 'aObserves', 'aPaused')}
+        sample = result.get('diagnostic')
+        if isinstance(sample, dict):
+            first_blur = sample.get('firstBlur')
+            diagnostic = {**safe_focus_sample(sample),
+                          **{key: sample.get(key) is True for key in ('singleB', 'wrappedB', 'originalEditorAttached')},
+                          'split': sample.get('split') if sample.get('split') in ('1', '2') else None,
+                          'actualBMode': sample.get('actualBMode') if sample.get('actualBMode') in
+                          ('observe', 'draft', 'direct') else None,
+                          'firstBlur': {**safe_focus_sample(first_blur),
+                                        'editorAttached': first_blur.get('editorAttached') is True}
+                          if isinstance(first_blur, dict) else None}
+        return last
+
+    def fields_match(fields, observation):
+        return all(observation[key] for key in fields)
+
+    def check_retained(action='sample'):
+        current = read(action)
+        if not fields_match(retained_fields, current):
+            raise GuiFailure('s06_tauri_direct_resize_input_focus_lost_' + stage)
+        return current
+
+    def check_original_peer_bytes():
+        if any(peer_connection_evidence(approval) != {'authenticationCount': 1, 'closed': False}
+               for approval in approvals):
+            raise GuiFailure('s06_tauri_direct_resize_peer_changed_' + stage)
+        check_bytes((b'', b'b'))
+
+    def wait_layout(phases, *, narrow=False):
+        def observed():
+            current = check_retained()
+            layout = ui.read_layout(panels)
+            if ((current['aPaused'] if narrow else current['aObserves']) and
+                    layout_matches(layout, targets, phases, 1, guarded=True) and layout.get('domFocusOwner') == 'panel-b'):
+                return layout
+            return None
+        return wait_for(observed, 's06_tauri_direct_resize_layout_' + stage)
+
+    def a_tick(floor=-1):
+        def observed():
+            check_retained()
+            try:
+                tick = ui.rendered_tick(panels[0], 0, scroll=False)
+            except GuiFailure as error:
+                if str(error) != 's06_tauri_visible_peer_marker_missing':
+                    raise
+                return None  # A rendered row can be empty before the fresh full reaches xterm.
+            return tick if type(tick) is int and tick > floor else None
+        return wait_for(observed, 's06_tauri_direct_resize_a_tick_' + stage, timeout=12)
+
+    try:
+        before_window = ui.wait_window(WIDE_WIDTH)
+        wait_for(lambda: fields_match(before_fields, read('sample')), 's06_tauri_direct_resize_not_ready')
+        check_retained('arm')
+        before = wait_layout(active)
+        initial_tick = a_tick()
+        check_original_peer_bytes()
+
+        stage = 'narrow'
+        narrow_window = ui.window(NARROW_WIDTH)
+        narrowed = wait_layout((None, 'active'), narrow=True)
+        check_original_peer_bytes()
+
+        stage = 'wide_restored'
+        restored_window = ui.window(WIDE_WIDTH)
+        if restored_window != before_window:
+            raise GuiFailure('s06_tauri_direct_resize_viewport_changed')
+        restored = wait_layout(active)
+        require_same_positions(before, restored)
+        restored_tick = a_tick(initial_tick)
+        check_original_peer_bytes()
+        check_retained('finish')
+    except GuiFailure:
+        if ui.output is not None:
+            (ui.output / 's06-tauri-direct-resize-failure.json').write_text(
+                json.dumps({'stage': stage, 'observation': last, 'diagnostic': diagnostic}, sort_keys=True))
+        raise
+    return {'windowRectRoundTrip': True, 'sizes': [before_window, narrow_window, restored_window],
+            'originalEditorFocusAndInputStatePreserved': True, 'originalTargetAndReceiptPreserved': True,
+            'layoutPausedAAndRestoredSameTargetNewFrame': True, 'originalPanelColumnsRestored': True,
+            'domFocusOwnerSamples': [layout['domFocusOwner'] for layout in (before, narrowed, restored)],
+            'panelRectsBeforeAndAfter': [[view['rect'] for view in layout['views']]
+                                        for layout in (before, restored)],
+            'aFixtureTicks': [initial_tick, restored_tick], 'originalPeerAuthenticationCounts': [1, 1],
+            'peerInputBytesBeforeEscape': [0, 1]}
+
+
+def exercise_peer_close(ui, panels, approvals):
+    report = {'before': None, 'steps': [], 'workspaceHidden': False, 'final': None}
+
+    def finished():
+        report['final'] = peer_close_sample(approvals)
+        return all(row['authenticationCount'] == 1 and row['recognizedCloseCount'] == 1 and row['resetCount'] == 0
+                   for row in report['final'])
+
+    try:
+        report['before'] = peer_close_sample(approvals)
+        for index, panel in enumerate(panels):
+            ui.focus(panel)
+            step = {'side': index, 'before': peer_close_sample(approvals), 'attempted': False,
+                    'clickReturned': False, 'panelRemoved': False, 'after': None}
+            report['steps'].append(step)
+            original = step['before'][index]
+            if original['authenticationCount'] != 1 or original['recognizedCloseCount'] or original['resetCount']:
+                raise GuiFailure('s06_tauri_peer_changed_before_close')
+            step['attempted'] = True
+            ui.named('关闭此标签', panel + ' .tab-connection-actions')
+            step['clickReturned'] = True
+            # Await the real UI removal before addressing the remaining panel.
+            wait_for(lambda: ui.read('return !document.querySelector(arguments[0]);', panel) is True,
+                     's06_tauri_closed_panel_still_present')
+            step['panelRemoved'] = True
+            step['after'] = peer_close_sample(approvals)
+        wait_for(lambda: ui.read('return document.querySelector("#tab-workspace").hidden;') is True,
+                 's06_tauri_tabs_not_closed')
+        report['workspaceHidden'] = True
+        wait_for(finished, 's06_tauri_peer_close_unconfirmed', timeout=12)
+        return [row['authenticationCount'] for row in report['final']]
+    finally:
+        if ui.output is not None:
+            if report['final'] is None:
+                try:
+                    report['final'] = peer_close_sample(approvals)
+                except (GuiFailure, OSError):
+                    pass
+            # Record before WebDriver exit or fixture cleanup can affect the peers.
+            (ui.output / 's06-tauri-peer-close.json').write_text(json.dumps(report, sort_keys=True))
+
+
 def exercise(args, root, env, configs, approvals, expected):
-    driver, stage = WebDriver(), 'start'
+    driver, stage = WebDriver(), 'prepare_display'
     ui = SplitDriver(driver, args.output)
     guarded = bool(args.input_fixture)
     other = root / 's06-peer-b'
@@ -715,7 +1283,11 @@ def exercise(args, root, env, configs, approvals, expected):
                 raise GuiFailure('s06_tauri_remote_bytes_changed')
 
     try:
-        with owned_process(['tauri-driver'], cwd=root, env=env, log=root / 's06-tauri-driver.log'):
+        pointer = park_xvfb_pointer(os.environ) if guarded else nullcontext(False)
+        with pointer as parked, owned_process(['tauri-driver'], cwd=root, env=env, log=root / 's06-tauri-driver.log'):
+            if guarded:
+                (args.output / 's06-tauri-xvfb-pointer.json').write_text(json.dumps({'parkedBeforeLaunch': parked}))
+            stage = 'start'
             try:
                 driver.start(args.tauri_app)
                 rect = driver.call('POST', driver.session + '/window/rect', {'width': 1440, 'height': 1200})
@@ -809,18 +1381,21 @@ def exercise(args, root, env, configs, approvals, expected):
                     raise GuiFailure('s06_tauri_both_frames_not_visible')
                 ui.screenshot('connected')
                 stage = 'input_focus'
+                direct_resize_evidence = None
                 if guarded:
-                    ui.named('逐键输入', panels[1] + ' .tab-mode-actions')
-                    wait_for(lambda: ui.read('return document.querySelector(arguments[0]+" .tab-mobile-controls")?.dataset.mode;', panels[1]) == 'direct',
-                             's06_tauri_direct_mode_not_ready')
-                    ui.keyboard('b')
-                    wait_for(lambda: bounded_wire(other / 'received.bin', 4096) == b'b', 's06_tauri_direct_input_missing')
+                    ui.first_direct_key(panels, targets, (root / 'received.bin', other / 'received.bin'))
+                    stage = 'direct_resize'
+                    direct_resize_evidence = exercise_direct_resize(ui, panels, targets, approvals, check_bytes)
+                    (args.output / 's06-tauri-direct-resize.json').write_text(json.dumps(direct_resize_evidence, sort_keys=True))
                     stage = 'direct_escape'
-                    ui.escape_direct_input(panels, targets)
+                    escape_observation = ui.escape_direct_input(panels, targets)
                     if any(peer_connection_evidence(approval) != {'authenticationCount': 1, 'closed': False}
                            for approval in approvals):
                         raise GuiFailure('s06_tauri_direct_escape_peer_changed')
                     check_bytes((b'', b'b'))
+                    (args.output / 's06-tauri-direct-escape.json').write_text(json.dumps(
+                        {'observation': escape_observation, 'originalPeersPreserved': True, 'noExtraInputBytes': True},
+                        sort_keys=True))
                     stage = 'input_focus'
                 ui.focus(panels[0])
                 driver.click(panels[1] + ' .terminal-host')
@@ -850,28 +1425,19 @@ def exercise(args, root, env, configs, approvals, expected):
                     targets = [(config['paneId'], fixture_terminal_id(config)) for config in configs]
                     resize_evidence = exercise_window_resize(ui, panels, targets, approvals, check_bytes)
                 stage = 'close'
-                for panel in panels:
-                    ui.focus(panel); ui.named('关闭此标签', panel + ' .tab-connection-actions')
-                    # The click starts an async cancel. Wait for that real tab
-                    # to disappear before addressing the remaining single view;
-                    # its split-only focus header is intentionally gone then.
-                    wait_for(lambda: ui.read('return !document.querySelector(arguments[0]);', panel) is True,
-                             's06_tauri_closed_panel_still_present')
-                wait_for(lambda: ui.read('return document.querySelector("#tab-workspace").hidden;') is True,
-                         's06_tauri_tabs_not_closed')
-                wait_for(lambda: all(peer_connection_evidence(a) == {'authenticationCount': 1, 'closed': True}
-                                     for a in approvals), 's06_tauri_peer_close_unconfirmed', timeout=12)
+                peer_authentication_counts = exercise_peer_close(ui, panels, approvals)
                 check_bytes(expected)
                 return {**{key: True for key in ('normalHomepage', 'twoReviewedIdentities', 'samePaneDifferentTerminal',
                     'bothVisible', 'independentFrames', 'bothAdvanced', 'singleInputFocus', 'focusDoesNotRestoreInput',
                     'lateInputRejected', 'stoppedBoth')},
                     'sides': [{'visibleFrameSnapshots': 2, 'tickAdvanced': second > first, 'inputAccepted': guarded}
                               for first, second in ticks],
-                    'peerAuthenticationCounts': [peer_connection_evidence(a)['authenticationCount'] for a in approvals],
+                    'peerAuthenticationCounts': peer_authentication_counts,
                     'peersClosedBeforeDriverExit': True, 'frameEvidence': 'public visible-terminal-text UI snapshots; native WebDriver actions',
                     **({'guardedDirectEscape': {'trustedChordConsumed': True, 'domFocusMovedToA': True,
                         'selectedTargetStayedB': True, 'originalTargetsAndPeersPreserved': True,
                         'readOnlyAfterEscape': True, 'noExtraInputBytes': True}} if guarded else {}),
+                    **({'guardedDirectResize': direct_resize_evidence} if direct_resize_evidence is not None else {}),
                     **({'windowResize': resize_evidence} if resize_evidence is not None else {})}
             finally:
                 driver.close()

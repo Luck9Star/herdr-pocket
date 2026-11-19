@@ -1,0 +1,208 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "36a9228df84e344ff9f9f4b4e2fecd92dd177246",
+  "kind": "flutter-android-encrypted-ed25519",
+  "status": "passed",
+  "cleanup": {
+    "reverseRemoved": true,
+    "packageRemoved": true,
+    "ownedForwardsRemoved": true,
+    "fixtureClosed": true,
+    "temporaryKeyRemoved": true,
+    "flutterToolStopped": true,
+    "rawLogsUploaded": false
+  },
+  "physicalImeVerified": false,
+  "checkpoints": {
+    "review": {
+      "id": 1,
+      "hostKey": "A",
+      "authAttempts": 0,
+      "authSuccesses": 0,
+      "ptyRequests": 0,
+      "shellRequests": 0,
+      "inputBytes": 0,
+      "outputBytes": 0,
+      "authAccepted": false,
+      "markerReceived": false,
+      "sessionClosed": false,
+      "closed": true
+    },
+    "rejected": {
+      "id": 1,
+      "hostKey": "A",
+      "authAttempts": 0,
+      "authSuccesses": 0,
+      "ptyRequests": 0,
+      "shellRequests": 0,
+      "inputBytes": 0,
+      "outputBytes": 0,
+      "authAccepted": false,
+      "markerReceived": false,
+      "sessionClosed": false,
+      "closed": true
+    }
+  },
+  "startup": {
+    "deviceState": "device",
+    "packageObserved": true,
+    "appStageObserved": true,
+    "appStage": "encrypted_disconnect",
+    "privateInputDelivered": true,
+    "toolExitCode": 0,
+    "tool": {
+      "streamState": "eof",
+      "markers": {
+        "startupLock": false,
+        "gradleStarted": true,
+        "gradleCompleted": true,
+        "installationStarted": true,
+        "testLoading": true,
+        "markerTestStarted": true,
+        "uiTestStarted": true,
+        "gradleFailed": false,
+        "deviceOffline": false
+      }
+    }
+  },
+  "connectDiagnostic": {
+    "status": "ready",
+    "stable": true,
+    "enabled": true,
+    "hit": true,
+    "rectPt": [
+      24,
+      643,
+      345,
+      48
+    ],
+    "viewSizePx": [
+      1080,
+      2340
+    ],
+    "viewSizePt": [
+      393,
+      851
+    ],
+    "insetBottomPx": 0,
+    "privateKeyEmpty": false,
+    "passphraseEmpty": false,
+    "keyAuth": true,
+    "targetValid": true,
+    "busy": false,
+    "reviewRequired": false,
+    "fingerprintPresent": true,
+    "targetMatches": true,
+    "credentialReady": true,
+    "canConnect": true
+  },
+  "uiDiagnostic": {
+    "phase": "encrypted_capture",
+    "terminalCount": 1,
+    "terminalHit": true,
+    "disconnectHit": true,
+    "toggleHit": true,
+    "enterHit": true,
+    "headerHit": true,
+    "toggleState": "open",
+    "insetBottomPx": 0,
+    "viewSizePx": [
+      1080,
+      2340
+    ],
+    "terminalRectPt": [
+      24,
+      169,
+      345,
+      537
+    ],
+    "enterRectPt": [
+      315,
+      715,
+      54,
+      44
+    ],
+    "columns": 38,
+    "rows": 25,
+    "terminalFocused": false,
+    "testInputRegistered": false,
+    "testClientSet": false,
+    "welcomeVisible": true,
+    "echoVisible": true
+  },
+  "device": {
+    "schemaVersion": 1,
+    "platform": "android-api35-emulator",
+    "homepageEntry": true,
+    "fingerprintMatched": true,
+    "explicitTrustRequired": true,
+    "privateKeyPasted": true,
+    "passphraseObscured": true,
+    "wrongPassphraseRejectedLocally": true,
+    "realTerminalView": true,
+    "normalTextInputCommit": true,
+    "remoteEchoVisible": true,
+    "disconnectUiConfirmed": true,
+    "credentialsCleared": true,
+    "privateInputRemoved": true,
+    "clipboardCleared": true,
+    "physicalImeVerified": false
+  },
+  "authenticationMethod": "publickey",
+  "peerClosedBeforeDriverExit": true,
+  "protocol": {
+    "authAccepted": true,
+    "ptyRequested": true,
+    "shellRequested": true,
+    "markerReceived": true,
+    "sessionClosed": true,
+    "connections": 2,
+    "connectionsClosed": true,
+    "ptySizes": [],
+    "connectionEvents": [
+      {
+        "id": 1,
+        "hostKey": "A",
+        "handshakeCompleted": false,
+        "authAttempts": 0,
+        "authAccepted": false,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "markerReceived": false,
+        "sessionClosed": false,
+        "closed": true
+      },
+      {
+        "id": 2,
+        "hostKey": "A",
+        "handshakeCompleted": true,
+        "authAttempts": 1,
+        "authAccepted": true,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 9,
+        "outputBytes": 102,
+        "markerReceived": true,
+        "sessionClosed": true,
+        "closed": true
+      }
+    ]
+  },
+  "lastPhase": "read_screenshots",
+  "cleanupChecks": {
+    "reverse": "verified",
+    "package": "verified",
+    "forwards": "verified"
+  },
+  "screenProof": {
+    "ordinary": {
+      "attempt": 1,
+      "accepted": true,
+      "expectedTarget": "fixture@127.0.0.1:47447"
+    }
+  }
+}

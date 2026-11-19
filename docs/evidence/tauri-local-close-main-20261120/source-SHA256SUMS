@@ -1,0 +1,9 @@
+fba6f33e3e3453b32167dd96cda7e4fe2034928d0b3d725d00a2fb8500045a65  validation/tauri/index.html
+207e72a0dae0d4a3e2ed46c4adc0121a8bf37319966bee59577bbe8462a03d2f  validation/tauri/src/direct-ssh-live.css
+79f1d133fa31da499b82c15db7a0d76a27d9aac47a3a8a486bcd43311309ab19  validation/tauri/src/direct-ssh-setup.css
+05e2dbb09d51316d1e8335295514fe8b0ed16fe504eb79c2d9bd0035fc85a566  validation/tauri/src/direct-ssh-ui.js
+4596a46c862ba935cc2571ed6cfab501196f28f72b20963a31f854e3e69b8738  validation/tauri/src/network-ui.js
+1cf5feba2c2f60a8efb5fc5b996f1e34ebc4309d8edabd20de91f4904d9ba074  validation/tauri/src/remote.js
+cfbea450b8991180fe50d33804618b10195e3a04ad364dbf6de76f50285a61f5  validation/tauri/test/direct-dashboard-gui.test.mjs
+4c49819fd37def043279a9ae22a8cd4176002d22ae207ddf01b31d91e798522d  validation/tauri/test/direct-ssh-host-key-change.test.mjs
+14a988f3599f84e9db019ac205d1f222a7ac4f3dff82aab3d83c9c7deb65c81d  validation/tauri/test/network-ui.test.mjs

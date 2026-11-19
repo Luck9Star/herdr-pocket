@@ -1,0 +1,2862 @@
+{
+  "viewport": [
+    320,
+    640
+  ],
+  "engine": "Playwright WebKit 26.5",
+  "fixture": "loopback HTTP and synthetic IPC; no real SSH",
+  "states": {
+    "terminal": {
+      "sidebar": {
+        "rect": [
+          0,
+          584,
+          320,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "toggle": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "board": {
+        "rect": [
+          0,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "terminal": {
+        "rect": [
+          80,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "network": {
+        "rect": [
+          160,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "settings": {
+        "rect": [
+          240,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "header": {
+        "rect": [
+          0,
+          24,
+          320,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "disconnect": {
+        "rect": [
+          244,
+          29,
+          60,
+          44
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "status": {
+        "rect": [
+          16,
+          92,
+          288,
+          44
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "target": {
+        "rect": [
+          88,
+          107.5224609375,
+          156.3955078125,
+          12.955078125
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "panel": {
+        "rect": [
+          16,
+          144,
+          288,
+          328
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "screen": {
+        "rect": [
+          28,
+          156,
+          260,
+          300
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "focus": {
+        "rect": [
+          260,
+          92,
+          44,
+          44
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "home": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkPage": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsPage": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkEmpty": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkAdd": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "boardStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsTarget": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "fontSize": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "saveFont": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "transfer": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkOpen": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkPanel": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "boardCard": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "homeAdd": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "homeSsh": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "online": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "sha256": "046b3b60e2b83ca8952f8a50fa889c0d420a1dcbd462c65bb22a15eebcbc85f2"
+    },
+    "scrolled": {
+      "sidebar": {
+        "rect": [
+          0,
+          584,
+          320,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "toggle": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "board": {
+        "rect": [
+          0,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "terminal": {
+        "rect": [
+          80,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "network": {
+        "rect": [
+          160,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "settings": {
+        "rect": [
+          240,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "header": {
+        "rect": [
+          0,
+          24,
+          320,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "disconnect": {
+        "rect": [
+          244,
+          29,
+          60,
+          44
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "status": {
+        "rect": [
+          16,
+          92,
+          288,
+          44
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "target": {
+        "rect": [
+          88,
+          107.5224609375,
+          156.3955078125,
+          12.955078125
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "panel": {
+        "rect": [
+          16,
+          144,
+          288,
+          328
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "screen": {
+        "rect": [
+          28,
+          156,
+          260,
+          300
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "focus": {
+        "rect": [
+          260,
+          92,
+          44,
+          44
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "home": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkPage": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsPage": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkEmpty": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkAdd": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "boardStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsTarget": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "fontSize": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "saveFont": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "transfer": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkOpen": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkPanel": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "boardCard": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "homeAdd": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "homeSsh": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "online": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "sha256": "4959d8e1897a7bd126895235bb3c5081e9ccfcee86dab1149ebb98c98d2671c0"
+    },
+    "board": {
+      "sidebar": {
+        "rect": [
+          0,
+          584,
+          320,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "toggle": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "board": {
+        "rect": [
+          0,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "terminal": {
+        "rect": [
+          80,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "network": {
+        "rect": [
+          160,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "settings": {
+        "rect": [
+          240,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "header": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "disconnect": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "status": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "target": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "panel": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "screen": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "focus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "home": {
+        "rect": [
+          16,
+          112,
+          288,
+          268
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "networkPage": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsPage": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkEmpty": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkAdd": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "boardStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsTarget": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "fontSize": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "saveFont": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "transfer": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkOpen": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkPanel": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "boardCard": {
+        "rect": [
+          16,
+          112,
+          288,
+          268
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "homeAdd": {
+        "rect": [
+          32,
+          256,
+          256,
+          48
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "homeSsh": {
+        "rect": [
+          32,
+          316,
+          256,
+          48
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "online": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "sha256": "2bb5f4219e3e094786bd139c75b0643d732578b0b53d93ea7c05c0b6067ef769"
+    },
+    "network": {
+      "sidebar": {
+        "rect": [
+          0,
+          575,
+          320,
+          65
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "toggle": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "board": {
+        "rect": [
+          8,
+          580,
+          71.5,
+          60
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "terminal": {
+        "rect": [
+          85.5,
+          580,
+          71.5,
+          60
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "network": {
+        "rect": [
+          163,
+          580,
+          71.5,
+          60
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "settings": {
+        "rect": [
+          240.5,
+          580,
+          71.5,
+          60
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "header": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "disconnect": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "status": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "target": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "panel": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "screen": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "focus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "home": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkPage": {
+        "rect": [
+          16,
+          118,
+          288,
+          160.59375
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "settingsPage": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkEmpty": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkAdd": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "boardStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsTarget": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "fontSize": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "saveFont": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "transfer": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkOpen": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkPanel": {
+        "rect": [
+          16,
+          118,
+          288,
+          160.59375
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "boardCard": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "homeAdd": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "homeSsh": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "online": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "sha256": "4c9aa4a093b408c8dc4b2989321cb1324ea4ab1e5281c0de5b2a78644be2460b"
+    },
+    "settings": {
+      "sidebar": {
+        "rect": [
+          0,
+          584,
+          320,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "toggle": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "board": {
+        "rect": [
+          0,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "terminal": {
+        "rect": [
+          80,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "network": {
+        "rect": [
+          160,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "settings": {
+        "rect": [
+          240,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "header": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "disconnect": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "status": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "target": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "panel": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "screen": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "focus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "home": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkPage": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsPage": {
+        "rect": [
+          0,
+          24,
+          320,
+          412
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "networkEmpty": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkAdd": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "boardStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsStatus": {
+        "rect": [
+          16,
+          100,
+          288,
+          44
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "settingsTarget": {
+        "rect": [
+          16,
+          154,
+          288,
+          52
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "fontSize": {
+        "rect": [
+          16,
+          244,
+          288,
+          48
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "saveFont": {
+        "rect": [
+          16,
+          304,
+          288,
+          48
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "transfer": {
+        "rect": [
+          16,
+          368,
+          288,
+          48
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "networkOpen": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkPanel": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "boardCard": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "homeAdd": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "homeSsh": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "online": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "sha256": "dffb5b7b7aaa1af8f91645bcbc445e2711cd1aa639b528c57c30ff817a0eb78e"
+    },
+    "returned-terminal": {
+      "sidebar": {
+        "rect": [
+          0,
+          584,
+          320,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "toggle": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "board": {
+        "rect": [
+          0,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "terminal": {
+        "rect": [
+          80,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "network": {
+        "rect": [
+          160,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "settings": {
+        "rect": [
+          240,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "header": {
+        "rect": [
+          0,
+          24,
+          320,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "disconnect": {
+        "rect": [
+          244,
+          29,
+          60,
+          44
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "status": {
+        "rect": [
+          16,
+          92,
+          288,
+          44
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "target": {
+        "rect": [
+          88,
+          107.5224609375,
+          156.3955078125,
+          12.955078125
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "panel": {
+        "rect": [
+          16,
+          144,
+          288,
+          328
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "screen": {
+        "rect": [
+          28,
+          156,
+          260,
+          300
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "focus": {
+        "rect": [
+          260,
+          92,
+          44,
+          44
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "home": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkPage": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsPage": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkEmpty": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkAdd": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "boardStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsTarget": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "fontSize": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "saveFont": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "transfer": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkOpen": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkPanel": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "boardCard": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "homeAdd": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "homeSsh": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "online": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "sha256": "491a803f2ae420cdd652c38ec5074a1eaa3d7acc7e82e6fed677f7b7a61edd3f"
+    },
+    "input-once": {
+      "sidebar": {
+        "rect": [
+          0,
+          584,
+          320,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "toggle": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "board": {
+        "rect": [
+          0,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "terminal": {
+        "rect": [
+          80,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "network": {
+        "rect": [
+          160,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "settings": {
+        "rect": [
+          240,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "header": {
+        "rect": [
+          0,
+          24,
+          320,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "disconnect": {
+        "rect": [
+          244,
+          29,
+          60,
+          44
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "status": {
+        "rect": [
+          16,
+          92,
+          288,
+          44
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "target": {
+        "rect": [
+          88,
+          107.5224609375,
+          156.3955078125,
+          12.955078125
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "panel": {
+        "rect": [
+          16,
+          144,
+          288,
+          328
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "screen": {
+        "rect": [
+          28,
+          156,
+          260,
+          300
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "focus": {
+        "rect": [
+          260,
+          92,
+          44,
+          44
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "home": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkPage": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsPage": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkEmpty": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkAdd": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "boardStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsTarget": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "fontSize": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "saveFont": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "transfer": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkOpen": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkPanel": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "boardCard": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "homeAdd": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "homeSsh": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "online": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "sha256": "34781431dbef95d34c0e1bba38b8baa2b12c1f88229e45bc6bd8f8d8bd063fc5"
+    },
+    "closed-home": {
+      "sidebar": {
+        "rect": [
+          0,
+          584,
+          320,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "toggle": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "board": {
+        "rect": [
+          0,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "terminal": {
+        "rect": [
+          80,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "network": {
+        "rect": [
+          160,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "settings": {
+        "rect": [
+          240,
+          584,
+          80,
+          56
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "header": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "disconnect": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": true
+      },
+      "status": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "target": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "panel": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "screen": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "focus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": true
+      },
+      "home": {
+        "rect": [
+          16,
+          96,
+          288,
+          328
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "networkPage": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsPage": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkEmpty": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkAdd": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "boardStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsStatus": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "settingsTarget": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "fontSize": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "saveFont": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "transfer": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkOpen": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "networkPanel": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "boardCard": {
+        "rect": [
+          16,
+          156,
+          288,
+          268
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "homeAdd": {
+        "rect": [
+          32,
+          300,
+          256,
+          48
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "homeSsh": {
+        "rect": [
+          32,
+          360,
+          256,
+          48
+        ],
+        "visible": true,
+        "hit": true,
+        "disabled": false
+      },
+      "online": {
+        "rect": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "hit": false,
+        "disabled": false
+      },
+      "sha256": "4cb4960720b6e46894cea06de91c6fcedc5de1192efbe5d818f57d957e77b2d9"
+    }
+  },
+  "checks": {
+    "targetParts": [
+      {
+        "rect": [
+          88,
+          107.5224609375,
+          156.3955078125,
+          12.955078125
+        ],
+        "visible": true
+      }
+    ],
+    "rowsAtBottom": "fixture-line-107\nfixture-line-108\nfixture-line-109\nfixture-line-110\nfixture-line-111\nfixture-line-112\nfixture-line-113\nfixture-line-114\nfixture-line-115\nfixture-line-116\nfixture-line-117\nfixture-line-118\nfixture-line-119\nTAIL-READY\n$  ",
+    "rowsScrolled": "fixture-line-088\nfixture-line-089\nfixture-line-090\nfixture-line-091\nfixture-line-092\nfixture-line-093\nfixture-line-094\nfixture-line-095\nfixture-line-096\nfixture-line-097\nfixture-line-098\nfixture-line-099\nfixture-line-100\nfixture-line-101\nfixture-line-102",
+    "scrollBefore": 0,
+    "sameXtermAndScrollAcrossRoutes": true
+  },
+  "errors": [],
+  "ipc": {
+    "events": [
+      {
+        "command": "config_document_platform"
+      },
+      {
+        "command": "host_init"
+      },
+      {
+        "command": "host_list"
+      },
+      {
+        "command": "network_list"
+      },
+      {
+        "command": "ssh_host_key_probe"
+      },
+      {
+        "command": "ssh_shell_open",
+        "sessionId": "fixture-session"
+      },
+      {
+        "command": "ssh_shell_ack",
+        "sessionId": "fixture-session"
+      },
+      {
+        "command": "ssh_shell_resize",
+        "sessionId": "fixture-session"
+      },
+      {
+        "command": "host_list"
+      },
+      {
+        "command": "network_list"
+      },
+      {
+        "command": "network_list"
+      },
+      {
+        "command": "ssh_shell_write",
+        "byteLength": 1
+      },
+      {
+        "command": "ssh_shell_write",
+        "byteLength": 1
+      },
+      {
+        "command": "ssh_shell_write",
+        "byteLength": 1
+      },
+      {
+        "command": "ssh_shell_write",
+        "byteLength": 1
+      },
+      {
+        "command": "ssh_shell_write",
+        "byteLength": 1
+      },
+      {
+        "command": "ssh_shell_write",
+        "byteLength": 1
+      },
+      {
+        "command": "ssh_shell_write",
+        "byteLength": 1
+      },
+      {
+        "command": "ssh_shell_write",
+        "byteLength": 1
+      },
+      {
+        "command": "ssh_shell_ack",
+        "sessionId": "fixture-session"
+      },
+      {
+        "command": "ssh_shell_close",
+        "sessionId": "fixture-session"
+      }
+    ],
+    "errors": []
+  },
+  "passed": true
+}

@@ -721,9 +721,11 @@ class RemoteReadOnlyAdapter {
     } else if (_usesNativeConnector && a.cancelled.isCompleted && a.failure == null &&
         a.evidence.snapshotReceived && managed != null && a.client != null) {
       // Dart's native SSHSocket.close only finishes writes. Keep the original
-      // SSH reader through peer EOF before destroying the descriptor.
+      // SSH reader through channel CLOSE and peer EOF. Finish the SSH close
+      // exchange while the writer can still send the protocol replies.
       try {
         await (() async {
+          await a.channels?.waitIdle();
           await managed.close();
           await a.client!.done;
         })().timeout(const Duration(seconds:2));
@@ -745,12 +747,14 @@ class RemoteReadOnlyAdapter {
     if (a != null && a.closing == null && a.socket is GracefulSSHSocket) a.gracefulRequested = true;
   }
   Future<void> cancel() async {
-    generation++;
     final a = _attempt;
-    if (a == null) return;
-    a.evidence.generation = generation;
-    if (!a.cancelled.isCompleted) a.cancelled.complete();
-    a.waits.interrupt(const RemoteFailure('cancelled')); a.wakeWatch?.call();
+    if (a == null) { generation++; return; }
+    if (!a.cancelled.isCompleted) {
+      generation++;
+      a.evidence.generation = generation;
+      a.cancelled.complete();
+      a.waits.interrupt(const RemoteFailure('cancelled')); a.wakeWatch?.call();
+    }
     await _close(a);
     if (!a.nativeRetired || !a.gracefulPeerClosed) throw const RemoteFailure('network_transport_failed');
   }

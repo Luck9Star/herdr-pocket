@@ -53,6 +53,27 @@ struct SecureCredentialViewProbe {
         }
         let channel = "herdr.pocket/secure-field/7"
         var checks: [String: Bool] = [:]
+        let stagedLabel = "私钥口令（加密私钥需要）"
+        let staged = factory.create(withViewIdentifier: 9, arguments: [
+            "label": stagedLabel, "identifier": "direct-passphrase"])
+        let stagedSecure = staged as? NSSecureTextField
+        checks["stagedPassphraseIsNative"] = stagedSecure != nil
+            && stagedSecure?.accessibilitySubrole() == .secureTextField
+            && stagedSecure?.accessibilityIdentifier() == "direct-passphrase"
+            && stagedSecure?.accessibilityLabel() == stagedLabel
+        let invalidPairs = [
+            ("direct-secret", stagedLabel),
+            ("direct-secret", "私钥口令（可选）"),
+            ("direct-passphrase", "密码（仅本次使用）"),
+            ("direct-passphrase", "未知标签"),
+            ("unrecognized", stagedLabel),
+        ]
+        checks["invalidPairsHaveNoEditorOrChannel"] = invalidPairs.enumerated().allSatisfy { index, pair in
+            let viewId = Int64(10 + index)
+            let rejected = factory.create(withViewIdentifier: viewId, arguments: [
+                "identifier": pair.0, "label": pair.1])
+            return type(of: rejected) == NSView.self && messenger.handlers["herdr.pocket/secure-field/\(viewId)"] == nil
+        }
         func sync(_ revision: Int, text: String? = nil, enabled: Bool = true) {
             var args: [String: Any] = ["revision": revision, "enabled": enabled, "dark": false]
             if let text { args["text"] = text }

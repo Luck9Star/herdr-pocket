@@ -19,15 +19,18 @@ class MemoryConfigDocuments implements ConfigDocuments {
 }
 void main() {
   testWidgets('normal host board opens imported metadata in formal explicit pairing without inheriting identity', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(800, 860);
+    addTearDown(tester.view.reset);
     final catalog = HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
     final imported = HostProfile.imported(portable(),1000); await catalog.add(imported);
     final keys = TestDeviceKeys(fixtureConfig()['privateKeyPem'] as String);
     final tokens = (await tester.runAsync(DesignTokens.load))!;
     await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:HostCatalogPage(tokens:tokens,catalog:catalog,keys:keys,
       offlineBuilder:(_) => const SizedBox()))); await tester.pumpAndSettle();
-    await tester.tap(find.text('设置').last); await tester.pumpAndSettle();
+    await tapVisible(tester,'home-tab-3'); await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('hosts-transfer')),findsOneWidget);
-    await tester.tap(find.text('看板').last); await tester.pumpAndSettle();
+    await tapVisible(tester,'home-tab-0'); await tester.pumpAndSettle();
     expect(find.textContaining('导入未配对'),findsOneWidget); expect(keys.creates,0); expect(keys.signCalls,0);
     await tapVisible(tester,'host-open-${imported.id}'); await tester.pumpAndSettle();
     expect(tester.widget<TextField>(find.byKey(const ValueKey('pair-host'))).controller!.text,'fixture.invalid');

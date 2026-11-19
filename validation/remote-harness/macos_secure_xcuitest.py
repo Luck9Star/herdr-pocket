@@ -62,8 +62,6 @@ def prepare(app, fixture=None):
             raise ValueError('macos_xcui_fixture_invalid')
     text = text.replace(unit, 'productType = "com.apple.product-type.bundle.ui-testing";')
     text = text.replace(loader, '').replace(host, '\t\t\t\tTEST_TARGET_NAME = Runner;')
-    project.write_text(text)
-    scheme.write_text(scheme_text.replace('parallelizable = "YES"', 'parallelizable = "NO"'))
     test_source = (HERE / 'macos_secure_xcuitest.swift').read_text()
     if fixture is not None:
         encoded = base64.b64encode(json.dumps(config).encode()).decode()
@@ -72,30 +70,34 @@ def prepare(app, fixture=None):
         test_source = test_source.replace('__HP_FIXTURE_BASE64__', encoded)
         dart = app / 'lib/direct_ssh_page.dart'
         dart_text = dart.read_text()
-        point = "          OutlinedButton(key: const ValueKey('direct-probe')"
-        if dart_text.count(point) != 1 or 'HPAX:H' in dart_text:
+        form_point = "    return entryList(desktop: desktop, key: const ValueKey('direct-form'), children: [\n"
+        cleared_point = '      Align(alignment: Alignment.topLeft, child: SizedBox(width: width, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [\n'
+        paste_point = "      if (keyAuth) ...[const SizedBox(height: 10), SizedBox(height: mobileButtonHeight, child: OutlinedButton(key: const ValueKey('direct-paste-key'),"
+        if (dart_text.count(form_point) != 2 or dart_text.count(cleared_point) != 1 or
+                dart_text.count(paste_point) != 1 or any(marker in dart_text for marker in ('HPAX:H', 'HPKEY:K', 'HPCLEAR:K', 'HPCLOSE:L'))):
             raise ValueError('macos_xcui_dart_unexpected')
-        diagnostic = '''          Text('HPAX:H${host.text.trim() == "127.0.0.1" ? 1 : 0}P${port.text.trim() == "PASSWORD_PORT" ? 1 : 0}K${port.text.trim() == "KEY_PORT" ? 1 : 0}U${user.text.trim() == "fixture" ? 1 : 0}V${valid ? 1 : 0}B${busy ? 1 : 0}F${foreground ? 1 : 0}E${status.startsWith("探测失败") ? 1 : 0}A${host.text.isEmpty ? 1 : 0}N${user.text.isEmpty ? 1 : 0}T${port.text == "22" ? 1 : 0}D${port.text.isEmpty ? 1 : 0}C${fingerprint != null && checkedTarget == target ? 1 : 0}', style: const TextStyle(fontSize: 1)),
+        diagnostic = '''      if (desktop) Text('HPAX:H${host.text.trim() == "127.0.0.1" ? 1 : 0}P${port.text.trim() == "PASSWORD_PORT" ? 1 : 0}K${port.text.trim() == "KEY_PORT" ? 1 : 0}U${user.text.trim() == "fixture" ? 1 : 0}V${valid ? 1 : 0}B${busy ? 1 : 0}F${foreground ? 1 : 0}E${status.startsWith("探测失败") ? 1 : 0}A${host.text.isEmpty ? 1 : 0}N${user.text.isEmpty ? 1 : 0}T${port.text == "22" ? 1 : 0}D${port.text.isEmpty ? 1 : 0}C${fingerprint != null && checkedTarget == target ? 1 : 0}', style: const TextStyle(fontSize: 1)),
 '''.replace('PASSWORD_PORT',str(config['port'])).replace('KEY_PORT',str(config['keyPort']))
+        cleared_diagnostic = '''Text('HPCLEAR:K${secret.text.isEmpty ? 1 : 0}P${passphrase.text.isEmpty ? 1 : 0}', style: const TextStyle(fontSize: 1)),
+'''
+        close_diagnostic = '''Text('HPCLOSE:L${closeLocalConfirmed ? 1 : 0}F${closeCleanupFailed ? 1 : 0}', style: const TextStyle(fontSize: 1)),
+'''
         key_encoded = base64.b64encode(config['privateKey'].encode()).decode()
         phrase_encoded = base64.b64encode(config['passphrase'].encode()).decode()
-        key_diagnostic = ("          Text('HPKEY:K${secret.text == utf8.decode(base64.decode(\"" + key_encoded +
+        key_diagnostic = ("      if (desktop && keyAuth) Text('HPKEY:K${secret.text == utf8.decode(base64.decode(\"" + key_encoded +
                        "\")) ? 1 : 0}P${passphrase.text == utf8.decode(base64.decode(\"" + phrase_encoded +
                        "\")) ? 1 : 0}Q${passphrase.text == 'q' ? 1 : 0}E${secret.text.isEmpty ? 1 : 0}L${secret.text.length == utf8.decode(base64.decode(\"" + key_encoded + "\")).length ? 1 : 0}T${secret.text.trimRight() == utf8.decode(base64.decode(\"" + key_encoded + "\")).trimRight() ? 1 : 0}', style: const TextStyle(fontSize: 1)),\n")
-        address_point = "          Semantics(container: true, explicitChildNodes: true, label: '地址'"
-        if dart_text.count(address_point) != 1:
-            raise ValueError('macos_xcui_dart_unexpected')
-        pem_point = "          Semantics(container: true, explicitChildNodes: true, label: keyAuth ? '私钥 PEM（仅本次使用）'"
-        field_point = "TextField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy && !hostKeyReviewRequired, obscureText: !keyAuth,"
-        if dart_text.count(pem_point) != 1 or dart_text.count(field_point) != 1:
-            raise ValueError('macos_xcui_dart_unexpected')
         connect_point = '  Future<void> connect() async {'
         parse_point = '      final localSocket = await SSHSocket.connect('
         if dart_text.count(connect_point) != 1 or dart_text.count(parse_point) != 1:
             raise ValueError('macos_xcui_dart_unexpected')
         dart_text = dart_text.replace(connect_point, connect_point + "\n    if (keyAuth) debugPrint('HP_XCUI_STAGE=keyConnectHandlerEntered');", 1)
         dart_text = dart_text.replace(parse_point, "      if (keyAuth) debugPrint('HP_XCUI_STAGE=keyPemParsed');\n" + parse_point, 1)
-        dart.write_text(dart_text.replace(point, diagnostic + point, 1).replace(address_point, diagnostic + address_point, 1).replace(pem_point, key_diagnostic + pem_point, 1))
+        dart_text = dart_text.replace(form_point, form_point + diagnostic + '      if (desktop) ' + cleared_diagnostic)
+        dart_text = dart_text.replace(cleared_point, cleared_point + '        ' + cleared_diagnostic + '        ' + close_diagnostic, 1)
+        dart.write_text(dart_text.replace(paste_point, key_diagnostic + paste_point, 1))
+    project.write_text(text)
+    scheme.write_text(scheme_text.replace('parallelizable = "YES"', 'parallelizable = "NO"'))
     source.write_text(test_source)
 
 

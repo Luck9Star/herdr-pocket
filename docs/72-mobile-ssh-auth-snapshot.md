@@ -73,6 +73,30 @@ R7 验收范围为受控回环密码认证与 XCTest 输入。活动终端在三
 
 [证据索引、原图、结构化结果、哈希及 R1–R4 停点](evidence/flutter-android-encrypted-key-r5-20261119/README.md)。[原始 Actions 工件 14508621605](https://github.com/Luck9Star/herdr-pocket/actions/runs/44479715559/artifacts/14508621605) 的 ZIP SHA256 为 `b796cc238e1775384c836242d3212ec8d03c1d024267a43462fcaf3bd178199f`。终端输入使用 Flutter 测试文本输入；物理键盘、系统中文 IME、实体设备和跨网不属于该次通过范围。
 
+## Flutter iOS 加密私钥独立验收
+
+### R4 模拟器复验
+
+2026-11-19，[作业 135546106261](https://github.com/Luck9Star/herdr-pocket/actions/runs/44520075525/job/135546106261)用 `2ccf9a57eba5114cd79849d66d25b114d3763dcc` 在 iPhone 11 / iOS 26.2 模拟器通过普通密码、密码换钥与独立加密私钥。独立私钥的错误口令仍在客户端拒绝，服务端在该时点没有认证、PTY 或收发。正确口令后只接受一次公钥认证。三案各有一次 PTY 和 shell，服务端各收 9 字节、出 102 字节，主动断开后均记录 `peer_eof`。三张 828 × 1792 系统终端图均通过 OCR 和目标核验，凭据、夹具与模拟器清理通过。[三案原 ZIP、OCR 与清理索引](evidence/flutter-ios-encrypted-key-r4-20261119/README.md)
+
+同一提交的[独立加密私钥 × 主机换钥作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44520076236/job/135546116097)在首次 A 探测报 `probe_failed`。服务端只有一条 A 连接，零认证、零 PTY、零收发，口令编辑及换钥流程尚未执行。R4 三案的通过只覆盖普通密码、密码换钥和独立私钥。历史 `e777df4` 的主动断开复位和 `3fdcae6` 的口令键盘下连接控件未命中保留为各自的失败边界。
+
+### R1 历史验收
+
+2026-11-19，Flutter iOS 专用 R1 作业在 iPhone 11 / iOS 26.2 模拟器完成普通密码、密码换钥与独立加密 OpenSSH Ed25519 私钥三案，XCTest 1 项通过。源提交为 `31a4bfd08fb2922a0dff8d8259858b87502bf928`，原始 ZIP 的 SHA256 为 `b56fc432ae53d65d10512069d90bc662a55da6b135bbe43771b9cda773fc5b13`。[作业 135459578044](https://github.com/Luck9Star/herdr-pocket/actions/runs/44494931219/job/135459578044) · [原始工件 14515586833](https://github.com/Luck9Star/herdr-pocket/actions/runs/44494931219/artifacts/14515586833)
+
+加密私钥案从首页进入并明确核对主机指纹。密码与私钥两向切换均清除前一种输入，并保留同一主机信任。错误口令在客户端被拒绝，此时只有首次探测，服务端认证、PTY、shell 和收发均为零。正确私钥在第二条连接完成一次公钥认证、一次 PTY 和一次 shell，收到一行 9 字节的终端命令并回显 102 字节。主动断开后返回首页，两条连接都在驱动退出前关闭。记录确认凭据、剪贴板、临时输入、夹具和模拟器已清理。
+
+原件索引见 ZIP 中的 `result.json`。三张 828 × 1792 的系统终端原图各有独立 OCR 记录，PNG 与 OCR 均可按各案 SHA256 核验。
+
+| 案例 | 系统终端原图 | OCR |
+| --- | --- | --- |
+| 普通密码（`ordinary`） | `ordinary-terminal.png` | `ordinary-terminal-ocr.json` |
+| 密码换钥（`keyChange`） | `key-change-terminal.png` | `key-change-terminal-ocr.json` |
+| 独立加密私钥（`encryptedKey`） | `encrypted-key-terminal.png` | `encrypted-key-terminal-ocr.json` |
+
+ZIP 同时保留 `key-change-review.png` 核对原图和 `preconnect.png` 已遮罩的连接前原图。私钥与主机换钥组合、实体设备、物理键盘、系统中文 IME 及真实跨网仍待独立验证。[仓库原件及成员校验清单](evidence/flutter-ios-encrypted-key-r1-20261119/README.md)
+
 ## R22 Android 设备证据
 
 两次作业使用受控 API 35 x86_64 模拟器与回环 SSH，均完成普通连接、主机密钥变化、终端回显和断开。两次使用不同源码，原始 ZIP 已完整重新下载并计算 SHA256。[可复核的运行、工件及内部结果索引](evidence/mobile-ssh-auth-r23/r22-actions.json)
@@ -178,3 +202,11 @@ git rev-parse HEAD
 - R7 冷启动 App 后长按原本为空的 PEM 字段。同窗采样可读，记录为空字段，未取得唯一菜单或内容插入的证据。权限弹窗、菜单实际可用性和产品支持情况均未证实。[R7 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44510667185/job/135513780849)
 
 两次都止于填入口令前的粘贴确认。服务端各只有一条已关闭的 A，认证尝试及成功、PTY、shell、输入及输出均为零。模拟器删除、夹具关闭和私有临时文件移除均通过。恢复验收须先在同一 App 窗口证明粘贴动作及内容插入，结果未知时停止并清理，不能重放原动作。错口令拒绝、正确私钥认证、终端回显及原屏 OCR、主动断开仍待实测。
+
+## Flutter Android 加密私钥与主机换钥
+
+**通过 — API 35 模拟器、受控回环。** 2026-11-19，R2 以 `auth_case=encrypted-key-rotation` 从正常首页完成加密 OpenSSH Ed25519 私钥与主机换钥的同次运行。源码 `3fdcae6794ecff0f1b63e0e4f9c3ed8caf7fead3` 与归档基线 `4056f41` 的 Flutter 产品树一致。独立的常规密码作业在同一源码上通过。[R2 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44515040529/job/135528754522) · [同源常规密码作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44515044000/job/135528765174)
+
+R2 先核对 A，见到 B 后拒绝认证。取消后仍保留 A 的信任，重新探测并显式核对 B 后才允许连接。对端四条传输依次为 A、B、B、B，前三条均为零认证、PTY、shell、输入与输出。末条只受理一次公钥认证、一项 PTY 和一个 shell，收到 9 字节并回显。Android 系统原图与 Flutter 渲染表面原图均通过各自 OCR 核对。主动断开、对端关闭、凭据清理、应用卸载、ADB 转发移除与 AVD 退出均有记录。[官方原 ZIP、图像摘要及逐条计数](evidence/flutter-android-encrypted-key-rotation-20261119/README.md)
+
+R1 已记录换钥与远端回显，读取截图时返回非 PNG，原图与完整清理未证实。R2 独立完成全流程。实体设备、物理 IME、真实网络和其他平台未纳入此格。[R1 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44510452198/job/135513026564)

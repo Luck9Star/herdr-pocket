@@ -5,7 +5,7 @@ import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/host_catalog.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
 import 'package:terminal_view/terminal_view.dart';
-import 'direct_ssh_widget_test.dart' show waitFor;
+import 'direct_ssh_widget_test.dart' show tapAndWaitForOrdinaryDisconnect, waitFor;
 import 'host_catalog_test.dart' show MemoryCatalogStorage;
 import 'host_tabs_widget_test.dart' show tabProfile;
 
@@ -59,7 +59,7 @@ void main() {
       await tester.enterText(key('direct-secret'), 'temporary'); await tester.pump();
       await tester.ensureVisible(key('direct-connect')); await tester.tap(key('direct-connect')); await tester.pump();
       await waitFor(tester, find.byType(TerminalView));
-      await tester.tap(find.text('断开')); await tester.pumpAndSettle();
+      await tapAndWaitForOrdinaryDisconnect(tester);
       expect(key('direct-closed-feedback'), findsOneWidget); expect(key('direct-secret'), findsNothing);
       expect(tester.widget<TextField>(key('direct-host')).controller!.text, '127.0.0.1');
       expect(tester.widget<TextField>(key('direct-user')).controller!.text, 'fixture');
@@ -79,7 +79,7 @@ void main() {
         await tester.enterText(key('direct-secret'), 'temporary'); await tester.pump();
         await tester.ensureVisible(key('direct-connect')); await tester.tap(key('direct-connect')); await tester.pump();
         await waitFor(tester, find.byType(TerminalView));
-        await tester.tap(find.text('断开')); await tester.pumpAndSettle();
+        await tapAndWaitForOrdinaryDisconnect(tester);
       }
       await tester.ensureVisible(key('direct-return-home')); await tester.pumpAndSettle();
       expect(key('direct-return-home').hitTestable(), findsOneWidget);
@@ -147,7 +147,7 @@ void main() {
       await tester.enterText(key('direct-secret'), 'temporary'); await tester.pump();
       await tester.ensureVisible(key('direct-connect')); await tester.tap(key('direct-connect')); await tester.pump();
       await waitFor(tester, find.byType(TerminalView));
-      await tester.tap(find.text('断开')); await tester.pumpAndSettle();
+      await tapAndWaitForOrdinaryDisconnect(tester);
       expect(key('direct-closed-feedback'), findsOneWidget);
       // A short drag is cancelled: the route remains and the home notice is not emitted.
       await edgeDrag(35);

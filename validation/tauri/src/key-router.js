@@ -67,7 +67,7 @@ function preferred(root) {
 function panels() {
   const body = byId('view-content');
   if (!body) return [];
-  const wrapped = (body.children || []).filter(node => node.dataset?.role === 'workbench-panel');
+  const wrapped = Array.from(body.children || []).filter(node => node.dataset?.role === 'workbench-panel');
   if (wrapped.length) return wrapped;
   return body.dataset?.role === 'workbench-panel' ? [body] : [];
 }
@@ -112,7 +112,7 @@ function rotate(backward) {
 
 function navButtons(id) {
   const nav = byId(id);
-  return nav ? (nav.children || []).filter(node => tag(node) === BUTTON) : [];
+  return nav ? Array.from(nav.children || []).filter(node => tag(node) === BUTTON) : [];
 }
 
 function selectByNumber(id, number) {

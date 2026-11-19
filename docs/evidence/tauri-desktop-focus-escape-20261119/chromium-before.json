@@ -1,0 +1,465 @@
+{
+  "sourceSHA": "44d7838e53020cc306ffbef9030c08c740a89381",
+  "routerSha256": "020101dfa4eb05db019802e3135eed2c787f3df9cfbed33e674b95943b3930d6",
+  "engine": "chromium",
+  "browser": "148.0.7778.96",
+  "scope": "Tauri production frontend and xterm, Playwright native browser keys, simulated IPC, no SSH",
+  "keyboard": {
+    "working": {
+      "viewport": 1440,
+      "focused": {
+        "kind": "TEXTAREA",
+        "role": null,
+        "css": "xterm",
+        "target": [
+          "w1:p2",
+          "term_b002"
+        ],
+        "frame": "active",
+        "name": "Terminal input",
+        "enabled": true,
+        "readOnly": false,
+        "visible": true,
+        "sameEditor": true
+      },
+      "views": [
+        {
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "focused": true,
+          "phase": "active",
+          "mode": "direct"
+        },
+        {
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "focused": false,
+          "phase": "active",
+          "mode": "observe"
+        }
+      ],
+      "input": [],
+      "sendCalls": 0
+    },
+    "marker": {
+      "viewport": 1440,
+      "focused": {
+        "kind": "TEXTAREA",
+        "role": null,
+        "css": "xterm",
+        "target": [
+          "w1:p2",
+          "term_b002"
+        ],
+        "frame": "active",
+        "name": "Terminal input",
+        "enabled": true,
+        "readOnly": false,
+        "visible": true,
+        "sameEditor": true
+      },
+      "views": [
+        {
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "focused": true,
+          "phase": "active",
+          "mode": "direct"
+        },
+        {
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "focused": false,
+          "phase": "active",
+          "mode": "observe"
+        }
+      ],
+      "input": [
+        {
+          "side": "beta",
+          "bytes": [
+            120
+          ]
+        }
+      ],
+      "sendCalls": 1
+    },
+    "directWide": {
+      "viewport": 1440,
+      "focused": {
+        "kind": "TEXTAREA",
+        "role": null,
+        "css": "xterm",
+        "target": [
+          "w1:p2",
+          "term_b002"
+        ],
+        "frame": "active",
+        "name": "Terminal input",
+        "enabled": true,
+        "readOnly": false,
+        "visible": true,
+        "sameEditor": true
+      },
+      "views": [
+        {
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "focused": true,
+          "phase": "active",
+          "mode": "direct"
+        },
+        {
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "focused": false,
+          "phase": "active",
+          "mode": "observe"
+        }
+      ],
+      "input": [
+        {
+          "side": "beta",
+          "bytes": [
+            120
+          ]
+        }
+      ],
+      "sendCalls": 1
+    },
+    "resizeControl": [
+      [
+        "A",
+        "pause"
+      ],
+      [
+        "A",
+        "resume"
+      ]
+    ],
+    "escape": {
+      "viewport": 1440,
+      "focused": {
+        "kind": "TEXTAREA",
+        "role": null,
+        "css": "xterm",
+        "target": [
+          "w1:p2",
+          "term_b002"
+        ],
+        "frame": "active",
+        "name": "Terminal input",
+        "enabled": true,
+        "readOnly": false,
+        "visible": true,
+        "sameEditor": true
+      },
+      "views": [
+        {
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "focused": true,
+          "phase": "active",
+          "mode": "direct"
+        },
+        {
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "focused": false,
+          "phase": "active",
+          "mode": "observe"
+        }
+      ],
+      "input": [
+        {
+          "side": "beta",
+          "bytes": [
+            120
+          ]
+        },
+        {
+          "side": "beta",
+          "bytes": [
+            27,
+            91,
+            49,
+            55,
+            59,
+            54,
+            126
+          ]
+        }
+      ],
+      "sendCalls": 2
+    },
+    "screenshotSha256": "4cf7684564ed197f9fc4077a8c975cf5cde451b152febf9a1e2390b85ac1ee36",
+    "escapeControl": [],
+    "events": [
+      {
+        "key": "x",
+        "ctrl": false,
+        "shift": false,
+        "alt": false,
+        "trusted": true,
+        "before": {
+          "kind": "TEXTAREA",
+          "role": null,
+          "css": "xterm",
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "Terminal input",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": true
+        },
+        "consumed": false,
+        "after": {
+          "kind": "TEXTAREA",
+          "role": null,
+          "css": "xterm",
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "Terminal input",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": true
+        }
+      },
+      {
+        "key": "Control",
+        "ctrl": true,
+        "shift": false,
+        "alt": false,
+        "trusted": true,
+        "before": {
+          "kind": "TEXTAREA",
+          "role": null,
+          "css": "xterm",
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "Terminal input",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": true
+        },
+        "consumed": false,
+        "after": {
+          "kind": "TEXTAREA",
+          "role": null,
+          "css": "xterm",
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "Terminal input",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": true
+        }
+      },
+      {
+        "key": "Shift",
+        "ctrl": true,
+        "shift": true,
+        "alt": false,
+        "trusted": true,
+        "before": {
+          "kind": "TEXTAREA",
+          "role": null,
+          "css": "xterm",
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "Terminal input",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": true
+        },
+        "consumed": false,
+        "after": {
+          "kind": "TEXTAREA",
+          "role": null,
+          "css": "xterm",
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "Terminal input",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": true
+        }
+      },
+      {
+        "key": "F6",
+        "ctrl": true,
+        "shift": true,
+        "alt": false,
+        "trusted": true,
+        "before": {
+          "kind": "TEXTAREA",
+          "role": null,
+          "css": "xterm",
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "Terminal input",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": true
+        },
+        "consumed": false,
+        "after": {
+          "kind": "TEXTAREA",
+          "role": null,
+          "css": "xterm",
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "frame": "active",
+          "name": "Terminal input",
+          "enabled": true,
+          "readOnly": false,
+          "visible": true,
+          "sameEditor": true
+        }
+      }
+    ],
+    "after": {
+      "viewport": 1440,
+      "focused": {
+        "kind": "TEXTAREA",
+        "role": null,
+        "css": "xterm",
+        "target": [
+          "w1:p2",
+          "term_b002"
+        ],
+        "frame": "active",
+        "name": "Terminal input",
+        "enabled": true,
+        "readOnly": false,
+        "visible": true,
+        "sameEditor": true
+      },
+      "views": [
+        {
+          "target": [
+            "w1:p2",
+            "term_b002"
+          ],
+          "focused": true,
+          "phase": "active",
+          "mode": "direct"
+        },
+        {
+          "target": [
+            "w1:p1",
+            "term_a001"
+          ],
+          "focused": false,
+          "phase": "active",
+          "mode": "observe"
+        }
+      ],
+      "input": [
+        {
+          "side": "beta",
+          "bytes": [
+            120
+          ]
+        },
+        {
+          "side": "beta",
+          "bytes": [
+            27,
+            91,
+            49,
+            55,
+            59,
+            54,
+            126
+          ]
+        }
+      ],
+      "sendCalls": 2
+    },
+    "transport": [
+      {
+        "cmd": "remote_tab_reserve",
+        "side": "A"
+      },
+      {
+        "cmd": "remote_tab_observe",
+        "side": "A"
+      },
+      {
+        "cmd": "remote_tab_reserve",
+        "side": "B"
+      },
+      {
+        "cmd": "remote_tab_observe",
+        "side": "B"
+      },
+      {
+        "cmd": "remote_tab_input_mode",
+        "side": "B",
+        "mode": "direct",
+        "epoch": 1
+      },
+      {
+        "cmd": "remote_tab_input_send",
+        "side": "B",
+        "epoch": 1
+      },
+      {
+        "cmd": "remote_tab_input_send",
+        "side": "B",
+        "epoch": 1
+      }
+    ]
+  },
+  "passed": false,
+  "browserErrors": [
+    "collection_filter_error"
+  ]
+}

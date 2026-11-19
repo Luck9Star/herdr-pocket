@@ -195,6 +195,42 @@ Future<void> reviewLinuxFingerprint(
   );
 }
 
+Future<void> enterFocusedPassphrase(
+  WidgetTester tester,
+  Finder field,
+  String passphrase,
+) async {
+  // enterText(field) can reuse a cached editor that has since lost focus.
+  // Reacquire the live input connection through the visible field instead.
+  await tapControl(tester, field, 'linux_passphrase');
+  final editable = find.descendant(
+    of: field,
+    matching: find.byType(EditableText),
+  );
+  final editor = tester.state<EditableTextState>(editable);
+  final input = editor.widget;
+  expect(
+    input.obscureText &&
+        !input.readOnly &&
+        input.focusNode.hasPrimaryFocus &&
+        input.controller.text.isEmpty,
+    isTrue,
+    reason: 'linux_direct_passphrase_editor_not_focused',
+  );
+  tester.testTextInput.enterText(passphrase);
+  await tester.idle();
+  await tester.pump();
+  expect(
+    identical(tester.state<EditableTextState>(editable), editor) &&
+        identical(editor.widget.controller, input.controller) &&
+        identical(editor.widget.focusNode, input.focusNode) &&
+        input.focusNode.hasPrimaryFocus &&
+        input.controller.text == passphrase,
+    isTrue,
+    reason: 'linux_direct_passphrase_readback_failed',
+  );
+}
+
 Future<TextEditingController> prepareEncryptedKey(
   WidgetTester tester,
   LinuxTarget target,
@@ -315,7 +351,7 @@ Future<TextEditingController> prepareEncryptedKey(
   step('key_retry_passphrase_required');
   expect(connectDisabled(), isTrue);
   step('key_valid_passphrase');
-  await fill(passphrase, target.passphrase!);
+  await enterFocusedPassphrase(tester, passphrase, target.passphrase!);
   step('key_retry_target_bound');
   expect(sameTrust(target.fingerprint), isTrue);
   final rotated = target.rotatedFingerprint;
@@ -405,7 +441,7 @@ Future<TextEditingController> prepareEncryptedKey(
     if (state.keyAuth != true) await tap(tester, 'direct-auth-key');
     await pastePem();
     expect(connectDisabled(), isTrue);
-    await fill(passphrase, target.passphrase!);
+    await enterFocusedPassphrase(tester, passphrase, target.passphrase!);
   }
   return tester.widget<TextField>(passphrase).controller!;
 }

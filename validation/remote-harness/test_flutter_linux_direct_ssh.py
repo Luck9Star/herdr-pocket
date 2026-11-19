@@ -4,7 +4,7 @@ import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 if importlib.util.find_spec('paramiko') is None or importlib.util.find_spec('PIL') is None:
     raise unittest.SkipTest('ordinary SSH and screenshot test dependencies are missing')
@@ -14,8 +14,11 @@ from flutter_linux_direct_ssh import (
     ScreenshotGateError,
     capture,
     capture_geometry,
+    key_rejection_evidence,
     locked_dependencies,
     read_exchange,
+    read_ui_stage,
+    rotation_session,
     window_geometry,
 )
 from PIL import Image
@@ -92,6 +95,70 @@ class PrivateExchangeTests(unittest.TestCase):
             (root / 'probe.json').write_text(' ' * 1025)
             with self.assertRaisesRegex(GuiFailure, 'invalid_exchange'):
                 read_exchange(root, 'probe')
+
+    def test_key_retry_diagnostic_uses_only_fixed_stages(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            note = root / 'stage.json'
+            self.assertIsNone(read_ui_stage(root))
+            note.write_text('{"phase":"key_retry_clipboard_seed"}')
+            self.assertEqual(read_ui_stage(root), 'key_retry_clipboard_seed')
+            note.write_text('{"phase":"key_connect_tap"}')
+            self.assertEqual(read_ui_stage(root), 'key_connect_tap')
+            note.write_text('{"phase":"key_retry_pem_readback","value":"unbound data"}')
+            self.assertIsNone(read_ui_stage(root))
+            note.write_text('{"phase":"unrecognized data"}')
+            self.assertIsNone(read_ui_stage(root))
+
+    def test_key_negative_checkpoints_require_consumed_material_and_zero_new_connections(self):
+        probe = {'id': 1, 'hostKey': 'A', 'closed': True, 'authAttempts': 0,
+                 'authSuccesses': 0, 'ptyRequests': 0, 'shellRequests': 0,
+                 'inputBytes': 0, 'outputBytes': 0}
+        facts = {'connections': 1, 'connectionsClosed': True, 'connectionEvents': [probe]}
+        fixture = Mock()
+        fixture.snapshot.return_value = facts
+        modes = {'passwordToKeyCleared': True, 'keyToPasswordCleared': True, 'sameTrust': True}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(key_rejection_evidence(fixture, root, 'mode-switch', modes),
+                             dict(modes, connections=1, authenticationAttempts=0))
+            rejected = {'rejectedLocally': True}
+            self.assertEqual(key_rejection_evidence(fixture, root, 'wrong-passphrase', rejected),
+                             dict(rejected, connections=1, authenticationAttempts=0))
+            for unsafe in [{'rejectedLocally': 1}, {'rejectedLocally': False}, dict(rejected, extra=True)]:
+                with self.assertRaisesRegex(GuiFailure, 'key_checkpoint_invalid'):
+                    key_rejection_evidence(fixture, root, 'wrong-passphrase', unsafe)
+            target = root / 'target.json'
+            target.touch()
+            with self.assertRaisesRegex(GuiFailure, 'key_material_not_consumed'):
+                key_rejection_evidence(fixture, root, 'wrong-passphrase', rejected)
+            target.unlink()
+            fixture.snapshot.return_value = dict(facts, connections=2, connectionEvents=[probe, probe])
+            with self.assertRaisesRegex(GuiFailure, 'connection_count_invalid'):
+                key_rejection_evidence(fixture, root, 'wrong-passphrase', rejected)
+
+    def test_rotated_session_requires_b_exactly_once_and_closes_before_exit(self):
+        session = {'id': 4, 'hostKey': 'B', 'authAttempts': 1, 'authSuccesses': 1,
+                   'ptyRequests': 1, 'shellRequests': 1, 'outputBytes': 102,
+                   'handshakeCompleted': True, 'authAccepted': True, 'inputBytes': 9,
+                   'markerReceived': True, 'singleMarkerLineExact': True,
+                   'closed': True, 'sessionClosed': True, 'closeReason': 'peer_eof'}
+
+        def check(expected, **changes):
+            facts = {'connections': 4, 'connectionsClosed': True,
+                     'connectionEvents': [{}, {}, {}, dict(session, **changes)]}
+            if expected is None:
+                rotation_session(facts, sent=True, closed=True)
+            else:
+                with self.assertRaisesRegex(GuiFailure, expected):
+                    rotation_session(facts, sent=True, closed=True)
+
+        check(None)
+        check('signed_session_unproven', hostKey='A')
+        check('signed_session_unproven', authAttempts=2)
+        check('key_input_not_exact', inputBytes=18)
+        check('key_input_not_exact', singleMarkerLineExact=False)
+        check('close_order_invalid', closeReason='fixture_stopped')
 
     def test_only_the_existing_sdk_lock_extension_is_accepted(self):
         block = '    source: sdk\n    version: "0.0.0"\n'

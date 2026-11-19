@@ -70,7 +70,7 @@ jobs:
       - name: Install isolated helper and loopback sshd dependencies
         run: |
           python3 -m venv "$RUNNER_TEMP/pairing-venv"
-          "$RUNNER_TEMP/pairing-venv/bin/pip" install -r validation/pairing/requirements.txt
+          "$RUNNER_TEMP/pairing-venv/bin/pip" install -r validation/pairing/requirements.txt 'paramiko==4.0.0' 'pillow==12.2.0'
           PYTHONDONTWRITEBYTECODE=1 "$RUNNER_TEMP/pairing-venv/bin/python" -m unittest discover -s validation/remote-harness -q
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120 install -y openssh-server

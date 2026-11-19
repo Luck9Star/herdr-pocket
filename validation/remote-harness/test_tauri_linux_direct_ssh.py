@@ -118,11 +118,12 @@ class WebDriverTests(unittest.TestCase):
     def test_native_click_and_physical_keys_are_each_sent_once(self):
         driver = DesktopDriver()
         driver.session = '/session/fixture'
-        driver.call = Mock(side_effect=[True, [{'element-6066-11e4-a52e-4f735466cecf': 'focus'}], None, None])
-        driver.click('#ssh-focus')
+        driver.call = Mock(side_effect=[True, [{'element-6066-11e4-a52e-4f735466cecf': 'screen'}], None, None])
+        driver.click('#ssh-terminal .xterm-screen')
         driver.send_test_line()
         calls = [call.args for call in driver.call.call_args_list]
-        self.assertEqual(calls[2], ('POST', '/session/fixture/element/focus/click', {}))
+        self.assertEqual(calls[1][2], {'using': 'css selector', 'value': '#ssh-terminal .xterm-screen'})
+        self.assertEqual(calls[2], ('POST', '/session/fixture/element/screen/click', {}))
         self.assertEqual(calls[3][:2], ('POST', '/session/fixture/actions'))
         keys = calls[3][2]['actions'][0]['actions']
         self.assertEqual(''.join(key['value'] for key in keys[::2]), 'hp-check\ue007')
@@ -161,6 +162,7 @@ class ReviewFlowTests(unittest.TestCase):
         driver = Mock()
         driver.observe.return_value = True
         driver.click.side_effect = lambda selector: events.append(('click', selector))
+        driver.send_test_line.side_effect = lambda: events.append(('type', 'terminal'))
         fixture = Mock(username='fixture', port=49821, fingerprint='SHA256:example',
                        public_key='ssh-rsa AAAA', password='temporary')
         fixture.wait_for.return_value = True
@@ -175,6 +177,9 @@ class ReviewFlowTests(unittest.TestCase):
         self.assertEqual(events.count(('click', '#ssh-trust-confirm')), 1)
         self.assertLess(events.index(('peer', 'probe')), events.index(('click', '#ssh-trust-confirm')))
         self.assertLess(events.index(('click', '#ssh-trust-confirm')), events.index(('click', '#ssh-connect')))
+        self.assertNotIn(('click', '#ssh-focus'), events)
+        self.assertEqual(events.count(('click', '#ssh-terminal .xterm-screen')), 1)
+        self.assertLess(events.index(('click', '#ssh-terminal .xterm-screen')), events.index(('type', 'terminal')))
         self.assertIn(('click', '#ssh-disconnect'), events)
         self.assertIn(('click', '#ssh-return-home'), events)
 

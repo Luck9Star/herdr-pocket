@@ -2,6 +2,8 @@
 
 2026-11-19，修复提交 `9c58f2ac4eafb189c792c2120ca944f9a05f46f4` 的 Tauri 前端在三档桌面视口均可从首屏读取断开反馈并点击「返回首页」。关闭 IPC 拒绝或返回 `false` 时显示「远端关闭未确认」。修前运行来自 `d37a4fe491876b0657aa4ed05f1513c6c08b71ba`，其 `validation/tauri` 与合入前的 `887dbb16a225d2327dfc47eb492f56cdade00bed` 逐文件一致。
 
+公开复现提交 `c453f40c2ba168ce045df04b5102963a642b76fa` 与原始运行提交 `9c58f2a` 共用完整 Git 树 `18b8fc5a203594d9c9686d93a3c87ed07647d5ce`。原运行和原图 SHA 保留。[公开等价提交](https://github.com/Luck9Star/herdr-pocket/commit/c453f40c2ba168ce045df04b5102963a642b76fa)
+
 ## 原尺寸对照
 
 | 场景 | 修前 | 修后 |
@@ -19,9 +21,11 @@
 
 浏览器运行使用生产 HTML、CSS、JS 与实际 xterm。Tauri IPC 由夹具响应，覆盖前端、DOM 命中和 IPC 结果处理。成功的关闭 IPC 仅代表本端命令确认及本地会话结束。原生命令会移除会话记录，并在存在记录时停用输入、取消本地任务。命令在找不到会话时也返回 unit，且没有等待远端关闭回执。原生窗口、真实 SSH 及对端是否收到关闭均未用这组证据验证。[原生命令](../../../validation/tauri/src-tauri/src/direct_shell.rs#L139) · [会话控制](../../../validation/transport-rust/src/direct_shell.rs#L202)
 
+关闭响应的后续提交 `aaa0b5a25d3bd49b38636665da152e89c873f1ed` 只接受 unit 的 `null` 和 JavaScript 的 `undefined`。页面和样式与原图版本逐字节一致。700×900 的成功与拒绝截图与本目录原图逐字节相同，`false`、对象、字符串返回均显示未确认。对象和字符串在原图版本分别复现了误报。局部 45 项、完整前端 698 项及五个受控 WebKit 用例均通过。
+
 ## 逐点差异
 
-修前按下断开后，三档反馈顶部分别为 y=902.8125、796.8125、957.8125 pt，均超过当时客户区底缘，且无专用返回按钮。修后六次都在 `scrollY=0` 看到反馈和可命中的返回按钮。以下四元组依次为 x、y、宽、高，单位 CSS pt。设计取自 `880fcf767b381b15452095afcebd16c1f81c0632`。
+修前按下断开后，三档反馈顶部分别为 y=902.8125、796.8125、957.8125 pt，均超过当时客户区底缘，且无专用返回按钮。修后六次都在 `scrollY=0` 看到反馈和可命中的返回按钮。以下四元组依次为 x、y、宽、高，单位 CSS pt。原逐点比对来自 `880fcf767b381b15452095afcebd16c1f81c0632`。重新生成最终画板 `b2358542c7f0e200650314d811add56a2772cafb`，三档反馈与返回的坐标和尺寸逐项一致。[最终画板规格](https://github.com/Luck9Star/herdr-pocket/blob/b2358542c7f0e200650314d811add56a2772cafb/design/penpot/direct-ssh-desktop.md)
 
 | 视口 | 实测反馈 / 设计反馈 | 实测返回 / 设计返回 |
 | --- | --- | --- |

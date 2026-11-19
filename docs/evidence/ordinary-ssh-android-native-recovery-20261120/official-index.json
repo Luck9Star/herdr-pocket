@@ -1,0 +1,743 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-20",
+  "platform": {
+    "api": 35,
+    "abi": "x86_64",
+    "image": "Google APIs rev 9",
+    "emulator": "37.2.13.0",
+    "physicalDevice": false,
+    "physicalImeVerified": false
+  },
+  "network": "isolated-adb-reverse-ssh",
+  "counts": {
+    "archives": 7,
+    "passedCases": 8,
+    "deviceAndIntegrationPNGs": 23,
+    "independentOcrPassed": 11
+  },
+  "runs": [
+    {
+      "archive": "44588463433-14563056326.zip",
+      "runId": 44588463433,
+      "jobId": 135787725650,
+      "artifactId": 14563056326,
+      "sourceSHA": "1fdcb193cdb68a8ff27d85bfebefc26ead059c81",
+      "zipSizeBytes": 714433,
+      "zipSha256": "8c5c45d3a4749d0e0cccacfa306c49ea5e73f2fbc52aa32132f31416b4935ebf",
+      "attempt": 1,
+      "client": "flutter",
+      "mainReport": "direct-ssh-public/result.json",
+      "members": [
+        {
+          "path": "direct-ssh-avd/emulator-version.txt",
+          "sha256": "1a523c9091747b7bf48a755396278f2eca455352b40c281336f1c3e075607b54",
+          "sizeBytes": 655
+        },
+        {
+          "path": "direct-ssh-avd/image.properties",
+          "sha256": "809a6f5103c048607257f03f18e22dd740137e9009c99d4a496de846b6ee3412",
+          "sizeBytes": 357
+        },
+        {
+          "path": "direct-ssh-avd/lifecycle.txt",
+          "sha256": "4382732c658b78c67d310b55b97b392cb5ba40328ced42755e6b6a43514cf003",
+          "sizeBytes": 283
+        },
+        {
+          "path": "direct-ssh-avd/resources-end.json",
+          "sha256": "7fad1b7ca50d516a31c2e05661cf3e51b4e89495c6945aa8796454e0d541505b",
+          "sizeBytes": 295
+        },
+        {
+          "path": "direct-ssh-avd/resources-start.json",
+          "sha256": "7c8dedd177b2d021934e4219e2e5365b0cb921bf594d72062df42b6d0c9d9c45",
+          "sizeBytes": 295
+        },
+        {
+          "path": "direct-ssh-public/connected-device.png",
+          "sha256": "10465eebfec3f24426c75fee68fd1adee6483402a9fe555a90db9868a0b52bd2",
+          "sizeBytes": 98387,
+          "sizePx": [
+            1080,
+            2340
+          ]
+        },
+        {
+          "path": "direct-ssh-public/connected.png",
+          "sha256": "89e16bcbde45197d6483242f100d71e032bab31627f43ef23125ceefa6033d44",
+          "sizeBytes": 92701,
+          "sizePx": [
+            1080,
+            2340
+          ]
+        },
+        {
+          "path": "direct-ssh-public/disconnected.png",
+          "sha256": "d6797107e62d267f56ecd2f30385dc927f6d6dc17b41a55f1cef530003109848",
+          "sizeBytes": 103563,
+          "sizePx": [
+            1080,
+            2340
+          ]
+        },
+        {
+          "path": "direct-ssh-public/home.png",
+          "sha256": "b55fe8b2f2b5c0d2e1327795225ee5016f9446b955522e7e27c5b5bc1940e6cf",
+          "sizeBytes": 91529,
+          "sizePx": [
+            1080,
+            2340
+          ]
+        },
+        {
+          "path": "direct-ssh-public/key-rotation-screen-proof.json",
+          "sha256": "609fa1103abf3a47ac01a1b4cc40c17f7ce031fc5a82e3374eda94c504d03584",
+          "sizeBytes": 1568
+        },
+        {
+          "path": "direct-ssh-public/ordinary-screen-proof.json",
+          "sha256": "ba4d2521b428e463e85939d9300a97f55b4d2a3ee94ba5642bcea064c53b3d21",
+          "sizeBytes": 1564
+        },
+        {
+          "path": "direct-ssh-public/result.json",
+          "sha256": "28996fd43fb0457f4de27292c4db5ec5300e7ec5e8f981448e100298ebb33c11",
+          "sizeBytes": 14406
+        },
+        {
+          "path": "direct-ssh-public/rotation-connected-device.png",
+          "sha256": "5dc9bf83a3f2db66fda23a0db74437aa7b32beae24f1eca1c853d36ea58b8378",
+          "sizeBytes": 139387,
+          "sizePx": [
+            1080,
+            2340
+          ]
+        },
+        {
+          "path": "direct-ssh-public/rotation-connected.png",
+          "sha256": "b8851b9c16e6f897f0764059aae2340e51b7e608dba2e020be90d2075353341e",
+          "sizeBytes": 109221,
+          "sizePx": [
+            1080,
+            2340
+          ]
+        },
+        {
+          "path": "direct-ssh-public/rotation-rejected.png",
+          "sha256": "7f4940a96cc9ab89f7e22abc59c9de903e2553bb73de2c15a5ee3cbcd858f737",
+          "sizeBytes": 173378,
+          "sizePx": [
+            1080,
+            2340
+          ]
+        }
+      ],
+      "pixelProofs": [
+        {
+          "case": "key-rotation",
+          "source": "flutter-integration",
+          "image": "direct-ssh-public/rotation-connected.png",
+          "officialReport": "direct-ssh-public/key-rotation-screen-proof.json",
+          "imageSha256": "b8851b9c16e6f897f0764059aae2340e51b7e608dba2e020be90d2075353341e",
+          "officialOCRSequencePassed": true,
+          "independentAppleVisionSequencePassed": true
+        },
+        {
+          "case": "key-rotation",
+          "source": "adb-framebuffer",
+          "image": "direct-ssh-public/rotation-connected-device.png",
+          "officialReport": "direct-ssh-public/key-rotation-screen-proof.json",
+          "imageSha256": "5dc9bf83a3f2db66fda23a0db74437aa7b32beae24f1eca1c853d36ea58b8378",
+          "officialOCRSequencePassed": true,
+          "independentAppleVisionSequencePassed": true
+        },
+        {
+          "case": "ordinary",
+          "source": "flutter-integration",
+          "image": "direct-ssh-public/connected.png",
+          "officialReport": "direct-ssh-public/ordinary-screen-proof.json",
+          "imageSha256": "89e16bcbde45197d6483242f100d71e032bab31627f43ef23125ceefa6033d44",
+          "officialOCRSequencePassed": true,
+          "independentAppleVisionSequencePassed": true
+        },
+        {
+          "case": "ordinary",
+          "source": "adb-framebuffer",
+          "image": "direct-ssh-public/connected-device.png",
+          "officialReport": "direct-ssh-public/ordinary-screen-proof.json",
+          "imageSha256": "10465eebfec3f24426c75fee68fd1adee6483402a9fe555a90db9868a0b52bd2",
+          "officialOCRSequencePassed": true,
+          "independentAppleVisionSequencePassed": true
+        }
+      ],
+      "status": "passed",
+      "avdLifecycleVerified": true,
+      "casesPassed": [
+        "password",
+        "password-host-key-rotation"
+      ]
+    },
+    {
+      "archive": "44589659555-14563403939.zip",
+      "runId": 44589659555,
+      "jobId": 135791907646,
+      "artifactId": 14563403939,
+      "sourceSHA": "65204b6d55fbb308a73af0b12a2f30a6cd345cf4",
+      "zipSizeBytes": 613685,
+      "zipSha256": "796c3fafaa8bc1e18b14ec665732d605906b343f3668a8d047cf5ee542e04985",
+      "attempt": 1,
+      "client": "tauri",
+      "mainReport": "tauri-direct-evidence/manifest.json",
+      "members": [
+        {
+          "path": "avd-evidence/emulator-version.txt",
+          "sha256": "1a523c9091747b7bf48a755396278f2eca455352b40c281336f1c3e075607b54",
+          "sizeBytes": 655
+        },
+        {
+          "path": "avd-evidence/image.properties",
+          "sha256": "809a6f5103c048607257f03f18e22dd740137e9009c99d4a496de846b6ee3412",
+          "sizeBytes": 357
+        },
+        {
+          "path": "avd-evidence/lifecycle.txt",
+          "sha256": "496b0da7fe80bf5275ef1fbefb41d97b702ed20f43fa9e0f300d18cd3477d9fa",
+          "sizeBytes": 283
+        },
+        {
+          "path": "avd-evidence/resources-end.json",
+          "sha256": "60877609c797e995da9c764408b13c2c8c441a344d4b6cb235856099c6517236",
+          "sizeBytes": 295
+        },
+        {
+          "path": "avd-evidence/resources-start.json",
+          "sha256": "f4427c4400a5ada2aaec98f175a11bac303d192ae9cf0f3bfd48a88485212a49",
+          "sizeBytes": 295
+        },
+        {
+          "path": "tauri-direct-evidence/manifest.json",
+          "sha256": "77edf4f0ca262649cf4766ca68422207b8255f90dfba59c990fe4a56f44547b6",
+          "sizeBytes": 17818
+        },
+        {
+          "path": "tauri-direct-evidence/s10-host-key-change-android.png",
+          "sha256": "b26cb668db3e921988b30a48469025fd041350280f32aa8833b50bbc541b8cbd",
+          "sizeBytes": 182873,
+          "sizePx": [
+            1081,
+            2341
+          ]
+        },
+        {
+          "path": "tauri-direct-evidence/ssh-rotation-terminal-android-webview-before.png",
+          "sha256": "5bea24a8ad627e47328df9a191b3558e857fffb0293b809a81c5f8bc13378b15",
+          "sizeBytes": 87362,
+          "sizePx": [
+            1081,
+            2341
+          ]
+        },
+        {
+          "path": "tauri-direct-evidence/ssh-rotation-terminal-android.json",
+          "sha256": "1d3104a35ddbe8582e91efb115806307906ad26564a3ed2be39136c922f804b9",
+          "sizeBytes": 4144
+        },
+        {
+          "path": "tauri-direct-evidence/ssh-rotation-terminal-android.png",
+          "sha256": "093abfd3668e33fe257eb0224797d7396d2b73b5f529e749a645b2ee6a8eb053",
+          "sizeBytes": 157812,
+          "sizePx": [
+            1080,
+            2340
+          ]
+        },
+        {
+          "path": "tauri-direct-evidence/ssh-terminal-android-webview-before.png",
+          "sha256": "e0d0ce33a666f3a251b58850f50f7e2819a20dae92aa31c4d2bffb6fb4c662ba",
+          "sizeBytes": 90219,
+          "sizePx": [
+            1081,
+            2341
+          ]
+        },
+        {
+          "path": "tauri-direct-evidence/ssh-terminal-android.json",
+          "sha256": "bf2247d3fae642da08517f03d238373b0c1c5ff94a4e0b96ea8c51c06edaa1e5",
+          "sizeBytes": 4135
+        },
+        {
+          "path": "tauri-direct-evidence/ssh-terminal-android.png",
+          "sha256": "d313684d88c429cc743efc296f13808e713fc86a63e66d36a0cedcd0cef342d9",
+          "sizeBytes": 160589,
+          "sizePx": [
+            1080,
+            2340
+          ]
+        }
+      ],
+      "pixelProofs": [
+        {
+          "case": "ordinary",
+          "source": "adb-framebuffer",
+          "image": "tauri-direct-evidence/ssh-terminal-android.png",
+          "officialReport": "tauri-direct-evidence/ssh-terminal-android.json",
+          "imageSha256": "d313684d88c429cc743efc296f13808e713fc86a63e66d36a0cedcd0cef342d9",
+          "officialOCRSequencePassed": true,
+          "webViewImage": "tauri-direct-evidence/ssh-terminal-android-webview-before.png",
+          "webViewImageSha256": "e0d0ce33a666f3a251b58850f50f7e2819a20dae92aa31c4d2bffb6fb4c662ba",
+          "independentAppleVisionSequencePassed": true
+        },
+        {
+          "case": "key-rotation",
+          "source": "adb-framebuffer",
+          "image": "tauri-direct-evidence/ssh-rotation-terminal-android.png",
+          "officialReport": "tauri-direct-evidence/ssh-rotation-terminal-android.json",
+          "imageSha256": "093abfd3668e33fe257eb0224797d7396d2b73b5f529e749a645b2ee6a8eb053",
+          "officialOCRSequencePassed": true,
+          "webViewImage": "tauri-direct-evidence/ssh-rotation-terminal-android-webview-before.png",
+          "webViewImageSha256": "5bea24a8ad627e47328df9a191b3558e857fffb0293b809a81c5f8bc13378b15",
+          "independentAppleVisionSequencePassed": true
+        }
+      ],
+      "status": "passed",
+      "avdLifecycleVerified": true,
+      "casesPassed": [
+        "password",
+        "password-host-key-rotation",
+        "encrypted-key"
+      ]
+    },
+    {
+      "archive": "44584317141-14560658602.zip",
+      "runId": 44584317141,
+      "jobId": 135773023383,
+      "artifactId": 14560658602,
+      "sourceSHA": "c5aa64a0c9703d0494f5694ec0028018f7f2a0b8",
+      "zipSizeBytes": 2664,
+      "zipSha256": "73b9e345598793083610b94d0c7a12d8156932ce513c223dab852e39cf54fc29",
+      "attempt": 1,
+      "client": "flutter",
+      "scenarios": [
+        "password",
+        "password-host-key-rotation"
+      ],
+      "mainReport": "direct-ssh-public/result.json",
+      "members": [
+        {
+          "path": "direct-ssh-avd/emulator-version.txt",
+          "sha256": "1a523c9091747b7bf48a755396278f2eca455352b40c281336f1c3e075607b54",
+          "sizeBytes": 655
+        },
+        {
+          "path": "direct-ssh-avd/image.properties",
+          "sha256": "809a6f5103c048607257f03f18e22dd740137e9009c99d4a496de846b6ee3412",
+          "sizeBytes": 357
+        },
+        {
+          "path": "direct-ssh-avd/lifecycle.txt",
+          "sha256": "110889bf8fe00f4b66566469ab56cf0a5fcd6bca5dc3567774a6fb8ea87b967c",
+          "sizeBytes": 283
+        },
+        {
+          "path": "direct-ssh-avd/resources-end.json",
+          "sha256": "a696f4c7973a8e89e02fb69757610fcd088d4634855292ac936d1d0099c6878a",
+          "sizeBytes": 295
+        },
+        {
+          "path": "direct-ssh-avd/resources-start.json",
+          "sha256": "f586e68cbae93a3f229d71716746255360b69012d4178358032f58929281a7eb",
+          "sizeBytes": 295
+        },
+        {
+          "path": "direct-ssh-public/result.json",
+          "sha256": "0ac34a3291f46d546bf091ceded1b15769f5b413fe0fec0202904f0d1bf4be13",
+          "sizeBytes": 1322
+        }
+      ],
+      "pixelProofs": [],
+      "status": "failed",
+      "avdLifecycleVerified": true,
+      "casesPassed": [],
+      "failure": {
+        "stage": "await_driver_exit",
+        "ordinaryPeerConnections": 0,
+        "rotationPeerConnections": 0,
+        "cause": "unknown"
+      }
+    },
+    {
+      "archive": "44584324549-14559764597.zip",
+      "runId": 44584324549,
+      "jobId": 135777168671,
+      "artifactId": 14559764597,
+      "sourceSHA": "c5aa64a0c9703d0494f5694ec0028018f7f2a0b8",
+      "zipSizeBytes": 2923,
+      "zipSha256": "6d75b2a87338a3d9ac6d7a8a0b670476330a5424d2c1a53dfcda4b14624a3798",
+      "attempt": 2,
+      "client": "tauri",
+      "scenarios": [
+        "password"
+      ],
+      "mainReport": "tauri-direct-evidence/manifest.json",
+      "members": [
+        {
+          "path": "avd-evidence/emulator-version.txt",
+          "sha256": "1a523c9091747b7bf48a755396278f2eca455352b40c281336f1c3e075607b54",
+          "sizeBytes": 655
+        },
+        {
+          "path": "avd-evidence/image.properties",
+          "sha256": "809a6f5103c048607257f03f18e22dd740137e9009c99d4a496de846b6ee3412",
+          "sizeBytes": 357
+        },
+        {
+          "path": "avd-evidence/lifecycle.txt",
+          "sha256": "110889bf8fe00f4b66566469ab56cf0a5fcd6bca5dc3567774a6fb8ea87b967c",
+          "sizeBytes": 283
+        },
+        {
+          "path": "avd-evidence/resources-end.json",
+          "sha256": "358e83ff1a0846594ffb255ebf46847103e5b602e174d3c6720bc0c9bab455b9",
+          "sizeBytes": 295
+        },
+        {
+          "path": "avd-evidence/resources-start.json",
+          "sha256": "c56308597cc01f71c88e1077b8b02e5a4069862ac513f5f404755a7b11a41a38",
+          "sizeBytes": 295
+        },
+        {
+          "path": "tauri-direct-evidence/manifest.json",
+          "sha256": "6bf7e07ea8a9414a2ef5e54f202fea90188f4e986b71d99a44b9a82fde599cf5",
+          "sizeBytes": 3537
+        }
+      ],
+      "pixelProofs": [],
+      "status": "failed",
+      "avdLifecycleVerified": true,
+      "casesPassed": [],
+      "failure": {
+        "stage": "active_settings",
+        "failedFact": "sectionContent",
+        "peerAuthSuccesses": 1,
+        "peerPtyRequests": 1,
+        "peerShellRequests": 1,
+        "peerInputBytes": 0
+      }
+    },
+    {
+      "archive": "44584332500-14559224332.zip",
+      "runId": 44584332500,
+      "jobId": 135773083268,
+      "artifactId": 14559224332,
+      "sourceSHA": "c5aa64a0c9703d0494f5694ec0028018f7f2a0b8",
+      "zipSizeBytes": 346331,
+      "zipSha256": "4fa24ba1d1dc7b0224a81684c88aa2cb698dff2bb3b119403677e573184ac533",
+      "attempt": 1,
+      "client": "flutter",
+      "mainReport": "direct-ssh-public/result.json",
+      "members": [
+        {
+          "path": "direct-ssh-avd/emulator-version.txt",
+          "sha256": "1a523c9091747b7bf48a755396278f2eca455352b40c281336f1c3e075607b54",
+          "sizeBytes": 655
+        },
+        {
+          "path": "direct-ssh-avd/image.properties",
+          "sha256": "809a6f5103c048607257f03f18e22dd740137e9009c99d4a496de846b6ee3412",
+          "sizeBytes": 357
+        },
+        {
+          "path": "direct-ssh-avd/lifecycle.txt",
+          "sha256": "4382732c658b78c67d310b55b97b392cb5ba40328ced42755e6b6a43514cf003",
+          "sizeBytes": 283
+        },
+        {
+          "path": "direct-ssh-avd/resources-end.json",
+          "sha256": "74d5f814133394905ec427f806545ddb2d6bf1d9ad0f705fee3ce64a6d61bb38",
+          "sizeBytes": 295
+        },
+        {
+          "path": "direct-ssh-avd/resources-start.json",
+          "sha256": "6e47c2d0fe3235dc48ce0450d282b25c2e912e1d177748ec297e41c79b1a3099",
+          "sizeBytes": 295
+        },
+        {
+          "path": "direct-ssh-public/connected-device.png",
+          "sha256": "7ea7a52f44448fa9fdadfc9f0a16f68912d0592559a07918be53f8dbacceaf9f",
+          "sizeBytes": 104910,
+          "sizePx": [
+            1080,
+            2340
+          ]
+        },
+        {
+          "path": "direct-ssh-public/connected.png",
+          "sha256": "739f8be680bc00c180b167484d244d74d337253ff2cec36e064f7c168288e8ac",
+          "sizeBytes": 101834,
+          "sizePx": [
+            1080,
+            2340
+          ]
+        },
+        {
+          "path": "direct-ssh-public/disconnected.png",
+          "sha256": "305856cc177be14a39facc6c6e261665d6e30a7d0a703dfac2d811e82bc80624",
+          "sizeBytes": 104304,
+          "sizePx": [
+            1080,
+            2340
+          ]
+        },
+        {
+          "path": "direct-ssh-public/home.png",
+          "sha256": "89d91e7999e7558c2e8058f9ff32115ef7f6601a2a049382bef6ab1a7d1de32a",
+          "sizeBytes": 86218,
+          "sizePx": [
+            1080,
+            2340
+          ]
+        },
+        {
+          "path": "direct-ssh-public/ordinary-screen-proof.json",
+          "sha256": "88fca9b9671c7e4352a20db2e028756cab074aa1e57b02d20cb889c1771be5a0",
+          "sizeBytes": 1564
+        },
+        {
+          "path": "direct-ssh-public/result.json",
+          "sha256": "42e51f8731cf26494aa744f65f1311ad7fd22df09e4e2f6e5145f71aa0232e88",
+          "sizeBytes": 4812
+        }
+      ],
+      "pixelProofs": [
+        {
+          "case": "ordinary",
+          "source": "flutter-integration",
+          "image": "direct-ssh-public/connected.png",
+          "officialReport": "direct-ssh-public/ordinary-screen-proof.json",
+          "imageSha256": "739f8be680bc00c180b167484d244d74d337253ff2cec36e064f7c168288e8ac",
+          "officialOCRSequencePassed": true,
+          "independentAppleVisionSequencePassed": true
+        },
+        {
+          "case": "ordinary",
+          "source": "adb-framebuffer",
+          "image": "direct-ssh-public/connected-device.png",
+          "officialReport": "direct-ssh-public/ordinary-screen-proof.json",
+          "imageSha256": "7ea7a52f44448fa9fdadfc9f0a16f68912d0592559a07918be53f8dbacceaf9f",
+          "officialOCRSequencePassed": true,
+          "independentAppleVisionSequencePassed": true
+        }
+      ],
+      "status": "passed",
+      "avdLifecycleVerified": true,
+      "casesPassed": [
+        "encrypted-key"
+      ]
+    },
+    {
+      "archive": "44584342158-14562075072.zip",
+      "runId": 44584342158,
+      "jobId": 135777315874,
+      "artifactId": 14562075072,
+      "sourceSHA": "c5aa64a0c9703d0494f5694ec0028018f7f2a0b8",
+      "zipSizeBytes": 326369,
+      "zipSha256": "560fafb0710a85ae0781706b559a369c191c2cc902c7737664cab9d174bbd3e5",
+      "attempt": 2,
+      "client": "flutter",
+      "mainReport": "direct-ssh-public/result.json",
+      "members": [
+        {
+          "path": "direct-ssh-avd/emulator-version.txt",
+          "sha256": "1a523c9091747b7bf48a755396278f2eca455352b40c281336f1c3e075607b54",
+          "sizeBytes": 655
+        },
+        {
+          "path": "direct-ssh-avd/image.properties",
+          "sha256": "809a6f5103c048607257f03f18e22dd740137e9009c99d4a496de846b6ee3412",
+          "sizeBytes": 357
+        },
+        {
+          "path": "direct-ssh-avd/lifecycle.txt",
+          "sha256": "4382732c658b78c67d310b55b97b392cb5ba40328ced42755e6b6a43514cf003",
+          "sizeBytes": 283
+        },
+        {
+          "path": "direct-ssh-avd/resources-end.json",
+          "sha256": "87f826ac66f2744df3d8e248f68307c3633babed41e84a6f9405ce3b0edd16ce",
+          "sizeBytes": 295
+        },
+        {
+          "path": "direct-ssh-avd/resources-start.json",
+          "sha256": "492a52a5efead4c052f0cec6bbc0b06ced8f163eafa4671750cbd9497062675b",
+          "sizeBytes": 295
+        },
+        {
+          "path": "direct-ssh-public/disconnected.png",
+          "sha256": "ead01352a4f581553ae3ce4f0aee04b0822f0d78585a2ff97db1d299e0877a82",
+          "sizeBytes": 103645,
+          "sizePx": [
+            1080,
+            2340
+          ]
+        },
+        {
+          "path": "direct-ssh-public/home.png",
+          "sha256": "89d91e7999e7558c2e8058f9ff32115ef7f6601a2a049382bef6ab1a7d1de32a",
+          "sizeBytes": 86218,
+          "sizePx": [
+            1080,
+            2340
+          ]
+        },
+        {
+          "path": "direct-ssh-public/key-rotation-screen-proof.json",
+          "sha256": "12a6b4041e4130ec1630f6905075907378330ce94fa2c4d6d0bad07748f7e0d1",
+          "sizeBytes": 1568
+        },
+        {
+          "path": "direct-ssh-public/result.json",
+          "sha256": "133350b1cc27992d585bc2430ed84978ccfb86a82ee837c368f90c2672dc31c3",
+          "sizeBytes": 8660
+        },
+        {
+          "path": "direct-ssh-public/rotation-connected-device.png",
+          "sha256": "d96be1b8f03536cc95d82138f96a0228be92797ba4d584f3ba6d7bf721e0d028",
+          "sizeBytes": 95031,
+          "sizePx": [
+            1080,
+            2340
+          ]
+        },
+        {
+          "path": "direct-ssh-public/rotation-connected.png",
+          "sha256": "5c4c2cc15bd46dc9e78ccc627f0563b976933cf9aa4c8419b5f554c8eb97f757",
+          "sizeBytes": 91586,
+          "sizePx": [
+            1080,
+            2340
+          ]
+        }
+      ],
+      "pixelProofs": [
+        {
+          "case": "key-rotation",
+          "source": "flutter-integration",
+          "image": "direct-ssh-public/rotation-connected.png",
+          "officialReport": "direct-ssh-public/key-rotation-screen-proof.json",
+          "imageSha256": "5c4c2cc15bd46dc9e78ccc627f0563b976933cf9aa4c8419b5f554c8eb97f757",
+          "officialOCRSequencePassed": true,
+          "independentAppleVisionSequencePassed": true
+        },
+        {
+          "case": "key-rotation",
+          "source": "adb-framebuffer",
+          "image": "direct-ssh-public/rotation-connected-device.png",
+          "officialReport": "direct-ssh-public/key-rotation-screen-proof.json",
+          "imageSha256": "d96be1b8f03536cc95d82138f96a0228be92797ba4d584f3ba6d7bf721e0d028",
+          "officialOCRSequencePassed": true,
+          "independentAppleVisionSequencePassed": true
+        }
+      ],
+      "status": "passed",
+      "avdLifecycleVerified": true,
+      "casesPassed": [
+        "encrypted-key-host-key-rotation"
+      ]
+    },
+    {
+      "archive": "44584349993-14561102653.zip",
+      "runId": 44584349993,
+      "jobId": 135773148918,
+      "artifactId": 14561102653,
+      "sourceSHA": "c5aa64a0c9703d0494f5694ec0028018f7f2a0b8",
+      "zipSizeBytes": 385674,
+      "zipSha256": "e0eef36991cf7ebc087abcdc3e2027de5990d3c8cd1f2a2519956b4c91ef8b7a",
+      "attempt": 1,
+      "client": "tauri",
+      "mainReport": "tauri-direct-evidence/manifest.json",
+      "members": [
+        {
+          "path": "avd-evidence/emulator-version.txt",
+          "sha256": "1a523c9091747b7bf48a755396278f2eca455352b40c281336f1c3e075607b54",
+          "sizeBytes": 655
+        },
+        {
+          "path": "avd-evidence/image.properties",
+          "sha256": "809a6f5103c048607257f03f18e22dd740137e9009c99d4a496de846b6ee3412",
+          "sizeBytes": 357
+        },
+        {
+          "path": "avd-evidence/lifecycle.txt",
+          "sha256": "4382732c658b78c67d310b55b97b392cb5ba40328ced42755e6b6a43514cf003",
+          "sizeBytes": 283
+        },
+        {
+          "path": "avd-evidence/resources-end.json",
+          "sha256": "29a57d0fcf75f78fce9bae70056be8da23585874c857b27afa13d2758e54aa2b",
+          "sizeBytes": 295
+        },
+        {
+          "path": "avd-evidence/resources-start.json",
+          "sha256": "9883a0b7b3c9d7a4bce2c02232042d6335ec505b30ab0962b925d01007234d42",
+          "sizeBytes": 295
+        },
+        {
+          "path": "tauri-direct-evidence/manifest.json",
+          "sha256": "b912583726697cc45b9e09f5fa76756e9b18dac2c05153426fa24234c73fded9",
+          "sizeBytes": 10016
+        },
+        {
+          "path": "tauri-direct-evidence/s10-host-key-change-android.png",
+          "sha256": "6c3813370b77c62b8bd8747c4722870fa42fb0cd279fb1ecb4594598374ce7e2",
+          "sizeBytes": 180516,
+          "sizePx": [
+            1081,
+            2341
+          ]
+        },
+        {
+          "path": "tauri-direct-evidence/ssh-rotation-terminal-android-webview-before.png",
+          "sha256": "eb822725ef457c90dcb293e4aadb21fb68b63346af68f19cc996c0c66c2c91fe",
+          "sizeBytes": 86984,
+          "sizePx": [
+            1081,
+            2341
+          ]
+        },
+        {
+          "path": "tauri-direct-evidence/ssh-rotation-terminal-android.json",
+          "sha256": "0a076a47bfc45f7ef13d7d3b1b0f43c57a188936e7009a5b8aade29cb6b8973f",
+          "sizeBytes": 4144
+        },
+        {
+          "path": "tauri-direct-evidence/ssh-rotation-terminal-android.png",
+          "sha256": "b65f154a66968d64820c6da5e436b89a94f5dfc1135bdda5cbed8e46a6e52604",
+          "sizeBytes": 156639,
+          "sizePx": [
+            1080,
+            2340
+          ]
+        }
+      ],
+      "pixelProofs": [
+        {
+          "case": "key-rotation",
+          "source": "adb-framebuffer",
+          "image": "tauri-direct-evidence/ssh-rotation-terminal-android.png",
+          "officialReport": "tauri-direct-evidence/ssh-rotation-terminal-android.json",
+          "imageSha256": "b65f154a66968d64820c6da5e436b89a94f5dfc1135bdda5cbed8e46a6e52604",
+          "officialOCRSequencePassed": true,
+          "webViewImage": "tauri-direct-evidence/ssh-rotation-terminal-android-webview-before.png",
+          "webViewImageSha256": "eb822725ef457c90dcb293e4aadb21fb68b63346af68f19cc996c0c66c2c91fe",
+          "independentAppleVisionSequencePassed": true
+        }
+      ],
+      "status": "passed",
+      "avdLifecycleVerified": true,
+      "casesPassed": [
+        "encrypted-key-host-key-rotation"
+      ]
+    }
+  ]
+}

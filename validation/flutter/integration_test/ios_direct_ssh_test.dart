@@ -19,6 +19,7 @@ const runId = String.fromEnvironment('HERDR_IOS_RUN_ID');
 const targetJson = String.fromEnvironment('HERDR_IOS_DIRECT_TARGET');
 const rotationTargetJson = String.fromEnvironment('HERDR_IOS_ROTATION_TARGET');
 const encryptedCase = String.fromEnvironment('HERDR_IOS_ENCRYPTED_KEY_CASE');
+const encryptedRotation = encryptedCase == 'rotation';
 const encryptedTargetJson = String.fromEnvironment(
   'HERDR_IOS_ENCRYPTED_KEY_TARGET',
 );
@@ -163,7 +164,7 @@ void main() {
         final type = details.exception.runtimeType.toString();
         final source = RegExp(r'direct_ssh_ui_steps\.dart:(\d+)')
             .firstMatch(details.stack?.toString() ?? '');
-        final excerpt = encryptedCase == '1'
+        final excerpt = encryptedCase.isNotEmpty
             ? <String>[]
             : details
                   .exceptionAsString()
@@ -202,17 +203,23 @@ void main() {
       final previousLayoutReporter = FlutterError.onError;
       final overflows = <Map<String, Object?>>[];
       try {
-        if (encryptedCase != '' && encryptedCase != '1') {
+        if (!const {'', '1', 'rotation'}.contains(encryptedCase)) {
           throw StateError('direct_ssh_ios_invalid_case');
         }
-        final config = target();
-        final rotation = target(encoded: rotationTargetJson, rotating: true);
-        final encrypted = encryptedCase == '1'
-            ? target(encoded: encryptedTargetJson, encrypted: true)
-            : null;
+        final config = encryptedRotation ? null : target();
+        final rotation = encryptedRotation
+            ? null
+            : target(encoded: rotationTargetJson, rotating: true);
+        final encrypted = encryptedCase.isEmpty
+            ? null
+            : target(
+                encoded: encryptedTargetJson,
+                encrypted: true,
+                rotating: encryptedRotation,
+              );
         final ports = [
-          config['port'],
-          rotation['port'],
+          if (config != null) config['port'],
+          if (rotation != null) rotation['port'],
           if (encrypted != null) encrypted['port'],
         ];
         if (ports.toSet().length != ports.length) {
@@ -221,13 +228,17 @@ void main() {
         fixtureValidated = true;
         activeFixture = true;
         privateValues = [
-          config['password'] as String,
-          config['username'] as String,
-          config['host'] as String,
-          config['fingerprint'] as String,
-          rotation['password'] as String,
-          rotation['fingerprint'] as String,
-          rotation['rotatedFingerprint'] as String,
+          if (config != null) ...[
+            config['password'] as String,
+            config['username'] as String,
+            config['host'] as String,
+            config['fingerprint'] as String,
+          ],
+          if (rotation != null) ...[
+            rotation['password'] as String,
+            rotation['fingerprint'] as String,
+            rotation['rotatedFingerprint'] as String,
+          ],
           directory,
         ];
         expect(tester.testTextInput.isRegistered, isFalse);
@@ -254,8 +265,11 @@ void main() {
         void step(String next) {
           stage = next;
           publish('stage.json', {'stage': next});
-          if (next == 'home' || next == 'report_data_set') {
-            publish('semantics-$next.json', semanticsProbe());
+          if (next == 'home' ||
+              (encryptedRotation && next == 'rotation_home')) {
+            publish('semantics-home.json', semanticsProbe());
+          } else if (next == 'report_data_set') {
+            publish('semantics-report_data_set.json', semanticsProbe());
           }
         }
 
@@ -292,6 +306,22 @@ void main() {
             );
             expect(find.byKey(const ValueKey('direct-form')), findsNothing);
             expect(find.byKey(const ValueKey('direct-secret')), findsNothing);
+            if (encryptedRotation) {
+              expect(control('direct-passphrase'), findsNothing);
+              await until(
+                tester,
+                () =>
+                    ui
+                        .PlatformDispatcher
+                        .instance
+                        .implicitView
+                        ?.viewInsets
+                        .bottom ==
+                    0,
+                timeoutReason:
+                    'direct_ssh_ios_encrypted_rotation_review_keyboard_timeout',
+              );
+            }
             expect(
               find.byKey(const ValueKey('direct-host-key-cancel')),
               findsOneWidget,
@@ -323,13 +353,14 @@ void main() {
               );
             }
             publish('review-request.json', {
-              'tag': 'key-rotation',
+              'tag': encryptedRotation ? 'encrypted-rotation' : 'key-rotation',
               'formAbsent': true,
               'secretAbsent': true,
             });
-            expect(await screenshotReply('review-done.json'), {
-              'captured': true,
-            });
+            final reviewReply = encryptedRotation
+                ? 'encrypted-rotation-review-done.json'
+                : 'review-done.json';
+            expect(await screenshotReply(reviewReply), {'captured': true});
             return;
           }
           if (name == 'connected' ||
@@ -337,8 +368,12 @@ void main() {
               name == 'encrypted-connected') {
             final (tag, peer) = switch (name) {
               'encrypted-connected' => ('encrypted', encrypted!),
-              'rotation-connected' => ('key-rotation', rotation),
-              _ => ('ordinary', config),
+              'rotation-connected' when encryptedRotation => (
+                'encrypted-rotation',
+                encrypted!,
+              ),
+              'rotation-connected' => ('key-rotation', rotation!),
+              _ => ('ordinary', config!),
             };
             final expectedTarget =
                 '${peer['username']}@${peer['host']}:${peer['port']}';
@@ -392,25 +427,6 @@ void main() {
           }
         }
 
-        await runDirectSshRotationUi(
-          tester,
-          config: rotation,
-          directory: directory,
-          platform: 'ios-simulator',
-          step: step,
-          publish: publish,
-          capture: capture,
-        );
-        await runDirectSshUi(
-          tester,
-          binding: binding,
-          config: config,
-          directory: directory,
-          platform: 'ios-simulator',
-          step: step,
-          publish: publish,
-          capture: capture,
-        );
         Future<void> returnHome() async {
           step('return_home');
           final back = find.bySemanticsIdentifier('direct-back').hitTestable();
@@ -434,7 +450,28 @@ void main() {
           step('returned_home');
         }
 
-        await returnHome();
+        if (!encryptedRotation) {
+          await runDirectSshRotationUi(
+            tester,
+            config: rotation!,
+            directory: directory,
+            platform: 'ios-simulator',
+            step: step,
+            publish: publish,
+            capture: capture,
+          );
+          await runDirectSshUi(
+            tester,
+            binding: binding,
+            config: config!,
+            directory: directory,
+            platform: 'ios-simulator',
+            step: step,
+            publish: publish,
+            capture: capture,
+          );
+          await returnHome();
+        }
         if (encrypted != null) {
           step('encrypted_waiting_private');
           final file = File('$directory/encrypted-credentials.json');
@@ -470,17 +507,30 @@ void main() {
             platform: 'ios-simulator',
             step: step,
             publish: publish,
-            capture: (name) => name == 'connected'
-                ? capture('encrypted-connected')
-                : Future<void>.value(),
+            rotating: encryptedRotation,
+            capture: (name) {
+              if (encryptedRotation && name == 'rotation-connected') {
+                return capture(name);
+              }
+              return name == 'connected'
+                  ? capture('encrypted-connected')
+                  : Future<void>.value();
+            },
+            captureRotationRejected: encryptedRotation ? capture : null,
             afterTrust: () async {
               final modes = await checkIosCredentialSwitches(
                 tester,
                 encrypted['fingerprint'] as String,
               );
-              publish('encrypted-mode-switch.json', modes);
+              publish(
+                encryptedRotation
+                    ? 'encrypted-rotation-mode-switch.json'
+                    : 'encrypted-mode-switch.json',
+                modes,
+              );
             },
           );
+          if (encryptedRotation) step('report_data_set');
           await returnHome();
           step('encrypted_returned_home');
         }

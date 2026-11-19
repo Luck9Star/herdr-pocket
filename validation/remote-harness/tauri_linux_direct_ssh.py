@@ -1,0 +1,312 @@
+#!/usr/bin/env python3
+"""Exercise the native Linux Tauri desktop against a disposable ordinary SSH peer."""
+import argparse
+import base64
+import binascii
+import errno
+import io
+import json
+import os
+import re
+import socket
+import tempfile
+import time
+import urllib.request
+from contextlib import suppress
+from pathlib import Path
+
+from direct_ssh_fixture import DirectSshFixture
+from paired_gui import GuiFailure, WebDriver, owned_process, wait_for
+from PIL import Image
+from terminal_screenshot_gate import ScreenshotGateError, verify_terminal_screenshot
+
+CHECK_FIELDS = ('authAttempts', 'authSuccesses', 'ptyRequests', 'shellRequests', 'inputBytes', 'outputBytes')
+SECRET_FIELDS = ('#ssh-password', '#ssh-key', '#ssh-passphrase')
+TYPED_LINE = 'hp-check\ue007'  # WebDriver Enter, sent to the focused xterm.
+RENDER_PENDING = {'terminal_screenshot_echo_not_visible', 'terminal_screenshot_token_not_visible',
+                  'terminal_screenshot_proof_not_adjacent'}
+
+
+def require(condition, code):
+    if not condition:
+        raise GuiFailure(code)
+
+
+class DesktopDriver(WebDriver):
+    def observe(self, script, *args):
+        helpers = '''const node = selector => document.querySelector(selector);
+            const visible = el => !!el && el.getClientRects().length > 0 &&
+                getComputedStyle(el).visibility === 'visible';'''
+        return self.call('POST', self.session + '/execute/sync', {'script': helpers + script, 'args': args})
+
+    def click(self, selector):
+        # The native element command owns scrolling, hit testing and activation.
+        wait_for(lambda: self.observe('const el = node(arguments[0]); return visible(el) && !el.disabled;',
+                                     selector), 'control_unavailable_' + selector.lstrip('#'))
+        self.call('POST', self.element(selector) + '/click', {})
+
+    def fill(self, selector, value):
+        self.click(selector)
+        field = self.element(selector)
+        self.call('POST', field + '/clear', {})
+        self.call('POST', field + '/value', {'text': value, 'value': list(value)})
+        require(self.read(selector, 'value') == value, 'form_input_mismatch_' + selector.lstrip('#'))
+
+    def send_test_line(self):
+        self.call('POST', self.session + '/actions', {'actions': [{
+            'type': 'key', 'id': 'ordinary-ssh-keyboard',
+            'actions': [{'type': action, 'value': key} for key in TYPED_LINE for action in ('keyDown', 'keyUp')],
+        }]})
+
+
+def probe_evidence(facts, count):
+    events = facts['connectionEvents']
+    require(facts['connections'] == len(events) == count, 'direct_ssh_connection_count_invalid')
+    probe = events[0]
+    # Product discovery records the host key and deliberately rejects it before
+    # completing SSH negotiation. The full key is checked in the user review.
+    require(probe['id'] == 1 and probe['hostKey'] == 'A' and probe['closed'] is True
+            and all(probe[field] == 0 for field in CHECK_FIELDS),
+            'direct_ssh_probe_not_empty')
+    if count == 1:
+        require(facts['connectionsClosed'] is True, 'direct_ssh_probe_not_closed')
+
+
+def session_evidence(facts, *, sent, closed):
+    probe_evidence(facts, 2)
+    session = facts['connectionEvents'][1]
+    require(session['id'] == 2 and session['hostKey'] == 'A' and session['handshakeCompleted'] is True
+            and session['authAccepted'] is True and session['authAttempts'] == session['authSuccesses'] == 1
+            and session['ptyRequests'] == session['shellRequests'] == 1 and session['outputBytes'] > 0,
+            'direct_ssh_password_shell_unproven')
+    # The fixture's anchored marker matcher plus the exact length excludes a
+    # prefix, trailing bytes or replay. The sole terminator is CR or LF.
+    require(session['markerReceived'] is sent and session['inputBytes'] == (9 if sent else 0),
+            'direct_ssh_unexpected_input')
+    require(facts['connectionsClosed'] is closed and session['closed'] is closed
+            and session['sessionClosed'] is closed
+            and (not closed or session['closeReason'] in ('peer_eof', 'transport_closed')),
+            'direct_ssh_close_order_invalid')
+
+
+def terminal_geometry(driver, endpoint):
+    return driver.observe('''const endpoint = node('#ssh-live-endpoint');
+        const output = node('#ssh-terminal-output');
+        const screen = node('#ssh-terminal .xterm-screen');
+        if (!visible(screen) || !visible(endpoint) || endpoint.innerText !== arguments[0] ||
+            visible(node('#ssh-setup')) || arguments[1].some(selector => node(selector).value !== '') ||
+            document.activeElement !== node('#ssh-terminal .xterm-helper-textarea') ||
+            document.hidden || !document.hasFocus() || devicePixelRatio !== 1 || innerWidth < 960) return null;
+        const target = endpoint.getBoundingClientRect();
+        if (target.left < 0 || target.top < 0 || target.right > innerWidth || target.bottom > innerHeight ||
+            !endpoint.contains(document.elementFromPoint((target.left + target.right) / 2,
+                                                         (target.top + target.bottom) / 2))) return null;
+        const r = screen.getBoundingClientRect(), c = output.getBoundingClientRect();
+        const left = Math.ceil(Math.max(0, r.left, c.left + output.clientLeft));
+        const top = Math.ceil(Math.max(0, r.top, c.top + output.clientTop));
+        const right = Math.floor(Math.min(innerWidth, r.right, c.left + output.clientLeft + output.clientWidth));
+        const bottom = Math.floor(Math.min(innerHeight, r.bottom, c.top + output.clientTop + output.clientHeight));
+        if (!screen.contains(document.elementFromPoint((left + right) / 2, (top + bottom) / 2))) return null;
+        return right - left >= 300 && bottom - top >= 120 ? {
+            viewport: [innerWidth, innerHeight], bounds: [left, top, right - left, bottom - top],
+            endpointBounds: [target.left, target.top, target.width, target.height],
+        } : null;''', endpoint, SECRET_FIELDS)
+
+
+def decode_viewport_capture(value, viewport):
+    try:
+        if not isinstance(value, str) or len(value) > 10_700_000:
+            raise ValueError()
+        png = base64.b64decode(value, validate=True)
+        if len(png) > 8_000_000 or not png.startswith(b'\x89PNG\r\n\x1a\n'):
+            raise ValueError()
+        with Image.open(io.BytesIO(png)) as image:
+            if image.format != 'PNG' or list(image.size) != viewport:
+                raise ValueError()
+        return png
+    except (binascii.Error, OSError, ValueError, Image.DecompressionBombError):
+        raise GuiFailure('direct_ssh_viewport_png_invalid') from None
+
+
+def capture_terminal(driver, endpoint, token):
+    # A native WebDriver screenshot contains the WebView viewport. Measurements
+    # on both sides of the capture must agree in original one-to-one pixels.
+    for capture_index in range(1, 4):
+        before = wait_for(lambda: terminal_geometry(driver, endpoint), 'direct_ssh_terminal_geometry_missing')
+        png = decode_viewport_capture(driver.call('GET', driver.session + '/screenshot'), before['viewport'])
+        require(terminal_geometry(driver, endpoint) == before, 'direct_ssh_terminal_geometry_changed')
+        try:
+            screen = verify_terminal_screenshot(png, expected_token=token, bounds=before['bounds'])
+            return png, {**screen, 'captureAttempt': capture_index, 'capture': 'native WebKitGTK WebDriver viewport',
+                         'targetBounds': before['endpointBounds']}
+        except ScreenshotGateError as error:
+            if str(error) not in RENDER_PENDING or capture_index == 3:
+                raise
+            time.sleep(.2)  # Only the pixels may be read again.
+
+
+def execute(driver, fixture, report):
+    host = '127.0.0.1'
+    endpoint = f'{fixture.username}@{host}:{fixture.port}'
+    review = f'主机 {host}:{fixture.port} · {fixture.fingerprint} · {fixture.public_key}'
+    report['stage'] = 'form'
+    require(driver.observe('return visible(node("#home-dashboard"));'), 'direct_ssh_home_not_visible')
+    driver.click('#host-open-remote')
+    driver.click('#add-ssh')
+    for selector, value in (('#ssh-host', host), ('#ssh-port', str(fixture.port)), ('#ssh-user', fixture.username)):
+        driver.fill(selector, value)
+    require(driver.observe('return ["#ssh-password", "#ssh-connect", "#ssh-review"].every(s => node(s).disabled);'),
+            'direct_ssh_credentials_ungated_before_probe')
+
+    report['stage'] = 'probe'
+    driver.click('#ssh-probe')
+    wait_for(lambda: driver.observe('''const el = node('#ssh-fingerprint'), box = el.getBoundingClientRect();
+                                    return visible(el) && box.top >= 0 && box.bottom <= innerHeight &&
+                                        box.left >= 0 && box.right <= innerWidth && el.innerText === arguments[0] &&
+                                        !node('#ssh-review').disabled;''', review),
+             'direct_ssh_fingerprint_not_visible_or_mismatched')
+    require(fixture.wait_for_connections_closed(1), 'direct_ssh_probe_not_closed')
+    probe_evidence(fixture.snapshot(), 1)
+    require(driver.observe('return !node("#ssh-review").checked && node("#ssh-password").disabled && '
+                           'node("#ssh-connect").disabled;'), 'direct_ssh_credentials_ungated_before_review')
+    driver.click('#ssh-review')
+    require(driver.observe('return node("#ssh-review").checked && node("#ssh-auth-method").value === "password" && '
+                           'node("#ssh-password").type === "password" && node("#ssh-connect").disabled;'),
+            'direct_ssh_password_review_invalid')
+    report['target'] = {'host': host, 'port': fixture.port, 'username': fixture.username,
+                        'algorithm': fixture.public_key.split(' ', 1)[0], 'fingerprint': fixture.fingerprint}
+    report['fingerprintReviewed'] = True
+
+    report['stage'] = 'connect'
+    driver.fill('#ssh-password', fixture.password)
+    driver.click('#ssh-connect')
+    require(fixture.wait_for('shellRequested'), 'direct_ssh_shell_not_requested')
+    wait_for(lambda: bool(fixture.snapshot()['connectionEvents'][1]['outputBytes']), 'direct_ssh_shell_no_output')
+    session_evidence(fixture.snapshot(), sent=False, closed=False)
+    wait_for(lambda: driver.observe('const el = node("#ssh-live-endpoint"); '
+                                    'return visible(el) && el.innerText === arguments[0];', endpoint),
+             'direct_ssh_live_target_mismatched')
+
+    report['stage'] = 'input'
+    driver.click('#ssh-focus')
+    wait_for(lambda: terminal_geometry(driver, endpoint), 'direct_ssh_input_target_unproven')
+    driver.send_test_line()
+    require(fixture.wait_for('markerReceived'), 'direct_ssh_marker_not_received')
+    session_evidence(fixture.snapshot(), sent=True, closed=False)
+
+    report['stage'] = 'capture'
+    png, screen = capture_terminal(driver, endpoint, fixture.screen_token)
+    session_evidence(fixture.snapshot(), sent=True, closed=False)
+
+    report['stage'] = 'disconnect'
+    driver.click('#ssh-disconnect')
+    wait_for(lambda: driver.observe('const status = node("#ssh-status"); return visible(status) && '
+                                    'status.innerText === "已断开；重新连接需要再次输入凭据。" && '
+                                    '!visible(node("#ssh-live")) && node("#ssh-live-endpoint").innerText === "";'),
+             'direct_ssh_ui_disconnect_unconfirmed')
+    require(fixture.wait_for_connections_closed(2), 'direct_ssh_peer_disconnect_unconfirmed')
+    session_evidence(fixture.snapshot(), sent=True, closed=True)
+    require(driver.observe('return arguments[0].every(s => node(s).value === "") && '
+                           'node("#ssh-connect").disabled;', SECRET_FIELDS), 'direct_ssh_credentials_not_cleared')
+    driver.click('#show-remote')
+    wait_for(lambda: driver.observe('return visible(node("#home-dashboard")) && !visible(node("#home-ssh"));'),
+             'direct_ssh_home_not_restored')
+    session_evidence(fixture.snapshot(), sent=True, closed=True)
+    report.update(terminal=screen, returnedHome=True, credentialFieldsCleared=True)
+    return png
+
+
+def driver_ports():
+    with socket.socket() as webdriver, socket.socket() as native:
+        for listener in (webdriver, native):
+            listener.bind(('127.0.0.1', 0))
+        return webdriver.getsockname()[1], native.getsockname()[1]
+
+
+def port_is_released(port):
+    with socket.socket() as client:
+        client.settimeout(.25)
+        return client.connect_ex(('127.0.0.1', port)) == errno.ECONNREFUSED
+
+
+def native_run(app, report):
+    report['stage'] = 'launch'
+    driver = DesktopDriver()
+    port, native_port = driver_ports()
+    driver.base = f'http://127.0.0.1:{port}'
+    with tempfile.TemporaryDirectory(prefix='hp-tauri-linux-direct-') as temporary:
+        root = Path(temporary)
+        env = {key: os.environ[key] for key in ('PATH', 'DISPLAY', 'XAUTHORITY', 'DBUS_SESSION_BUS_ADDRESS',
+                                               'LANG', 'LC_ALL', 'WEBKIT_DISABLE_COMPOSITING_MODE',
+                                               'LIBGL_ALWAYS_SOFTWARE', 'GDK_SCALE', 'GDK_DPI_SCALE') if key in os.environ}
+        env.update(HOME=str(root), SHELL='/bin/sh')
+        for item in ('CONFIG', 'STATE', 'DATA', 'CACHE', 'RUNTIME'):
+            path = root / item.lower()
+            path.mkdir(mode=0o700)
+            env[f'XDG_{item}_{"DIR" if item == "RUNTIME" else "HOME"}'] = str(path)
+        with owned_process(['tauri-driver', '--port', str(port), '--native-port', str(native_port)],
+                           cwd=root, env=env, log=root / 'driver.log') as process:
+            try:
+                driver.start(app)
+                rect = driver.call('POST', driver.session + '/window/rect', {'width': 1440, 'height': 1200})
+                require(rect.get('width') == 1440 and rect.get('height') == 1200,
+                        'direct_ssh_window_size_unconfirmed')
+                with DirectSshFixture(screen_proof=True, channel_deadline=time.monotonic() + 240) as fixture:
+                    try:
+                        png = execute(driver, fixture, report)
+                    finally:
+                        # Snapshot before fixture cleanup, so a forced close
+                        # can never appear as a successful user disconnect.
+                        report['peer'] = fixture.snapshot()
+                report['stage'] = 'cleanup'
+                require(fixture.snapshot()['connectionsClosed'] is True and fixture.password == ''
+                        and port_is_released(fixture.port), 'direct_ssh_fixture_cleanup_unconfirmed')
+            except BaseException:
+                with suppress(GuiFailure, OSError, ValueError):
+                    driver.close()
+                raise
+            else:
+                try:
+                    driver.close()
+                except (GuiFailure, OSError, ValueError):
+                    raise GuiFailure('direct_ssh_webdriver_session_cleanup_unconfirmed') from None
+        require(process.poll() is not None, 'direct_ssh_driver_process_still_running')
+        wait_for(lambda: port_is_released(port) and port_is_released(native_port),
+                 'direct_ssh_driver_ports_not_released', timeout=5)
+    require(not root.exists(), 'direct_ssh_temporary_resources_remain')
+    report['cleanup'] = {'peerListenerReleased': True, 'fixturePasswordCleared': True,
+                         'webdriverProcessStopped': True, 'webdriverPortsReleased': True, 'privateDirectoryRemoved': True}
+    return png
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--app', required=True, type=Path)
+    parser.add_argument('--source-sha', required=True)
+    parser.add_argument('--output', required=True, type=Path)
+    args = parser.parse_args()
+    if not re.fullmatch(r'[0-9a-f]{40}', args.source_sha) or not args.app.is_file():
+        parser.error('a built native app and a full source SHA are required')
+
+    # WebDriver carries a disposable password over an owned loopback only.
+    urllib.request.install_opener(urllib.request.build_opener(urllib.request.ProxyHandler({})))
+    args.output.mkdir(parents=True, exist_ok=False)
+    report = {'schemaVersion': 1, 'sourceSHA': args.source_sha, 'platform': 'Linux Tauri GTK / Xvfb',
+              'authentication': 'password', 'scope': 'native application and isolated loopback SSH', 'status': 'failed'}
+    try:
+        png = native_run(args.app.resolve(), report)
+        (args.output / 'ordinary-terminal.png').write_bytes(png)
+        report.update(status='passed', stage='complete')
+    except (GuiFailure, ScreenshotGateError) as error:
+        report['errorCode'] = str(error)
+    except Exception:  # noqa: BLE001 - never publish arbitrary driver or peer exception text.
+        report['errorCode'] = 'linux_direct_ssh_runner_failed'
+    (args.output / 'result.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
+    if report['status'] != 'passed':
+        print(f"Linux Tauri ordinary SSH failed at {report.get('stage')}: {report['errorCode']}", flush=True)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

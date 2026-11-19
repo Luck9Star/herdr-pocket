@@ -79,7 +79,11 @@ R7 验收范围为受控回环密码认证与 XCTest 输入。活动终端在三
 
 2026-11-19，[作业 135546106261](https://github.com/Luck9Star/herdr-pocket/actions/runs/44520075525/job/135546106261)用 `2ccf9a57eba5114cd79849d66d25b114d3763dcc` 在 iPhone 11 / iOS 26.2 模拟器通过普通密码、密码换钥与独立加密私钥。独立私钥的错误口令仍在客户端拒绝，服务端在该时点没有认证、PTY 或收发。正确口令后只接受一次公钥认证。三案各有一次 PTY 和 shell，服务端各收 9 字节、出 102 字节，主动断开后均记录 `peer_eof`。三张 828 × 1792 系统终端图均通过 OCR 和目标核验，凭据、夹具与模拟器清理通过。[三案原 ZIP、OCR 与清理索引](evidence/flutter-ios-encrypted-key-r4-20261119/README.md)
 
-同一提交的[独立加密私钥 × 主机换钥作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44520076236/job/135546116097)在首次 A 探测报 `probe_failed`。服务端只有一条 A 连接，零认证、零 PTY、零收发，口令编辑及换钥流程尚未执行。R4 三案的通过只覆盖普通密码、密码换钥和独立私钥。历史 `e777df4` 的主动断开复位和 `3fdcae6` 的口令键盘下连接控件未命中保留为各自的失败边界。
+同一提交的[R2 独立加密私钥 × 主机换钥作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44520076236/job/135546116097)在首次 A 探测报 `probe_failed`。服务端只有一条 A 连接，零认证、零 PTY、零收发，口令编辑及换钥流程尚未执行。R4 三案的通过只覆盖普通密码、密码换钥和独立私钥。历史 `e777df4` 的主动断开复位和 `3fdcae6` 的口令键盘下连接控件未命中保留为各自的失败边界。
+
+### 独立加密私钥与主机换钥 R3
+
+同源的 [R3 作业 135558963395](https://github.com/Luck9Star/herdr-pocket/actions/runs/44523800466/job/135558963395)在新建的 iPhone 11 / iOS 26.2 模拟器通过组合案。首次核对 A，遇到 B 时拒绝连接，取消后保留 A。主动重探并明确确认 B 后，才以临时加密 OpenSSH Ed25519 私钥完成公钥认证。四条回环连接顺序为 A → B → B → B，前三条零认证、零 PTY、零 shell、零收发。末条 1 次公钥认证、1 次 PTY、1 次 shell，9 字节输入、102 字节输出。主动断开返回首页，服务端以 `peer_eof` 关闭。两张系统原图、终端区域 OCR、目标身份及清理均已核对。[R3 与 R2 原件及校验](evidence/flutter-ios-encrypted-key-rotation-20261119/README.md)
 
 ### R1 历史验收
 

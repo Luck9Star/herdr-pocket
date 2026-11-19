@@ -22,6 +22,8 @@ class BatchFailure(RuntimeError):
 TERMINAL_PROOFS = {'ordinary-terminal.png': 'ordinary-terminal-ocr.json',
                    'key-change-terminal.png': 'key-change-terminal-ocr.json'}
 ENCRYPTED_KEY_PROOF = {'encrypted-key-terminal.png': 'encrypted-key-terminal-ocr.json'}
+ENCRYPTED_ROTATION_PROOF = {'encrypted-rotation-terminal.png': 'encrypted-rotation-terminal-ocr.json'}
+ENCRYPTED_ROTATION_REVIEW = 'encrypted-rotation-review.png'
 REQUIRED_IMAGES = {*TERMINAL_PROOFS, 'key-change-review.png'}
 
 
@@ -68,19 +70,89 @@ def encrypted_key_case_valid(case):
             and case.get('authenticationMethod') == 'publickey' and case.get('peerClosedBeforeDriverExit') is True)
 
 
-def publish_evidence(root, destination, *, shell, source_sha, include_encrypted_key=False):
+def encrypted_rotation_case_valid(report):
+    cases = report.get('cases')
+    case = cases.get('encryptedKeyRotation') if isinstance(cases, dict) else None
+    peer = report.get('encryptedRotationProtocol')
+    if (report.get('kind') != 'flutter-ios-simulator-encrypted-key-rotation' or
+            not isinstance(case, dict) or set(cases) != {'encryptedKeyRotation'} or case.get('status') != 'passed'
+            or case.get('protocolRef') != 'encryptedRotationProtocol'
+            or case.get('authenticationMethod') != 'publickey' or 'wrongPassphrase' in case
+            or not all(case.get(key) is True for key in ('fingerprintReviewed', 'terminalInputReceived',
+                        'disconnected', 'returnedHome', 'peerClosedBeforeDriverExit'))
+            or not isinstance(peer, dict) or type(peer.get('connections')) is not int or peer['connections'] != 4
+            or peer.get('connectionsClosed') is not True):
+        return False
+    checkpoints = case.get('checkpoints')
+    modes = case.get('modeSwitch')
+    device = case.get('device')
+    cleanup = report.get('cleanup')
+    screens = report.get('screens')
+    screen = screens.get('encrypted-rotation') if isinstance(screens, dict) else None
+    if (not isinstance(checkpoints, dict) or tuple(checkpoints) != ('review', 'rejected', 'cancelled', 'reprobed')
+            or not isinstance(modes, dict) or not all(modes.get(key) is True for key in
+                ('passwordToKeyCleared', 'keyToPasswordCleared', 'sameTrust'))
+            or not isinstance(device, dict) or not all(device.get(key) is True for key in
+                ('sameTarget', 'oldFingerprintMatchedIndependentA', 'changedFingerprintMatchedIndependentB',
+                 'rejectedBeforeAuthentication', 'reviewNavigationBlocked', 'cancelKeepsOldTrust',
+                 'credentialsLockedBeforeApproval', 'noAutomaticConnection', 'freshProbeMatchedIndependentB',
+                 'explicitRotatedTrustRequired', 'privateKeyPasted', 'passphraseObscured',
+                 'privateInputRemoved', 'clipboardCleared', 'credentialsCleared'))
+            or not isinstance(cleanup, dict) or not all(cleanup.get(key) is True for key in
+                ('simulatorDeleted', 'fixtureClosed', 'flutterToolStopped', 'appRemoved', 'privateRemoved',
+                 'encryptedFixtureClosed', 'encryptedSecretsCleared')) or cleanup.get('rawLogsUploaded') is not False
+            or not isinstance(screen, dict) or set(screens) != {'encrypted-rotation'} or screen.get('accepted') is not True
+            or not isinstance(screen.get('targetEvidence'), dict) or screen['targetEvidence'].get('targetVisible') is not True):
+        return False
+    events = peer.get('connectionEvents')
+    if not isinstance(events, list) or len(events) != 4:
+        return False
+    zero = ('authAttempts', 'authSuccesses', 'ptyRequests', 'shellRequests', 'inputBytes', 'outputBytes')
+    for index, (event, key) in enumerate(zip(events, 'ABBB'), 1):
+        if (not isinstance(event, dict) or type(event.get('id')) is not int or event['id'] != index
+                or event.get('hostKey') != key or event.get('closed') is not True):
+            return False
+        if index < 4 and (any(type(event.get(name)) is not int or event[name] != 0 for name in zero)
+                          or any(event.get(name) is not False for name in ('authAccepted', 'markerReceived', 'sessionClosed'))):
+            return False
+    probe = checkpoints['review']
+    probe_fields = {'id', 'hostKey', 'closed', 'authAccepted', 'markerReceived', 'sessionClosed', *zero}
+    if (not isinstance(probe, dict) or set(probe) != probe_fields or
+            any(type(probe[name]) is not type(events[0][name]) or probe[name] != events[0][name] for name in probe_fields)
+            or checkpoints['rejected'] != checkpoints['cancelled']):
+        return False
+    for phase, count in (('rejected', 2), ('cancelled', 2), ('reprobed', 3)):
+        checkpoint = checkpoints[phase]
+        if (not isinstance(checkpoint, dict) or type(checkpoint.get('stage')) is not int or checkpoint['stage'] != count
+                or type(checkpoint.get('connections')) is not int or checkpoint['connections'] != count
+                or checkpoint.get('connectionsClosed') is not True):
+            return False
+    accepted = case.get('acceptedSession')
+    counts = {'id': 4, 'authAttempts': 1, 'authSuccesses': 1, 'ptyRequests': 1, 'shellRequests': 1, 'inputBytes': 9}
+    return (isinstance(accepted, dict) and accepted.get('hostKey') == 'B'
+            and all(type(accepted.get(name)) is int and accepted[name] == expected for name, expected in counts.items())
+            and type(accepted.get('outputBytes')) is int and accepted['outputBytes'] > 0
+            and all(accepted.get(name) is True for name in ('markerReceived', 'singleMarkerLineExact', 'sessionClosed', 'closed'))
+            and events[3].get('authAccepted') is True
+            and all(type(events[3].get(name)) is type(value) and events[3][name] == value
+                    for name, value in accepted.items()))
+
+
+def publish_evidence(root, destination, *, shell, source_sha, include_encrypted_key=False, encrypted_rotation=False):
     """Copy only this run's bound public files; leave SSH/OCR to the runners.
 
     Failed runs may retain an already completed scene. A passed result must
-    supply all standard system captures and accepted OCR reports. The encrypted
-    key opt-in adds one Flutter terminal capture and its OCR report.
+    supply its selected scenario's system captures and accepted OCR reports.
+    Independent encrypted authentication extends the standard batch; encrypted
+    rotation publishes its own review and terminal evidence.
     Even an incomplete passed result retains its sanitized result for diagnosis.
     """
     from PIL import Image
     root, destination = Path(root), Path(destination)
     if root.is_symlink() or not root.is_dir() or destination.exists() or destination.is_symlink():
         raise BatchFailure('ios_batch_public_directory_invalid')
-    if (shell not in ('flutter', 'tauri') or (include_encrypted_key and shell != 'flutter')
+    if (shell not in ('flutter', 'tauri') or ((include_encrypted_key or encrypted_rotation) and shell != 'flutter')
+            or (include_encrypted_key and encrypted_rotation)
             or not re.fullmatch(r'[0-9a-f]{40}', source_sha)):
         raise BatchFailure('ios_batch_source_invalid')
     raw, report = read_public_json(root, 'result.json')
@@ -90,15 +162,32 @@ def publish_evidence(root, destination, *, shell, source_sha, include_encrypted_
     (destination / 'result.json').write_bytes(raw)
     passed = report['status'] == 'passed'
     artifacts = report.get('artifacts', {})
-    terminal_proofs = TERMINAL_PROOFS | (ENCRYPTED_KEY_PROOF if include_encrypted_key else {})
-    required = REQUIRED_IMAGES | terminal_proofs.keys()
-    allowed = required | ({'preconnect.png'} if shell == 'flutter' else set())
+    if encrypted_rotation:
+        terminal_proofs = ENCRYPTED_ROTATION_PROOF
+        required = allowed = {ENCRYPTED_ROTATION_REVIEW, *terminal_proofs}
+    else:
+        terminal_proofs = TERMINAL_PROOFS | (ENCRYPTED_KEY_PROOF if include_encrypted_key else {})
+        required = REQUIRED_IMAGES | terminal_proofs.keys()
+        allowed = required | ({'preconnect.png'} if shell == 'flutter' else set())
     if (not isinstance(artifacts, dict) or set(artifacts) - allowed or
             any(not isinstance(value, str) or not re.fullmatch(r'[0-9a-f]{64}', value)
                 for value in artifacts.values())):
         raise BatchFailure('ios_batch_artifact_manifest_invalid')
     if passed and not required.issubset(artifacts):
         raise BatchFailure('ios_batch_required_images_missing')
+    if passed and encrypted_rotation:
+        if not encrypted_rotation_case_valid(report):
+            raise BatchFailure('ios_batch_encrypted_rotation_case_invalid')
+        if len(set(artifacts.values())) != len(required):
+            raise BatchFailure('ios_batch_encrypted_rotation_image_reused')
+        case = report['cases']['encryptedKeyRotation']
+        terminal, criteria = next(iter(ENCRYPTED_ROTATION_PROOF.items()))
+        capture = case.get('terminalScreenshot')
+        if (not isinstance(capture, dict) or capture.get('imageFile') != terminal or
+                capture.get('imageSha256') != artifacts[terminal] or capture.get('criteriaFile') != criteria or
+                case.get('reviewScreenshot') != {'imageFile': ENCRYPTED_ROTATION_REVIEW,
+                    'imageSha256': artifacts[ENCRYPTED_ROTATION_REVIEW], 'purpose': 'design-review-no-ocr'}):
+            raise BatchFailure('ios_batch_encrypted_rotation_artifact_ref_invalid')
     if passed and include_encrypted_key:
         encrypted_image = next(iter(ENCRYPTED_KEY_PROOF))
         if artifacts[encrypted_image] in {artifacts[name] for name in REQUIRED_IMAGES}:
@@ -122,6 +211,9 @@ def publish_evidence(root, destination, *, shell, source_sha, include_encrypted_
             proof_name = terminal_proofs.get(name)
             if proof_name:
                 proof_raw, proof = read_public_json(root, proof_name)
+                if (passed and encrypted_rotation and
+                        hashlib.sha256(proof_raw).hexdigest() != capture.get('criteriaSha256')):
+                    raise BatchFailure('ios_batch_ocr_criteria_hash_mismatch')
                 if proof.get('imageSha256') != artifacts[name]:
                     raise BatchFailure('ios_batch_ocr_image_hash_mismatch')
                 if not all(proof.get(key) is True for key in
@@ -190,14 +282,16 @@ def main():
     publish.add_argument('--destination', required=True)
     publish.add_argument('--shell', required=True, choices=('flutter', 'tauri'))
     publish.add_argument('--source-sha', required=True)
-    publish.add_argument('--include-encrypted-key', action='store_true')
+    cases = publish.add_mutually_exclusive_group()
+    cases.add_argument('--include-encrypted-key', action='store_true')
+    cases.add_argument('--encrypted-key-rotation', action='store_true')
     args = parser.parse_args()
     try:
         if args.action == 'select-app':
             print(select_simulator_app(args.root))
         elif args.action == 'publish':
             names = publish_evidence(args.root, args.destination, shell=args.shell, source_sha=args.source_sha,
-                                     include_encrypted_key=args.include_encrypted_key)
+                                     include_encrypted_key=args.include_encrypted_key, encrypted_rotation=args.encrypted_key_rotation)
             print('Verified public files: ' + ', '.join(sorted(names)))
             if read_public_json(Path(args.destination), 'result.json')[1]['status'] != 'passed':
                 raise BatchFailure('ios_batch_runner_reported_failure')

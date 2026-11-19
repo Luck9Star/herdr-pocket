@@ -12,6 +12,11 @@ class DualOverlayDeviceFailure(RuntimeError):
     pass
 
 
+class PrivateExchangeReadFailure(DualOverlayDeviceFailure):
+    def __init__(self, entry, reason):
+        super().__init__('private_exchange_read_failed')
+        self.diagnostic = {'entry': entry, 'reason': reason}
+
 
 NATIVE_SOURCE_SHA='547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8'
 HOST_SOURCE_SHA='5404adfb3c86f5174edda38f1d0c63c8d81996c5'
@@ -299,16 +304,31 @@ def read_exchange(adb, serial, name, *, run):
                'dev.herdr.herdr_flutter_probe', 'sh', '-c', shlex.quote(script)]
     try:
         result = run(command, stdout=-1, stderr=-1, timeout=20, check=False)
-    except (OSError, subprocess.TimeoutExpired):
-        raise DualOverlayDeviceFailure('private_exchange_read_failed') from None
-    if (result.returncode != 0 or not isinstance(result.stdout, bytes)
-            or len(result.stdout) > 65544):
-        raise DualOverlayDeviceFailure('private_exchange_read_failed')
+    except OSError:
+        raise PrivateExchangeReadFailure(name, 'adb_unavailable') from None
+    except subprocess.TimeoutExpired:
+        raise PrivateExchangeReadFailure(name, 'adb_timeout') from None
+    if not isinstance(result.stdout, bytes) or len(result.stdout) > 65544:
+        raise PrivateExchangeReadFailure(name, 'output_invalid')
+    if result.returncode:
+        from flutter_android_gui import ADB_TRANSIENT_STDERR
+        stderr = getattr(result, 'stderr', b'').strip()
+        reason = 'command_failed'
+        if not result.stdout:
+            if stderr in {line.encode() for line in ADB_TRANSIENT_STDERR}:
+                reason = stderr.removeprefix(b'error: ').replace(b' ', b'_').decode('ascii')
+            elif stderr == b'run-as: unknown package: dev.herdr.herdr_flutter_probe':
+                reason = 'package_missing'
+            elif result.returncode == 73 and not stderr:
+                reason = 'directory_unavailable'
+        elif result.returncode == 74 and result.stdout.startswith(b'PRESENT\n'):
+            reason = 'file_unreadable'
+        raise PrivateExchangeReadFailure(name, reason)
     if result.stdout == b'MISSING\n':
         return None
     if result.stdout.startswith(b'PRESENT\n'):
         return result.stdout[len(b'PRESENT\n'):]
-    raise DualOverlayDeviceFailure('private_exchange_read_failed')
+    raise PrivateExchangeReadFailure(name, 'output_invalid')
 
 
 
@@ -657,13 +677,41 @@ def installed_apk_evidence(device, bundle, destination, verify):
     return verify(bundle, destination)
 
 
+def flutter_process_state(process):
+    if process is None:
+        return 'not_started'
+    code = process.poll()
+    return ('running' if code is None else 'success' if code == 0 else 'signal' if code < 0 else 'nonzero')
+
+
+def stop_flutter_process(process):
+    import os
+    import signal
+
+    if process is None or process.poll() is not None:
+        return True
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(process.pid, sig)
+        except ProcessLookupError:
+            pass
+        except OSError:
+            return False
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            continue
+        except OSError:
+            return False
+        return True
+    return process.poll() is not None
+
+
 def run_device(args, env):
     """Run the explicitly selected fresh owned-device cases."""
     import json
-    import os
     from pathlib import Path
     import re
-    import signal
     import sys
     import tempfile
 
@@ -711,6 +759,7 @@ def run_device(args, env):
             report['cases'].append(case)
             process = None
             session = None
+            session_cleanup_failed = False
             try:
                 flags = ['--dart-define=HERDR_ANDROID_DUAL_OVERLAY=true',
                          '--dart-define=HERDR_ANDROID_DUAL_RUN_ID=' + env['GITHUB_RUN_ID'],
@@ -752,32 +801,29 @@ def run_device(args, env):
                         case['auditProgress'] = {} if shared else {'interimClosePending': None, 'stoppedCloseConfirmed': None,
                                                  'survivorSecondInputConfirmed': None}
                         with (private / (case_name + '-flutter.log')).open('wb') as log:
-                            process = subprocess.Popen(['flutter', 'test', '--no-pub', '--no-uninstall',
-                                '--reporter', 'expanded', '-d', 'emulator-5554',
-                                'integration_test/android_dual_overlay_test.dart', *flags], cwd=app,
-                                stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
                             try:
+                                process = subprocess.Popen(['flutter', 'test', '--no-pub', '--no-uninstall',
+                                    '--reporter', 'expanded', '-d', 'emulator-5554',
+                                    'integration_test/android_dual_overlay_test.dart', *flags], cwd=app,
+                                    stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
                                 case['ui'] = drive_checkpoints(session, process, 'adb', 'emulator-5554',
                                                                first_stop, run=subprocess.run,
                                                                report_stage=lambda stage: case.update(uiStage=stage),
                                                                report_failure=lambda failure: case.update(uiFailure=failure),
                                                                audit_records=case['hostAudits'],
                                                                audit_progress=case['auditProgress'], shared=shared)
-                            except Exception:
+                            except Exception as error:
+                                case['flutterAtUiFailure'] = flutter_process_state(process)
+                                if isinstance(error, PrivateExchangeReadFailure):
+                                    case['exchangeFailure'] = error.diagnostic
                                 hosts = sample_failed_host_audits(session)
                                 case['failureHostAudits'] = ({'a': hosts['et'], 'b': hosts['ts']} if shared else hosts)
                                 raise
                             finally:
-                                if process.poll() is None:
-                                    try: os.killpg(process.pid, signal.SIGTERM)
-                                    except ProcessLookupError: pass
-                                    try: process.wait(timeout=10)
-                                    except subprocess.TimeoutExpired:
-                                        try: os.killpg(process.pid, signal.SIGKILL)
-                                        except ProcessLookupError: pass
-                                        process.wait(timeout=10)
+                                case['flutterStopped'] = stop_flutter_process(process)
                                 if not shared:
                                     case['tsControlAfter'] = sample_ts_control(session)
+                        case['stage'] = 'installed_apk'
                         installed = private / (case_name + '-installed.apk')
                         installed_evidence = installed_apk_evidence(device, args.qa_bundle, installed, dual_overlay_apk.verify)
                         case['installedApkSha256'] = installed_evidence['apkSha256']
@@ -787,13 +833,21 @@ def run_device(args, env):
                         raise DualOverlayDeviceFailure('host_cleanup_incomplete')
                     case['hostCleanup'] = True
                     if shared:
+                        case['stage'] = 'host_verification'
                         peer_counts = {'acceptedOverlayStreams': 1, 'loopbackTcpConnections': 1}
                         if session.report.get('sharedPeerStreams') != {'a': peer_counts, 'b': peer_counts}:
                             raise DualOverlayDeviceFailure('shared_fixture_peer_dial_count_mismatch')
-                case['status'] = 'passed'; case['stage'] = 'complete'
+                case.update(status='passed', stage='device_cleanup')
             except Exception as error:
-                case['errorCode'] = str(error) if isinstance(error, DualOverlayDeviceFailure) else 'device_runner_failed'
+                session_cleanup_failed = (getattr(error, 'cleanup_code', None) == 'shared_overlay_session_cleanup_incomplete'
+                                          or case['stage'] == 'host_cleanup')
+                if isinstance(error, DualOverlayDeviceFailure):
+                    case['errorCode'] = str(error)
+                else:
+                    case['errorCode'] = ('host_cleanup_incomplete' if case['stage'] == 'host_cleanup'
+                                         else 'device_runner_failed')
             finally:
+                cleanup_errors = []
                 if session is not None:
                     session_report = getattr(session, 'report', {})
                     known_stages = {'device-and-bundle', 'namespace', 'host-controller',
@@ -814,31 +868,42 @@ def run_device(args, env):
                     if isinstance(relay_failure, str) and relay_failure in relay_codes: case['relayFailure'] = relay_failure
                     if shared and 'sharedPeerStreams' in session_report:
                         case['sharedPeerStreams'] = session_report['sharedPeerStreams']
+                    if 'reverseCleanup' in session_report:
+                        case['reverseCleanup'] = session_report['reverseCleanup']
                     cleanup_report = session_report.get('cleanup', {})
                     case['sharedCleanup'] = {key: value for key, value in cleanup_report.items()
                         if key in {'reverseRemoved', 'relayStopped', 'controllerStopped', 'namespaceRemoved',
                                    'hostPrivateDirectoryRemoved', 'controlReaderStopped', 'privateFilesRemoved'}
                         and type(value) is bool}
-                    case['hostCleanup'] = bool(cleanup_report) and all(value is True for value in cleanup_report.values())
+                    case['hostCleanup'] = (not session_cleanup_failed and bool(cleanup_report)
+                                           and all(value is True for value in cleanup_report.values()))
                     if not case['hostCleanup']:
-                        case['status'] = 'failed'; case['errorCode'] = 'host_cleanup_incomplete'
-                if process is not None and process.poll() is None:
-                    try: os.killpg(process.pid, signal.SIGKILL); process.wait(timeout=10)
-                    except (OSError, subprocess.TimeoutExpired): pass
+                        cleanup_errors.append('host_cleanup_incomplete')
+                if case.get('flutterStopped') is False:
+                    cleanup_errors.append('flutter_cleanup_incomplete')
                 try:
                     if device.package_present():
                         device.adb('shell', 'am', 'force-stop', device.PACKAGE)
                         device.adb('uninstall', device.PACKAGE)
                     case['packageRemoved'] = not device.package_present()
+                except Exception:
+                    case['packageRemoved'] = False
+                try:
                     for line in device.forward_set() - before_forwards:
                         parts = line.split()
                         if len(parts) == 3 and parts[0] == 'emulator-5554' and re.fullmatch(r'tcp:\d+', parts[1]):
                             device.adb('forward', '--remove', parts[1])
                     case['forwardsRestored'] = device.forward_set() == before_forwards
                 except Exception:
-                    case['packageRemoved'] = False; case['forwardsRestored'] = False
+                    case['forwardsRestored'] = False
                 if not case.get('packageRemoved') or not case.get('forwardsRestored'):
-                    case['status'] = 'failed'; case['errorCode'] = 'device_cleanup_incomplete'
+                    cleanup_errors.append('device_cleanup_incomplete')
+                if cleanup_errors:
+                    case['status'] = 'failed'
+                    case.setdefault('errorCode', cleanup_errors[0])
+                    case['cleanupErrorCodes'] = cleanup_errors
+                elif case['status'] == 'passed':
+                    case['stage'] = 'complete'
     if all(case['status'] == 'passed' for case in report['cases']) and len(report['cases']) == len(case_names):
         report['status'] = 'passed'
     (output / 'manifest.json').write_text(json.dumps(report, indent=2) + '\n')

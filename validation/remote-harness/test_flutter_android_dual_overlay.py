@@ -632,6 +632,84 @@ class InstalledApkTest(unittest.TestCase):
                     installed_apk_evidence(device, 'qa', target, lambda *_: {})
 
 
+class DeviceCleanupEvidenceTest(unittest.TestCase):
+    def test_first_ui_failure_survives_host_and_device_cleanup_failures(self):
+        import json
+        from pathlib import Path
+        import subprocess
+        import sys
+        import tempfile
+        from types import SimpleNamespace
+
+        import android_dual_overlay_session as host
+        import flutter_android_dual_overlay as driver
+        import flutter_direct_ssh_android as device
+
+        cleanup = dict.fromkeys(('reverseRemoved', 'relayStopped', 'controllerStopped',
+                                 'namespaceRemoved', 'hostPrivateDirectoryRemoved',
+                                 'controlReaderStopped', 'privateFilesRemoved'), True)
+        cleanup['reverseRemoved'] = False
+        reverse = {'removedConfirmed': 1, 'alreadyAbsent': 0,
+                   'problems': ['owned_mapping_remaining', 'remove_unconfirmed']}
+        session = host.AndroidDualOverlaySession.__new__(host.AndroidDualOverlaySession)
+        session.materials = {'etNetwork': dict.fromkeys(('networkName', 'networkSecret', 'peerUrl'),
+                                                        'synthetic private configuration')}
+        session.report = {'stage': 'ready', 'cleanup': cleanup, 'reverseCleanup': reverse}
+        session.start = lambda: None
+        session.control = SimpleNamespace(call=lambda request: {'event': 'host_audit', 'role': request['role'],
+            **dict.fromkeys(('acceptedSessions', 'newSessions', 'capturedBytes', 'newInputBytes'), 0), 'sessions': []})
+        session.read_host_profile = lambda _: {}
+        def close():
+            raise OSError('synthetic private cleanup detail')
+        session.close = close
+
+        def run(command, **kwargs):
+            if command[0] == 'flutter' or command[7] != 'sh':
+                return subprocess.CompletedProcess(command, 0, b'', b'')
+            return subprocess.CompletedProcess(command, 1, b'', b'error: device offline\n')
+
+        values = {('devices',): 'List of devices attached\nemulator-5554 device',
+                  ('shell', 'getprop', 'ro.kernel.qemu'): '1',
+                  ('shell', 'getprop', 'ro.build.version.sdk'): '35',
+                  ('shell', 'getprop', 'ro.product.cpu.abi'): 'x86_64',
+                  ('shell', 'am', 'get-current-user'): '0'}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flutter = Path(driver.__file__).resolve().parents[1] / 'flutter'
+            output = root / 'evidence'
+            args = SimpleNamespace(project=flutter, output=output, qa_bundle=root, host_bundle=root,
+                host_checkout=root, host_source=driver.HOST_SOURCE_SHA, native_source=driver.NATIVE_SOURCE_SHA,
+                scenario=driver.SHARED_SCENARIO)
+            env = {'RUNNER_TEMP': tmp, 'ANDROID_AVD_HOME': str(root / 'avd'),
+                   'GITHUB_SHA': 'a' * 40, 'GITHUB_RUN_ID': '1'}
+            with patch.object(device, 'checked_paths', return_value=(flutter, output)), \
+                 patch.object(device, 'verify_prepared'), patch.object(device, 'text', side_effect=lambda *key: values[key]), \
+                 patch.object(device, 'package_present', side_effect=[False, True]), \
+                 patch.object(device, 'forward_set', return_value=set()) as forwards, \
+                 patch.object(device, 'adb', side_effect=[None, OSError('synthetic private adb detail')]), \
+                 patch.object(host, 'AndroidDualOverlaySession', return_value=session), \
+                 patch.dict(sys.modules, dual_overlay_apk=SimpleNamespace(verify=lambda *_: {'apkSha256': 'b' * 64})), \
+                 patch.object(subprocess, 'Popen', return_value=SimpleNamespace(poll=lambda: 1)), \
+                 patch.object(subprocess, 'run', side_effect=run):
+                report = driver.run_device(args, env)
+            self.assertEqual(report, json.loads((output / 'manifest.json').read_text()))
+
+        case, = report['cases']
+        self.assertEqual(report['status'], 'failed')
+        self.assertEqual(case['stage'], 'device_ui')
+        self.assertEqual(case['errorCode'], 'private_exchange_read_failed')
+        self.assertEqual(case['exchangeFailure'], {'entry': 'stage', 'reason': 'device_offline'})
+        self.assertEqual(case['flutterAtUiFailure'], 'nonzero')
+        self.assertNotIn('uiStage', case)
+        self.assertFalse(case['hostCleanup'])
+        self.assertEqual(case['reverseCleanup'], reverse)
+        self.assertEqual(case['cleanupErrorCodes'], ['host_cleanup_incomplete', 'device_cleanup_incomplete'])
+        self.assertTrue(case['flutterStopped'])
+        self.assertFalse(case['packageRemoved'])
+        self.assertTrue(case['forwardsRestored'])
+        self.assertGreater(forwards.call_count, 1)
+        self.assertNotIn('synthetic private', json.dumps(report))
+
 
 class WorkflowFallbackTest(unittest.TestCase):
     def test_missing_report_records_failure_and_existing_report_is_preserved(self):

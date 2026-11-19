@@ -107,6 +107,40 @@ class ReverseTests(unittest.TestCase):
             fake.map[10101]=29999
             with self.assertRaisesRegex(bridge.ReverseError,'reverse_cleanup_unconfirmed'): mappings.close()
         self.assertEqual(fake.map,{10101:29999})
+
+    def test_missing_owned_mapping_is_verified_without_replaying_a_write(self):
+        fake = FakeAdb({10999: 20999})
+        with self.run_with(fake):
+            with bridge.OwnedReverseMappings(self.relay, _device_check=lambda: None) as mappings:
+                del fake.map[10101]
+            mappings.close()
+        self.assertEqual(fake.map, {10999: 20999})
+        self.assertEqual([call[1] for call in fake.calls], ['--no-rebind'] * 3 + ['--remove'] * 2)
+        self.assertTrue(mappings.cleanup_confirmed)
+        self.assertEqual(mappings.cleanup_evidence, {'removedConfirmed': 2, 'alreadyAbsent': 1, 'problems': []})
+
+    def test_remove_failure_does_not_replay_or_hide_the_remaining_mapping(self):
+        for removal_applied in (False, True):
+            fake = FakeAdb({10999: 20999})
+            def adb(*args):
+                if args == ('reverse', '--remove', 'tcp:10101'):
+                    if removal_applied:
+                        fake.adb(*args)
+                    else:
+                        fake.calls.append(args)
+                    raise bridge.ReverseError('synthetic private connection detail')
+                return fake.adb(*args)
+            with self.subTest(removal_applied=removal_applied), self.run_with(fake), \
+                 patch.object(bridge, '_adb', side_effect=adb):
+                mappings = bridge.OwnedReverseMappings(self.relay, _device_check=lambda: None).__enter__()
+                for _ in range(2):
+                    with self.assertRaisesRegex(bridge.ReverseError, 'reverse_cleanup_unconfirmed'):
+                        mappings.close()
+                self.assertEqual(fake.map, {10999: 20999} if removal_applied else {10999: 20999, 10101: 20101})
+                self.assertEqual(fake.calls.count(('reverse', '--remove', 'tcp:10101')), 1)
+                self.assertFalse(mappings.cleanup_confirmed)
+                problems = ['remove_unconfirmed'] if removal_applied else ['owned_mapping_remaining', 'remove_unconfirmed']
+                self.assertEqual(mappings.cleanup_evidence, {'removedConfirmed': 2, 'alreadyAbsent': 0, 'problems': problems})
     def test_aosp_reverse_tag_is_accepted_without_exporting_ports(self):
         bridge.REVERSE_LIST_DIAGNOSTICS.clear()
         with patch.object(bridge,'_text',return_value='(reverse) tcp:10101 tcp:20101'):

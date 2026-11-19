@@ -150,7 +150,7 @@ class AndroidDualOverlaySession:
             return self
         except BaseException as original:
             try: self.close()
-            except Exception: original.cleanup_code = 'shared_session_cleanup_failed'
+            except Exception: original.cleanup_code = 'shared_overlay_session_cleanup_incomplete'
             raise
 
     def start(self):
@@ -326,6 +326,8 @@ class AndroidDualOverlaySession:
                 if resource is not None: resource.close()
                 cleanup[name] = resource is None or name != 'reverseRemoved' or resource.cleanup_confirmed
             except Exception: cleanup[name] = False
+        if self.reverse is not None and isinstance(self.reverse.cleanup_evidence, dict):
+            self.report['reverseCleanup'] = self.reverse.cleanup_evidence
         cleanup['controllerStopped'] = self.process is None
         if self.process is not None:
             try:
@@ -376,7 +378,7 @@ class AndroidDualOverlaySession:
 
     def __exit__(self, kind, original, _):
         try: self.close()
-        except SessionError:
+        except Exception:
             if original is None: raise
             original.cleanup_code = 'shared_overlay_session_cleanup_incomplete'
 

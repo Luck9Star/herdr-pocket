@@ -94,8 +94,9 @@ class OwnedReverseMappings:
         self.roles=getattr(relay, 'roles', ROLES)
         self._device_check=_device_check or assert_owned_avd
         self.created={}
-        self.baseline={}
+        self.baseline=None
         self.cleanup_confirmed=False
+        self.cleanup_evidence=None
         self.uncertain=set()
         self.installed_count=0
         self.removed_count=0
@@ -132,30 +133,58 @@ class OwnedReverseMappings:
             raise
 
     def close(self):
-        failed=False
-        for device,host in list(self.created.items()):
-            try:
-                current=_mapping_list()
-                if current.get(device)!=host:
-                    failed=True
-                    continue
-                _adb('reverse','--remove',f'tcp:{device}')
-                if device in _mapping_list():
-                    failed=True
-                else:
-                    del self.created[device]
-                    self.removed_count+=1
-            except (ReverseError, OSError, subprocess.SubprocessError):
-                failed=True
-        try:
-            after=_mapping_list()
-            if any(after.get(device)!=host for device,host in self.baseline.items()): failed=True
-            if any(device in after for device in self.uncertain): failed=True
-        except (ReverseError, OSError, subprocess.SubprocessError):
-            failed=True
-        self.cleanup_confirmed=not failed and not self.created
+        if self.cleanup_evidence is None:
+            self._close_once()
         if not self.cleanup_confirmed:
             raise ReverseError('reverse_cleanup_unconfirmed')
 
-    def __exit__(self, *_):
-        self.close()
+    def _close_once(self):
+        problems = set()
+        already_absent = set()
+        acknowledged = set()
+        adb_errors = (ReverseError, OSError, subprocess.SubprocessError)
+        for device, host in self.created.items():
+            try:
+                current = _mapping_list()
+            except adb_errors:
+                problems.add('list_before_remove_failed')
+                continue
+            if device not in current:
+                already_absent.add(device)
+            elif current[device] != host:
+                problems.add('owned_mapping_changed')
+            else:
+                try:
+                    _adb('reverse', '--remove', f'tcp:{device}')
+                    acknowledged.add(device)
+                except adb_errors:
+                    problems.add('remove_unconfirmed')
+        confirmed_absent = set()
+        if self.baseline is not None:
+            try:
+                after = _mapping_list()
+            except adb_errors:
+                problems.add('list_after_remove_failed')
+            else:
+                if any(after.get(device) != host for device, host in self.baseline.items()):
+                    problems.add('baseline_changed')
+                if self.uncertain & after.keys():
+                    problems.add('uncertain_mapping_remaining')
+                if self.created.keys() & after.keys():
+                    problems.add('owned_mapping_remaining')
+                confirmed_absent = (acknowledged | already_absent) - after.keys()
+                for device in confirmed_absent:
+                    del self.created[device]
+        self.removed_count = len(confirmed_absent & acknowledged)
+        self.cleanup_evidence = {'removedConfirmed': self.removed_count,
+                                 'alreadyAbsent': len(confirmed_absent & already_absent),
+                                 'problems': sorted(problems)}
+        self.cleanup_confirmed = not problems and not self.created
+
+    def __exit__(self, kind, original, traceback):
+        try:
+            self.close()
+        except ReverseError:
+            if original is None:
+                raise
+            original.cleanup_code = 'reverse_cleanup_unconfirmed'

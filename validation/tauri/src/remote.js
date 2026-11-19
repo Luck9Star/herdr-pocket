@@ -867,7 +867,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
       pairStatus('公开连接资料已填入；请独立核对用户名和主机公钥，再创建设备公开请求。');render();
     }});
   let sshBackSection = 'dashboard';
-  const ssh = initDirectSshUI({native, invoke, clipboardRead,
+  const ssh = initDirectSshUI({native, invoke, clipboardRead, terminalCursor:theme.terminal.cursor,
     onBack: disconnected => {
       navigateHome(disconnected ? 'dashboard' : sshBackSection);
       if (disconnected) $('host-ssh-disconnected').hidden = false;
@@ -888,7 +888,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     setHomeSection(section);
     if(section==='network' && $('network-panel').hidden && !$('network-open').disabled) $('network-open').click();
   }
-  $('nav-terminal').onclick=()=>{ if(ssh.isActive()) {if ($('host-home').hidden) $('show-remote').click();setHomeSection('ssh');return;} if (!$('remote-page').hidden) {setHomeSection('terminal');return;} if(workspace.hasTabs()) {onLeaveFixture();showRemotePage();return;} navigateHome('terminal'); };
+  $('nav-terminal').onclick=()=>{ if(ssh.isActive()) {navigateHome('ssh');return;} if (!$('remote-page').hidden) {setHomeSection('terminal');return;} if(workspace.hasTabs()) {onLeaveFixture();showRemotePage();return;} navigateHome('terminal'); };
   $('nav-network').onclick=()=>navigateHome('network');
   $('nav-settings').onclick=()=>navigateHome('settings');
   $('terminal-to-board').onclick=()=>navigateHome('dashboard');
@@ -898,8 +898,8 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   $('host-empty-add').onclick=()=>navigateHome('add');
   $('add-back').onclick=()=>navigateHome('dashboard');
   $('add-herdr').onclick=()=>void openNewHost();
-  $('add-ssh').onclick=()=>{ sshBackSection='add'; setHomeSection('ssh'); };
-  $('home-open-ssh').onclick=()=>{ sshBackSection='dashboard'; setHomeSection('ssh'); };
+  $('add-ssh').onclick=()=>{ if(!ssh.isActive()) sshBackSection='add'; setHomeSection('ssh'); };
+  $('home-open-ssh').onclick=()=>{ if(!ssh.isActive()) sshBackSection='dashboard'; setHomeSection('ssh'); };
   const closeConfigTransfer=initConfigTransfer({native, invoke, getHosts:()=>hostRecords, refreshHosts, onAffected:ids=>{workspace.prepareAffected(ids);if(ids.includes(activeHostId))cancel('配置操作涉及此主机；观察已停止，请重新核对。');}, onSettled:ids=>workspace.affected(ids), onApplied:async result=>{
     const affected=[...result.removedIds,...result.retired.map(h=>h.id)];
     workspace.affected(affected);

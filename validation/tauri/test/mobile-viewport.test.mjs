@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {observeAndroidSshHeader, observeIosSshActions, observeMobileViewport} from '../src/mobile-viewport.js';
+import {observeAndroidSshHeader, observeMobileViewport} from '../src/mobile-viewport.js';
 import {readFileSync} from 'node:fs';
 
 test('header and SSH target union native and CSS safe-area insets without adding them',()=>{
@@ -17,18 +17,13 @@ test('S10 keeps its top safe area when the header is hidden',()=>{
   assert.match(css, /#host-home:has\(#home-ssh:not\(\[hidden\]\) #ssh-key-change:not\(\[hidden\]\)\)\s*\{\s*padding-top:calc\(12px \+ max\(var\(--hp-system-top-inset,0px\),env\(safe-area-inset-top,0px\),var\(--hp-ios-status-bar-fallback,0px\)\)\)/);
 });
 
-test('the active ordinary SSH header uses the shared status bar inset on compact portrait iOS',()=>{
-  const css=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
-  const activeHeader='.ios-edge-to-edge:has(#host-home:not([hidden]) #home-ssh:not([hidden]) #ssh-live:not([hidden])) .app-header';
-  const inset='max(var(--hp-system-top-inset,0px),env(safe-area-inset-top,0px),var(--hp-ios-status-bar-fallback))';
-  assert.ok(css.includes(`@media (max-width:599px) and (orientation:portrait) {
-  /* A native iOS WebView can extend behind the status bar with a zero CSS top inset. */
-  .ios-edge-to-edge { --hp-ios-status-bar-fallback:64px; }
-  ${activeHeader} {
-    position:sticky; top:0; z-index:10; background:var(--hp-canvas);
-    padding-top:calc(16px + ${inset});
-  }
-}`));
+test('the compact SSH terminal and settings use the shared top inset and the visual viewport',()=>{
+  const css=readFileSync(new URL('../src/direct-ssh-live.css',import.meta.url),'utf8');
+  assert.ok(css.includes('#host-home { padding:var(--hp-connection-top) 0 0; }'));
+  assert.ok(css.includes('top:var(--hp-connection-top)'));
+  assert.ok(css.includes('height:calc(var(--hp-visual-height,100dvh) - var(--hp-connection-top) - var(--ssh-tabs-space))'));
+  assert.ok(css.includes('--ssh-tabs-space:calc(56px + env(safe-area-inset-bottom,0px))'));
+  assert.match(css,/body\.keyboard-visible[^{]*\{\s*--ssh-tabs-space:0px;[\s\S]*?\.route-tabs \{ display:none; \}/);
 });
 
 function fixture() {
@@ -122,56 +117,4 @@ test('Android SSH header scroll tracking stops during review and outside the rou
     nodes['home-ssh'].hidden=true; mutation(); assert.equal(f.callbacks.has('w:scroll'),false);
     stop();
   } finally { Object.assign(globalThis,previous); }
-});
-
-test('iOS SSH viewport leaves space for fixed navigation and the entire action row', () => {
-  const f = fixture();
-  const property = '--hp-ssh-terminal-max-height';
-  let terminalHeight = 430, actionsEnd = 865, navHeight = 98, position = 'fixed';
-  let resize, frame;
-  const actions = {getBoundingClientRect: () => ({bottom:actionsEnd})};
-  const nav = {getBoundingClientRect: () => ({height:navHeight})};
-  const terminal = {getBoundingClientRect: () => ({height:terminalHeight}), style:f.root.style};
-  const doc = {
-    getElementById: id => ({'host-home':{}, 'ssh-terminal-output':terminal, 'ssh-disconnect':{parentElement:actions}})[id],
-    querySelector: selector => selector === '.route-tabs' ? nav : {},
-  };
-  Object.assign(f.view, {
-    innerHeight:956, scrollY:0,
-    getComputedStyle: () => ({position}),
-    requestAnimationFrame: update => { frame = update; return 1; },
-    cancelAnimationFrame: () => { frame = undefined; },
-  });
-  const oldResizeObserver = globalThis.ResizeObserver;
-  globalThis.ResizeObserver = class {
-    constructor(callback) { resize = callback; }
-    observe() {}
-    disconnect() {}
-  };
-  try {
-    const stop = observeIosSshActions(f.view, doc);
-    frame();
-    assert.equal(f.props.get(property), '415px');
-    // Shrinking the terminal and scrolling the document don't change the available budget.
-    f.view.scrollY = 28;
-    terminalHeight -= 15;
-    actionsEnd -= 15 + f.view.scrollY;
-    resize(); frame();
-    assert.equal(f.props.get(property), '415px');
-    navHeight -= 10;
-    resize(); frame();
-    assert.equal(f.props.get(property), '425px');
-    position = 'static';
-    resize(); frame();
-    assert.equal(f.props.has(property), false);
-    position = 'fixed';
-    resize(); frame();
-    terminalHeight = 0;
-    resize(); frame();
-    assert.equal(f.props.has(property), false);
-    stop();
-    assert.equal(f.callbacks.size, 0);
-  } finally {
-    globalThis.ResizeObserver = oldResizeObserver;
-  }
 });

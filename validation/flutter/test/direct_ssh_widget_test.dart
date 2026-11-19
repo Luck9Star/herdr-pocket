@@ -320,7 +320,8 @@ void main() {
         home: DirectSshPage(tokens: tokens)));
       final dynamic state = tester.state(find.byType(DirectSshPage));
       const target = 'long-user@very-long-host-name-with-many-labels.example.internal:65535';
-      state.setState(() { state.terminal = state.createTerminal(state.epoch); state.shell = CapturingShell(); state.activeTarget = target; state.connected = true; });
+      final shell = CapturingShell();
+      state.setState(() { state.terminal = state.createTerminal(state.epoch); state.shell = shell; state.activeTarget = target; state.connected = true; });
       await tester.pump();
       final label = find.byKey(const ValueKey('direct-active-target'));
       expect(find.text(target), findsOneWidget);
@@ -337,9 +338,14 @@ void main() {
       expect(tester.getRect(label).right, lessThanOrEqualTo(width));
       expect(find.text('断开').hitTestable(), findsOneWidget);
       expect(find.text('Esc').hitTestable(), findsOneWidget);
-      final keys = find.ancestor(of: find.text('Esc'), matching: find.byType(SingleChildScrollView));
+      // At narrow widths Enter occupies the second row, so scroll its own row.
+      final keys = find.ancestor(of: find.text('Enter'), matching: find.byType(SingleChildScrollView));
       await tester.drag(keys.first, const Offset(-600, 0)); await tester.pump();
+      expect(find.text('Ctrl-D').hitTestable(), findsOneWidget);
       expect(find.text('Enter').hitTestable(), findsOneWidget);
+      await tester.tap(find.text('Ctrl-D'));
+      await tester.tap(find.text('Enter'));
+      expect(shell.writes, ['\x04', '\r']);
       expect(tester.getSize(find.byType(TerminalView)).height, greaterThan(0));
       await tester.tap(find.text('断开')); await tester.pump();
       expect(state.activeTarget, isNull); expect(state.terminal, isNull);

@@ -1361,6 +1361,25 @@ class Checkpoints:
                     self.result.setdefault('geometryFailureDetails', {}).setdefault(phase, []).append(
                         {'reason': reason, **detail})
             self.result['nativeCheckpoint'] = phase
+            if 'secretDiagnostic' in payload:
+                diagnostic = payload['secretDiagnostic']
+                fields = {'identifier', 'label', 'value', 'privateKeyHeader', 'passphrase'}
+                roles = HOME_ROLES | {'textView'}
+                require(stage == 'native_progress' and phase == 'encrypted_key_passphrase'
+                        and set(payload) == {'stage', 'nativeCheckpoint', 'secretDiagnostic'}
+                        and type(diagnostic) is dict and set(diagnostic) == {'count', 'candidates'}
+                        and type(diagnostic['count']) is int and 1 <= diagnostic['count'] <= 10000
+                        and type(diagnostic['candidates']) is list
+                        and len(diagnostic['candidates']) == min(diagnostic['count'], 12)
+                        and all(type(item) is dict and set(item) == fields | {'role', 'scope', 'relation'}
+                                and type(item['role']) is str and item['role'] in roles
+                                and item['scope'] in ('sameWeb', 'other')
+                                and item['relation'] in ('same', 'ancestor', 'descendant', 'other')
+                                and all(type(item[key]) is bool for key in fields)
+                                and any(item[key] for key in ('identifier', 'label', 'value'))
+                                and (item['privateKeyHeader'] or item['passphrase'])
+                                for item in diagnostic['candidates']), 'tauri_ios_native_diagnostic_invalid')
+                self.result['secretDiagnostic'] = json.loads(json.dumps(diagnostic))
             if 'inputReadback' in payload:
                 readback = payload['inputReadback']
                 require(stage == 'native_progress' and phase.rsplit('_', 1)[-1] in ('host', 'port', 'username')

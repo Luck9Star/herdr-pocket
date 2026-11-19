@@ -2778,9 +2778,32 @@ final class TauriDirectSSHUITests: XCTestCase {
         try require(filled.pem.live.snapshot.value as? String == pem &&
                     NativeControlPolicy.credentialMasked(filled.passphrase.live.snapshot.value) &&
                     filled.submit.owner.snapshot.isEnabled && filled.submit.live.snapshot.isEnabled, failure)
-        try assertNoSecret(try nodes().filter { node in
-            !NativeControlPolicy.KeyField.pem.matches(identifier: node.identifier, label: node.label)
-        })
+        let observed = try observedNodes().filter { node in
+            !NativeControlPolicy.KeyField.pem.matches(identifier: node.snapshot.identifier, label: node.snapshot.label)
+        }
+        let passphrases = ["ordinaryPassword", "rotationPassword", "encryptedWrongPassphrase", "encryptedPassphrase"]
+            .compactMap { config[$0] as? String }
+        let header = "-----BEGIN OPENSSH PRIVATE KEY-----"
+        let suspicious = observed.compactMap { node -> [String: Any]? in
+            let values = [node.snapshot.identifier, node.snapshot.label, node.snapshot.value as? String ?? ""]
+            let headerHits = values.map { $0.contains(header) }
+            let passwordHits = values.map { value in passphrases.contains { value.contains($0) } }
+            guard headerHits.contains(true) || passwordHits.contains(true) else { return nil }
+            let path = node.path, pemPath = filled.pem.owner.path
+            let relation = path == pemPath ? "same" : pemPath.starts(with: path) ? "ancestor" :
+                path.starts(with: pemPath) ? "descendant" : "other"
+            let scope = node.windowPath == filled.pem.owner.windowPath && node.webPath == filled.pem.owner.webPath ?
+                "sameWeb" : "other"
+            return ["role": node.snapshot.elementType == .textView ? "textView" : role(node.snapshot.elementType),
+                "scope": scope, "relation": relation, "identifier": headerHits[0] || passwordHits[0],
+                "label": headerHits[1] || passwordHits[1], "value": headerHits[2] || passwordHits[2],
+                "privateKeyHeader": headerHits.contains(true), "passphrase": passwordHits.contains(true)]
+        }
+        if !suspicious.isEmpty {
+            try post("native_progress", ["nativeCheckpoint": nativePhase,
+                "secretDiagnostic": ["count": min(suspicious.count, 10000), "candidates": Array(suspicious.prefix(12))]])
+        }
+        try assertNoSecret(observed.map { $0.snapshot })
         try post(prefix + "_ready")
         return filled.submit
     }

@@ -620,6 +620,20 @@ class GeometryReasonTests(unittest.TestCase):
         with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
             self.state.accept(payload | {'nativeCheckpoint': 'ordinary_password'})
 
+    def test_secret_exposure_diagnostic_only_accepts_bounded_categories(self):
+        state = ios.Checkpoints(None, None, self.directory.name, {}, encrypted=object())
+        candidate = {'role': 'textView', 'scope': 'sameWeb', 'relation': 'ancestor',
+                     'identifier': False, 'label': False, 'value': True,
+                     'privateKeyHeader': True, 'passphrase': False}
+        detail = {'count': 1, 'candidates': [candidate]}
+        payload = {'stage': 'native_progress', 'nativeCheckpoint': 'encrypted_key_passphrase', 'secretDiagnostic': detail}
+        state.accept(payload)
+        self.assertEqual(state.result['secretDiagnostic'], detail)
+        for bad in (detail | {'text': 'fixture-secret'}, {'count': 1, 'candidates': [candidate | {'role': 'secret'}]},
+                    {'count': 1, 'candidates': [candidate | {'value': 'secret'}]}, {'count': 10001, 'candidates': []}):
+            with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                state.accept(payload | {'secretDiagnostic': bad})
+
     def test_key_change_password_preserves_both_attempts(self):
         phase = 'key_change_password'
         first = ['field_outside'] * 9

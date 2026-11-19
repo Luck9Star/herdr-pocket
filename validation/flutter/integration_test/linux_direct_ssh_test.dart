@@ -27,11 +27,13 @@ class LinuxTarget {
       password = value['password'] as String?,
       privateKey = value['privateKey'] as String?,
       passphrase = value['passphrase'] as String?,
-      wrongPassphrase = value['wrongPassphrase'] as String? {
+      wrongPassphrase = value['wrongPassphrase'] as String?,
+      rotatedFingerprint = value['rotatedFingerprint'] as String? {
+    final fingerprintPattern = RegExp(r'^SHA256:[A-Za-z0-9+/]{43}$');
     final disposableSecret = RegExp(r'^[a-f0-9]{32}$');
     final validCredential = privateKey == null
         ? value.length == 3 && disposableSecret.hasMatch(password ?? '')
-        : value.length == 5 &&
+        : value.length == (rotatedFingerprint == null ? 5 : 6) &&
               !value.containsKey('password') &&
               privateKey!.startsWith('-----BEGIN OPENSSH PRIVATE KEY-----\n') &&
               privateKey!.trimRight().endsWith(
@@ -39,18 +41,25 @@ class LinuxTarget {
               ) &&
               disposableSecret.hasMatch(passphrase ?? '') &&
               disposableSecret.hasMatch(wrongPassphrase ?? '') &&
-              wrongPassphrase != passphrase;
+              wrongPassphrase != passphrase &&
+              (rotatedFingerprint == null ||
+                  (rotatedFingerprint != fingerprint &&
+                      fingerprintPattern.hasMatch(rotatedFingerprint!)));
     if (!validCredential ||
         port < 1024 ||
         port > 65535 ||
-        !RegExp(r'^SHA256:[A-Za-z0-9+/]{43}$').hasMatch(fingerprint)) {
+        !fingerprintPattern.hasMatch(fingerprint)) {
       throw StateError('linux_direct_fixture_invalid');
     }
   }
 
   final int port;
   final String fingerprint;
-  final String? password, privateKey, passphrase, wrongPassphrase;
+  final String? password,
+      privateKey,
+      passphrase,
+      wrongPassphrase,
+      rotatedFingerprint;
   bool get encrypted => privateKey != null;
   String get label => 'fixture@127.0.0.1:$port';
 }
@@ -125,6 +134,67 @@ Map<String, Object> outcomePixels(WidgetTester tester, Finder outcome) {
     'outcomeBounds': [left, top, right - left, bottom - top]};
 }
 
+Future<void> reviewLinuxFingerprint(
+  WidgetTester tester,
+  LinuxTarget target,
+  String fingerprint,
+  Checkpoint checkpoint,
+  String phase,
+) async {
+  await tap(tester, 'direct-probe', requireEnabled: true, stableHitPoint: true);
+  final review = control('direct-trust-header');
+  final approve = control('direct-trust-key');
+  await waitUi(tester, () {
+    if (review.evaluate().length != 1 ||
+        approve.hitTestable().evaluate().length != 1) {
+      return false;
+    }
+    final route = ModalRoute.of(tester.element(review));
+    return route?.isCurrent == true &&
+        route?.animation?.status == AnimationStatus.completed;
+  }, 'linux_direct_review_timeout');
+  expect(
+    find.descendant(of: review, matching: find.text('核对主机密钥')),
+    findsOneWidget,
+  );
+  expect(
+    control('direct-independent-verification').hitTestable(),
+    findsOneWidget,
+  );
+  expect(control('direct-connect'), findsNothing);
+  expect(control('direct-secret'), findsNothing);
+  expect(control('direct-passphrase'), findsNothing);
+  final presentedFingerprint = find.descendant(
+    of: control('direct-key-fingerprint'),
+    matching: find.byType(SelectableText),
+  );
+  final presentedTarget = control('direct-target-value');
+  final presentedAlgorithm = control('direct-key-algorithm');
+  for (final evidence in [
+    presentedTarget,
+    presentedAlgorithm,
+    presentedFingerprint,
+  ]) {
+    expect(evidence.hitTestable(), findsOneWidget);
+  }
+  final algorithm = tester.widget<SelectableText>(presentedAlgorithm).data;
+  const rsaAlgorithms = {'ssh-rsa', 'rsa-sha2-256', 'rsa-sha2-512'};
+  expect(
+    tester.widget<SelectableText>(presentedTarget).data == target.label &&
+        rsaAlgorithms.contains(algorithm) &&
+        tester.widget<SelectableText>(presentedFingerprint).data == fingerprint,
+    isTrue,
+    reason: 'linux_direct_fingerprint_or_target_mismatch',
+  );
+  await checkpoint(phase, {'algorithm': algorithm!});
+  await tap(
+    tester,
+    'direct-trust-key',
+    requireEnabled: true,
+    stableHitPoint: true,
+  );
+}
+
 Future<TextEditingController> prepareEncryptedKey(
   WidgetTester tester,
   LinuxTarget target,
@@ -135,9 +205,8 @@ Future<TextEditingController> prepareEncryptedKey(
   final pem = control('direct-secret'),
       passphrase = control('direct-passphrase');
   final connect = control('direct-connect');
-  bool sameTrust() =>
-      state.fingerprint == target.fingerprint &&
-      state.checkedTarget == state.target;
+  bool sameTrust(String fingerprint) =>
+      state.fingerprint == fingerprint && state.checkedTarget == state.target;
   bool cleared() => state.secret.text.isEmpty && state.passphrase.text.isEmpty;
   bool connectDisabled() =>
       tester.widget<FilledButton>(connect).onPressed == null;
@@ -176,12 +245,12 @@ Future<TextEditingController> prepareEncryptedKey(
   }
 
   step('key_mode_switch');
-  expect(sameTrust() && cleared(), isTrue);
+  expect(sameTrust(target.fingerprint) && cleared(), isTrue);
   await fill(pem, 'disposable-mode-switch');
   await tap(tester, 'direct-auth-key');
   final passwordToKeyCleared =
       cleared() &&
-      sameTrust() &&
+      sameTrust(target.fingerprint) &&
       tester.widget<TextField>(passphrase).obscureText;
   expect(passwordToKeyCleared, isTrue);
   await pastePem();
@@ -190,7 +259,7 @@ Future<TextEditingController> prepareEncryptedKey(
   await tap(tester, 'direct-auth-password');
   final keyToPasswordCleared =
       cleared() &&
-      sameTrust() &&
+      sameTrust(target.fingerprint) &&
       tester.widget<TextField>(pem).obscureText &&
       passphrase.evaluate().isEmpty &&
       connectDisabled();
@@ -198,7 +267,7 @@ Future<TextEditingController> prepareEncryptedKey(
   await checkpoint('mode-switch', {
     'passwordToKeyCleared': passwordToKeyCleared,
     'keyToPasswordCleared': keyToPasswordCleared,
-    'sameTrust': sameTrust(),
+    'sameTrust': sameTrust(target.fingerprint),
   });
 
   step('key_wrong_passphrase');
@@ -220,7 +289,7 @@ Future<TextEditingController> prepareEncryptedKey(
   );
   expect(
     cleared() &&
-        sameTrust() &&
+        sameTrust(target.fingerprint) &&
         connectDisabled() &&
         find.byType(TerminalView).evaluate().isEmpty,
     isTrue,
@@ -231,7 +300,96 @@ Future<TextEditingController> prepareEncryptedKey(
   await pastePem();
   expect(connectDisabled(), isTrue);
   await fill(passphrase, target.passphrase!);
-  expect(sameTrust(), isTrue);
+  expect(sameTrust(target.fingerprint), isTrue);
+  final rotated = target.rotatedFingerprint;
+  if (rotated != null) {
+    step('key_rotation_reject');
+    await tap(
+      tester,
+      'direct-connect',
+      requireEnabled: true,
+      stableHitPoint: true,
+    );
+    final change = control('direct-host-key-change');
+    await waitUi(
+      tester,
+      () => change.hitTestable().evaluate().length == 1,
+      'linux_direct_rotation_review_timeout',
+    );
+    final oldKey = control('direct-host-key-old'),
+        newKey = control('direct-host-key-new');
+    expect(oldKey.hitTestable(), findsOneWidget);
+    expect(newKey.hitTestable(), findsOneWidget);
+    expect(
+      tester.widget<SelectableText>(oldKey).data == target.fingerprint &&
+          tester.widget<SelectableText>(newKey).data == rotated &&
+          tester.widget<SelectableText>(control('direct-target-value')).data ==
+              target.label,
+      isTrue,
+    );
+    expect(state.connectFailure, DirectSshConnectFailure.hostKeyChanged);
+    expect(state.connectHostKeyMatched, isFalse);
+    expect(
+      sameTrust(target.fingerprint) && state.hostKeyReviewRequired && cleared(),
+      isTrue,
+    );
+    for (final hidden in [
+      pem,
+      passphrase,
+      connect,
+      find.byType(TerminalView),
+    ]) {
+      expect(hidden, findsNothing);
+    }
+    await checkpoint(
+      'rotation-rejected',
+      outcomePixels(tester, control('direct-changed-keys')),
+    );
+
+    step('key_rotation_retain');
+    await tap(tester, 'direct-host-key-cancel');
+    expect(find.text('已保留旧信任').hitTestable(), findsOneWidget);
+    expect(
+      sameTrust(target.fingerprint) && state.hostKeyReviewRequired && cleared(),
+      isTrue,
+    );
+    for (final hidden in [
+      pem,
+      passphrase,
+      connect,
+      find.byType(TerminalView),
+    ]) {
+      expect(hidden, findsNothing);
+    }
+    await checkpoint('rotation-retained', const {
+      'oldTrustRetained': true,
+      'credentialsLocked': true,
+    });
+
+    step('key_rotation_probe');
+    await reviewLinuxFingerprint(
+      tester,
+      target,
+      rotated,
+      checkpoint,
+      'rotation-probe',
+    );
+    await waitUi(
+      tester,
+      () =>
+          control('direct-trust-header').evaluate().isEmpty &&
+          control('direct-trust-approved').hitTestable().evaluate().length == 1,
+      'linux_direct_rotation_approval_timeout',
+    );
+    expect(
+      sameTrust(rotated) && !state.hostKeyReviewRequired && cleared(),
+      isTrue,
+    );
+    if (state.keyAuth != true) await tap(tester, 'direct-auth-key');
+    await pastePem();
+    expect(connectDisabled(), isTrue);
+    await fill(passphrase, target.passphrase!);
+  }
   return tester.widget<TextField>(passphrase).controller!;
 }
 
@@ -287,60 +445,11 @@ Future<void> runLinuxOrdinary(
   expect(password, findsNothing);
 
   step('probe');
-  await tap(tester, 'direct-probe', requireEnabled: true, stableHitPoint: true);
-  final review = control('direct-trust-header');
-  final approve = control('direct-trust-key');
-  await waitUi(tester, () {
-    if (review.evaluate().length != 1 ||
-        approve.hitTestable().evaluate().length != 1) {
-      return false;
-    }
-    final route = ModalRoute.of(tester.element(review));
-    return route?.isCurrent == true &&
-        route?.animation?.status == AnimationStatus.completed;
-  }, 'linux_direct_review_timeout');
-  expect(
-    find.descendant(of: review, matching: find.text('核对主机密钥')),
-    findsOneWidget,
-  );
-  expect(
-    control('direct-independent-verification').hitTestable(),
-    findsOneWidget,
-  );
-  expect(connect, findsNothing);
-  expect(password, findsNothing);
-  final presentedFingerprint = find.descendant(
-    of: control('direct-key-fingerprint'),
-    matching: find.byType(SelectableText),
-  );
-  final presentedTarget = control('direct-target-value');
-  final presentedAlgorithm = control('direct-key-algorithm');
-  for (final evidence in [
-    presentedTarget,
-    presentedAlgorithm,
-    presentedFingerprint,
-  ]) {
-    expect(evidence.hitTestable(), findsOneWidget);
-  }
-  final algorithm = tester.widget<SelectableText>(presentedAlgorithm).data;
-  const rsaAlgorithms = {'ssh-rsa', 'rsa-sha2-256', 'rsa-sha2-512'};
-  expect(
-    tester.widget<SelectableText>(presentedTarget).data == target.label &&
-        rsaAlgorithms.contains(algorithm) &&
-        tester.widget<SelectableText>(presentedFingerprint).data ==
-            target.fingerprint,
-    isTrue,
-    reason: 'linux_direct_fingerprint_or_target_mismatch',
-  );
-  await checkpoint('probe', {'algorithm': algorithm!});
-  await tap(
-    tester,
-    'direct-trust-key',
-    requireEnabled: true,
-    stableHitPoint: true,
-  );
+  await reviewLinuxFingerprint(tester, target, target.fingerprint, checkpoint, 'probe');
 
   step(target.encrypted ? 'private_key' : 'password');
+  final review = control('direct-trust-header');
+  final presentedTarget = control('direct-target-value');
   await waitUi(
     tester,
     () =>

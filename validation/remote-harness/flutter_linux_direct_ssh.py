@@ -38,7 +38,7 @@ from candidate import lock_packages
 TEST = 'linux_direct_ssh_test.dart'
 SHARED_STEPS = 'direct_ssh_ui_steps.dart'
 PHASES = ('home', 'form', 'probe', 'password', 'private_key', 'key_mode_switch', 'key_wrong_passphrase',
-          'key_valid_passphrase', 'connected', 'input', 'capture', 'disconnect', 'return_home')
+          'key_valid_passphrase', 'key_rotation_reject', 'key_rotation_retain', 'key_rotation_probe', 'connected', 'input', 'capture', 'disconnect', 'return_home')
 PENDING_PIXELS = {'terminal_screenshot_echo_not_visible', 'terminal_screenshot_token_not_visible',
                   'terminal_screenshot_proof_not_adjacent'}
 
@@ -211,7 +211,30 @@ def key_rejection_evidence(fixture, root, phase, result):
     return {**result, 'connections': 1, 'authenticationAttempts': 0}
 
 
-def exchange(process, root, fixture, report, *, encrypted=False):
+def closed_rotation(fixture, count):
+    require(fixture.wait_for_connections_closed(count), 'flutter_linux_rotation_peer_open')
+    try:
+        return fixture.rotation_evidence(count)
+    except ValueError:
+        raise GuiFailure('flutter_linux_rotation_peer_invalid') from None
+
+
+def rotation_session(facts, *, sent, closed):
+    events = facts['connectionEvents']
+    require(facts['connections'] == len(events) == 4, 'flutter_linux_rotation_session_count')
+    session = events[-1]
+    require(session['id'] == 4 and session['hostKey'] == 'B' and session['handshakeCompleted'] is True and
+            session['authAttempts'] == session['authSuccesses'] == session['ptyRequests'] == session['shellRequests'] == 1
+            and session['authAccepted'] is True and session['outputBytes'] > 0,
+            'flutter_linux_rotation_signed_session_unproven')
+    require(session['inputBytes'] == (9 if sent else 0) and session['markerReceived'] is sent and
+            session.get('singleMarkerLineExact') is sent, 'flutter_linux_key_input_not_exact')
+    require(facts['connectionsClosed'] is closed and session['closed'] is closed and
+            session['sessionClosed'] is closed and (not closed or session['closeReason'] in ('peer_eof', 'transport_closed')),
+            'flutter_linux_rotation_close_order_invalid')
+
+
+def exchange(process, root, fixture, report, *, encrypted=False, rotating=False):
     def request(name, *, timeout=45):
         def available():
             result = read_exchange(root, name)
@@ -223,6 +246,9 @@ def exchange(process, root, fixture, report, *, encrypted=False):
 
     def verify_session(*, sent, closed):
         facts = fixture.snapshot()
+        if rotating:
+            rotation_session(facts, sent=sent, closed=closed)
+            return
         session_evidence(facts, sent=sent, closed=closed)
         if encrypted:
             require(facts['connectionEvents'][1].get('singleMarkerLineExact') is sent,
@@ -230,32 +256,55 @@ def exchange(process, root, fixture, report, *, encrypted=False):
 
     images = {}
     before_connect = ('mode-switch', 'wrong-passphrase') if encrypted else ()
-    for phase in ('probe', *before_connect, 'connected', 'capture', 'disconnect', 'complete'):
+    rotation_steps = ('rotation-rejected', 'rotation-retained', 'rotation-probe') if rotating else ()
+    session_count = 4 if rotating else 2
+    for phase in ('probe', *before_connect, *rotation_steps, 'connected', 'capture', 'disconnect', 'complete'):
         report['checkpoint'] = phase
         value = request(phase, timeout=1000 if phase == 'probe' else 45)
-        require(phase in ('probe', *before_connect, 'capture', 'disconnect', 'complete') or value == {},
+        require(phase in ('probe', *before_connect, *rotation_steps, 'capture', 'disconnect', 'complete') or value == {},
                 'flutter_linux_unexpected_exchange_fields')
-        if phase == 'probe':
+        if phase in ('probe', 'rotation-probe'):
             require(value.keys() == {'algorithm'} and value['algorithm'] in ('ssh-rsa', 'rsa-sha2-256', 'rsa-sha2-512'),
                     'flutter_linux_displayed_algorithm_invalid')
-            require(fixture.wait_for_connections_closed(1), 'flutter_linux_probe_not_closed')
-            probe_evidence(fixture.snapshot(), 1)
-            report['fingerprintMatchedBeforeConfirm'] = True
-            report['displayedHostKeyAlgorithm'] = value['algorithm']
+            if phase == 'probe':
+                require(fixture.wait_for_connections_closed(1), 'flutter_linux_probe_not_closed')
+                probe_evidence(fixture.snapshot(), 1)
+                report['fingerprintMatchedBeforeConfirm'] = True
+                report['displayedHostKeyAlgorithm'] = value['algorithm']
+            else:
+                report['rotation']['freshProbe'] = closed_rotation(fixture, 3)
+                report['rotation']['newFingerprintMatchedBeforeConfirm'] = True
+                report['rotation']['newDisplayedHostKeyAlgorithm'] = value['algorithm']
         elif phase in before_connect:
             evidence = key_rejection_evidence(fixture, root, phase, value)
             report['modeSwitch' if phase == 'mode-switch' else 'wrongPassphrase'] = evidence
+        elif phase == 'rotation-rejected':
+            rejected = closed_rotation(fixture, 2)
+            images['rotation-rejected.png'], review = capture_outcome(value)
+            require(rejected == closed_rotation(fixture, 2), 'flutter_linux_rotation_review_changed')
+            report['rotation'] = {'rejected': rejected, 'reviewFrame': review,
+                                  'oldAndNewFingerprintsMatched': True}
+        elif phase == 'rotation-retained':
+            require(value.keys() == {'oldTrustRetained', 'credentialsLocked'} and
+                    all(flag is True for flag in value.values()), 'flutter_linux_rotation_ui_invalid')
+            require(closed_rotation(fixture, 2) == report['rotation']['rejected'],
+                    'flutter_linux_rotation_retaining_trust_dialed')
+            report['rotation'].update(value)
         elif phase == 'connected':
-            wait_for(lambda: len(fixture.snapshot()['connectionEvents']) == 2 and fixture.snapshot()[
-                'connectionEvents'][1]['outputBytes'] > 0, 'flutter_linux_shell_output_missing', timeout=5)
+            wait_for(lambda: len(fixture.snapshot()['connectionEvents']) == session_count and fixture.snapshot()[
+                'connectionEvents'][-1]['outputBytes'] > 0, 'flutter_linux_shell_output_missing', timeout=5)
             verify_session(sent=False, closed=False)
             report['fingerprintConfirmed'] = True
+            if rotating:
+                report['rotation']['newFingerprintConfirmed'] = True
         elif phase == 'capture':
             verify_session(sent=True, closed=False)
             images['ordinary-terminal.png'], report['terminal'] = capture(value, fixture.screen_token)
             verify_session(sent=True, closed=False)
         else:
-            require(fixture.wait_for_connections_closed(2), 'flutter_linux_peer_close_unconfirmed')
+            require(fixture.wait_for_connections_closed(session_count), 'flutter_linux_peer_close_unconfirmed')
+            if rotating:
+                report['rotation']['closed'] = closed_rotation(fixture, session_count)
             verify_session(sent=True, closed=True)
             name = 'disconnect' if phase == 'disconnect' else 'home'
             images[f'ordinary-{name}.png'], report[f'{name}Outcome'] = capture_outcome(value)
@@ -266,7 +315,7 @@ def exchange(process, root, fixture, report, *, encrypted=False):
     return images
 
 
-def run(app, source, report, *, encrypted=False):
+def run(app, source, report, *, encrypted=False, rotating=False):
     with tempfile.TemporaryDirectory(prefix='hp-flutter-linux-direct-') as temp:
         root = Path(temp)
         env = {k: v for k, v in os.environ.items() if not k.startswith('HERDR_') and k not in ('SSH_AUTH_SOCK', 'SSH_AGENT_PID')}
@@ -277,11 +326,13 @@ def run(app, source, report, *, encrypted=False):
         report['checkpoint'] = 'prepare'
         report['sourceVerification'] = prepare(app, source, env, root / 'pub.log')
         factory = EncryptedKeyFixture if encrypted else DirectSshFixture
-        with factory(screen_proof=True, channel_deadline=time.monotonic() + 1400) as fixture:
+        with factory(screen_proof=True, rotate_after_probe=rotating, channel_deadline=time.monotonic() + 1400) as fixture:
             target = root / 'target.json'
             credentials = ({'privateKey': fixture.private_key, 'passphrase': fixture.passphrase,
                             'wrongPassphrase': fixture.wrong_passphrase}
                            if encrypted else {'password': fixture.password})
+            if rotating:
+                credentials['rotatedFingerprint'] = fixture.rotated_fingerprint
             # Open with an owner-only mode before writing; the Flutter driver consumes the key file once.
             with os.fdopen(
                     os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w', encoding='utf-8') as stream:
@@ -289,11 +340,13 @@ def run(app, source, report, *, encrypted=False):
             credentials.clear()
             report['target'] = {'host': '127.0.0.1', 'port': fixture.port, 'username': fixture.username,
                                 'algorithm': 'ssh-rsa', 'fingerprint': fixture.fingerprint}
+            if rotating:
+                report['rotatedFingerprint'] = fixture.rotated_fingerprint
             args = ['flutter', 'test', '--no-pub', '--reporter', 'expanded', '-d', 'linux',
                     f'--dart-define=HERDR_FLUTTER_LINUX_DIRECT_DIR={root}', f'integration_test/{TEST}']
             with owned_process(args, cwd=app, env=env, log=root / 'flutter.log') as process:
                 try:
-                    images = exchange(process, root, fixture, report, encrypted=encrypted)
+                    images = exchange(process, root, fixture, report, encrypted=encrypted, rotating=rotating)
                 finally:
                     report['peer'] = fixture.snapshot()  # Before any forced teardown.
                     stage = read_exchange(root, 'stage')
@@ -318,7 +371,7 @@ def main():
     parser.add_argument('--app', required=True, type=Path)
     parser.add_argument('--source-sha', required=True)
     parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--authentication', choices=('password', 'key'), default='password')
+    parser.add_argument('--authentication', choices=('password', 'key', 'key-rotation'), default='password')
     args = parser.parse_args()
     app = args.app.resolve()
     temp = Path(os.environ.get('RUNNER_TEMP', '/')).resolve()
@@ -329,10 +382,13 @@ def main():
         parser.error('use the isolated Linux Flutter workflow and its generated scaffold')
     args.output.mkdir(parents=True, exist_ok=False)
     report = {'schemaVersion': 1, 'sourceSHA': args.source_sha, 'platform': 'Linux Flutter debug GTK / Xvfb',
-              'authentication': 'publickey' if args.authentication == 'key' else 'password', 'scope': 'native Flutter integration_test with Flutter test input and X11 pixels',
+              'authentication': 'password' if args.authentication == 'password' else 'publickey', 'scope': 'native Flutter integration_test with Flutter test input and X11 pixels',
               'physicalImeVerified': False, 'status': 'failed'}
+    rotating = args.authentication == 'key-rotation'
+    if rotating:
+        report['hostKeyRotation'] = True
     try:
-        images = run(app, args.source_sha, report, encrypted=args.authentication == 'key')
+        images = run(app, args.source_sha, report, encrypted=args.authentication != 'password', rotating=rotating)
         for name, png in images.items():
             (args.output / name).write_bytes(png)
         report.update(status='passed', checkpoint='complete')

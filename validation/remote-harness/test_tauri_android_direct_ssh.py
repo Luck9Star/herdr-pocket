@@ -664,7 +664,193 @@ class ActiveNavigationTests(unittest.TestCase):
                 driver.native_active_tap(browser,'#ssh-disconnect')
             adb.assert_not_called()
 
-    def test_preexisting_owned_keyboard_is_dismissed_before_native_focus_tap(self):
+
+    def _ime_gate(self, *, password='synthetic-password', dom=None, ocr=True, foreground=True,
+                  install=True, peer=True, publish=None):
+        browser=Mock(); browser.evidence_dir=None; browser._ime_keyboard_proof_captured=False
+        browser._temporary_install_confirmed=install
+        fixture=Mock(); fixture.password=password; fixture.username='fixture'; fixture.port=2222
+        dom_state={key:True for key in driver.IME_DOM_KEYS} if dom is None else dom
+        foreground_values=[foreground,foreground] if isinstance(foreground,bool) else list(foreground)
+        if peer:
+            fixture.snapshot.return_value=self.peer()
+        else:
+            fixture.snapshot.return_value={'connections':3}
+        if publish is None:
+            def publish(output,png,evidence):
+                (output/'ime-keyboard-opened-native.png').write_bytes(png)
+                (output/'ime-keyboard-opened-native.json').write_text(json.dumps(evidence)+'\n')
+        def ocr_call(png,bounds):
+            if ocr is Exception: raise driver.GuiFailure('direct_ime_proof_ocr_failed')
+            return ocr,'tesseract 5'
+
+        result={'json':None,'png':None,'files':[]}
+        with tempfile.TemporaryDirectory() as evidence:
+            browser.evidence_dir=evidence
+            (Path(evidence)/'ime-keyboard-opened-native.json').write_text('{}\n')
+            with patch.object(driver,'_ime_dom_state',side_effect=lambda b,f:dict(dom_state)), \
+                 patch.object(driver,'_framebuffer_png',return_value=(b'\x89PNG\r\n\x1a\n'+b'0'*32,(393,851))), \
+                 patch.object(driver,'_terminal_geometry',return_value={'g':1}), \
+                 patch.object(driver,'_read_window_hierarchy',return_value='h1'), \
+                 patch.object(driver,'_terminal_framebuffer_bounds',return_value=(0,0,393,200)), \
+                 patch.object(driver,'_webview_frames',side_effect=lambda h:{(0,0,393,851)}), \
+                 patch.object(driver,'_ocr_public_marker',side_effect=ocr_call), \
+                 patch.object(driver,'_foreground_owned',side_effect=lambda:foreground_values.pop(0) if foreground_values else foreground), \
+                 patch.object(driver,'active_diagnostic',return_value={'bounded':True}), \
+                 patch.object(driver,'active_peer'), \
+                 patch.object(driver,'_atomic_publish',side_effect=publish):
+                if not peer:
+                    driver.active_peer.side_effect=driver.GuiFailure('direct_active_peer_changed')
+                driver.capture_native_ime_keyboard_proof(browser,fixture)
+            json_path=Path(evidence)/'ime-keyboard-opened-native.json'
+            png_path=Path(evidence)/'ime-keyboard-opened-native.png'
+            result['json']=json.loads(json_path.read_text()) if json_path.exists() else None
+            result['png']=png_path.read_bytes() if png_path.exists() else None
+            result['files']=sorted(p.name for p in Path(evidence).iterdir())
+        return result
+
+    def test_ime_proof_publishes_only_when_all_public_gates_hold(self):
+        result=self._ime_gate()
+        self.assertEqual(result['json']['status'],'passed')
+        self.assertNotIn('credentialsHeld',result['json'])
+        self.assertTrue(result['png'].startswith(b'\x89PNG'))
+        self.assertIn('ime-keyboard-opened-native.png',result['files'])
+
+    def test_ime_proof_ignores_fixture_password_and_publishes_without_it(self):
+        result=self._ime_gate(password='')
+        self.assertEqual(result['json']['status'],'passed')
+
+    def test_ime_proof_fails_closed_on_credential_value_on_screen(self):
+        result=self._ime_gate(dom={**{key:True for key in driver.IME_DOM_KEYS},'credentialControlsEmpty':False})
+        self.assertEqual((result['json']['status'],result['json']['errorCode']),('failed','direct_ime_proof_page_state_invalid'))
+        self.assertNotIn('ime-keyboard-opened-native.png',result['files'])
+
+    def test_ime_proof_fails_closed_on_wrong_or_error_page(self):
+        for key in ('activeTerminalLive','endpointMatched','connectedBadge','authFormHidden','terminalReadyOnly'):
+            dom={**{k:True for k in driver.IME_DOM_KEYS},key:False}
+            result=self._ime_gate(dom=dom)
+            self.assertEqual((result['json']['status'],result['json']['errorCode']),('failed','direct_ime_proof_page_state_invalid'),key)
+            self.assertNotIn('ime-keyboard-opened-native.png',result['files'])
+
+    def test_ime_proof_fails_closed_when_peer_changes_or_input_appears(self):
+        result=self._ime_gate(peer=False)
+        self.assertEqual((result['json']['status'],result['json']['errorCode']),('failed','direct_active_peer_changed'))
+        self.assertNotIn('ime-keyboard-opened-native.png',result['files'])
+
+    def test_ime_proof_fails_closed_when_foreground_changes(self):
+        result=self._ime_gate(foreground=[True,False])
+        self.assertEqual((result['json']['status'],result['json']['errorCode']),('failed','direct_ime_proof_foreground_lost'))
+        self.assertNotIn('ime-keyboard-opened-native.png',result['files'])
+
+    def test_ime_proof_fails_closed_when_install_not_temporary(self):
+        result=self._ime_gate(install=False)
+        self.assertEqual((result['json']['status'],result['json']['errorCode']),('failed','direct_ime_proof_install_unconfirmed'))
+        self.assertNotIn('ime-keyboard-opened-native.png',result['files'])
+
+    def test_ime_proof_fails_closed_when_ocr_marker_absent(self):
+        result=self._ime_gate(ocr=False)
+        self.assertEqual((result['json']['status'],result['json']['errorCode']),('failed','direct_ime_proof_marker_not_visible'))
+        self.assertNotIn('ime-keyboard-opened-native.png',result['files'])
+
+    def test_ime_proof_mid_abort_publish_leaves_no_public_files(self):
+        def publish(output,png,evidence):
+            raise driver.GuiFailure('direct_ime_proof_publish_failed')
+        result=self._ime_gate(publish=publish)
+        # abort leaves no public image; the bounded failure JSON is the expected record
+        self.assertNotIn('ime-keyboard-opened-native.png',result['files'])
+        self.assertNotIn('ime-keyboard-opened-native.png.tmp',result['files'])
+        self.assertEqual(result['json'].get('errorCode'),'direct_ime_proof_publish_failed')
+
+    def test_ocr_public_marker_real_function_fails_closed_without_tesseract(self):
+        # exercises the real function; on hosts without tesseract (this repo's
+        # local policy: no global installs) the guard must raise, not pass
+        with patch.dict('os.environ', {'PATH': '/nonexistent'}):
+            with self.assertRaises(driver.GuiFailure) as raised:
+                driver._ocr_public_marker(b'\x89PNG\r\n\x1a\n'+b'0'*32, (0,0,10,10))
+            self.assertEqual(str(raised.exception), 'direct_ime_proof_ocr_missing')
+        with patch.object(driver.shutil, 'which', return_value='/fake/tesseract'):
+            with self.assertRaises(driver.GuiFailure) as raised:
+                driver._ocr_public_marker(b'not-a-png', (0,0,10,10))
+            self.assertEqual(str(raised.exception), 'direct_ime_proof_ocr_failed')
+            with self.assertRaises(driver.GuiFailure) as raised:
+                driver._ocr_public_marker(b'\x89PNG\r\n\x1a\n'+b'0'*32, (-5,0,10,10))
+            self.assertEqual(str(raised.exception), 'direct_ime_proof_ocr_failed')
+
+    def test_foreground_owned_requires_exact_package_token(self):
+        from android_gui import PACKAGE
+        good=f'  mCurrentFocus=Window{{4}} {PACKAGE}/MainActivity'
+        imposter=f'  mCurrentFocus=Window{{4}} com.other.pkg{PACKAGE}/x'
+        with patch.object(driver,'adb',return_value=good):
+            self.assertTrue(driver._foreground_owned())
+        with patch.object(driver,'adb',return_value=imposter):
+            self.assertFalse(driver._foreground_owned())
+        with patch.object(driver,'adb',return_value='  unrelated dumpsys line'):
+            self.assertFalse(driver._foreground_owned())
+
+    def test_ime_dom_predicate_whitelists_ready_plus_bare_prompt_only(self):
+        # run the exact JS shipped in _ime_dom_state through the driver's own
+        # evaluate expression via node, against a real xterm-style DOM stub
+        import re as _re, json as _json, subprocess as _sp, tempfile as _tf
+        src=Path(driver.__file__).read_text()
+        body=_re.search(r'value=browser\.evaluate\(r"""(\(\(\)=>\{[\s\S]*?\}\)\(\))"""\.replace', src).group(1)
+        script=f'''
+        globalThis.__pred__=require('fs').readFileSync(process.argv[1],'utf8');
+        globalThis.getComputedStyle=()=>({{visibility:'visible'}});
+        const inner=globalThis.__pred__.trim().replace(/^\\(\\(\\)=>\\{{/,'').replace(/\\}}\\)\\(\\)\\s*;?\\s*$/,'');
+        const fn=new Function('document','{{'+inner+'}}');
+        function mk(rows,cred){{
+          const divs=rows.map(t=>({{textContent:t}}));
+          const el=(vis=true,txt='')=>({{hidden:!vis,getClientRects:()=>vis?[{{}}]:[],textContent:txt}});
+          const ids={{'ssh-live':el(true),'ssh-setup':el(false),'ssh-credentials':el(false),
+            'ssh-live-endpoint':el(true,'fixture@127.0.0.1:2222'),
+            'ssh-password':cred.pw,'ssh-key':cred.key,'ssh-passphrase':cred.pp}};
+          const badge=el(true,'已连接');
+          return fn({{getElementById:id=>id in ids?ids[id]:null,
+            querySelector:s=>s==='.ssh-connected-badge'?badge:null,
+            querySelectorAll:s=>s==='#ssh-terminal .xterm-rows > div'?divs:[]}});}}
+        const hiddenEmpty={{hidden:true,getClientRects:()=>[],value:''}};
+        const okCred={{pw:hiddenEmpty,key:hiddenEmpty,pp:hiddenEmpty}};
+        const noKey={{pw:hiddenEmpty,pp:hiddenEmpty,key:null}};
+        const leakPw={{pw:{{hidden:false,getClientRects:()=>[{{}}],value:'leak'}},key:hiddenEmpty,pp:hiddenEmpty}};
+        const valPw={{pw:{{hidden:true,getClientRects:()=>[],value:'leak'}},key:hiddenEmpty,pp:hiddenEmpty}};
+        const cases=[
+          ['pos',['POCKET-ANDROID-READY','$'],okCred,'all'],
+          ['extra-line',['POCKET-ANDROID-READY','secret'],okCred,'term-false'],
+          ['no-marker',['$'],okCred,'term-false'],
+          ['missing-ctrl',['POCKET-ANDROID-READY','$'],noKey,'creds-false'],
+          ['visible-ctrl',['POCKET-ANDROID-READY','$'],leakPw,'creds-false'],
+          ['valued-ctrl',['POCKET-ANDROID-READY','$'],valPw,'creds-false'],
+        ];
+        let failed=0;
+        for(const [name,rows,cred,want] of cases){{
+          const r=mk(rows,cred);
+          const allOk=Object.values(r).every(Boolean);
+          const ok=want==='all'?allOk:want==='term-false'?!r.terminalReadyOnly:!r.credentialControlsEmpty;
+          if(!ok){{console.log('FAIL',name);failed++;}}
+        }}
+        process.exit(failed?1:0);
+        '''
+        with _tf.TemporaryDirectory() as tmp:
+            pred=Path(tmp)/'pred.js.body'
+            pred.write_text(body.replace('__ARG__', _json.dumps('fixture@127.0.0.1:2222')))
+            result=_sp.run(['node','--input-type=commonjs','-e',script,'--',str(pred)],capture_output=True,text=True)
+        self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+
+    def test_active_navigation_captures_ime_proof_after_keyboard_touch(self):
+        browser=Mock();fixture=Mock();fixture.snapshot.return_value=self.peer();order=[]
+        def native(b,selector): order.append(('tap',selector))
+        def ime(visible):
+            order.append(('ime',visible));return {'diagnostic':{}}
+        with patch.object(driver,'active_view'),patch.object(driver,'active_peer'), \
+             patch.object(driver,'native_active_tap',side_effect=native), \
+             patch.object(driver,'system_keyboard',side_effect=ime), \
+             patch.object(driver,'capture_native_ime_keyboard_proof',side_effect=lambda b,f: order.append(('proof',))) as proof:
+            driver.exercise_active_navigation(browser,fixture)
+        self.assertIn(('tap','#ssh-focus'),order)
+        self.assertIn(('proof',),order)
+        self.assertGreater(order.index(('proof',)),order.index(('tap','#ssh-focus')))
+        proof.assert_called_once_with(browser,fixture)
+
         browser=Mock();fixture=Mock();order=[]
         def system(visible):
             order.append(('ime',visible))

@@ -125,6 +125,7 @@ Future<void> runLinuxOrdinary(
     'linux_direct_home_timeout',
   );
   final originalHome = tester.widget<HostCatalogPage>(home);
+  final homeState = tester.state(home);
   expect(
     originalHome.catalog == null &&
         originalHome.adapterFactory == null &&
@@ -136,11 +137,17 @@ Future<void> runLinuxOrdinary(
   await openDirectSshFromHome(tester);
   final page = find.byType(DirectSshPage);
   expect(Theme.of(tester.element(page)).platform, TargetPlatform.linux);
-  for (final (name, value) in [
+  final setupHeader = control('direct-page-header');
+  expect(
+    find.descendant(of: setupHeader, matching: find.text('普通 SSH')),
+    findsOneWidget,
+  );
+  final fields = [
     ('direct-host', '127.0.0.1'),
     ('direct-port', '${target.port}'),
     ('direct-user', 'fixture'),
-  ]) {
+  ];
+  for (final (name, value) in fields) {
     final field = control(name);
     await tester.ensureVisible(field);
     await tester.enterText(field, value);
@@ -149,35 +156,56 @@ Future<void> runLinuxOrdinary(
   }
   final connect = control('direct-connect'),
       password = control('direct-secret');
-  expect(tester.widget<FilledButton>(connect).onPressed, isNull);
-  expect(tester.widget<TextField>(password).obscureText, isTrue);
-  final credential = tester.widget<TextField>(password).controller!;
-  expect(credential.text.isEmpty, isTrue);
+  expect(connect, findsNothing);
+  expect(password, findsNothing);
 
   step('probe');
-  await tap(tester, 'direct-probe');
-  final review = find.byType(AlertDialog);
-  await waitUi(
-    tester,
-    () =>
-        review.evaluate().length == 1 &&
-        control('direct-trust-key').hitTestable().evaluate().length == 1,
-    'linux_direct_review_timeout',
-  );
-  final displayed = tester.widget<SelectableText>(
-    find.descendant(of: review, matching: find.byType(SelectableText)),
-  );
-  final lines = displayed.data?.split('\n') ?? [];
-  const rsaAlgorithms = {'算法 ssh-rsa', '算法 rsa-sha2-256', '算法 rsa-sha2-512'};
+  await tap(tester, 'direct-probe', requireEnabled: true, stableHitPoint: true);
+  final review = control('direct-trust-header');
+  final approve = control('direct-trust-key');
+  await waitUi(tester, () {
+    if (review.evaluate().length != 1 ||
+        approve.hitTestable().evaluate().length != 1) {
+      return false;
+    }
+    final route = ModalRoute.of(tester.element(review));
+    return route?.isCurrent == true &&
+        route?.animation?.status == AnimationStatus.completed;
+  }, 'linux_direct_review_timeout');
   expect(
-    lines.length >= 3 &&
-        lines[0] == '目标 ${target.label}' &&
-        rsaAlgorithms.contains(lines[1]) &&
-        lines[2] == target.fingerprint,
+    find.descendant(of: review, matching: find.text('核对主机密钥')),
+    findsOneWidget,
+  );
+  expect(
+    control('direct-independent-verification').hitTestable(),
+    findsOneWidget,
+  );
+  expect(connect, findsNothing);
+  expect(password, findsNothing);
+  final presentedFingerprint = find.descendant(
+    of: control('direct-key-fingerprint'),
+    matching: find.byType(SelectableText),
+  );
+  final presentedTarget = control('direct-target-value');
+  final presentedAlgorithm = control('direct-key-algorithm');
+  for (final evidence in [
+    presentedTarget,
+    presentedAlgorithm,
+    presentedFingerprint,
+  ]) {
+    expect(evidence.hitTestable(), findsOneWidget);
+  }
+  final algorithm = tester.widget<SelectableText>(presentedAlgorithm).data;
+  const rsaAlgorithms = {'ssh-rsa', 'rsa-sha2-256', 'rsa-sha2-512'};
+  expect(
+    tester.widget<SelectableText>(presentedTarget).data == target.label &&
+        rsaAlgorithms.contains(algorithm) &&
+        tester.widget<SelectableText>(presentedFingerprint).data ==
+            target.fingerprint,
     isTrue,
     reason: 'linux_direct_fingerprint_or_target_mismatch',
   );
-  await checkpoint('probe', {'algorithm': lines[1].substring(3)});
+  await checkpoint('probe', {'algorithm': algorithm!});
   await tap(
     tester,
     'direct-trust-key',
@@ -188,10 +216,31 @@ Future<void> runLinuxOrdinary(
   step('password');
   await waitUi(
     tester,
-    () => review.evaluate().isEmpty,
+    () =>
+        review.evaluate().isEmpty &&
+        password.hitTestable().evaluate().length == 1 &&
+        connect.evaluate().length == 1 &&
+        ModalRoute.of(tester.element(page))?.isCurrent == true,
     'linux_direct_review_close_timeout',
   );
+  expect(
+    find.descendant(of: setupHeader, matching: find.text('SSH 账号认证')),
+    findsOneWidget,
+  );
+  expect(control('direct-trust-approved').hitTestable(), findsOneWidget);
+  expect(
+    tester.widget<SelectableText>(presentedTarget).data == target.label,
+    isTrue,
+  );
+  for (final (name, _) in fields) {
+    expect(control(name), findsNothing);
+  }
+  expect(control('direct-probe'), findsNothing);
   expect(tester.widget<FilledButton>(connect).onPressed, isNull);
+  final passwordField = tester.widget<TextField>(password);
+  expect(passwordField.obscureText, isTrue);
+  final credential = passwordField.controller!;
+  expect(credential.text.isEmpty, isTrue);
   await tester.ensureVisible(password);
   await tester.enterText(password, target.password);
   await tester.pump();
@@ -221,6 +270,8 @@ Future<void> runLinuxOrdinary(
     tester.widget<Text>(bound).data == target.label && credential.text.isEmpty,
     isTrue,
   );
+  expect(find.text('已连接 · 输入直接发送到远端 shell').hitTestable(),
+    findsOneWidget);
   final terminal = tester.widget<TerminalView>(terminalView).terminal;
   final terminalState = tester.state<TerminalViewState>(terminalView);
   await checkpoint('connected', const {});
@@ -307,6 +358,12 @@ Future<void> runLinuxOrdinary(
     tester.widget<FilledButton>(control('direct-probe')).onPressed,
     isNotNull,
   );
+  for (final (name, value) in fields) {
+    expect(
+      tester.widget<TextField>(control(name)).controller!.text == value,
+      isTrue,
+    );
+  }
   final outcomeGeometry = outcomePixels(tester, control('direct-closed-feedback'));
   await checkpoint('disconnect', outcomeGeometry);
   expect(outcomePixels(tester, control('direct-closed-feedback')), outcomeGeometry);
@@ -321,10 +378,12 @@ Future<void> runLinuxOrdinary(
   await waitUi(
     tester,
     () =>
-        page.evaluate().isEmpty &&
+        find.byType(DirectSshPage, skipOffstage: false).evaluate().isEmpty &&
+        home.evaluate().length == 1 &&
         control('hosts-direct-ssh').hitTestable().evaluate().length == 1,
     'linux_direct_return_home_timeout',
   );
+  expect(tester.state(home), same(homeState));
   expect(control('home-ssh-closed').hitTestable(), findsOneWidget);
   expect(
     tester.widget<Text>(control('home-ssh-closed-title')).data,

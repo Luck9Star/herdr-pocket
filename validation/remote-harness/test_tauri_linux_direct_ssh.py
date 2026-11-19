@@ -24,13 +24,17 @@ from tauri_linux_direct_ssh import (
     REVIEW_WITNESS,
     execute,
     DirectSshFixture,
+    EncryptedKeyFixture,
     GuiFailure,
     ScreenshotGateError,
     capture_terminal,
     capture_outcome,
     decode_viewport_capture,
+    exercise_wrong_passphrase,
+    key_session_evidence,
     port_is_released,
     probe_evidence,
+    rejected_key_evidence,
     session_evidence,
     wait_for,
 )
@@ -114,7 +118,114 @@ class PeerEvidenceTests(unittest.TestCase):
             session_evidence(mislabeled, sent=True, closed=True)
 
 
+class EncryptedPeerEvidenceTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        with EncryptedKeyFixture(screen_proof=True, channel_deadline=time.monotonic() + 20) as fixture:
+            with paramiko.Transport(('127.0.0.1', fixture.port)) as probe:
+                probe.start_client(timeout=3)
+                key = probe.get_remote_server_key()
+                assert f'{key.get_name()} {key.get_base64()}' == fixture.public_key
+            assert fixture.wait_for_connections_closed(1, timeout=3)
+            # The failed attempt has a real key exchange, then the client
+            # rejects decryption locally without sending an auth request.
+            with paramiko.Transport(('127.0.0.1', fixture.port)) as rejected:
+                rejected.start_client(timeout=3)
+                try:
+                    paramiko.Ed25519Key(file_obj=io.StringIO(fixture.private_key), password=fixture.wrong_passphrase)
+                except paramiko.SSHException:
+                    pass
+                else:
+                    raise AssertionError('the fixture accepted the wrong passphrase')
+            assert fixture.wait_for_connections_closed(2, timeout=3)
+            cls.rejected = fixture.snapshot()
+            key = paramiko.Ed25519Key(file_obj=io.StringIO(fixture.private_key), password=fixture.passphrase)
+            with paramiko.Transport(('127.0.0.1', fixture.port)) as session:
+                session.start_client(timeout=3)
+                session.auth_publickey(fixture.username, key)
+                with session.open_session(timeout=3) as channel:
+                    channel.settimeout(3)
+                    channel.get_pty()
+                    channel.invoke_shell()
+                    assert b'POCKET-ANDROID-READY' in channel.recv(1024)
+                    def with_output():
+                        facts = fixture.snapshot()
+                        return facts if facts['connectionEvents'][-1]['outputBytes'] > 0 else None
+
+                    cls.no_input = wait_for(with_output, 'test_key_shell_no_output', timeout=3)
+                    channel.sendall(b'hp-check\r')
+                    expected = (ECHO_MARKER, *token_lines(fixture.screen_token))
+                    rendered = b''
+                    while not all(text.encode() in rendered for text in expected):
+                        block = channel.recv(1024)
+                        assert block
+                        rendered += block
+                    cls.pre_close = fixture.snapshot()
+                    channel.shutdown_write()
+                    assert fixture.wait_for_connections_closed(3, timeout=3)
+            cls.post_close = fixture.snapshot()
+        assert not any((fixture.private_key, fixture.passphrase, fixture.wrong_passphrase, fixture.password))
+        assert port_is_released(fixture.port)
+
+    def test_real_encrypted_peer_rejection_and_single_successful_public_key_session(self):
+        rejected_key_evidence(self.rejected, 2)
+        key_session_evidence(self.no_input, sent=False, closed=False)
+        key_session_evidence(self.pre_close, sent=True, closed=False)
+        key_session_evidence(self.post_close, sent=True, closed=True)
+
+    def test_rejects_wrong_passphrase_paths_with_authentication_or_terminal_activity(self):
+        for change in ({'handshakeCompleted': False}, {'closed': False}, {'authAttempts': 1},
+                       {'ptyRequests': 1}, {'shellRequests': 1}, {'inputBytes': 1}, {'outputBytes': 1}):
+            with self.subTest(change=change), self.assertRaisesRegex(GuiFailure, 'wrong_passphrase_peer_not_empty'):
+                drift = deepcopy(self.rejected)
+                drift['connectionEvents'][1].update(change)
+                rejected_key_evidence(drift, 2)
+
+    def test_rejects_equal_length_nonmatching_command_or_early_disconnect(self):
+        drift = deepcopy(self.pre_close)
+        drift['connectionEvents'][-1]['singleMarkerLineExact'] = False
+        with self.assertRaisesRegex(GuiFailure, 'unexpected_input'):
+            key_session_evidence(drift, sent=True, closed=False)
+        with self.assertRaisesRegex(GuiFailure, 'close_order_invalid'):
+            key_session_evidence(self.post_close, sent=True, closed=False)
+
+    def test_wrong_passphrase_click_is_single_and_evidence_has_no_credentials(self):
+        driver = Mock()
+        driver.observe.return_value = True
+        fixture = Mock(private_key='fixture-pem', wrong_passphrase='fixture-wrong',
+                       passphrase='fixture-correct', password='fixture-password')
+        fixture.wait_for_connections_closed.return_value = True
+        fixture.snapshot.return_value = self.rejected
+        report = {}
+        exercise_wrong_passphrase(driver, fixture, 'fixture@127.0.0.1:2222', report)
+        driver.click.assert_called_once_with('#ssh-connect')
+        self.assertEqual([call.args for call in driver.fill.call_args_list],
+                         [('#ssh-key', fixture.private_key), ('#ssh-passphrase', fixture.wrong_passphrase)])
+        self.assertTrue(report['wrongPassphrase']['handshakeCompleted'])
+        self.assertEqual(report['wrongPassphrase']['authenticationAttempts'], 0)
+        self.assertNotIn('fixture-', json.dumps(report))
+
+
 class WebDriverTests(unittest.TestCase):
+    def test_encrypted_pem_line_breaks_use_native_enter_and_require_exact_readback(self):
+        driver = DesktopDriver()
+        driver.click = Mock()
+        driver.element = Mock(return_value='/owned/key')
+        driver.call = Mock()
+        value = 'fixture-header\nfixture-body\n'
+        driver.read = Mock(return_value=value)
+        driver.fill('#ssh-key', value)
+        driver.click.assert_called_once_with('#ssh-key')
+        driver.read.assert_called_once_with('#ssh-key', 'value')
+        strokes = 'fixture-header\ue007fixture-body\ue007'
+        self.assertEqual([call.args for call in driver.call.call_args_list], [
+            ('POST', '/owned/key/clear', {}),
+            ('POST', '/owned/key/value', {'text': strokes, 'value': list(strokes)}),
+        ])
+        driver.read.return_value = value.replace('\n', '')
+        with self.assertRaisesRegex(GuiFailure, 'form_input_mismatch_ssh-key'):
+            driver.fill('#ssh-key', value)
+
     def test_native_webkit_session_uses_production_binary_and_public_capabilities(self):
         driver = DesktopDriver()
         binary = Path('/isolated/herdr-pocket-tauri-probe')

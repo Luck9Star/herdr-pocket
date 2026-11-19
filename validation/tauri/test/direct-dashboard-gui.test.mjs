@@ -79,7 +79,7 @@ async function importedRemote() {
   return import(`data:text/javascript;base64,${source}`);
 }
 
-async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scanResponse, pairRequest=pairingCameraFixture().request, clipboardWrite, pairAcceptStored=true, hostRemove, hostCleanupRetry, read = null, compactEntry = null } = {}) {
+async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scanResponse, pairRequest=pairingCameraFixture().request, clipboardWrite, pairAcceptStored=true, hostRemove, hostCleanupRetry, read = null, compactEntry = null, tabInvoke } = {}) {
   const previous = {
     document: globalThis.document,
     window: globalThis.window,
@@ -141,6 +141,7 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scan
 
   const invoke = async (name, args = {}) => {
     calls.push({ name, args });
+    if (tabInvoke && name.startsWith('remote_tab_')) return tabInvoke(name,args);
     if (name === 'ssh_host_key_probe') return {...args,publicKey:'ssh-ed25519 FIXTURE',fingerprint:'SHA256:fixture'};
     if (name === 'ssh_shell_open') return 'ssh-fixture';
     if (name === 'ssh_shell_close') return;
@@ -582,6 +583,81 @@ for(const reason of ['offline','background'])test(`${reason} invalidates the liv
     assert.match(summary(n).textContent,/上次快照.*受阻 1/);
     assert.equal(h.calls.filter(c=>c.name==='remote_cancel').length,1);
   } finally {h.finish();await flush();h.restore();}
+});
+
+test('saved system-route workspace stops on offline and needs explicit review and a new snapshot',async()=>{
+  const streams=[];
+  const h=await setup({tabInvoke(name,args) {
+    if(name==='remote_tab_reserve')return 10+streams.length;
+    if(name==='remote_tab_observe')return new Promise(finish=>streams.push({args,finish}));
+    if(name==='remote_tab_input_mode')return 1;
+  }});
+  const n=h.nodes, count=name=>h.calls.filter(call=>call.name===name).length;
+  const button=text=>n['view-content'].all().find(node=>node.tagName==='button' && node.textContent===text);
+  const review=()=>n['view-content'].all().find(node=>node.type==='checkbox');
+  const connect=async()=>{const check=review();check.checked=true;check.onchange();button('连接').click();await flush();};
+  const emit=(stream,event)=>stream.args.onEvent.onmessage({generation:stream.args.generation,...event});
+  const snapshot=(stream,revision,panes)=>emit(stream,{kind:'dashboard_watch',update:{epoch:1,revision,phase:'fresh',reason:'fixture',panes}});
+  try {
+    await pairAndConnect(h);h.finish();await flush();
+    n['host-return-home'].click();await flush();await flush();
+    n['host-list'].children[0].all().find(node=>node.textContent==='新终端标签').click();
+    await flush();
+    h.windowEvent('offline');assert.equal(count('remote_tab_cancel'),0);
+    await connect();
+    const [first]=streams;
+    assert.equal(h.calls.find(call=>call.name==='remote_tab_reserve').args.expectedNetworkProfileId,null);
+    emit(first,{kind:'observation',snapshot:{epoch:1,phase:'starting'}});
+    snapshot(first,1,blockedPane());
+    const before=summary(n).textContent;
+    assert.match(before,/当前快照.*受阻 1/);
+    emit(first,{kind:'selection_ready',epoch:1});
+    const pane=n['view-content'].all().find(node=>node.dataset.paneId==='w1:p1');
+    assert.equal(pane.disabled,false);pane.click();await flush();
+    emit(first,{kind:'target_bound',epoch:1,pane_id:'w1:p1',terminal_id:'term_a001'});
+    emit(first,{kind:'observation',snapshot:{epoch:1,phase:'active'}});
+    emit(first,{kind:'frame',epoch:1,frame:{seq:1,full:true,cols:80,rows:24,bytes:[65]}});
+    emit(first,{kind:'input_ready',epoch:1,unknown:false,recovery_status:'ready'});
+    const direct=button('逐键输入');
+    assert.equal(direct.disabled,false);direct.click();await flush();
+    const terminal=h.terminal;
+    assert.equal(terminal.options.disableStdin,false);
+
+    h.windowEvent('offline');h.windowEvent('offline');
+    const after=summary(n).textContent;
+    assert.equal(after,before.replace('当前快照','上次快照（状态已陈旧）'));
+    assert.equal(terminal.options.disableStdin,true);
+    assert.equal(button('逐键输入'),undefined);
+    terminal.data('x');
+    assert.ok(n['view-content'].all().some(node=>node.textContent.includes('重新连接需主动核验')));
+    snapshot(first,2,[]);
+    emit(first,{kind:'frame',epoch:1,frame:{seq:2,full:false,cols:80,rows:24,bytes:[66]}});
+    assert.equal(summary(n).textContent,after);
+    assert.equal(count('remote_tab_ack'),1);
+    assert.equal(count('remote_tab_cancel'),1);
+    const {tabId,clientGeneration,generation}=first.args;
+    assert.deepEqual(h.calls.find(call=>call.name==='remote_tab_cancel').args,{tabId,clientGeneration,generation});
+    first.finish();await flush();
+    assert.equal(review().checked,false);
+    assert.equal(button('连接').disabled,true);
+    h.windowEvent('online');h.foreground();await flush();
+    assert.equal(count('remote_tab_reserve'),1);
+    assert.equal(summary(n).textContent,after);
+
+    await connect();
+    const second=streams[1];
+    assert.ok(second);
+    assert.equal(summary(n).textContent,after);
+    snapshot(first,3,[]);
+    assert.equal(summary(n).textContent,after);
+    emit(second,{kind:'observation',snapshot:{epoch:1,phase:'starting'}});
+    snapshot(second,1,[]);
+    assert.match(summary(n).textContent,/当前快照.*受阻 0/);
+    assert.notEqual(second.args.generation,generation);
+    assert.equal(count('remote_tab_observe'),2);
+    assert.equal(count('remote_tab_cancel'),1);
+    assert.equal(h.calls.filter(call=>/input_send|resize/.test(call.name)).length,0);
+  } finally {for(const stream of streams)stream.finish();await flush();h.restore();}
 });
 
 test('unexpected bound terminal stops without enabling input or sending',async()=>{

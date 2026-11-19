@@ -390,7 +390,6 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     pasteFocusEpoch++;clearPasteReview();
     if(inputEpoch!==null || inputBusy)loseInputFocus();
   });
-  window.addEventListener('offline',()=>{if(gate.pending)cancel('网络已断开，观察已停止；重新连接需主动核验。');});
   for(const id of ['remote-input-preview','remote-input-confirm', 'remote-input-recover','remote-read-paste']) $(id).addEventListener('pointerdown',e=>e.preventDefault());
   $('remote-read-paste').onclick=async()=>{
     const origin=inputMode==='direct'?terminal?.textarea:$('remote-input-draft');
@@ -1191,6 +1190,11 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
       pairCamera.background();workspace.background();
       cancel('应用进入后台，已取消读取并清除临时私钥。回到前台后需重新核验。',true);
     }else{pairCamera.foreground();render();}
+  });
+  window.addEventListener('offline',()=>{
+    const message='网络已断开，观察已停止；重新连接需主动核验。';
+    workspace.systemOffline(message);
+    if(gate.pending)cancel(message);
   });
   window.addEventListener('pagehide',()=>{ssh.close();workspace.background();cancel();});
   // The browser never substitutes fixture output for a failed/missing native transport.

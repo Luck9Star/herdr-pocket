@@ -647,6 +647,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     try {
       let generation;
       for (let attempt = 0; attempt < 5; attempt++) {
+        if(!current(tab,token))return;
         try {
           generation = await invoke('remote_tab_reserve',{tabId:tab.id,clientGeneration:token.generation,hostId:tab.hostId,expectedTarget:reviewed.target,expectedDeviceFingerprint:reviewed.deviceFingerprint,expectedNetworkProfileId:reviewed.networkProfileId,expectedNetworkRevision:reviewed.networkRevision});
           break;
@@ -662,7 +663,8 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       tab.nativeGeneration=generation;
       if(tabs.activeId!==tab.id && splitPartner()!==tab){await cancel(tab);return;}
       const pendingVisible=invoke('remote_tab_visible',{tabId:tab.id,clientGeneration:token.generation,generation});tab.visibilityPending=pendingVisible;await pendingVisible;tab.visibilityPending=null;
-      if(!current(tab,token) || (tabs.activeId!==tab.id && splitPartner()!==tab) || tab.wantsPause){await cancel(tab);return;}
+      if(!current(tab,token) || tab.closing)return;
+      if((tabs.activeId!==tab.id && splitPartner()!==tab) || tab.wantsPause){await cancel(tab);return;}
       const channel=channelFactory();
       // 分屏可见集：活动标签或分屏副面板都可继续接收事件（后端 visible 为集合语义，仅 focus 独占）。
       const paneVisible=()=>tabs.activeId===tab.id || splitPartner()===tab;
@@ -724,6 +726,18 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
   function setFont(size) {for(const tab of tabs.list())if(tab.terminal){tab.localViewport.capture();tab.terminal.options.fontSize=size;}}
   function prepareAffected(ids) {const affected=tabs.affected(ids);for(const tab of affected){retireSplitPause(tab);tab.controlRevision++;if(tab.inputBusy && tab.inflightReview){tab.unknown=true;tab.unknownReview=tab.inflightReview;}tab.diagnostics?.finish('host_selection_changed');retireDirectPending(tab);tab.board.invalidate('configuration_changed');boardEvent(tab,'stale');tab.selectionReady=false;tab.suppressBlur=true;tab.invalidated=true;tab.reviewed=false;tab.message='目标或网络配置已变更，请关闭此标签并新建。';tab.inputRevision++;tab.inputBusy=false;tab.inputEpoch=null;tab.mode='observe';tab.queue.clear();if(tab.terminal)tab.terminal.options.disableStdin=true;tabs.invalidate(tab.id);tab.closing=true;tab.state='disconnected';}render();for(const tab of affected)tab.suppressBlur=false;}
   function affected(ids) {for(const tab of tabs.affected(ids)){tab.diagnostics?.finish('host_selection_changed');tab.invalidated=true;tab.reviewed=false;tab.message='目标或网络配置已变更，请关闭此标签并新建。';void cancel(tab);}}
+  function systemOffline(message) {
+    for(const tab of tabs.list()) {
+      // Use the route reviewed for this attempt. A bound provider owns its transport state.
+      if(!current(tab,tab.token) || tab.summaryIdentity.networkProfileId!=null || tab.summaryIdentity.requiresNetworkBinding)continue;
+      tab.reviewed=false;
+      tab.inputReady=false;
+      tab.draftComposing=false;
+      tab.message=message;
+      if(tab.messageElement)tab.messageElement.textContent=message;
+      void cancel(tab);
+    }
+  }
   function background() {for(const tab of tabs.list())tab.pasteReadSequence++;textSelection?.close();textSelection=null;fontDiagnostics?.close(false);fontDiagnostics=null;for(const tab of tabs.list()){tab.pasteReview=null;void cancel(tab);}}
   function prepareHide(){const active=tabs.get(tabs.activeId);if(active)active.pasteReadSequence++;textSelection?.close();textSelection=null;fontDiagnostics?.close(false);fontDiagnostics=null;const tab=tabs.get(tabs.activeId);if(tab)tab.suppressBlur=true;}
   function cancelPrepareHide(){const tab=tabs.get(tabs.activeId);if(tab){tab.suppressBlur=false;if(tab.mode==='direct' && document.activeElement!==tab.terminal?.textarea)void loseDirect(tab);}}
@@ -767,5 +781,5 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
       void pause(partner);
     } else render();
   });
-  render();return {hasTabs:()=>tabs.list().length>0,create,createBlocked,select,prepareAffected,affected,background,prepareHide,cancelPrepareHide,hide,setFont};
+  render();return {hasTabs:()=>tabs.list().length>0,create,createBlocked,select,prepareAffected,affected,systemOffline,background,prepareHide,cancelPrepareHide,hide,setFont};
 }

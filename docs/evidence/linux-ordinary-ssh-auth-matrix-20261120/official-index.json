@@ -424,5 +424,16 @@
         }
       ]
     }
-  ]
+  ],
+  "sixcell": {
+    "sourceSHA": "3a8e655fa61a0b991fa583bc14681651363c414d",
+    "note": "Same-source six-cell matrix (Tauri/Flutter x password/key/rotation). Historical four runs above kept as cross-source comparison.",
+    "counts": {
+      "archives": 6,
+      "pngs": 20,
+      "officialOcrBindings": 6,
+      "independentOcrPassed": 6
+    },
+    "index": "sixcell-index.json"
+  }
 }

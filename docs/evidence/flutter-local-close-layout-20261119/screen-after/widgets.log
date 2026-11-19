@@ -1,0 +1,28 @@
+00:00 +0: loading /private/tmp/herdr-flutter-responsive-return.ADBtEerg/app/test/close_layout_pixels_test.dart
+00:00 +0: ordinary SSH close layout at 1440px (variant: TargetPlatform.linux)
+ANCHOR 1440 direct-closed-feedback [264.0, 76.0, 560.0, 66.0]
+ANCHOR 1440 direct-return-home [264.0, 452.0, 560.0, 48.0]
+ANCHOR 1440 home-ssh-closed [264.0, 62.0, 560.0, 44.0]
+ANCHOR 1440 home-empty-card [264.0, 122.0, 560.0, 268.0]
+SIDEBAR 1440 224.0
+00:01 +1: ordinary SSH close layout at 980px (variant: TargetPlatform.linux)
+ANCHOR 980 direct-closed-feedback [264.0, 76.0, 560.0, 66.0]
+ANCHOR 980 direct-return-home [264.0, 452.0, 560.0, 48.0]
+ANCHOR 980 home-ssh-closed [264.0, 62.0, 560.0, 44.0]
+ANCHOR 980 home-empty-card [264.0, 122.0, 560.0, 268.0]
+SIDEBAR 980 224.0
+00:02 +2: ordinary SSH close layout at 700px (variant: TargetPlatform.linux)
+ANCHOR 700 direct-closed-feedback [104.0, 76.0, 556.0, 66.0]
+ANCHOR 700 direct-return-home [104.0, 452.0, 556.0, 48.0]
+ANCHOR 700 home-ssh-closed [104.0, 62.0, 556.0, 44.0]
+ANCHOR 700 home-empty-card [104.0, 122.0, 556.0, 268.0]
+SIDEBAR 700 64.0
+00:03 +3: ordinary SSH close layout at 390px (variant: TargetPlatform.iOS)
+ANCHOR 390 direct-closed-feedback [24.0, 123.0, 342.0, 66.0]
+ANCHOR 390 direct-return-home [24.0, 499.0, 342.0, 48.0]
+ANCHOR 390 home-ssh-closed [24.0, 119.0, 342.0, 44.0]
+00:04 +4: ordinary SSH close layout at 320px (variant: TargetPlatform.iOS)
+ANCHOR 320 direct-closed-feedback [16.0, 100.0, 288.0, 66.0]
+ANCHOR 320 direct-return-home [16.0, 476.0, 288.0, 48.0]
+ANCHOR 320 home-ssh-closed [16.0, 96.0, 288.0, 44.0]
+00:05 +5: All tests passed!

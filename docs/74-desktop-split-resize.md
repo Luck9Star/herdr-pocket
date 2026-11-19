@@ -202,8 +202,12 @@ R1 未确认最终关闭。R2 云端通过，本机显式等待取消时仍复�
 
 ## Tauri 分屏键盘退出与窗口变化
 
-**D1 逐键退出通过（Ubuntu 24.04 原生 GTK，固定宽屏，隔离 SSH/herdr）。** 2026-11-19，guarded R6 在 `c14af9d0bec0a5451318378bf5abaf1c94fd25b9` 上从首页配对两条连接。B 收到明确输入的 1 字节后，真实 WebDriver 键盘按下一次 `Ctrl+Shift+F6`。焦点移到 A 原有的「设为输入焦点」按钮，当前选中的终端保持 B，B 退出逐键输入，两侧均处于只读观察，原目标和连接保留。随后 A 明确发送一次草稿，SSH 对端最终收到 9／1 字节，退出驱动前两条连接均已关闭。[guarded R6 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44524014037/job/135562342657) · [原件、六项断言与复核方法](evidence/tauri-gtk-focus-resize-r6-20261119/README.md)
+**D1 逐键退出通过（Ubuntu 24.04 原生 GTK，固定宽屏，隔离 SSH/herdr）。** 2026-11-19，guarded R6 在 `c14af9d0bec0a5451318378bf5abaf1c94fd25b9` 上从首页配对两条连接。B 收到明确输入的 1 字节后，真实 WebDriver 键盘按下一次 `Ctrl+Shift+F6`。焦点移到 A 原有的「设为输入焦点」按钮，当前选中的终端保持 B，B 退出逐键输入，两侧均处于只读观察，原目标和连接保留。随后 A 明确发送一次草稿，SSH 对端最终收到 9／1 字节，退出驱动前两条连接均已关闭。guarded R7 结果待同源作业原件复核。[guarded R6 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44524014037/job/135562342657) · [原件、六项断言与复核方法](evidence/tauri-gtk-focus-resize-r6-20261119/README.md) · [guarded R7 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44533705204/job/135596416871)
 
-**D2 逐键期间收窄与回宽通过（WebKit 和 Chromium，受控 IPC）。** 1440 → 700 → 1440 时，B 保留原 xterm 编辑器、焦点及输入资格，A 因布局暂停，回宽后等待同一目标的新完整帧再恢复只读观察。另一路手动暂停 A 后，回宽仍保持暂停。两种浏览器运行生产前端和 xterm，连接、输入受理与帧由夹具提供。guarded R6 只在固定宽屏验证 D1。[D2 原图、报告与复跑](evidence/tauri-active-input-split-resize-20261119/README.md) · [D1 浏览器修前后](evidence/tauri-desktop-focus-escape-20261119/README.md)
+**D2 逐键期间收窄与回宽通过（WebKit 和 Chromium，受控 IPC）。** 1440 → 700 → 1440 时，B 保留原 xterm 编辑器、DOM 焦点及输入资格。A 因布局暂停，回宽后等待同一目标的新完整帧，再恢复只读观察。手动暂停的 A 在回宽后仍保持暂停。两种浏览器都运行生产前端和 xterm，连接、输入受理与帧由夹具提供。[D2 原图、报告与复跑](evidence/tauri-active-input-split-resize-20261119/README.md) · [D1 浏览器修前后](evidence/tauri-desktop-focus-escape-20261119/README.md)
 
-**D2 stock 部分通过（Ubuntu 24.04 原生 GTK，只读观察）。** 首次作业在准备 GTK 依赖时遇到 APT HTTP 503。同源第二次作业通过原生窗口 1440 → 700 → 1440，保留两条原连接与终端，收窄暂停 A，回宽后两侧显示新帧，远端零输入。接着从「返回主机看板」暂停两侧，回终端时 A 的诊断状态为 `disconnected`，B 为 `paused`，完整作业失败。手动暂停后的窗口往返、仅恢复选中侧及正常收尾的两端关闭仍待验证。原生 GTK 逐键期间窗口变化、物理输入法、系统密钥库与真实网络提供方也仍待验。[stock 首次作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44524007838/job/135559686242) · [同源重跑与原件](evidence/tauri-gtk-focus-resize-r6-20261119/README.md#stock-窗口往返与手动暂停断点)
+**D2 stock R7 通过（Ubuntu 24.04 原生 GTK，两条真实回环 SSH，只读观察）。** 窗口与视口同为 1440 × 1200 → 700 × 1200 → 1440 × 1200。收窄仅显示原 B，原 A 暂停。回宽恢复原来的左右位置，A 用同一目标的新完整帧恢复，两侧画面推进。B 一直是应用选中的终端。DOM 焦点采样依次在 B 面板和两次面板外。[stock R7 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44533698168/job/135593449788) · [原件和窗口证据](evidence/tauri-gtk-focus-resize-r7-20261119/README.md#stock-原生窗口与双-ssh)
+
+驱动实际点击「返回主机看板」与「终端」，两侧手动暂停在第二轮窄宽往返中保持，旧画面不推进。显式选中 A 后点击「恢复观察」，仅 A 收到新完整帧，B 继续暂停。两侧各认证一次、各收到零字节，分别在驱动退出前关闭。两个远端 PTY 均保持 119 × 40，采样均未观察到尺寸变化，临时授权、进程与密钥已清理。[R7 门槛和修前／修后原图](evidence/tauri-gtk-focus-resize-r7-20261119/README.md#修前与修后的原图)
+
+R6 在手动离页后能确认两侧暂停，返回时 A 被读为断开，B 仍暂停。受控 IPC 的 Chromium 和 WebKit 复现了过期帧确认误取消原连接。`5e50a4d` 按当前连接和观察周期处理帧确认，迟到结果不影响保留的连接，当前周期的确认失败仍会断开。[R6 断点](evidence/tauri-gtk-focus-resize-r6-20261119/README.md#stock-窗口往返与手动暂停断点) · [R7 修复与复跑](evidence/tauri-gtk-focus-resize-r7-20261119/README.md#修复范围与复跑)

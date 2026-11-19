@@ -60,7 +60,8 @@ jobs:
           python3 "$GITHUB_WORKSPACE/validation/flutter/tool/android_device_test.py" prepare --destination "$RUNNER_TEMP/direct-ssh-app"
           flutter pub get
           python3 "$GITHUB_WORKSPACE/validation/flutter/tool/android_device_test.py" verify-lock --destination "$RUNNER_TEMP/direct-ssh-app"
-          flutter analyze lib integration_test
+          flutter analyze lib integration_test test/android_connect_diagnostic_test.dart
+          flutter test --no-pub test/android_connect_diagnostic_test.dart
       - name: Prebuild the encrypted-key integration target without a device
         if: ${{ inputs.auth_case == 'encrypted-key' }}
         run: |

@@ -115,6 +115,19 @@ class PeerEvidenceTests(unittest.TestCase):
 
 
 class WebDriverTests(unittest.TestCase):
+    def test_native_webkit_session_uses_production_binary_and_public_capabilities(self):
+        driver = DesktopDriver()
+        binary = Path('/isolated/herdr-pocket-tauri-probe')
+        driver.call = Mock(side_effect=[{'ready': False}, {'ready': True}, {'sessionId': 'fixture'}])
+        driver.start(binary)
+        self.assertEqual(driver.session, '/session/fixture')
+        self.assertEqual([call.args for call in driver.call.call_args_list], [
+            ('GET', '/status'), ('GET', '/status'),
+            ('POST', '/session', {'capabilities': {'alwaysMatch': {
+                'webkitgtk:browserOptions': {'binary': str(binary.resolve()), 'args': []},
+            }}}),
+        ])
+
     def test_native_click_and_physical_keys_are_each_sent_once(self):
         driver = DesktopDriver()
         driver.session = '/session/fixture'

@@ -81,7 +81,7 @@ R7 验收范围为受控回环密码认证与 XCTest 输入。活动终端在三
 | 密码换钥（`keyChange`） | `key-change-terminal.png` | `key-change-terminal-ocr.json` |
 | 独立加密私钥（`encryptedKey`） | `encrypted-key-terminal.png` | `encrypted-key-terminal-ocr.json` |
 
-ZIP 同时保留 `key-change-review.png` 核对原图和 `preconnect.png` 已遮罩的连接前原图。私钥与主机换钥组合、实体设备、物理键盘、系统中文 IME 及真实跨网仍待独立验证。
+ZIP 同时保留 `key-change-review.png` 核对原图和 `preconnect.png` 已遮罩的连接前原图。私钥与主机换钥组合、实体设备、物理键盘、系统中文 IME 及真实跨网仍待独立验证。[仓库原件及成员校验清单](evidence/flutter-ios-encrypted-key-r1-20261119/README.md)
 
 ## R22 Android 设备证据
 

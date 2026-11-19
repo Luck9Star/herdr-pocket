@@ -2279,3 +2279,102 @@ test('a stale network catalog cannot overwrite a newer empty-home refresh', asyn
     assert.deepEqual(globalThis.__remoteCatalogState(), current);
   } finally { releaseStale(staleCatalog);await flush();h.restore(); }
 });
+
+for (const [outcome, phase] of [[null, 'confirmed'], [false, 'failed']]) test(`pending ordinary close retains ${phase} when target receives an input event`, async () => {
+  let finishClose;
+  const pending = new Promise(resolve => { finishClose = resolve; });
+  const h = await setup({compactEntry:{matches:true, addEventListener(){}},
+    sshInvoke:name => name === 'ssh_shell_open' ? 's1' : pending});
+  const n = h.nodes;
+  try {
+    await openOrdinary(h, 's1');
+    n['ssh-disconnect'].click();
+    assert.equal(n['ssh-closed-feedback'].dataset.phase, 'pending');
+    for (const id of ['ssh-host','ssh-port','ssh-user']) assert.equal(n[id].disabled, true);
+    n['ssh-port'].value = '2223';
+    n['ssh-port'].dispatch('input');
+    assert.equal(n['ssh-port'].value, '2222');
+    assert.equal(n['ssh-probe'].disabled, true);
+    finishClose(outcome);
+    await flush();
+    assert.equal(n['ssh-closed-feedback'].dataset.phase, phase);
+    for (const id of ['ssh-host','ssh-port','ssh-user']) assert.equal(n[id].disabled, false);
+    assert.equal(n['ssh-return-home'].hidden, false);
+    n['ssh-return-home'].click();
+    assert.equal(n['home-dashboard'].hidden, false);
+    assert.equal(n['host-ssh-disconnected'].dataset.phase, phase);
+  } finally { finishClose(outcome); await flush(); h.restore(); }
+});
+
+test('back while ordinary SSH open is pending restores the target after retiring its late session', async () => {
+  let finishOpen;
+  const pending = new Promise(resolve => { finishOpen = resolve; });
+  const h = await setup({compactEntry:{matches:true, addEventListener(){}},
+    sshInvoke:name => name === 'ssh_shell_open' ? pending : null});
+  const n = h.nodes;
+  try {
+    n['home-open-ssh'].click();
+    n['ssh-host'].value='fixture.invalid';n['ssh-port'].value='2222';n['ssh-user'].value='fixture';
+    await n['ssh-probe'].onclick();n['ssh-trust-confirm'].click();
+    n['ssh-password'].value='temporary fixture';
+    const opening = n['ssh-form'].onsubmit({preventDefault(){}});
+    await flush();
+    n['ssh-step-back'].click();
+    assert.equal(n['home-ssh'].dataset.sshStep, 'target');
+    assert.doesNotMatch(n['ssh-status'].textContent, /正在连接/);
+    assert.equal(n['ssh-password'].value, '');
+    finishOpen('s1');
+    await opening;await flush();
+    assert.equal(n['home-ssh'].dataset.sshStep, 'target');
+    assert.equal(n['ssh-probe'].disabled, false);
+    assert.doesNotMatch(n['ssh-status'].textContent, /正在连接/);
+    assert.equal(n['ssh-password'].value, '');
+    assert.deepEqual(h.calls.filter(c=>c.name==='ssh_shell_close').map(c=>c.args.sessionId), ['s1']);
+  } finally { finishOpen('s1'); await flush(); h.restore(); }
+});
+
+for (const route of ['network', 'settings']) for (const accepted of [true, false]) test(`cancelled opening stays cancelled on ${route} after late ${accepted ? 'success' : 'failure'} and permits a new connection`, async () => {
+  let finishOpen, failOpen, opens = 0;
+  const pending = new Promise((resolve, reject) => { finishOpen = resolve; failOpen = reject; });
+  const h = await setup({compactEntry:{matches:true, addEventListener(){}},
+    sshInvoke:name => name === 'ssh_shell_open' ? (++opens === 1 ? pending : 's2') : null});
+  const n = h.nodes;
+  try {
+    n['home-open-ssh'].click();
+    n['ssh-host'].value='fixture.invalid';n['ssh-port'].value='2222';n['ssh-user'].value='fixture';
+    await n['ssh-probe'].onclick();n['ssh-trust-confirm'].click();n['ssh-password'].value='temporary fixture';
+    const opening = n['ssh-form'].onsubmit({preventDefault(){}});await flush();
+    n['ssh-step-back'].click();n['ssh-step-back'].click();
+    assert.equal(n['home-dashboard'].hidden, false);
+    n[`nav-${route}`].click();
+    if (accepted) finishOpen('s1'); else failOpen(Error('fixture-open-failure'));
+    await opening;await flush();
+    assert.equal(n[`home-${route}`].hidden, false);
+    assert.deepEqual(h.calls.filter(c=>c.name==='ssh_shell_close').map(c=>c.args.sessionId), accepted ? ['s1'] : []);
+    assert.equal(h.calls.filter(c=>c.name==='ssh_shell_write').length, 0);
+    n['show-remote'].dispatch('click');
+    await openOrdinary(h, 's2', 'new.invalid');
+    assert.equal(n['ssh-live'].hidden, false);
+    assert.match(n['ssh-live-endpoint'].textContent, /new\.invalid/);
+    assert.equal(h.calls.filter(c=>c.name==='ssh_shell_open').length, 2);
+    assert.equal(h.calls.filter(c=>c.name==='ssh_shell_write').length, 0);
+  } finally { finishOpen('s1'); await flush(); h.restore(); }
+});
+
+test('after a completed close a deliberate target edit can be freshly probed without replay', async () => {
+  const h = await setup({compactEntry:{matches:true, addEventListener(){}},
+    sshInvoke:name => name === 'ssh_shell_open' ? 's1' : null});
+  const n = h.nodes;
+  try {
+    await openOrdinary(h, 's1');
+    n['ssh-disconnect'].click();await flush();
+    assert.equal(n['ssh-closed-feedback'].dataset.phase, 'confirmed');
+    assert.equal(n['ssh-port'].disabled, false);
+    n['ssh-port'].value='2223';n['ssh-port'].dispatch('input');
+    assert.equal(n['ssh-probe'].disabled, false);
+    await n['ssh-probe'].onclick();
+    assert.equal(h.calls.filter(c=>c.name==='ssh_host_key_probe').at(-1).args.port, 2223);
+    assert.equal(h.calls.filter(c=>c.name==='ssh_shell_open').length, 1);
+    assert.equal(h.calls.filter(c=>c.name==='ssh_shell_write').length, 0);
+  } finally { await flush(); h.restore(); }
+});

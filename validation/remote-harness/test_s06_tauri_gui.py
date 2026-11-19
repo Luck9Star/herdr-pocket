@@ -2,9 +2,12 @@ import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 try:
-    from s06_tauri_gui import SplitDriver, observed_tick, peer_connection_evidence, require_side_by_side, GuiFailure
+    from s06_tauri_gui import (SplitDriver, exercise_window_resize, layout_matches, observed_tick,
+                               peer_connection_evidence, require_same_positions, require_side_by_side,
+                               window_dimensions, GuiFailure)
 except ModuleNotFoundError as missing:
     if missing.name != 'cryptography':
         raise
@@ -21,6 +24,87 @@ class TauriSplitEvidenceTests(unittest.TestCase):
                            [a], [a, {**b, 'width': 0}]]:
             with self.assertRaises(GuiFailure):
                 require_side_by_side(rectangles)
+
+    def test_window_command_is_sent_once_and_waits_for_real_rect_and_viewport(self):
+        calls = []
+        viewports = iter(({'width': 1440, 'height': 1168}, {'width': 700, 'height': 1168}))
+        def call(method, path, data=None):
+            calls.append((method, path, data))
+            if path.endswith('/execute/sync'):
+                self.assertEqual(data, {'script': 'return {width:innerWidth,height:innerHeight};', 'args': []})
+                return next(viewports)
+            return {'width': 700, 'height': 1200, 'x': 20, 'y': 30}
+
+        ui = SplitDriver(SimpleNamespace(session='/session/test', call=call))
+        self.assertEqual(ui.window(700), {'window': {'width': 700, 'height': 1200},
+                                          'viewport': {'width': 700, 'height': 1168}})
+        self.assertEqual(calls, [
+            ('POST', '/session/test/window/rect', {'width': 700, 'height': 1200}),
+            ('GET', '/session/test/window/rect', None),
+            ('POST', '/session/test/execute/sync', {'script': 'return {width:innerWidth,height:innerHeight};', 'args': []}),
+            ('GET', '/session/test/window/rect', None),
+            ('POST', '/session/test/execute/sync', {'script': 'return {width:innerWidth,height:innerHeight};', 'args': []}),
+        ])
+
+    def test_unconfirmed_native_resize_fails_without_replaying(self):
+        calls = []
+        def call(method, path, data=None):
+            calls.append((method, path, data))
+            return {'width': 1440, 'height': 1200}
+
+        with self.assertRaisesRegex(GuiFailure, '^s06_tauri_window_size_unconfirmed$'):
+            SplitDriver(SimpleNamespace(session='/session/test', call=call)).window(700)
+        self.assertEqual(len(calls), 1)
+        for rectangle in (None, {'width': True, 'height': 1200}, {'width': 700, 'height': 0}):
+            with self.assertRaises(GuiFailure):
+                window_dimensions(rectangle)
+
+    def test_layout_requires_original_target_focus_and_current_frame(self):
+        targets = [('w1:p1', 'term_a001'), ('w1:p1', 'term_b001')]
+        a = {'target': list(targets[0]), 'phase': 'active', 'focused': False,
+             'currentFrame': True, 'inputControls': False}
+        b = {**a, 'target': list(targets[1]), 'focused': True}
+        wide = {'views': [a, b], 'split': '2', 'mounted': 2, 'splitVisible': True,
+                'stashNotice': False, 'returnVisible': True}
+        self.assertTrue(layout_matches(wide, targets, ('active', 'active'), 1))
+        for changed in ({'target': list(targets[1])}, {'focused': True}, {'currentFrame': False},
+                        {'phase': 'resuming'}, {'inputControls': True}):
+            with self.subTest(changed=changed):
+                self.assertFalse(layout_matches({**wide, 'views': [{**a, **changed}, b]},
+                                                targets, ('active', 'active'), 1))
+        narrow = {**wide, 'views': [None, b], 'split': '1', 'mounted': 1,
+                  'splitVisible': False, 'stashNotice': True}
+        self.assertTrue(layout_matches(narrow, targets, (None, 'active'), 1))
+        self.assertFalse(layout_matches({**narrow, 'views': [a, b]}, targets, (None, 'active'), 1))
+        self.assertFalse(layout_matches({**narrow, 'stashNotice': None}, targets, (None, 'active'), 1))
+        stopped = {**a, 'phase': 'paused', 'currentFrame': False}
+        paused_wide = {**wide, 'views': [stopped, {**b, 'phase': 'paused', 'currentFrame': False}]}
+        self.assertTrue(layout_matches(paused_wide, targets, ('paused', 'paused'), 1))
+        self.assertFalse(layout_matches({**paused_wide, 'views': [a, paused_wide['views'][1]]},
+                                        targets, ('paused', 'paused'), 1))
+
+    def test_returned_wide_geometry_cannot_swap_the_two_targets(self):
+        a = dict(left=20, right=120, top=20, width=100, height=400)
+        b = dict(left=134, right=234, top=20, width=100, height=500)
+        before = {'views': [{'rect': a}, {'rect': b}]}
+        require_same_positions(before, before)
+        with self.assertRaisesRegex(GuiFailure, '^s06_tauri_split_position_changed$'):
+            require_same_positions(before, {'views': [{'rect': b}, {'rect': a}]})
+
+    def test_advance_requires_strictly_new_ticks_on_every_requested_side(self):
+        ui = SplitDriver(SimpleNamespace(wait_control=lambda _: None))
+        samples = iter((20, 30, 21, 30, 21, 31))
+        with patch.object(ui, 'collapse_details'), patch.object(ui, 'rendered_tick', side_effect=samples) as tick:
+            self.assertEqual(ui.ticks(['a', 'b'], (0, 1), (20, 30)), [21, 31])
+            self.assertEqual(tick.call_count, 6)
+
+    def test_replacement_connection_stops_resize_evidence_before_first_capture(self):
+        ui = SimpleNamespace(window=lambda width: {'window': {'width': width}}, wait_layout=lambda *args: {},
+                             ticks=lambda *args: [10, 20])
+        evidence = ({'authenticationCount': 1, 'closed': False}, {'authenticationCount': 2, 'closed': False})
+        with patch('s06_tauri_gui.peer_connection_evidence', side_effect=evidence):
+            with self.assertRaisesRegex(GuiFailure, '^s06_tauri_resize_did_not_keep_two_original_ssh_connections$'):
+                exercise_window_resize(ui, ['a', 'b'], [], [object(), object()], lambda _: None)
 
     def test_stale_read_relocates_before_the_only_native_click(self):
         for read in ('textContent', 'displayed', 'enabled'):

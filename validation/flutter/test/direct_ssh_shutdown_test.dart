@@ -22,12 +22,13 @@ class _Session extends Fake implements SSHSession {
   final input = StreamController<Uint8List>();
   final peerClosed = Completer<void>();
   int? remoteExitCode;
+  SSHSessionExitSignal? remoteExitSignal;
 
   @override
   int? get exitCode => remoteExitCode;
 
   @override
-  SSHSessionExitSignal? get exitSignal => null;
+  SSHSessionExitSignal? get exitSignal => remoteExitSignal;
 
   @override
   StreamSink<Uint8List> get stdin => input.sink;
@@ -76,9 +77,12 @@ class _Socket extends Fake implements SSHSocket {
   }
 }
 
-Future<dynamic> _openPage(WidgetTester tester) async {
+Future<dynamic> _openPage(
+  WidgetTester tester, {
+  Size size = const Size(390, 844),
+}) async {
   tester.view.devicePixelRatio = 1;
-  tester.view.physicalSize = const Size(390, 844);
+  tester.view.physicalSize = size;
   addTearDown(tester.view.resetDevicePixelRatio);
   addTearDown(tester.view.resetPhysicalSize);
   final tokens = (await tester.runAsync(DesignTokens.load))!;
@@ -91,7 +95,11 @@ Future<dynamic> _openPage(WidgetTester tester) async {
   return tester.state(find.byType(DirectSshPage));
 }
 
-_Session _connect(dynamic state, List<String> events) {
+_Session _connect(
+  dynamic state,
+  List<String> events, {
+  bool observeExit = false,
+}) {
   final session = _Session(events);
   state.setState(() {
     state.socket = _Socket(events);
@@ -101,6 +109,7 @@ _Session _connect(dynamic state, List<String> events) {
     state.activeTarget = 'fixture@127.0.0.1:22';
     state.connected = true;
   });
+  if (observeExit) state.observeShellEnd(session, state.epoch);
   return session;
 }
 
@@ -111,6 +120,110 @@ const _mobile = TargetPlatformVariant({
 final _disconnect = find.byKey(const ValueKey('direct-disconnect'));
 
 void main() {
+  for (final (width, exit, localFailure) in [
+    (320.0, 'silent', false),
+    (390.0, 'status', false),
+    (980.0, 'signal', false),
+    (390.0, 'status', true),
+  ]) {
+    final height = width == 320 ? 640.0 : width == 390 ? 844.0 : 780.0;
+    testWidgets('natural close at $width separates $exit and local failure: $localFailure', (
+      tester,
+    ) async {
+      final state = await _openPage(tester, size: Size(width, height));
+      final events = <String>[];
+      final session = _connect(state, events, observeExit: true);
+      final client = state.client as _Client;
+      final socket = state.socket as _Socket;
+      client.closeGate = Completer<void>();
+      client.closeThrows = localFailure;
+      socket.destroyThrows = localFailure;
+      if (exit == 'status') session.remoteExitCode = 0;
+      if (exit == 'signal') {
+        session.remoteExitSignal = SSHSessionExitSignal(
+          signalName: 'TERM',
+          coreDumped: false,
+          errorMessage: '',
+          languageTag: '',
+        );
+      }
+      state.secret.text = 'fixture-password';
+      state.passphrase.text = 'fixture-passphrase';
+      await tester.pump();
+      final lateOutput = state.terminal.onOutput! as void Function(String);
+
+      session.peerClosed.complete();
+      await tester.pump();
+      expect(find.text('正在断开本机连接'), findsOneWidget);
+      expect(find.text('本机已断开'), findsNothing);
+      expect(find.textContaining('远端已报告结束'), findsNothing);
+      expect(state.secret.text, isEmpty);
+      expect(state.passphrase.text, isEmpty);
+      expect(state.connected, isFalse);
+      expect(state.terminal, isNull);
+      lateOutput('retired');
+      expect(events, ['stdin-eof']);
+
+      client.closeGate!.complete();
+      await tester.pumpAndSettle();
+      expect(events, ['stdin-eof', if (!localFailure) 'client-close']);
+      expect(find.text(localFailure ? '本机连接关闭失败' : '本机已断开'), findsOneWidget);
+      expect(find.textContaining('远端已报告结束'),
+        !localFailure && exit != 'silent' ? findsOneWidget : findsNothing);
+      expect(find.byKey(const ValueKey('direct-return-home')).hitTestable(), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      expect(tester.takeException(), isNull);
+    }, variant: _mobile);
+  }
+
+  testWidgets('an older same-page retirement cannot report a later natural return', (tester) async {
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    final returned = <bool>[];
+    await tester.pumpWidget(MaterialApp(
+      theme: tokens.theme.copyWith(platform: TargetPlatform.macOS),
+      home: Builder(builder: (context) => TextButton(
+        onPressed: () => Navigator.push(context, MaterialPageRoute<void>(
+          builder: (_) => DirectSshPage(tokens: tokens, onReturnAfterDisconnect: returned.add),
+        )),
+        child: const Text('open'),
+      )),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    final dynamic state = tester.state(find.byType(DirectSshPage));
+    final olderEvents = <String>[];
+    final older = _connect(state, olderEvents, observeExit: true);
+    final olderClient = state.client as _Client;
+    olderClient.closeGate = Completer<void>();
+    older.peerClosed.complete();
+    await tester.pump();
+    expect(olderEvents, ['stdin-eof']);
+
+    state.changed();
+    final newerEvents = <String>[];
+    final newer = _connect(state, newerEvents, observeExit: true);
+    final newerClient = state.client as _Client;
+    newerClient.closeGate = Completer<void>();
+    newerClient.closeThrows = true;
+    (state.socket as _Socket).destroyThrows = true;
+    newer.peerClosed.complete();
+    await tester.pump();
+    expect(newerEvents, ['stdin-eof']);
+    expect(find.text('正在断开本机连接'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('direct-return-home')));
+    await tester.pumpAndSettle();
+    expect(find.byType(DirectSshPage), findsNothing);
+
+    olderClient.closeGate!.complete();
+    await tester.pump();
+    expect(olderEvents, ['stdin-eof', 'client-close']);
+    expect(returned, isEmpty);
+    newerClient.closeGate!.complete();
+    await tester.pump();
+    expect(returned, [false]);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final (width, outcome, feedbackHeight) in [
     (320.0, 'remote', 84.0), (390.0, 'remote', 66.0),
     (320.0, 'local', 66.0), (320.0, 'failed', 66.0),
@@ -283,7 +396,7 @@ void main() {
   ) async {
     final state = await _openPage(tester);
     final old = <String>[];
-    final first = _connect(state, old);
+    final first = _connect(state, old, observeExit: true);
     await tester.pump();
     final lateOutput = state.terminal.onOutput! as void Function(String);
     state.terminal.textInput('z');

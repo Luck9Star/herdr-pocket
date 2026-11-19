@@ -82,7 +82,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   bool closeLocalConfirmed = false;
   bool closeRemoteReported = false;
   bool closeCleanupFailed = false;
-  bool closeReturnPending = false;
+  int? closeReturnEpoch;
   DirectSshConnectPhase connectPhase = DirectSshConnectPhase.idle;
   DirectSshConnectFailure? connectFailure;
   bool connectHostKeyMatched = false, connectCredentialCaptured = false, connectPasswordRequested = false;
@@ -226,7 +226,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     closeLocalConfirmed = false;
     closeRemoteReported = false;
     closeCleanupFailed = false;
-    closeReturnPending = false;
+    closeReturnEpoch = null;
   }
   void changed() {
     userDisconnected = false;
@@ -262,12 +262,17 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   void disconnect() {
     final wasConnected = connected;
     userDisconnected = wasConnected;
-    closeLocalConfirmed = false;
-    closeRemoteReported = false;
-    closeCleanupFailed = false;
-    closeReturnPending = false;
+    resetCloseOutcome();
     mobileAuth = false;
     stop(message: wasConnected ? '正在断开本机连接；未重放输入。' : '已断开；未重放输入。', drainInput: wasConnected, reportCloseOutcome: wasConnected);
+  }
+
+  void observeShellEnd(SSHSession session, int generation) {
+    unawaited(session.done.then<void>((_) {
+      if (generation == epoch) disconnect();
+    }, onError: (Object _, StackTrace __) {
+      if (generation == epoch) stop(message: '连接中断，输入已停止。');
+    }));
   }
 
   void stop({String? message, bool notify = true, bool drainInput = false, bool reportCloseOutcome = false}) {
@@ -296,7 +301,9 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       final retiringEpoch = epoch;
       unawaited(_retireActiveSession(session, transport, connection).then((outcome) {
         cancelOutput();
-        if (reportCloseOutcome && ((epoch == retiringEpoch && userDisconnected) || closeReturnPending)) {
+        // Disposing a popped route advances epoch before its retirement may finish.
+        final returned = closeReturnEpoch == retiringEpoch;
+        if (reportCloseOutcome && ((epoch == retiringEpoch && userDisconnected) || returned)) {
           final confirmed = outcome.localClosed && credentialsCleared;
           closeLocalConfirmed = confirmed;
           closeRemoteReported = outcome.remoteReported;
@@ -305,10 +312,10 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
             : closeRemoteReported ? '本机已断开；远端已报告结束，凭据已清空。重连时请重新填写。'
             : '本机已断开；凭据已清空，重连时请重新填写。';
           if (mounted) setState(() => status = nextStatus); else status = nextStatus;
-          if (closeReturnPending) {
-            widget.onReturnAfterDisconnect?.call(confirmed);
-            closeReturnPending = false;
+          if (returned) {
+            closeReturnEpoch = null;
             userDisconnected = false;
+            widget.onReturnAfterDisconnect?.call(confirmed);
           }
         }
       }));
@@ -471,7 +478,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       shell = localShell;
       stdout = localShell.stdout.cast<List<int>>().transform(const Utf8Decoder(allowMalformed: true)).listen((text) { if (generation == epoch && identical(sessionTerminal, terminal)) sessionTerminal.write(text); }, onError: (_) { if (generation == epoch) stop(message: '终端输出错误，连接已关闭。'); });
       stderr = localShell.stderr.cast<List<int>>().transform(const Utf8Decoder(allowMalformed: true)).listen((text) { if (generation == epoch && identical(sessionTerminal, terminal)) sessionTerminal.write(text); }, onError: (_) { if (generation == epoch) stop(message: '终端输出错误，连接已关闭。'); });
-      unawaited(localShell.done.then((_) { if (generation == epoch) stop(message: '远端 shell 已结束（退出码 ${localShell.exitCode ?? '未知'}）。'); }, onError: (Object _, StackTrace __) { if (generation == epoch) stop(message: '连接中断，输入已停止。'); }));
+      observeShellEnd(localShell, generation);
       setState(() { busy = false; pendingTarget = null; activeTarget = displayTarget; connected = true; status = '已连接 · 输入直接发送到远端 shell'; });
       widget.onConnectionChanged?.call(true);
     } catch (error) {
@@ -1491,7 +1498,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
           userDisconnected = false;
           widget.onReturnAfterDisconnect?.call(confirmed);
         } else {
-          closeReturnPending = true;
+          closeReturnEpoch = epoch;
         }
       }
     },

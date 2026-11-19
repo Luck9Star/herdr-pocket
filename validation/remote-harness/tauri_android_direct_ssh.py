@@ -20,7 +20,7 @@ import time
 import uuid
 import xml.etree.ElementTree as ET
 
-from android_gui import AndroidWebView, PACKAGE, SERIAL, adb, dashboard_add_selector, system_keyboard
+from android_gui import AndroidWebView, PACKAGE, SERIAL, adb, dashboard_add_selector, system_keyboard, public_ime_diagnostic
 from paired_gui import GuiFailure, wait_for
 from terminal_screenshot_gate import ECHO_MARKER, ScreenshotGateError, verify_terminal_screenshot
 
@@ -51,7 +51,7 @@ DIRECT_ERROR_CODES = frozenset('''
     direct_terminal_webview_capture_failed direct_header_measurement_invalid direct_header_system_overlap direct_header_content_overlap direct_header_geometry_changed
     direct_unowned_or_invalid_device direct_unsafe_fixture direct_return_home_missing direct_return_home_peer_changed
     direct_setup_layout_unproven direct_mobile_setup_unproven direct_probe_peer_unproven
-    direct_active_ui_invalid direct_active_peer_changed
+    direct_active_ui_invalid direct_active_peer_changed direct_active_tap_unproven
     direct_webview_not_ready direct_webview_socket_missing
 '''.split())
 ANDROID_ERROR_CODES = {
@@ -688,7 +688,36 @@ def active_view(browser, fixture, section, keyboard=False):
         raise
 
 
-def exercise_active_navigation(browser, fixture, *, progress=None):
+def native_active_tap(browser, selector):
+    """Tap only the observed active SSH controls through Android's input dispatcher."""
+    if selector not in ('#ssh-focus','#ssh-hide-keyboard'):
+        raise GuiFailure('direct_active_tap_unproven')
+    expression=r"""(()=>{const e=document.querySelector(%s),r=e?.getBoundingClientRect(),v=visualViewport;
+      if(!e||e.disabled||!e.checkVisibility({checkOpacity:true,checkVisibilityCSS:true})||!r||!v)return null;
+      const x=r.left+r.width/2,y=r.top+r.height/2,h=document.elementFromPoint(x,y);
+      return {point:[x,y],rect:[r.left,r.top,r.width,r.height],viewport:[innerWidth,innerHeight],
+        visual:[v.offsetLeft,v.offsetTop,v.scale],dpr:devicePixelRatio,hit:h===e||e.contains(h)};})()""" % json.dumps(selector)
+    try:
+        before=browser.evaluate(expression);frames=_webview_frames(_read_window_hierarchy())
+        header=_header_geometry(browser);_,image_size=_framebuffer_png()
+        after=browser.evaluate(expression);frames_after=_webview_frames(_read_window_hierarchy())
+        if before!=after or not isinstance(before,dict) or before.get('hit') is not True or len(frames)!=1 or frames!=frames_after: raise ValueError()
+        point=before['point'];rect=before['rect'];viewport=before['viewport'];visual=before['visual'];dpr=before['dpr']
+        vals=[*point,*rect,*viewport,*visual,dpr]
+        if (len(point)!=2 or len(rect)!=4 or len(viewport)!=2 or visual!=[0,0,1] or
+            any(type(v) not in (int,float) or not math.isfinite(v) or abs(v)>100000 for v in vals) or
+            dpr<=0 or any(v<=0 for v in viewport) or rect[2]<=0 or rect[3]<=0 or not (0<=point[0]<viewport[0] and 0<=point[1]<viewport[1])): raise ValueError()
+        left,top,right,bottom=next(iter(frames));iw,ih=image_size
+        if not (0<=left<right<=iw and 0<=top<bottom<=ih and
+                abs((right-left)/viewport[0]/dpr-1)<=0.03 and header['native']['viewY']==top): raise ValueError()
+        x=round(left+point[0]*dpr);y=round(top+point[1]*dpr)
+        if not (left<=x<right and top<=y<bottom): raise ValueError()
+    except (AttributeError,KeyError,TypeError,ValueError,OverflowError,ET.ParseError):
+        raise GuiFailure('direct_active_tap_unproven') from None
+    adb('shell','input','tap',str(x),str(y))
+
+
+def exercise_active_navigation(browser, fixture, *, progress=None, ime_checks=None):
     """Native IME observations plus bounded peer facts across actual route clicks."""
     def observe(stage,section,keyboard=False):
         if progress is not None: progress['stage']=stage
@@ -698,15 +727,29 @@ def exercise_active_navigation(browser, fixture, *, progress=None):
         except GuiFailure as error:
             error.active_context=active_diagnostic(browser,fixture)
             raise
+    def ime(visible):
+        sample=system_keyboard(visible)
+        if ime_checks is not None:
+            ime_checks.append(public_ime_diagnostic(sample.get('diagnostic')))
+        return sample
     observe('active_initial','ssh')
+    try:
+        ime(False)
+    except GuiFailure as error:
+        if str(error)!='android_system_ime_hide_unconfirmed': raise
+        ime(True)  # Only a confirmed owned keyboard makes Back an IME dismissal.
+        adb('shell','input','keyevent','KEYCODE_BACK')
+        ime(False)
     if progress is not None: progress['stage']='active_keyboard_opened'
-    browser.click('#ssh-focus')
-    system_keyboard(True)
+    native_active_tap(browser,'#ssh-focus')
+    ime(True)
     observe('active_keyboard_opened','ssh',True)
+    ime(True)
     if progress is not None: progress['stage']='active_keyboard_closed'
-    browser.click('#ssh-hide-keyboard')
-    system_keyboard(False)
+    native_active_tap(browser,'#ssh-hide-keyboard')
+    ime(False)
     observe('active_keyboard_closed','ssh')
+    ime(False)
     for section,selector,label in (('dashboard','#show-remote','board'),('network','#nav-network','network'),('settings','#nav-settings','settings')):
         if progress is not None: progress['stage']='active_'+label
         browser.click(selector)
@@ -776,14 +819,23 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
     if browser.evaluate("!!document.querySelector('#ssh-password').value || !!document.querySelector('#ssh-key').value || !!document.querySelector('#ssh-passphrase').value"):
         raise GuiFailure('direct_credentials_retained')
     active_navigation = None
+    ime_checks=[]
     if staged and not encrypted_key:
         try:
-            active_navigation = exercise_active_navigation(browser,fixture,progress=progress)
+            active_navigation = exercise_active_navigation(browser,fixture,progress=progress,ime_checks=ime_checks)
         except GuiFailure as error:
             if not hasattr(error,'active_context'): error.active_context=active_diagnostic(browser,fixture)
+            error.ime_checks=ime_checks
+            error.ime_failure=public_ime_diagnostic(getattr(error,'system_ime_diagnostic',None))
             raise
     if progress is not None: progress['stage']='terminal_input'
-    browser.click('#ssh-focus')
+    if active_navigation:
+        native_active_tap(browser,'#ssh-focus')
+        system_keyboard(True)
+        active_view(browser,fixture,'ssh',keyboard=True)
+        active_peer(fixture)
+    else:
+        browser.click('#ssh-focus')
     wait_for(lambda: browser.evaluate("document.activeElement === document.querySelector('#ssh-terminal .xterm-helper-textarea')"),
              'direct_terminal_focus_missing')
     browser.call('Input.insertText', {'text': fixture.marker})
@@ -836,7 +888,7 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
     return {'fingerprintReviewed':True,'credentialReviewPreserved':True,'connected':True,
             'terminalInputReceived':True,'terminalEchoRendered':True,'disconnected':True,
             'passwordCleared':True, 'returnedHome':True, **({'helperKeysExact':True} if not encrypted_key else {}),
-            **({'ordinaryActive':active_navigation} if active_navigation else {}),
+            **({'ordinaryActive':active_navigation,'activeImeChecks':ime_checks} if active_navigation else {}),
             **({'terminalScreenshot':terminal_proof} if terminal_proof else {}),
             'peer':{k:True for k in ('authAccepted','ptyRequested','shellRequested','markerReceived','sessionClosed')}}
 
@@ -1132,6 +1184,11 @@ def main():
             report['activeDiagnostic']=diagnostic
         context=getattr(error,'active_context',None)
         if isinstance(context,dict): report['activeContext']=context
+        ime_checks=getattr(error,'ime_checks',None)
+        if isinstance(ime_checks,list) and len(ime_checks)<=6:
+            report['activeImeChecks']=[public_ime_diagnostic(item) for item in ime_checks]
+        ime_failure=public_ime_diagnostic(getattr(error,'ime_failure',None))
+        if ime_failure: report['activeImeFailure']=ime_failure
         report['errorCode']=public_driver_error(error)
         if progress.get('stage') in DRIVER_STAGES: report['failureStage']=progress['stage']
     except Exception:

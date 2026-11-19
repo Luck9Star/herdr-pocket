@@ -232,7 +232,7 @@ function home(board, returned) {
   const { margin, span, text, notice } = board;
   const top = 28;
   text('看板', margin, top + 14, { size: 22, bold: true, limit: span });
-  if (returned) notice('closed-feedback', '普通 SSH 已断开', [], top + 34);
+  if (returned) notice('closed-feedback', '本机已断开', [], top + 34);
   emptyHostCard(board, top + (returned ? 94 : 50));
 }
 function boardActive(board) {
@@ -282,7 +282,14 @@ function endpoint(board, feedback, focused = false) {
   pageHeader('普通 SSH');
   let y = 76;
   if (feedback === 'disconnected') {
-    y = notice('closed-feedback', '已断开连接', ['本次凭据已清空。重新连接时请重新填写。'], y) + 16;
+    // 用户定稿：确认本机已结束且清凭据即显示「本机已断开」；无远端报告只讲本机和凭据。
+    y = notice('closed-feedback', '本机已断开', ['凭据已清空，重连时请重新填写。'], y) + 16;
+  } else if (feedback === 'disconnected-remote-exit') {
+    // 仅当确有明确远端结束证据（如 exit 状态报告）才加远端一句。
+    y = notice('closed-feedback', '本机已断开', ['远端已报告结束，凭据已清空。重连时请重新填写。'], y) + 16;
+  } else if (feedback === 'disconnect-failed') {
+    // 关停失败单独说明，不声称成功；不新增操作，返回首页语义在文档说明。
+    y = notice('stop-failed-feedback', '本机连接关闭失败', ['会话可能仍在。可返回首页。'], y, 'danger') + 16;
   } else if (feedback === 'previous-trust') {
     y = notice('trust-preserved', '已保留旧信任', ['请重新探测并独立核对主机指纹。'], y) + 16;
   }
@@ -293,7 +300,7 @@ function endpoint(board, feedback, focused = false) {
   y = field('port', '端口', '22', margin + span - portWidth, y, portWidth) + 20;
   button('probe', '探测并核对主机密钥', y);
   if (feedback !== 'previous-trust') footnote('探测时仅获取主机密钥，认证在核对之后进行。', y + 70);
-  if (feedback === 'disconnected') button('return-home', '返回首页', y + 84, { kind: 'secondary' });
+  if (feedback === 'disconnected' || feedback === 'disconnected-remote-exit' || feedback === 'disconnect-failed') button('return-home', '返回首页', y + 84, { kind: 'secondary' });
 }
 function trust(board, rotated) {
   const { margin, span, pageHeader, layer, text, button, targetCard, fingerprintCard } = board;
@@ -384,6 +391,8 @@ const states = [
   ['network-active', '网络 · 会话保持连接', networkActive, 'network', true],
   ['settings-active', '设置 · 会话保持连接', settings, 'settings', true],
   ['disconnected', '断开连接', (board) => endpoint(board, 'disconnected'), null, false],
+  ['disconnected-remote-exit', '断开 · 远端报告结束', (board) => endpoint(board, 'disconnected-remote-exit'), null, false],
+  ['disconnect-failed', '断开失败', (board) => endpoint(board, 'disconnect-failed'), null, false],
   ['returned', '断开后返回首页', (board) => home(board, true), 'board', false],
   ['key-changed', '指纹变化 · 阻止连接', changed, null, false],
   ['previous-trust', '取消并保留旧信任', (board) => endpoint(board, 'previous-trust'), null, false],

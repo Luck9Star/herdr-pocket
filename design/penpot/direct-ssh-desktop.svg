@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="5880" height="11064" viewBox="0 0 5880 11064">
+<svg xmlns="http://www.w3.org/2000/svg" width="5880" height="13824" viewBox="0 0 5880 13824">
 <title>Herdr Pocket · 普通 SSH 桌面设计</title>
-<rect width="5880" height="11064" fill="#E2E8F0"/>
+<rect width="5880" height="13824" fill="#E2E8F0"/>
 <text x="24" y="48" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">home-1440 · 空首页</text>
 <g id="home-1440" transform="translate(24 60)">
 <title>home-1440 · 空首页</title>
@@ -779,8 +779,8 @@
 </g>
 <g id="disconnected-1440-closed-feedback"><title>closed-feedback</title>
 <rect x="264" y="76" width="560" height="66" rx="10" fill="#EEF2FF" stroke="#C7D2FE" stroke-width="1"/>
-<text id="disconnected-1440-text-8" x="276" y="100" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#4F46E5" text-anchor="start">已断开连接</text>
-<text id="disconnected-1440-text-9" x="276" y="123" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="400" fill="#475569" text-anchor="start">本次凭据已清空。重新连接时请重新填写。</text>
+<text id="disconnected-1440-text-8" x="276" y="100" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#4F46E5" text-anchor="start">本机已断开</text>
+<text id="disconnected-1440-text-9" x="276" y="123" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="400" fill="#475569" text-anchor="start">凭据已清空，重连时请重新填写。</text>
 </g>
 <text id="disconnected-1440-text-10" x="264" y="178" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="600" fill="#0F172A" text-anchor="start">填写连接目标</text>
 <text id="disconnected-1440-text-11" x="264" y="208" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">主机地址</text>
@@ -813,8 +813,164 @@
 <text id="disconnected-1440-text-19" x="544" y="481" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">返回首页</text>
 </g>
 </g>
-<text x="24" y="2928" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">returned-1440 · 断开后返回首页</text>
-<g id="returned-1440" transform="translate(24 2940)">
+<text x="24" y="2928" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">disconnected-remote-exit-1440 · 断开 · 远端报告结束</text>
+<g id="disconnected-remote-exit-1440" transform="translate(24 2940)">
+<title>disconnected-remote-exit-1440 · 断开 · 远端报告结束</title>
+<rect x="0" y="0" width="1440" height="900" rx="0" fill="#F8FAFC"/>
+<g id="disconnected-remote-exit-1440-app-sidebar"><title>app-sidebar</title>
+<rect x="0" y="0" width="224" height="900" rx="0" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+<path d="M 223.5 0 L 223.5 900" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+<g id="disconnected-remote-exit-1440-sidebar-toggle"><title>sidebar-toggle</title>
+<rect x="8" y="8" width="44" height="44" fill="none"/>
+<path d="M4 6 H20 M4 12 H20 M4 18 H20" transform="translate(18 17)" fill="none" stroke="#0F172A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g id="disconnected-remote-exit-1440-nav-board"><title>nav-board</title>
+<rect x="8" y="68" width="208" height="44" fill="none"/>
+<path d="M3 3 H10 V10 H3 Z M14 3 H21 V10 H14 Z M3 14 H10 V21 H3 Z M14 14 H21 V21 H14 Z" transform="translate(22 81)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text id="disconnected-remote-exit-1440-text-1" x="56" y="96" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">看板</text>
+</g>
+<g id="disconnected-remote-exit-1440-nav-terminal"><title>nav-terminal</title>
+<rect x="8" y="120" width="208" height="44" fill="none"/>
+<path d="M3 4 H21 V20 H3 Z M7 9 L10 12 L7 15 M13 15 H17" transform="translate(22 133)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text id="disconnected-remote-exit-1440-text-2" x="56" y="148" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">终端</text>
+</g>
+<g id="disconnected-remote-exit-1440-nav-network"><title>nav-network</title>
+<rect x="8" y="172" width="208" height="44" fill="none"/>
+<path d="M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 M3 12 H21 M12 3 C6 7 6 17 12 21 C18 17 18 7 12 3" transform="translate(22 185)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text id="disconnected-remote-exit-1440-text-3" x="56" y="200" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">网络</text>
+</g>
+<g id="disconnected-remote-exit-1440-nav-settings"><title>nav-settings</title>
+<rect x="8" y="224" width="208" height="44" fill="none"/>
+<path d="M3 6 H21 M3 12 H21 M3 18 H21 M8 3 V9 M16 9 V15 M10 15 V21" transform="translate(22 237)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text id="disconnected-remote-exit-1440-text-4" x="56" y="252" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">设置</text>
+</g>
+<text id="disconnected-remote-exit-1440-text-5" x="20" y="304" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#475569" text-anchor="start">主机</text>
+<text id="disconnected-remote-exit-1440-text-6" x="20" y="326" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="400" fill="#64748B" text-anchor="start">还没有主机 · 从看板添加</text>
+</g>
+<g id="disconnected-remote-exit-1440-page-header"><title>page-header</title>
+<path d="M 224 55.5 L 1440 55.5" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+<g id="disconnected-remote-exit-1440-back"><title>back</title>
+<rect x="232" y="6" width="44" height="44" fill="none"/>
+<path d="M14 4 L6 12 L14 20 M6 12 H20" transform="translate(241 16)" fill="none" stroke="#0F172A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<text id="disconnected-remote-exit-1440-text-7" x="288" y="35" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="600" fill="#0F172A" text-anchor="start">普通 SSH</text>
+</g>
+<g id="disconnected-remote-exit-1440-closed-feedback"><title>closed-feedback</title>
+<rect x="264" y="76" width="560" height="66" rx="10" fill="#EEF2FF" stroke="#C7D2FE" stroke-width="1"/>
+<text id="disconnected-remote-exit-1440-text-8" x="276" y="100" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#4F46E5" text-anchor="start">本机已断开</text>
+<text id="disconnected-remote-exit-1440-text-9" x="276" y="123" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="400" fill="#475569" text-anchor="start">远端已报告结束，凭据已清空。重连时请重新填写。</text>
+</g>
+<text id="disconnected-remote-exit-1440-text-10" x="264" y="178" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="600" fill="#0F172A" text-anchor="start">填写连接目标</text>
+<text id="disconnected-remote-exit-1440-text-11" x="264" y="208" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">主机地址</text>
+<g id="disconnected-remote-exit-1440-host"><title>host</title>
+<rect x="264" y="216" width="560" height="48" fill="none"/>
+<rect x="264" y="216" width="560" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnected-remote-exit-1440-text-12" x="276" y="245" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">ssh.example.test</text>
+</g>
+<text id="disconnected-remote-exit-1440-text-13" x="264" y="292" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">用户名</text>
+<g id="disconnected-remote-exit-1440-username"><title>username</title>
+<rect x="264" y="300" width="464" height="48" fill="none"/>
+<rect x="264" y="300" width="464" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnected-remote-exit-1440-text-14" x="276" y="329" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">demo</text>
+</g>
+<text id="disconnected-remote-exit-1440-text-15" x="740" y="292" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">端口</text>
+<g id="disconnected-remote-exit-1440-port"><title>port</title>
+<rect x="740" y="300" width="84" height="48" fill="none"/>
+<rect x="740" y="300" width="84" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnected-remote-exit-1440-text-16" x="752" y="329" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">22</text>
+</g>
+<g id="disconnected-remote-exit-1440-probe"><title>probe</title>
+<rect x="264" y="368" width="560" height="48" fill="none"/>
+<rect x="264" y="368" width="560" height="48" rx="10" fill="#4F46E5"/>
+<text id="disconnected-remote-exit-1440-text-17" x="544" y="397" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#FFFFFF" text-anchor="middle">探测并核对主机密钥</text>
+</g>
+<text id="disconnected-remote-exit-1440-text-18" x="264" y="438" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="start">探测时仅获取主机密钥，认证在核对之后进行。</text>
+<g id="disconnected-remote-exit-1440-return-home"><title>return-home</title>
+<rect x="264" y="452" width="560" height="48" fill="none"/>
+<rect x="264" y="452" width="560" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnected-remote-exit-1440-text-19" x="544" y="481" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">返回首页</text>
+</g>
+</g>
+<text x="1488" y="2928" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">disconnect-failed-1440 · 断开失败</text>
+<g id="disconnect-failed-1440" transform="translate(1488 2940)">
+<title>disconnect-failed-1440 · 断开失败</title>
+<rect x="0" y="0" width="1440" height="900" rx="0" fill="#F8FAFC"/>
+<g id="disconnect-failed-1440-app-sidebar"><title>app-sidebar</title>
+<rect x="0" y="0" width="224" height="900" rx="0" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+<path d="M 223.5 0 L 223.5 900" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+<g id="disconnect-failed-1440-sidebar-toggle"><title>sidebar-toggle</title>
+<rect x="8" y="8" width="44" height="44" fill="none"/>
+<path d="M4 6 H20 M4 12 H20 M4 18 H20" transform="translate(18 17)" fill="none" stroke="#0F172A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g id="disconnect-failed-1440-nav-board"><title>nav-board</title>
+<rect x="8" y="68" width="208" height="44" fill="none"/>
+<path d="M3 3 H10 V10 H3 Z M14 3 H21 V10 H14 Z M3 14 H10 V21 H3 Z M14 14 H21 V21 H14 Z" transform="translate(22 81)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text id="disconnect-failed-1440-text-1" x="56" y="96" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">看板</text>
+</g>
+<g id="disconnect-failed-1440-nav-terminal"><title>nav-terminal</title>
+<rect x="8" y="120" width="208" height="44" fill="none"/>
+<path d="M3 4 H21 V20 H3 Z M7 9 L10 12 L7 15 M13 15 H17" transform="translate(22 133)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text id="disconnect-failed-1440-text-2" x="56" y="148" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">终端</text>
+</g>
+<g id="disconnect-failed-1440-nav-network"><title>nav-network</title>
+<rect x="8" y="172" width="208" height="44" fill="none"/>
+<path d="M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 M3 12 H21 M12 3 C6 7 6 17 12 21 C18 17 18 7 12 3" transform="translate(22 185)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text id="disconnect-failed-1440-text-3" x="56" y="200" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">网络</text>
+</g>
+<g id="disconnect-failed-1440-nav-settings"><title>nav-settings</title>
+<rect x="8" y="224" width="208" height="44" fill="none"/>
+<path d="M3 6 H21 M3 12 H21 M3 18 H21 M8 3 V9 M16 9 V15 M10 15 V21" transform="translate(22 237)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text id="disconnect-failed-1440-text-4" x="56" y="252" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">设置</text>
+</g>
+<text id="disconnect-failed-1440-text-5" x="20" y="304" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#475569" text-anchor="start">主机</text>
+<text id="disconnect-failed-1440-text-6" x="20" y="326" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="400" fill="#64748B" text-anchor="start">还没有主机 · 从看板添加</text>
+</g>
+<g id="disconnect-failed-1440-page-header"><title>page-header</title>
+<path d="M 224 55.5 L 1440 55.5" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+<g id="disconnect-failed-1440-back"><title>back</title>
+<rect x="232" y="6" width="44" height="44" fill="none"/>
+<path d="M14 4 L6 12 L14 20 M6 12 H20" transform="translate(241 16)" fill="none" stroke="#0F172A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<text id="disconnect-failed-1440-text-7" x="288" y="35" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="600" fill="#0F172A" text-anchor="start">普通 SSH</text>
+</g>
+<g id="disconnect-failed-1440-stop-failed-feedback"><title>stop-failed-feedback</title>
+<rect x="264" y="76" width="560" height="66" rx="10" fill="#FFF1F2" stroke="#FECDD3" stroke-width="1"/>
+<text id="disconnect-failed-1440-text-8" x="276" y="100" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#BE123C" text-anchor="start">本机连接关闭失败</text>
+<text id="disconnect-failed-1440-text-9" x="276" y="123" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="400" fill="#475569" text-anchor="start">会话可能仍在。可返回首页。</text>
+</g>
+<text id="disconnect-failed-1440-text-10" x="264" y="178" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="600" fill="#0F172A" text-anchor="start">填写连接目标</text>
+<text id="disconnect-failed-1440-text-11" x="264" y="208" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">主机地址</text>
+<g id="disconnect-failed-1440-host"><title>host</title>
+<rect x="264" y="216" width="560" height="48" fill="none"/>
+<rect x="264" y="216" width="560" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnect-failed-1440-text-12" x="276" y="245" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">ssh.example.test</text>
+</g>
+<text id="disconnect-failed-1440-text-13" x="264" y="292" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">用户名</text>
+<g id="disconnect-failed-1440-username"><title>username</title>
+<rect x="264" y="300" width="464" height="48" fill="none"/>
+<rect x="264" y="300" width="464" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnect-failed-1440-text-14" x="276" y="329" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">demo</text>
+</g>
+<text id="disconnect-failed-1440-text-15" x="740" y="292" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">端口</text>
+<g id="disconnect-failed-1440-port"><title>port</title>
+<rect x="740" y="300" width="84" height="48" fill="none"/>
+<rect x="740" y="300" width="84" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnect-failed-1440-text-16" x="752" y="329" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">22</text>
+</g>
+<g id="disconnect-failed-1440-probe"><title>probe</title>
+<rect x="264" y="368" width="560" height="48" fill="none"/>
+<rect x="264" y="368" width="560" height="48" rx="10" fill="#4F46E5"/>
+<text id="disconnect-failed-1440-text-17" x="544" y="397" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#FFFFFF" text-anchor="middle">探测并核对主机密钥</text>
+</g>
+<text id="disconnect-failed-1440-text-18" x="264" y="438" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="start">探测时仅获取主机密钥，认证在核对之后进行。</text>
+<g id="disconnect-failed-1440-return-home"><title>return-home</title>
+<rect x="264" y="452" width="560" height="48" fill="none"/>
+<rect x="264" y="452" width="560" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnect-failed-1440-text-19" x="544" y="481" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">返回首页</text>
+</g>
+</g>
+<text x="2952" y="2928" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">returned-1440 · 断开后返回首页</text>
+<g id="returned-1440" transform="translate(2952 2940)">
 <title>returned-1440 · 断开后返回首页</title>
 <rect x="0" y="0" width="1440" height="900" rx="0" fill="#F8FAFC"/>
 <g id="returned-1440-app-sidebar"><title>app-sidebar</title>
@@ -851,7 +1007,7 @@
 <text id="returned-1440-text-7" x="264" y="42" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="600" fill="#0F172A" text-anchor="start">看板</text>
 <g id="returned-1440-closed-feedback"><title>closed-feedback</title>
 <rect x="264" y="62" width="560" height="44" rx="10" fill="#EEF2FF" stroke="#C7D2FE" stroke-width="1"/>
-<text id="returned-1440-text-8" x="276" y="89" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#4F46E5" text-anchor="start">普通 SSH 已断开</text>
+<text id="returned-1440-text-8" x="276" y="89" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#4F46E5" text-anchor="start">本机已断开</text>
 </g>
 <g id="returned-1440-home-empty-card"><title>home-empty-card</title>
 <rect x="264" y="122" width="560" height="268" rx="16" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
@@ -871,8 +1027,8 @@
 </g>
 </g>
 </g>
-<text x="1488" y="2928" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">key-changed-1440 · 指纹变化 · 阻止连接</text>
-<g id="key-changed-1440" transform="translate(1488 2940)">
+<text x="4416" y="2928" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">key-changed-1440 · 指纹变化 · 阻止连接</text>
+<g id="key-changed-1440" transform="translate(4416 2940)">
 <title>key-changed-1440 · 指纹变化 · 阻止连接</title>
 <rect x="0" y="0" width="1440" height="900" rx="0" fill="#F8FAFC"/>
 <g id="key-changed-1440-app-sidebar"><title>app-sidebar</title>
@@ -946,8 +1102,8 @@
 <text id="key-changed-1440-text-21" x="544" y="516" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">取消连接，保留旧信任</text>
 </g>
 </g>
-<text x="2952" y="2928" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">previous-trust-1440 · 取消并保留旧信任</text>
-<g id="previous-trust-1440" transform="translate(2952 2940)">
+<text x="24" y="3888" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">previous-trust-1440 · 取消并保留旧信任</text>
+<g id="previous-trust-1440" transform="translate(24 3900)">
 <title>previous-trust-1440 · 取消并保留旧信任</title>
 <rect x="0" y="0" width="1440" height="900" rx="0" fill="#F8FAFC"/>
 <g id="previous-trust-1440-app-sidebar"><title>app-sidebar</title>
@@ -1018,8 +1174,8 @@
 <text id="previous-trust-1440-text-17" x="544" y="397" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#FFFFFF" text-anchor="middle">探测并核对主机密钥</text>
 </g>
 </g>
-<text x="4416" y="2928" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">recheck-trust-1440 · 重新核对主机密钥</text>
-<g id="recheck-trust-1440" transform="translate(4416 2940)">
+<text x="1488" y="3888" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">recheck-trust-1440 · 重新核对主机密钥</text>
+<g id="recheck-trust-1440" transform="translate(1488 3900)">
 <title>recheck-trust-1440 · 重新核对主机密钥</title>
 <rect x="0" y="0" width="1440" height="900" rx="0" fill="#F8FAFC"/>
 <g id="recheck-trust-1440-app-sidebar"><title>app-sidebar</title>
@@ -1091,8 +1247,8 @@
 <text id="recheck-trust-1440-text-18" x="544" y="425" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">取消核对，保留旧信任</text>
 </g>
 </g>
-<text x="24" y="3888" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">home-980 · 空首页</text>
-<g id="home-980" transform="translate(24 3900)">
+<text x="24" y="4848" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">home-980 · 空首页</text>
+<g id="home-980" transform="translate(24 4860)">
 <title>home-980 · 空首页</title>
 <rect x="0" y="0" width="980" height="780" rx="0" fill="#F8FAFC"/>
 <g id="home-980-app-sidebar"><title>app-sidebar</title>
@@ -1145,8 +1301,8 @@
 </g>
 </g>
 </g>
-<text x="1028" y="3888" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">choose-980 · 选择接入方式</text>
-<g id="choose-980" transform="translate(1028 3900)">
+<text x="1028" y="4848" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">choose-980 · 选择接入方式</text>
+<g id="choose-980" transform="translate(1028 4860)">
 <title>choose-980 · 选择接入方式</title>
 <rect x="0" y="0" width="980" height="780" rx="0" fill="#F8FAFC"/>
 <g id="choose-980-app-sidebar"><title>app-sidebar</title>
@@ -1207,8 +1363,8 @@
 <text id="choose-980-text-12" x="278" y="313" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="400" fill="#475569" text-anchor="start">接入 herdr 工作台，查看会话和任务。</text>
 </g>
 </g>
-<text x="2032" y="3888" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">target-980 · 填写连接目标</text>
-<g id="target-980" transform="translate(2032 3900)">
+<text x="2032" y="4848" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">target-980 · 填写连接目标</text>
+<g id="target-980" transform="translate(2032 4860)">
 <title>target-980 · 填写连接目标</title>
 <rect x="0" y="0" width="980" height="780" rx="0" fill="#F8FAFC"/>
 <g id="target-980-app-sidebar"><title>app-sidebar</title>
@@ -1275,8 +1431,8 @@
 </g>
 <text id="target-980-text-16" x="264" y="356" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="start">探测时仅获取主机密钥，认证在核对之后进行。</text>
 </g>
-<text x="3036" y="3888" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">target-focused-980 · 目标输入聚焦</text>
-<g id="target-focused-980" transform="translate(3036 3900)">
+<text x="3036" y="4848" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">target-focused-980 · 目标输入聚焦</text>
+<g id="target-focused-980" transform="translate(3036 4860)">
 <title>target-focused-980 · 目标输入聚焦</title>
 <rect x="0" y="0" width="980" height="780" rx="0" fill="#F8FAFC"/>
 <g id="target-focused-980-app-sidebar"><title>app-sidebar</title>
@@ -1343,8 +1499,8 @@
 </g>
 <text id="target-focused-980-text-16" x="264" y="356" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="start">探测时仅获取主机密钥，认证在核对之后进行。</text>
 </g>
-<text x="24" y="4728" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">trust-980 · 首次核对主机密钥</text>
-<g id="trust-980" transform="translate(24 4740)">
+<text x="24" y="5688" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">trust-980 · 首次核对主机密钥</text>
+<g id="trust-980" transform="translate(24 5700)">
 <title>trust-980 · 首次核对主机密钥</title>
 <rect x="0" y="0" width="980" height="780" rx="0" fill="#F8FAFC"/>
 <g id="trust-980-app-sidebar"><title>app-sidebar</title>
@@ -1416,8 +1572,8 @@
 <text id="trust-980-text-18" x="544" y="425" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">取消核对</text>
 </g>
 </g>
-<text x="1028" y="4728" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">password-980 · 密码认证</text>
-<g id="password-980" transform="translate(1028 4740)">
+<text x="1028" y="5688" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">password-980 · 密码认证</text>
+<g id="password-980" transform="translate(1028 5700)">
 <title>password-980 · 密码认证</title>
 <rect x="0" y="0" width="980" height="780" rx="0" fill="#F8FAFC"/>
 <g id="password-980-app-sidebar"><title>app-sidebar</title>
@@ -1491,8 +1647,8 @@
 </g>
 <text id="password-980-text-17" x="264" y="434" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="start">断开或取消后，本次密码会清空。</text>
 </g>
-<text x="2032" y="4728" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">private-key-980 · 已有私钥认证</text>
-<g id="private-key-980" transform="translate(2032 4740)">
+<text x="2032" y="5688" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">private-key-980 · 已有私钥认证</text>
+<g id="private-key-980" transform="translate(2032 5700)">
 <title>private-key-980 · 已有私钥认证</title>
 <rect x="0" y="0" width="980" height="780" rx="0" fill="#F8FAFC"/>
 <g id="private-key-980-app-sidebar"><title>app-sidebar</title>
@@ -1577,8 +1733,8 @@
 </g>
 <text id="private-key-980-text-20" x="264" y="610" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="start">填写完整私钥后才能连接。</text>
 </g>
-<text x="3036" y="4728" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">terminal-980 · 活动终端</text>
-<g id="terminal-980" transform="translate(3036 4740)">
+<text x="3036" y="5688" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">terminal-980 · 活动终端</text>
+<g id="terminal-980" transform="translate(3036 5700)">
 <title>terminal-980 · 活动终端</title>
 <rect x="0" y="0" width="980" height="780" rx="0" fill="#F8FAFC"/>
 <g id="terminal-980-app-sidebar"><title>app-sidebar</title>
@@ -1640,8 +1796,8 @@
 <rect x="930" y="128" width="6" height="40" rx="3" fill="#475569"/>
 </g>
 </g>
-<text x="24" y="5568" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">board-active-980 · 看板 · 会话保持连接</text>
-<g id="board-active-980" transform="translate(24 5580)">
+<text x="24" y="6528" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">board-active-980 · 看板 · 会话保持连接</text>
+<g id="board-active-980" transform="translate(24 6540)">
 <title>board-active-980 · 看板 · 会话保持连接</title>
 <rect x="0" y="0" width="980" height="780" rx="0" fill="#F8FAFC"/>
 <g id="board-active-980-app-sidebar"><title>app-sidebar</title>
@@ -1701,8 +1857,8 @@
 </g>
 </g>
 </g>
-<text x="1028" y="5568" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">network-active-980 · 网络 · 会话保持连接</text>
-<g id="network-active-980" transform="translate(1028 5580)">
+<text x="1028" y="6528" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">network-active-980 · 网络 · 会话保持连接</text>
+<g id="network-active-980" transform="translate(1028 6540)">
 <title>network-active-980 · 网络 · 会话保持连接</title>
 <rect x="0" y="0" width="980" height="780" rx="0" fill="#F8FAFC"/>
 <g id="network-active-980-app-sidebar"><title>app-sidebar</title>
@@ -1757,8 +1913,8 @@
 </g>
 </g>
 </g>
-<text x="2032" y="5568" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">settings-active-980 · 设置 · 会话保持连接</text>
-<g id="settings-active-980" transform="translate(2032 5580)">
+<text x="2032" y="6528" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">settings-active-980 · 设置 · 会话保持连接</text>
+<g id="settings-active-980" transform="translate(2032 6540)">
 <title>settings-active-980 · 设置 · 会话保持连接</title>
 <rect x="0" y="0" width="980" height="780" rx="0" fill="#F8FAFC"/>
 <g id="settings-active-980-app-sidebar"><title>app-sidebar</title>
@@ -1825,8 +1981,8 @@
 <text id="settings-active-980-text-16" x="544" y="395" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">导入 / 导出配置</text>
 </g>
 </g>
-<text x="3036" y="5568" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">disconnected-980 · 断开连接</text>
-<g id="disconnected-980" transform="translate(3036 5580)">
+<text x="3036" y="6528" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">disconnected-980 · 断开连接</text>
+<g id="disconnected-980" transform="translate(3036 6540)">
 <title>disconnected-980 · 断开连接</title>
 <rect x="0" y="0" width="980" height="780" rx="0" fill="#F8FAFC"/>
 <g id="disconnected-980-app-sidebar"><title>app-sidebar</title>
@@ -1869,8 +2025,8 @@
 </g>
 <g id="disconnected-980-closed-feedback"><title>closed-feedback</title>
 <rect x="264" y="76" width="560" height="66" rx="10" fill="#EEF2FF" stroke="#C7D2FE" stroke-width="1"/>
-<text id="disconnected-980-text-8" x="276" y="100" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#4F46E5" text-anchor="start">已断开连接</text>
-<text id="disconnected-980-text-9" x="276" y="123" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="400" fill="#475569" text-anchor="start">本次凭据已清空。重新连接时请重新填写。</text>
+<text id="disconnected-980-text-8" x="276" y="100" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#4F46E5" text-anchor="start">本机已断开</text>
+<text id="disconnected-980-text-9" x="276" y="123" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="400" fill="#475569" text-anchor="start">凭据已清空，重连时请重新填写。</text>
 </g>
 <text id="disconnected-980-text-10" x="264" y="178" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="600" fill="#0F172A" text-anchor="start">填写连接目标</text>
 <text id="disconnected-980-text-11" x="264" y="208" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">主机地址</text>
@@ -1903,8 +2059,164 @@
 <text id="disconnected-980-text-19" x="544" y="481" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">返回首页</text>
 </g>
 </g>
-<text x="24" y="6408" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">returned-980 · 断开后返回首页</text>
-<g id="returned-980" transform="translate(24 6420)">
+<text x="24" y="7368" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">disconnected-remote-exit-980 · 断开 · 远端报告结束</text>
+<g id="disconnected-remote-exit-980" transform="translate(24 7380)">
+<title>disconnected-remote-exit-980 · 断开 · 远端报告结束</title>
+<rect x="0" y="0" width="980" height="780" rx="0" fill="#F8FAFC"/>
+<g id="disconnected-remote-exit-980-app-sidebar"><title>app-sidebar</title>
+<rect x="0" y="0" width="224" height="780" rx="0" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+<path d="M 223.5 0 L 223.5 780" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+<g id="disconnected-remote-exit-980-sidebar-toggle"><title>sidebar-toggle</title>
+<rect x="8" y="8" width="44" height="44" fill="none"/>
+<path d="M4 6 H20 M4 12 H20 M4 18 H20" transform="translate(18 17)" fill="none" stroke="#0F172A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g id="disconnected-remote-exit-980-nav-board"><title>nav-board</title>
+<rect x="8" y="68" width="208" height="44" fill="none"/>
+<path d="M3 3 H10 V10 H3 Z M14 3 H21 V10 H14 Z M3 14 H10 V21 H3 Z M14 14 H21 V21 H14 Z" transform="translate(22 81)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text id="disconnected-remote-exit-980-text-1" x="56" y="96" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">看板</text>
+</g>
+<g id="disconnected-remote-exit-980-nav-terminal"><title>nav-terminal</title>
+<rect x="8" y="120" width="208" height="44" fill="none"/>
+<path d="M3 4 H21 V20 H3 Z M7 9 L10 12 L7 15 M13 15 H17" transform="translate(22 133)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text id="disconnected-remote-exit-980-text-2" x="56" y="148" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">终端</text>
+</g>
+<g id="disconnected-remote-exit-980-nav-network"><title>nav-network</title>
+<rect x="8" y="172" width="208" height="44" fill="none"/>
+<path d="M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 M3 12 H21 M12 3 C6 7 6 17 12 21 C18 17 18 7 12 3" transform="translate(22 185)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text id="disconnected-remote-exit-980-text-3" x="56" y="200" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">网络</text>
+</g>
+<g id="disconnected-remote-exit-980-nav-settings"><title>nav-settings</title>
+<rect x="8" y="224" width="208" height="44" fill="none"/>
+<path d="M3 6 H21 M3 12 H21 M3 18 H21 M8 3 V9 M16 9 V15 M10 15 V21" transform="translate(22 237)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text id="disconnected-remote-exit-980-text-4" x="56" y="252" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">设置</text>
+</g>
+<text id="disconnected-remote-exit-980-text-5" x="20" y="304" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#475569" text-anchor="start">主机</text>
+<text id="disconnected-remote-exit-980-text-6" x="20" y="326" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="400" fill="#64748B" text-anchor="start">还没有主机 · 从看板添加</text>
+</g>
+<g id="disconnected-remote-exit-980-page-header"><title>page-header</title>
+<path d="M 224 55.5 L 980 55.5" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+<g id="disconnected-remote-exit-980-back"><title>back</title>
+<rect x="232" y="6" width="44" height="44" fill="none"/>
+<path d="M14 4 L6 12 L14 20 M6 12 H20" transform="translate(241 16)" fill="none" stroke="#0F172A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<text id="disconnected-remote-exit-980-text-7" x="288" y="35" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="600" fill="#0F172A" text-anchor="start">普通 SSH</text>
+</g>
+<g id="disconnected-remote-exit-980-closed-feedback"><title>closed-feedback</title>
+<rect x="264" y="76" width="560" height="66" rx="10" fill="#EEF2FF" stroke="#C7D2FE" stroke-width="1"/>
+<text id="disconnected-remote-exit-980-text-8" x="276" y="100" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#4F46E5" text-anchor="start">本机已断开</text>
+<text id="disconnected-remote-exit-980-text-9" x="276" y="123" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="400" fill="#475569" text-anchor="start">远端已报告结束，凭据已清空。重连时请重新填写。</text>
+</g>
+<text id="disconnected-remote-exit-980-text-10" x="264" y="178" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="600" fill="#0F172A" text-anchor="start">填写连接目标</text>
+<text id="disconnected-remote-exit-980-text-11" x="264" y="208" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">主机地址</text>
+<g id="disconnected-remote-exit-980-host"><title>host</title>
+<rect x="264" y="216" width="560" height="48" fill="none"/>
+<rect x="264" y="216" width="560" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnected-remote-exit-980-text-12" x="276" y="245" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">ssh.example.test</text>
+</g>
+<text id="disconnected-remote-exit-980-text-13" x="264" y="292" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">用户名</text>
+<g id="disconnected-remote-exit-980-username"><title>username</title>
+<rect x="264" y="300" width="464" height="48" fill="none"/>
+<rect x="264" y="300" width="464" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnected-remote-exit-980-text-14" x="276" y="329" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">demo</text>
+</g>
+<text id="disconnected-remote-exit-980-text-15" x="740" y="292" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">端口</text>
+<g id="disconnected-remote-exit-980-port"><title>port</title>
+<rect x="740" y="300" width="84" height="48" fill="none"/>
+<rect x="740" y="300" width="84" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnected-remote-exit-980-text-16" x="752" y="329" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">22</text>
+</g>
+<g id="disconnected-remote-exit-980-probe"><title>probe</title>
+<rect x="264" y="368" width="560" height="48" fill="none"/>
+<rect x="264" y="368" width="560" height="48" rx="10" fill="#4F46E5"/>
+<text id="disconnected-remote-exit-980-text-17" x="544" y="397" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#FFFFFF" text-anchor="middle">探测并核对主机密钥</text>
+</g>
+<text id="disconnected-remote-exit-980-text-18" x="264" y="438" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="start">探测时仅获取主机密钥，认证在核对之后进行。</text>
+<g id="disconnected-remote-exit-980-return-home"><title>return-home</title>
+<rect x="264" y="452" width="560" height="48" fill="none"/>
+<rect x="264" y="452" width="560" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnected-remote-exit-980-text-19" x="544" y="481" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">返回首页</text>
+</g>
+</g>
+<text x="1028" y="7368" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">disconnect-failed-980 · 断开失败</text>
+<g id="disconnect-failed-980" transform="translate(1028 7380)">
+<title>disconnect-failed-980 · 断开失败</title>
+<rect x="0" y="0" width="980" height="780" rx="0" fill="#F8FAFC"/>
+<g id="disconnect-failed-980-app-sidebar"><title>app-sidebar</title>
+<rect x="0" y="0" width="224" height="780" rx="0" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+<path d="M 223.5 0 L 223.5 780" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+<g id="disconnect-failed-980-sidebar-toggle"><title>sidebar-toggle</title>
+<rect x="8" y="8" width="44" height="44" fill="none"/>
+<path d="M4 6 H20 M4 12 H20 M4 18 H20" transform="translate(18 17)" fill="none" stroke="#0F172A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g id="disconnect-failed-980-nav-board"><title>nav-board</title>
+<rect x="8" y="68" width="208" height="44" fill="none"/>
+<path d="M3 3 H10 V10 H3 Z M14 3 H21 V10 H14 Z M3 14 H10 V21 H3 Z M14 14 H21 V21 H14 Z" transform="translate(22 81)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text id="disconnect-failed-980-text-1" x="56" y="96" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">看板</text>
+</g>
+<g id="disconnect-failed-980-nav-terminal"><title>nav-terminal</title>
+<rect x="8" y="120" width="208" height="44" fill="none"/>
+<path d="M3 4 H21 V20 H3 Z M7 9 L10 12 L7 15 M13 15 H17" transform="translate(22 133)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text id="disconnect-failed-980-text-2" x="56" y="148" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">终端</text>
+</g>
+<g id="disconnect-failed-980-nav-network"><title>nav-network</title>
+<rect x="8" y="172" width="208" height="44" fill="none"/>
+<path d="M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 M3 12 H21 M12 3 C6 7 6 17 12 21 C18 17 18 7 12 3" transform="translate(22 185)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text id="disconnect-failed-980-text-3" x="56" y="200" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">网络</text>
+</g>
+<g id="disconnect-failed-980-nav-settings"><title>nav-settings</title>
+<rect x="8" y="224" width="208" height="44" fill="none"/>
+<path d="M3 6 H21 M3 12 H21 M3 18 H21 M8 3 V9 M16 9 V15 M10 15 V21" transform="translate(22 237)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text id="disconnect-failed-980-text-4" x="56" y="252" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">设置</text>
+</g>
+<text id="disconnect-failed-980-text-5" x="20" y="304" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#475569" text-anchor="start">主机</text>
+<text id="disconnect-failed-980-text-6" x="20" y="326" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="400" fill="#64748B" text-anchor="start">还没有主机 · 从看板添加</text>
+</g>
+<g id="disconnect-failed-980-page-header"><title>page-header</title>
+<path d="M 224 55.5 L 980 55.5" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+<g id="disconnect-failed-980-back"><title>back</title>
+<rect x="232" y="6" width="44" height="44" fill="none"/>
+<path d="M14 4 L6 12 L14 20 M6 12 H20" transform="translate(241 16)" fill="none" stroke="#0F172A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<text id="disconnect-failed-980-text-7" x="288" y="35" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="600" fill="#0F172A" text-anchor="start">普通 SSH</text>
+</g>
+<g id="disconnect-failed-980-stop-failed-feedback"><title>stop-failed-feedback</title>
+<rect x="264" y="76" width="560" height="66" rx="10" fill="#FFF1F2" stroke="#FECDD3" stroke-width="1"/>
+<text id="disconnect-failed-980-text-8" x="276" y="100" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#BE123C" text-anchor="start">本机连接关闭失败</text>
+<text id="disconnect-failed-980-text-9" x="276" y="123" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="400" fill="#475569" text-anchor="start">会话可能仍在。可返回首页。</text>
+</g>
+<text id="disconnect-failed-980-text-10" x="264" y="178" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="600" fill="#0F172A" text-anchor="start">填写连接目标</text>
+<text id="disconnect-failed-980-text-11" x="264" y="208" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">主机地址</text>
+<g id="disconnect-failed-980-host"><title>host</title>
+<rect x="264" y="216" width="560" height="48" fill="none"/>
+<rect x="264" y="216" width="560" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnect-failed-980-text-12" x="276" y="245" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">ssh.example.test</text>
+</g>
+<text id="disconnect-failed-980-text-13" x="264" y="292" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">用户名</text>
+<g id="disconnect-failed-980-username"><title>username</title>
+<rect x="264" y="300" width="464" height="48" fill="none"/>
+<rect x="264" y="300" width="464" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnect-failed-980-text-14" x="276" y="329" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">demo</text>
+</g>
+<text id="disconnect-failed-980-text-15" x="740" y="292" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">端口</text>
+<g id="disconnect-failed-980-port"><title>port</title>
+<rect x="740" y="300" width="84" height="48" fill="none"/>
+<rect x="740" y="300" width="84" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnect-failed-980-text-16" x="752" y="329" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">22</text>
+</g>
+<g id="disconnect-failed-980-probe"><title>probe</title>
+<rect x="264" y="368" width="560" height="48" fill="none"/>
+<rect x="264" y="368" width="560" height="48" rx="10" fill="#4F46E5"/>
+<text id="disconnect-failed-980-text-17" x="544" y="397" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#FFFFFF" text-anchor="middle">探测并核对主机密钥</text>
+</g>
+<text id="disconnect-failed-980-text-18" x="264" y="438" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="start">探测时仅获取主机密钥，认证在核对之后进行。</text>
+<g id="disconnect-failed-980-return-home"><title>return-home</title>
+<rect x="264" y="452" width="560" height="48" fill="none"/>
+<rect x="264" y="452" width="560" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnect-failed-980-text-19" x="544" y="481" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">返回首页</text>
+</g>
+</g>
+<text x="2032" y="7368" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">returned-980 · 断开后返回首页</text>
+<g id="returned-980" transform="translate(2032 7380)">
 <title>returned-980 · 断开后返回首页</title>
 <rect x="0" y="0" width="980" height="780" rx="0" fill="#F8FAFC"/>
 <g id="returned-980-app-sidebar"><title>app-sidebar</title>
@@ -1941,7 +2253,7 @@
 <text id="returned-980-text-7" x="264" y="42" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="600" fill="#0F172A" text-anchor="start">看板</text>
 <g id="returned-980-closed-feedback"><title>closed-feedback</title>
 <rect x="264" y="62" width="560" height="44" rx="10" fill="#EEF2FF" stroke="#C7D2FE" stroke-width="1"/>
-<text id="returned-980-text-8" x="276" y="89" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#4F46E5" text-anchor="start">普通 SSH 已断开</text>
+<text id="returned-980-text-8" x="276" y="89" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#4F46E5" text-anchor="start">本机已断开</text>
 </g>
 <g id="returned-980-home-empty-card"><title>home-empty-card</title>
 <rect x="264" y="122" width="560" height="268" rx="16" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
@@ -1961,8 +2273,8 @@
 </g>
 </g>
 </g>
-<text x="1028" y="6408" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">key-changed-980 · 指纹变化 · 阻止连接</text>
-<g id="key-changed-980" transform="translate(1028 6420)">
+<text x="3036" y="7368" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">key-changed-980 · 指纹变化 · 阻止连接</text>
+<g id="key-changed-980" transform="translate(3036 7380)">
 <title>key-changed-980 · 指纹变化 · 阻止连接</title>
 <rect x="0" y="0" width="980" height="780" rx="0" fill="#F8FAFC"/>
 <g id="key-changed-980-app-sidebar"><title>app-sidebar</title>
@@ -2036,8 +2348,8 @@
 <text id="key-changed-980-text-21" x="544" y="516" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">取消连接，保留旧信任</text>
 </g>
 </g>
-<text x="2032" y="6408" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">previous-trust-980 · 取消并保留旧信任</text>
-<g id="previous-trust-980" transform="translate(2032 6420)">
+<text x="24" y="8208" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">previous-trust-980 · 取消并保留旧信任</text>
+<g id="previous-trust-980" transform="translate(24 8220)">
 <title>previous-trust-980 · 取消并保留旧信任</title>
 <rect x="0" y="0" width="980" height="780" rx="0" fill="#F8FAFC"/>
 <g id="previous-trust-980-app-sidebar"><title>app-sidebar</title>
@@ -2108,8 +2420,8 @@
 <text id="previous-trust-980-text-17" x="544" y="397" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#FFFFFF" text-anchor="middle">探测并核对主机密钥</text>
 </g>
 </g>
-<text x="3036" y="6408" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">recheck-trust-980 · 重新核对主机密钥</text>
-<g id="recheck-trust-980" transform="translate(3036 6420)">
+<text x="1028" y="8208" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">recheck-trust-980 · 重新核对主机密钥</text>
+<g id="recheck-trust-980" transform="translate(1028 8220)">
 <title>recheck-trust-980 · 重新核对主机密钥</title>
 <rect x="0" y="0" width="980" height="780" rx="0" fill="#F8FAFC"/>
 <g id="recheck-trust-980-app-sidebar"><title>app-sidebar</title>
@@ -2181,8 +2493,8 @@
 <text id="recheck-trust-980-text-18" x="544" y="425" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">取消核对，保留旧信任</text>
 </g>
 </g>
-<text x="24" y="7248" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">home-700 · 空首页</text>
-<g id="home-700" transform="translate(24 7260)">
+<text x="24" y="9048" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">home-700 · 空首页</text>
+<g id="home-700" transform="translate(24 9060)">
 <title>home-700 · 空首页</title>
 <rect x="0" y="0" width="700" height="900" rx="0" fill="#F8FAFC"/>
 <g id="home-700-app-sidebar"><title>app-sidebar</title>
@@ -2228,8 +2540,8 @@
 </g>
 </g>
 </g>
-<text x="748" y="7248" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">choose-700 · 选择接入方式</text>
-<g id="choose-700" transform="translate(748 7260)">
+<text x="748" y="9048" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">choose-700 · 选择接入方式</text>
+<g id="choose-700" transform="translate(748 9060)">
 <title>choose-700 · 选择接入方式</title>
 <rect x="0" y="0" width="700" height="900" rx="0" fill="#F8FAFC"/>
 <g id="choose-700-app-sidebar"><title>app-sidebar</title>
@@ -2284,8 +2596,8 @@
 <text id="choose-700-text-6" x="118" y="313" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="400" fill="#475569" text-anchor="start">接入 herdr 工作台，查看会话和任务。</text>
 </g>
 </g>
-<text x="1472" y="7248" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">target-700 · 填写连接目标</text>
-<g id="target-700" transform="translate(1472 7260)">
+<text x="1472" y="9048" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">target-700 · 填写连接目标</text>
+<g id="target-700" transform="translate(1472 9060)">
 <title>target-700 · 填写连接目标</title>
 <rect x="0" y="0" width="700" height="900" rx="0" fill="#F8FAFC"/>
 <g id="target-700-app-sidebar"><title>app-sidebar</title>
@@ -2346,8 +2658,8 @@
 </g>
 <text id="target-700-text-10" x="104" y="356" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="start">探测时仅获取主机密钥，认证在核对之后进行。</text>
 </g>
-<text x="2196" y="7248" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">target-focused-700 · 目标输入聚焦</text>
-<g id="target-focused-700" transform="translate(2196 7260)">
+<text x="2196" y="9048" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">target-focused-700 · 目标输入聚焦</text>
+<g id="target-focused-700" transform="translate(2196 9060)">
 <title>target-focused-700 · 目标输入聚焦</title>
 <rect x="0" y="0" width="700" height="900" rx="0" fill="#F8FAFC"/>
 <g id="target-focused-700-app-sidebar"><title>app-sidebar</title>
@@ -2408,8 +2720,8 @@
 </g>
 <text id="target-focused-700-text-10" x="104" y="356" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="start">探测时仅获取主机密钥，认证在核对之后进行。</text>
 </g>
-<text x="24" y="8208" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">trust-700 · 首次核对主机密钥</text>
-<g id="trust-700" transform="translate(24 8220)">
+<text x="24" y="10008" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">trust-700 · 首次核对主机密钥</text>
+<g id="trust-700" transform="translate(24 10020)">
 <title>trust-700 · 首次核对主机密钥</title>
 <rect x="0" y="0" width="700" height="900" rx="0" fill="#F8FAFC"/>
 <g id="trust-700-app-sidebar"><title>app-sidebar</title>
@@ -2475,8 +2787,8 @@
 <text id="trust-700-text-12" x="382" y="425" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">取消核对</text>
 </g>
 </g>
-<text x="748" y="8208" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">password-700 · 密码认证</text>
-<g id="password-700" transform="translate(748 8220)">
+<text x="748" y="10008" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">password-700 · 密码认证</text>
+<g id="password-700" transform="translate(748 10020)">
 <title>password-700 · 密码认证</title>
 <rect x="0" y="0" width="700" height="900" rx="0" fill="#F8FAFC"/>
 <g id="password-700-app-sidebar"><title>app-sidebar</title>
@@ -2544,8 +2856,8 @@
 </g>
 <text id="password-700-text-11" x="104" y="434" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="start">断开或取消后，本次密码会清空。</text>
 </g>
-<text x="1472" y="8208" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">private-key-700 · 已有私钥认证</text>
-<g id="private-key-700" transform="translate(1472 8220)">
+<text x="1472" y="10008" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">private-key-700 · 已有私钥认证</text>
+<g id="private-key-700" transform="translate(1472 10020)">
 <title>private-key-700 · 已有私钥认证</title>
 <rect x="0" y="0" width="700" height="900" rx="0" fill="#F8FAFC"/>
 <g id="private-key-700-app-sidebar"><title>app-sidebar</title>
@@ -2624,8 +2936,8 @@
 </g>
 <text id="private-key-700-text-14" x="104" y="610" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="start">填写完整私钥后才能连接。</text>
 </g>
-<text x="2196" y="8208" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">terminal-700 · 活动终端</text>
-<g id="terminal-700" transform="translate(2196 8220)">
+<text x="2196" y="10008" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">terminal-700 · 活动终端</text>
+<g id="terminal-700" transform="translate(2196 10020)">
 <title>terminal-700 · 活动终端</title>
 <rect x="0" y="0" width="700" height="900" rx="0" fill="#F8FAFC"/>
 <g id="terminal-700-app-sidebar"><title>app-sidebar</title>
@@ -2680,8 +2992,8 @@
 <rect x="650" y="128" width="6" height="40" rx="3" fill="#475569"/>
 </g>
 </g>
-<text x="24" y="9168" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">board-active-700 · 看板 · 会话保持连接</text>
-<g id="board-active-700" transform="translate(24 9180)">
+<text x="24" y="10968" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">board-active-700 · 看板 · 会话保持连接</text>
+<g id="board-active-700" transform="translate(24 10980)">
 <title>board-active-700 · 看板 · 会话保持连接</title>
 <rect x="0" y="0" width="700" height="900" rx="0" fill="#F8FAFC"/>
 <g id="board-active-700-app-sidebar"><title>app-sidebar</title>
@@ -2734,8 +3046,8 @@
 </g>
 </g>
 </g>
-<text x="748" y="9168" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">network-active-700 · 网络 · 会话保持连接</text>
-<g id="network-active-700" transform="translate(748 9180)">
+<text x="748" y="10968" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">network-active-700 · 网络 · 会话保持连接</text>
+<g id="network-active-700" transform="translate(748 10980)">
 <title>network-active-700 · 网络 · 会话保持连接</title>
 <rect x="0" y="0" width="700" height="900" rx="0" fill="#F8FAFC"/>
 <g id="network-active-700-app-sidebar"><title>app-sidebar</title>
@@ -2783,8 +3095,8 @@
 </g>
 </g>
 </g>
-<text x="1472" y="9168" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">settings-active-700 · 设置 · 会话保持连接</text>
-<g id="settings-active-700" transform="translate(1472 9180)">
+<text x="1472" y="10968" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">settings-active-700 · 设置 · 会话保持连接</text>
+<g id="settings-active-700" transform="translate(1472 10980)">
 <title>settings-active-700 · 设置 · 会话保持连接</title>
 <rect x="0" y="0" width="700" height="900" rx="0" fill="#F8FAFC"/>
 <g id="settings-active-700-app-sidebar"><title>app-sidebar</title>
@@ -2844,8 +3156,8 @@
 <text id="settings-active-700-text-9" x="382" y="395" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">导入 / 导出配置</text>
 </g>
 </g>
-<text x="2196" y="9168" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">disconnected-700 · 断开连接</text>
-<g id="disconnected-700" transform="translate(2196 9180)">
+<text x="2196" y="10968" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">disconnected-700 · 断开连接</text>
+<g id="disconnected-700" transform="translate(2196 10980)">
 <title>disconnected-700 · 断开连接</title>
 <rect x="0" y="0" width="700" height="900" rx="0" fill="#F8FAFC"/>
 <g id="disconnected-700-app-sidebar"><title>app-sidebar</title>
@@ -2882,8 +3194,8 @@
 </g>
 <g id="disconnected-700-closed-feedback"><title>closed-feedback</title>
 <rect x="104" y="76" width="556" height="66" rx="10" fill="#EEF2FF" stroke="#C7D2FE" stroke-width="1"/>
-<text id="disconnected-700-text-2" x="116" y="100" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#4F46E5" text-anchor="start">已断开连接</text>
-<text id="disconnected-700-text-3" x="116" y="123" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="400" fill="#475569" text-anchor="start">本次凭据已清空。重新连接时请重新填写。</text>
+<text id="disconnected-700-text-2" x="116" y="100" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#4F46E5" text-anchor="start">本机已断开</text>
+<text id="disconnected-700-text-3" x="116" y="123" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="400" fill="#475569" text-anchor="start">凭据已清空，重连时请重新填写。</text>
 </g>
 <text id="disconnected-700-text-4" x="104" y="178" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="600" fill="#0F172A" text-anchor="start">填写连接目标</text>
 <text id="disconnected-700-text-5" x="104" y="208" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">主机地址</text>
@@ -2916,8 +3228,152 @@
 <text id="disconnected-700-text-13" x="382" y="481" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">返回首页</text>
 </g>
 </g>
-<text x="24" y="10128" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">returned-700 · 断开后返回首页</text>
-<g id="returned-700" transform="translate(24 10140)">
+<text x="24" y="11928" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">disconnected-remote-exit-700 · 断开 · 远端报告结束</text>
+<g id="disconnected-remote-exit-700" transform="translate(24 11940)">
+<title>disconnected-remote-exit-700 · 断开 · 远端报告结束</title>
+<rect x="0" y="0" width="700" height="900" rx="0" fill="#F8FAFC"/>
+<g id="disconnected-remote-exit-700-app-sidebar"><title>app-sidebar</title>
+<rect x="0" y="0" width="64" height="900" rx="0" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+<path d="M 63.5 0 L 63.5 900" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+<g id="disconnected-remote-exit-700-sidebar-toggle"><title>sidebar-toggle</title>
+<rect x="10" y="8" width="44" height="44" fill="none"/>
+<path d="M4 6 H20 M4 12 H20 M4 18 H20" transform="translate(20 17)" fill="none" stroke="#0F172A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g id="disconnected-remote-exit-700-nav-board"><title>nav-board</title>
+<rect x="10" y="68" width="44" height="44" fill="none"/>
+<path d="M3 3 H10 V10 H3 Z M14 3 H21 V10 H14 Z M3 14 H10 V21 H3 Z M14 14 H21 V21 H14 Z" transform="translate(20 81)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g id="disconnected-remote-exit-700-nav-terminal"><title>nav-terminal</title>
+<rect x="10" y="120" width="44" height="44" fill="none"/>
+<path d="M3 4 H21 V20 H3 Z M7 9 L10 12 L7 15 M13 15 H17" transform="translate(20 133)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g id="disconnected-remote-exit-700-nav-network"><title>nav-network</title>
+<rect x="10" y="172" width="44" height="44" fill="none"/>
+<path d="M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 M3 12 H21 M12 3 C6 7 6 17 12 21 C18 17 18 7 12 3" transform="translate(20 185)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g id="disconnected-remote-exit-700-nav-settings"><title>nav-settings</title>
+<rect x="10" y="224" width="44" height="44" fill="none"/>
+<path d="M3 6 H21 M3 12 H21 M3 18 H21 M8 3 V9 M16 9 V15 M10 15 V21" transform="translate(20 237)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</g>
+<g id="disconnected-remote-exit-700-page-header"><title>page-header</title>
+<path d="M 64 55.5 L 700 55.5" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+<g id="disconnected-remote-exit-700-back"><title>back</title>
+<rect x="72" y="6" width="44" height="44" fill="none"/>
+<path d="M14 4 L6 12 L14 20 M6 12 H20" transform="translate(81 16)" fill="none" stroke="#0F172A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<text id="disconnected-remote-exit-700-text-1" x="128" y="35" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="600" fill="#0F172A" text-anchor="start">普通 SSH</text>
+</g>
+<g id="disconnected-remote-exit-700-closed-feedback"><title>closed-feedback</title>
+<rect x="104" y="76" width="556" height="66" rx="10" fill="#EEF2FF" stroke="#C7D2FE" stroke-width="1"/>
+<text id="disconnected-remote-exit-700-text-2" x="116" y="100" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#4F46E5" text-anchor="start">本机已断开</text>
+<text id="disconnected-remote-exit-700-text-3" x="116" y="123" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="400" fill="#475569" text-anchor="start">远端已报告结束，凭据已清空。重连时请重新填写。</text>
+</g>
+<text id="disconnected-remote-exit-700-text-4" x="104" y="178" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="600" fill="#0F172A" text-anchor="start">填写连接目标</text>
+<text id="disconnected-remote-exit-700-text-5" x="104" y="208" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">主机地址</text>
+<g id="disconnected-remote-exit-700-host"><title>host</title>
+<rect x="104" y="216" width="556" height="48" fill="none"/>
+<rect x="104" y="216" width="556" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnected-remote-exit-700-text-6" x="116" y="245" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">ssh.example.test</text>
+</g>
+<text id="disconnected-remote-exit-700-text-7" x="104" y="292" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">用户名</text>
+<g id="disconnected-remote-exit-700-username"><title>username</title>
+<rect x="104" y="300" width="460" height="48" fill="none"/>
+<rect x="104" y="300" width="460" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnected-remote-exit-700-text-8" x="116" y="329" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">demo</text>
+</g>
+<text id="disconnected-remote-exit-700-text-9" x="576" y="292" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">端口</text>
+<g id="disconnected-remote-exit-700-port"><title>port</title>
+<rect x="576" y="300" width="84" height="48" fill="none"/>
+<rect x="576" y="300" width="84" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnected-remote-exit-700-text-10" x="588" y="329" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">22</text>
+</g>
+<g id="disconnected-remote-exit-700-probe"><title>probe</title>
+<rect x="104" y="368" width="556" height="48" fill="none"/>
+<rect x="104" y="368" width="556" height="48" rx="10" fill="#4F46E5"/>
+<text id="disconnected-remote-exit-700-text-11" x="382" y="397" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#FFFFFF" text-anchor="middle">探测并核对主机密钥</text>
+</g>
+<text id="disconnected-remote-exit-700-text-12" x="104" y="438" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="start">探测时仅获取主机密钥，认证在核对之后进行。</text>
+<g id="disconnected-remote-exit-700-return-home"><title>return-home</title>
+<rect x="104" y="452" width="556" height="48" fill="none"/>
+<rect x="104" y="452" width="556" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnected-remote-exit-700-text-13" x="382" y="481" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">返回首页</text>
+</g>
+</g>
+<text x="748" y="11928" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">disconnect-failed-700 · 断开失败</text>
+<g id="disconnect-failed-700" transform="translate(748 11940)">
+<title>disconnect-failed-700 · 断开失败</title>
+<rect x="0" y="0" width="700" height="900" rx="0" fill="#F8FAFC"/>
+<g id="disconnect-failed-700-app-sidebar"><title>app-sidebar</title>
+<rect x="0" y="0" width="64" height="900" rx="0" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+<path d="M 63.5 0 L 63.5 900" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+<g id="disconnect-failed-700-sidebar-toggle"><title>sidebar-toggle</title>
+<rect x="10" y="8" width="44" height="44" fill="none"/>
+<path d="M4 6 H20 M4 12 H20 M4 18 H20" transform="translate(20 17)" fill="none" stroke="#0F172A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g id="disconnect-failed-700-nav-board"><title>nav-board</title>
+<rect x="10" y="68" width="44" height="44" fill="none"/>
+<path d="M3 3 H10 V10 H3 Z M14 3 H21 V10 H14 Z M3 14 H10 V21 H3 Z M14 14 H21 V21 H14 Z" transform="translate(20 81)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g id="disconnect-failed-700-nav-terminal"><title>nav-terminal</title>
+<rect x="10" y="120" width="44" height="44" fill="none"/>
+<path d="M3 4 H21 V20 H3 Z M7 9 L10 12 L7 15 M13 15 H17" transform="translate(20 133)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g id="disconnect-failed-700-nav-network"><title>nav-network</title>
+<rect x="10" y="172" width="44" height="44" fill="none"/>
+<path d="M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 M3 12 H21 M12 3 C6 7 6 17 12 21 C18 17 18 7 12 3" transform="translate(20 185)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g id="disconnect-failed-700-nav-settings"><title>nav-settings</title>
+<rect x="10" y="224" width="44" height="44" fill="none"/>
+<path d="M3 6 H21 M3 12 H21 M3 18 H21 M8 3 V9 M16 9 V15 M10 15 V21" transform="translate(20 237)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</g>
+<g id="disconnect-failed-700-page-header"><title>page-header</title>
+<path d="M 64 55.5 L 700 55.5" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+<g id="disconnect-failed-700-back"><title>back</title>
+<rect x="72" y="6" width="44" height="44" fill="none"/>
+<path d="M14 4 L6 12 L14 20 M6 12 H20" transform="translate(81 16)" fill="none" stroke="#0F172A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<text id="disconnect-failed-700-text-1" x="128" y="35" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="600" fill="#0F172A" text-anchor="start">普通 SSH</text>
+</g>
+<g id="disconnect-failed-700-stop-failed-feedback"><title>stop-failed-feedback</title>
+<rect x="104" y="76" width="556" height="66" rx="10" fill="#FFF1F2" stroke="#FECDD3" stroke-width="1"/>
+<text id="disconnect-failed-700-text-2" x="116" y="100" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#BE123C" text-anchor="start">本机连接关闭失败</text>
+<text id="disconnect-failed-700-text-3" x="116" y="123" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="400" fill="#475569" text-anchor="start">会话可能仍在。可返回首页。</text>
+</g>
+<text id="disconnect-failed-700-text-4" x="104" y="178" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="600" fill="#0F172A" text-anchor="start">填写连接目标</text>
+<text id="disconnect-failed-700-text-5" x="104" y="208" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">主机地址</text>
+<g id="disconnect-failed-700-host"><title>host</title>
+<rect x="104" y="216" width="556" height="48" fill="none"/>
+<rect x="104" y="216" width="556" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnect-failed-700-text-6" x="116" y="245" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">ssh.example.test</text>
+</g>
+<text id="disconnect-failed-700-text-7" x="104" y="292" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">用户名</text>
+<g id="disconnect-failed-700-username"><title>username</title>
+<rect x="104" y="300" width="460" height="48" fill="none"/>
+<rect x="104" y="300" width="460" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnect-failed-700-text-8" x="116" y="329" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">demo</text>
+</g>
+<text id="disconnect-failed-700-text-9" x="576" y="292" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">端口</text>
+<g id="disconnect-failed-700-port"><title>port</title>
+<rect x="576" y="300" width="84" height="48" fill="none"/>
+<rect x="576" y="300" width="84" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnect-failed-700-text-10" x="588" y="329" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">22</text>
+</g>
+<g id="disconnect-failed-700-probe"><title>probe</title>
+<rect x="104" y="368" width="556" height="48" fill="none"/>
+<rect x="104" y="368" width="556" height="48" rx="10" fill="#4F46E5"/>
+<text id="disconnect-failed-700-text-11" x="382" y="397" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#FFFFFF" text-anchor="middle">探测并核对主机密钥</text>
+</g>
+<text id="disconnect-failed-700-text-12" x="104" y="438" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="start">探测时仅获取主机密钥，认证在核对之后进行。</text>
+<g id="disconnect-failed-700-return-home"><title>return-home</title>
+<rect x="104" y="452" width="556" height="48" fill="none"/>
+<rect x="104" y="452" width="556" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="disconnect-failed-700-text-13" x="382" y="481" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">返回首页</text>
+</g>
+</g>
+<text x="1472" y="11928" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">returned-700 · 断开后返回首页</text>
+<g id="returned-700" transform="translate(1472 11940)">
 <title>returned-700 · 断开后返回首页</title>
 <rect x="0" y="0" width="700" height="900" rx="0" fill="#F8FAFC"/>
 <g id="returned-700-app-sidebar"><title>app-sidebar</title>
@@ -2947,7 +3403,7 @@
 <text id="returned-700-text-1" x="104" y="42" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="600" fill="#0F172A" text-anchor="start">看板</text>
 <g id="returned-700-closed-feedback"><title>closed-feedback</title>
 <rect x="104" y="62" width="556" height="44" rx="10" fill="#EEF2FF" stroke="#C7D2FE" stroke-width="1"/>
-<text id="returned-700-text-2" x="116" y="89" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#4F46E5" text-anchor="start">普通 SSH 已断开</text>
+<text id="returned-700-text-2" x="116" y="89" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#4F46E5" text-anchor="start">本机已断开</text>
 </g>
 <g id="returned-700-home-empty-card"><title>home-empty-card</title>
 <rect x="104" y="122" width="556" height="268" rx="16" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
@@ -2967,8 +3423,8 @@
 </g>
 </g>
 </g>
-<text x="748" y="10128" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">key-changed-700 · 指纹变化 · 阻止连接</text>
-<g id="key-changed-700" transform="translate(748 10140)">
+<text x="2196" y="11928" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">key-changed-700 · 指纹变化 · 阻止连接</text>
+<g id="key-changed-700" transform="translate(2196 11940)">
 <title>key-changed-700 · 指纹变化 · 阻止连接</title>
 <rect x="0" y="0" width="700" height="900" rx="0" fill="#F8FAFC"/>
 <g id="key-changed-700-app-sidebar"><title>app-sidebar</title>
@@ -3036,8 +3492,8 @@
 <text id="key-changed-700-text-15" x="382" y="516" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">取消连接，保留旧信任</text>
 </g>
 </g>
-<text x="1472" y="10128" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">previous-trust-700 · 取消并保留旧信任</text>
-<g id="previous-trust-700" transform="translate(1472 10140)">
+<text x="24" y="12888" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">previous-trust-700 · 取消并保留旧信任</text>
+<g id="previous-trust-700" transform="translate(24 12900)">
 <title>previous-trust-700 · 取消并保留旧信任</title>
 <rect x="0" y="0" width="700" height="900" rx="0" fill="#F8FAFC"/>
 <g id="previous-trust-700-app-sidebar"><title>app-sidebar</title>
@@ -3102,8 +3558,8 @@
 <text id="previous-trust-700-text-11" x="382" y="397" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#FFFFFF" text-anchor="middle">探测并核对主机密钥</text>
 </g>
 </g>
-<text x="2196" y="10128" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">recheck-trust-700 · 重新核对主机密钥</text>
-<g id="recheck-trust-700" transform="translate(2196 10140)">
+<text x="748" y="12888" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#0F172A">recheck-trust-700 · 重新核对主机密钥</text>
+<g id="recheck-trust-700" transform="translate(748 12900)">
 <title>recheck-trust-700 · 重新核对主机密钥</title>
 <rect x="0" y="0" width="700" height="900" rx="0" fill="#F8FAFC"/>
 <g id="recheck-trust-700-app-sidebar"><title>app-sidebar</title>

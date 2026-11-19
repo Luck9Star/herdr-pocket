@@ -60,6 +60,85 @@ WIN_ERRORS = {2, 3, 5, 6, 8, 13, 32, 50, 87, 109, 122, 123, 126, 127,
               193, 216, 233, 267, 740, 995, 1114, 1314, 1450, 1453, 1460, 1816}
 RUNNER_ERRORS = (AttributeError, BrokenPipeError, FileNotFoundError, KeyError, OSError, PermissionError,
                  subprocess.CalledProcessError, subprocess.TimeoutExpired, TypeError, ValueError)
+TCP_TABLE_OWNER_PID_LISTENER = 3
+MIB_TCP_STATE_LISTEN = 2
+ERROR_INSUFFICIENT_BUFFER = 122
+
+
+class TcpOwnerRow(ctypes.Structure):
+    _fields_ = [(field, ctypes.c_uint32) for field in (
+        'state', 'local_address', 'local_port', 'remote_address', 'remote_port', 'owning_pid',
+    )]
+
+
+class TcpOwnerTable(ctypes.Structure):
+    _fields_ = [('count', ctypes.c_uint32), ('rows', TcpOwnerRow * 1)]
+
+
+def loopback_listener_owners(table, port):
+    offset = TcpOwnerTable.rows.offset
+    row_size = ctypes.sizeof(TcpOwnerRow)
+    error = 'windows_direct_listener_table_invalid'
+    require(len(table) >= offset, error)
+    count = ctypes.c_uint32.from_buffer_copy(table).value
+    require(count <= (len(table) - offset) // row_size, error)
+    loopback = int.from_bytes(socket.inet_aton('127.0.0.1'), sys.byteorder)
+    owners = []
+    for index in range(count):
+        row = TcpOwnerRow.from_buffer_copy(table, offset + index * row_size)
+        # Only sockets covering this IPv4 destination are relevant. The top
+        # sixteen bits of dwLocalPort can contain uninitialized data.
+        if row.local_address in (0, loopback) and socket.ntohs(row.local_port & 0xffff) == port:
+            require(row.state == MIB_TCP_STATE_LISTEN, error)
+            owners.append((row.local_address == loopback, row.owning_pid))
+    return owners
+
+
+def windows_loopback_listener_owners(port):
+    table_api = ctypes.WinDLL('iphlpapi').GetExtendedTcpTable
+    table_api.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32), ctypes.c_int32,
+                          ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32]
+    table_api.restype = ctypes.c_uint32
+    size = ctypes.c_uint32(16384)
+    error = 'windows_direct_listener_table_unavailable'
+    for _ in range(3):
+        require(0 < size.value <= 16 * 1024 * 1024, error)
+        buffer = ctypes.create_string_buffer(size.value)
+        result = table_api(buffer, ctypes.byref(size), False, socket.AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0)
+        if result == 0:
+            return loopback_listener_owners(buffer, port)
+        require(result == ERROR_INSUFFICIENT_BUFFER, error)
+    raise GuiFailure(error)
+
+
+def loopback_connect_outcome(port):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+        # A short connect timeout can expire before Windows reports refusal.
+        # Only an actual refusal is evidence, even with the longer deadline.
+        client.settimeout(5)
+        try:
+            client.connect(('127.0.0.1', port))
+        except ConnectionRefusedError:
+            return 'refused'
+        except TimeoutError:
+            return 'timeout'
+        except OSError as error:
+            code = getattr(error, 'winerror', error.errno)
+            if code in (errno.ECONNREFUSED, 10061):  # WSAECONNREFUSED
+                return 'refused'
+            if code in (errno.ETIMEDOUT, 10060):  # WSAETIMEDOUT
+                return 'timeout'
+            return 'other_error'
+    return 'connected'
+
+
+def verify_listener_release(fixture, evidence):
+    evidence['fixtureResourcesClosed'] = fixture.local_resources_released()
+    require(evidence['fixtureResourcesClosed'], 'windows_direct_fixture_resources_unconfirmed')
+    evidence['absentFromWin32Table'] = not windows_loopback_listener_owners(fixture.port)
+    require(evidence['absentFromWin32Table'], 'windows_direct_peer_listener_still_present')
+    evidence['connectProbe'] = loopback_connect_outcome(fixture.port)
+    require(evidence['connectProbe'] == 'refused', 'windows_direct_peer_listener_unconfirmed')
 
 
 def runner_failure(error):
@@ -435,6 +514,11 @@ def run(app, source, report, base, images):
         report['sourceVerification'] = prepare(app, source, flutter, root / 'pub.log', env)
         report['checkpoint'] = 'fixture'
         with DirectSshFixture(screen_proof=True, channel_deadline=time.monotonic() + 1250) as fixture:
+            report['checkpoint'] = 'fixture_listener'
+            listener = report['listener'] = {
+                'ownedBeforeLaunch': windows_loopback_listener_owners(fixture.port) == [(True, os.getpid())],
+            }
+            require(listener['ownedBeforeLaunch'], 'windows_direct_unowned_peer_listener')
             with (root / 'target.json').open('x', encoding='utf-8') as stream:
                 json.dump({'port': fixture.port, 'fingerprint': fixture.fingerprint, 'password': fixture.password}, stream)
             report['target'] = {'host': '127.0.0.1', 'port': fixture.port, 'username': fixture.username,
@@ -461,10 +545,7 @@ def run(app, source, report, base, images):
                     report['peerAfterFailedLaunch'] = fixture.snapshot()
             require(not (root / 'target.json').exists(), 'windows_direct_target_file_unconsumed')
         report['checkpoint'] = 'cleanup'
-        with socket.socket() as client:
-            client.settimeout(.4)
-            require(client.connect_ex(('127.0.0.1', fixture.port)) in
-                    (errno.ECONNREFUSED, errno.WSAECONNREFUSED), 'windows_direct_peer_listener_unconfirmed')
+        verify_listener_release(fixture, listener)
         require(fixture.password == '', 'windows_direct_fixture_password_cleanup_unconfirmed')
     require(not root.exists(), 'windows_direct_fixture_directory_remains')
     report['cleanup'] = {'ownedProcessJobEmpty': True, 'peerListenerReleased': True,

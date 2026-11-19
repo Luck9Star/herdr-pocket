@@ -429,5 +429,13 @@ class DirectSshFixture:
             thread.join(timeout=2)
         self.password = ''
 
+    def local_resources_released(self):
+        """Confirm the stopped fixture has no listener, workers, or SSH sockets."""
+        with self._lock:
+            return (self._stop.is_set() and self._listener is not None and self._listener.fileno() == -1
+                    and not self._transports and not any(thread.is_alive() for thread in self._threads)
+                    and all(not transport.is_alive() and transport.sock.fileno() == -1
+                            for transport in self._events_by_transport))
+
     def __exit__(self, *_):
         self.close()

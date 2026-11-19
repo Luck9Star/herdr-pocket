@@ -1,7 +1,11 @@
+import ctypes
+import errno
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
+import socket
 import subprocess
 import sys
 import tempfile
@@ -9,11 +13,93 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 
+import paramiko
 from PIL import Image
 import flutter_windows_direct_ssh as windows
 
 
 class FlutterWindowsDirectSshTests(unittest.TestCase):
+    def test_listener_table_scopes_network_order_port_to_loopback_and_wildcard(self):
+        port = 40001
+        def row(address, local_port, pid, state=2):
+            local_address = int.from_bytes(socket.inet_aton(address), sys.byteorder)
+            return bytes(windows.TcpOwnerRow(state, local_address, socket.htons(local_port) | 0xBEEF0000,
+                                             0, 0, pid))
+
+        table = bytes(ctypes.c_uint32(4)) + b''.join((row('127.0.0.1', port, 20), row('0.0.0.0', port, 30),
+                                                     row('127.0.0.2', port, 40), row('127.0.0.1', port + 1, 50)))
+        self.assertEqual(windows.loopback_listener_owners(table, port), [(True, 20), (False, 30)])
+        for invalid in (table[:-1], b'', bytes(ctypes.c_uint32(1)) + row('127.0.0.1', port, 20, state=11)):
+            with self.subTest(size=len(invalid)), self.assertRaisesRegex(windows.GuiFailure, 'listener_table_invalid'):
+                windows.loopback_listener_owners(invalid, port)
+
+    def test_fixture_resources_and_tcp_refusal_on_real_loopback(self):
+        fixture = windows.DirectSshFixture()
+        self.assertFalse(fixture.local_resources_released())
+        with fixture:
+            self.assertFalse(fixture.local_resources_released())
+            with paramiko.Transport(socket.create_connection(('127.0.0.1', fixture.port), timeout=5)) as probe:
+                probe.start_client(timeout=5)
+                self.assertEqual(probe.get_remote_server_key().get_base64(), fixture.public_key.split(' ')[1])
+            self.assertTrue(fixture.wait_for_connections_closed(1))
+        self.assertTrue(fixture.local_resources_released())
+        self.assertEqual(fixture.password, '')
+        self.assertEqual(windows.loopback_connect_outcome(fixture.port), 'refused')
+
+    @unittest.skipUnless(sys.platform == 'win32', 'requires the native Windows TCP owner table')
+    def test_native_listener_owner_table_tracks_one_real_loopback_listener(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.bind(('127.0.0.1', 0))
+            listener.listen(1)
+            port = listener.getsockname()[1]
+            self.assertEqual(windows.windows_loopback_listener_owners(port), [(True, os.getpid())])
+            with socket.create_connection(('127.0.0.1', port), timeout=5) as client:
+                listener.settimeout(5)
+                accepted, _ = listener.accept()
+                with accepted:
+                    accepted.settimeout(5)
+                    accepted.shutdown(socket.SHUT_WR)
+                    self.assertEqual(client.recv(1), b'')
+                    client.shutdown(socket.SHUT_WR)
+                    self.assertEqual(accepted.recv(1), b'')
+            self.assertEqual(windows.windows_loopback_listener_owners(port), [(True, os.getpid())])
+        self.assertEqual(windows.windows_loopback_listener_owners(port), [])
+        self.assertEqual(windows.loopback_connect_outcome(port), 'refused')
+
+    def test_cleanup_requires_closed_resources_no_listener_and_explicit_refusal(self):
+        port = 40001
+        fixture = SimpleNamespace(port=port, local_resources_released=Mock(return_value=True))
+        controls = ((TimeoutError(), 'timeout'), (OSError(errno.ETIMEDOUT, 'private detail'), 'timeout'),
+                    (OSError(errno.EACCES, 'private detail'), 'other_error'), (None, 'connected'))
+        with patch.object(windows, 'windows_loopback_listener_owners', return_value=[]) as owners, \
+                patch.object(windows.socket, 'socket', MagicMock()) as socket_factory:
+            client = socket_factory.return_value.__enter__.return_value
+            for error, outcome in controls:
+                with self.subTest(outcome=outcome):
+                    client.connect.side_effect = error
+                    evidence = {}
+                    with self.assertRaisesRegex(windows.GuiFailure, 'peer_listener_unconfirmed'):
+                        windows.verify_listener_release(fixture, evidence)
+                    self.assertEqual(evidence, {'fixtureResourcesClosed': True, 'absentFromWin32Table': True,
+                                                'connectProbe': outcome})
+            client.connect.side_effect = ConnectionRefusedError()
+            windows.verify_listener_release(fixture, {})
+            client.settimeout.assert_called_with(5)
+            client.connect.assert_called_with(('127.0.0.1', port))
+            owners.assert_called_with(port)
+
+            client.connect.reset_mock()
+            owners.return_value = [(False, 20)]
+            with self.assertRaisesRegex(windows.GuiFailure, 'peer_listener_still_present'):
+                windows.verify_listener_release(fixture, {})
+            client.connect.assert_not_called()
+
+            owners.reset_mock()
+            fixture.local_resources_released.return_value = False
+            with self.assertRaisesRegex(windows.GuiFailure, 'fixture_resources_unconfirmed'):
+                windows.verify_listener_release(fixture, {})
+            owners.assert_not_called()
+
     def test_native_import_does_not_load_posix_pairing_modules(self):
         script = '''
 import builtins

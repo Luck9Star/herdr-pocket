@@ -566,6 +566,43 @@ Future<void> runDirectSshUi(
   step('report_data_set');
 }
 
+Future<void> enterEncryptedPassphrase(
+  WidgetTester tester,
+  Finder passphrase,
+  String text, {
+  required bool finishIosEditing,
+}) async {
+  expect(tester.widget<TextField>(passphrase).obscureText, isTrue);
+  await tester.ensureVisible(passphrase);
+  if (!finishIosEditing) {
+    await tester.enterText(passphrase, text);
+    return;
+  }
+  final editor = find.descendant(
+    of: passphrase,
+    matching: find.byType(EditableText),
+  );
+  // The keyboard can move the editor and connect button out of the lazy list.
+  final focus = tester.widget<EditableText>(editor).focusNode;
+  final form = Scrollable.of(tester.element(editor));
+  await tester.enterText(passphrase, text);
+  await until(
+    tester,
+    () => focus.hasFocus && tester.view.viewInsets.bottom > 0,
+    timeoutReason: 'direct_ssh_ios_ui_timeout_passphrase_keyboard_open',
+  );
+  await tester.testTextInput.receiveAction(TextInputAction.done);
+  await until(
+    tester,
+    () =>
+        !focus.hasFocus &&
+        tester.view.viewInsets.bottom == 0 &&
+        form.mounted &&
+        !form.position.isScrollingNotifier.value,
+    timeoutReason: 'direct_ssh_ios_ui_timeout_passphrase_keyboard_closed',
+  );
+}
+
 Future<void> finishAndroidEncryptedPassphrase(WidgetTester tester) async {
   final editor = find.descendant(
     of: control('direct-passphrase'),
@@ -754,9 +791,13 @@ Future<void> runEncryptedDirectSshUi(
   await pasteKey();
   final passphrase = control('direct-passphrase');
   final android = platform == 'android-api35-emulator';
-  expect(tester.widget<TextField>(passphrase).obscureText, isTrue);
-  await tester.ensureVisible(passphrase);
-  await tester.enterText(passphrase, 'invalid-fixture-passphrase');
+  final ios = platform == 'ios-simulator';
+  await enterEncryptedPassphrase(
+    tester,
+    passphrase,
+    'invalid-fixture-passphrase',
+    finishIosEditing: ios,
+  );
   await tester.pump();
   if (android) {
     step('encrypted_prepare_rejection');
@@ -773,17 +814,21 @@ Future<void> runEncryptedDirectSshUi(
   step('encrypted_rejected');
   await checkpoint('rejected');
   await pasteKey();
-  await tester.ensureVisible(passphrase);
-  await tester.enterText(passphrase, config['passphrase'] as String);
+  if (ios) step('encrypted_connect');
+  await enterEncryptedPassphrase(
+    tester,
+    passphrase,
+    config['passphrase'] as String,
+    finishIosEditing: ios,
+  );
   config.remove('privateKey');
   config.remove('passphrase');
   await tester.pump();
-  expect(tester.widget<TextField>(passphrase).obscureText, isTrue);
   if (android) {
     step('encrypted_prepare_connect');
     await finishAndroidEncryptedPassphrase(tester);
   }
-  step('encrypted_connect');
+  if (!ios) step('encrypted_connect');
   String? lastConnectDiagnostic;
   void connectDiagnostic(String status, bool stable) {
     final button = control('direct-connect');

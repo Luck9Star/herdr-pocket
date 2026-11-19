@@ -5,12 +5,13 @@ on:
   workflow_dispatch:
     inputs:
       scenario:
-        description: SSH acceptance scenario
+        description: Android native acceptance scenario
         type: choice
         default: default
         options:
           - default
           - encrypted-key-rotation
+          - config-document
 permissions:
   contents: read
 concurrency:
@@ -73,6 +74,7 @@ jobs:
           Path(sys.argv[1]).write_bytes(candidates[0].read_bytes())
           PY
       - name: Exercise real app UI against an owned temporary SSH server
+        if: inputs.scenario != 'config-document'
         env:
           SSH_SCENARIO: ${{ inputs.scenario || 'default' }}
         run: |
@@ -81,8 +83,21 @@ jobs:
             "$RUNNER_TEMP/direct-ssh-venv/bin/python" validation/remote-harness/tauri_android_direct_ssh.py \
             --apk "$RUNNER_TEMP/tauri-direct-x86_64.apk" --output "$RUNNER_TEMP/tauri-direct-evidence" \
             --scenario "$SSH_SCENARIO"
+      - name: Save and reopen a configuration through Android DocumentsUI
+        if: inputs.scenario == 'config-document'
+        run: |
+          bash validation/remote-harness/with-android-emulator.sh \
+            "$RUNNER_TEMP/direct-ssh-venv/bin/python" validation/remote-harness/tauri_android_config_document.py \
+            --apk "$RUNNER_TEMP/tauri-direct-x86_64.apk" --output "$RUNNER_TEMP/tauri-config-document-evidence"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
+        if: always() && inputs.scenario == 'config-document'
+        with:
+          name: tauri-android-config-document-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/tauri-config-document-evidence/manifest.json
+          if-no-files-found: warn
+          retention-days: 14
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always() && inputs.scenario != 'config-document'
         with:
           name: tauri-android-direct-ssh-evidence-${{ github.sha }}
           path: |
@@ -91,7 +106,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: success()
+        if: success() && inputs.scenario != 'config-document'
         with:
           name: tauri-android-direct-ssh-test-apk-${{ github.sha }}
           path: ${{ runner.temp }}/tauri-direct-x86_64.apk

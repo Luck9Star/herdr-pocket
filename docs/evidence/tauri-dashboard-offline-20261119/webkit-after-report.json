@@ -1,0 +1,27 @@
+{
+  "sourceSHA": "after",
+  "scope": "Tauri production frontend in an isolated Playwright browser; simulated Tauri IPC; no SSH, GTK, physical keyboard or remote input",
+  "engine": "webkit",
+  "browser": "26.5",
+  "tabKey": "Tab",
+  "before": "fixture-alpha · 当前快照 · 会话 alpha · 受阻 1 · 同步 2026/11/19 16:49:44",
+  "after": "fixture-alpha · 上次快照（状态已陈旧） · 会话 alpha · 受阻 1 · 同步 2026/11/19 16:49:44",
+  "late": "fixture-alpha · 上次快照（状态已陈旧） · 会话 alpha · 受阻 1 · 同步 2026/11/19 16:49:44",
+  "cancel": 1,
+  "observations": 1,
+  "events": [
+    {
+      "type": "offline",
+      "isTrusted": true,
+      "online": false
+    },
+    {
+      "type": "online",
+      "isTrusted": true,
+      "online": true
+    }
+  ],
+  "reconnected": "fixture-alpha · 当前快照 · 会话 alpha · 受阻 1 · 同步 2026/11/19 16:49:44",
+  "input": 0,
+  "pageErrors": []
+}

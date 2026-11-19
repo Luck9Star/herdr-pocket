@@ -243,7 +243,8 @@ function watchWorkspace(fixedTarget=null,options={}) {
   globalThis.window={confirm:()=>true};const calls=[],channels=[],observed=[];let terminal;
   const invoke=(name,args)=>{
     calls.push({name,args});
-    if(name==='remote_tab_reserve')return Promise.resolve(9);
+    if(name==='remote_tab_reserve')return options.reserve?options.reserve(args):Promise.resolve(9);
+    if(name==='remote_tab_visible' && options.visible)return options.visible(args);
     if(name==='remote_tab_observe'){
       observed.push(args);
       return options.observe?options.observe(args):new Promise(()=>{});
@@ -255,7 +256,7 @@ function watchWorkspace(fixedTarget=null,options={}) {
     if(name==='remote_tab_input_send' && options.send)return options.send(args);
     return Promise.resolve();
   };
-  const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({id,enabled:true,retired:false,target:{username:'u',host:id,port:22,session:'work'},hostFingerprint:'key',deviceFingerprint:'device'}),onDashboard:options.onDashboard,clipboardRead:options.clipboardRead,keyboardRequest:options.keyboardRequest,channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:(options)=>{
+  const ui=initTabWorkspace({native:true,invoke,theme:{terminal:{}},hostName:id=>id,hostInfo:id=>({id,enabled:true,retired:false,target:{username:'u',host:id,port:22,session:'work'},hostFingerprint:'key',deviceFingerprint:'device',networkProfileId:options.networkProfileId}),onDashboard:options.onDashboard,clipboardRead:options.clipboardRead,keyboardRequest:options.keyboardRequest,channelFactory:()=>{const c={};channels.push(c);return c;},terminalFactory:(options)=>{
     terminal={
       createdOptions:options,cols:options.cols,rows:options.rows,options:{},focusReadOnly:[],parser:{registerOscHandler(){}},textarea:new Element('textarea'),
       open(){},write(bytes,done){(this.writes??=[]).push(bytes);done();},reset(){},resize(cols,rows){this.cols=cols;this.rows=rows;},dispose(){},
@@ -277,6 +278,45 @@ function watchWorkspace(fixedTarget=null,options={}) {
   const observation=(epoch,phase)=>emit({kind:'observation',snapshot:{epoch,phase}});
   return {ui,id,calls,nodes,all,find,start,emit,watch,observation,terminal:()=>terminal,channel:()=>channels.at(-1),restore(){globalThis.document=oldDocument;globalThis.window=oldWindow;}};
 }
+
+for(const stage of ['reserve','visible','retry'])test(`system offline retires a workspace connection pending ${stage}`,async(t)=>{
+  let complete;
+  if(stage==='retry')t.mock.timers.enable({apis:['setTimeout']});
+  const waiting=()=>new Promise(resolve=>{complete=resolve;});
+  const h=watchWorkspace(null,{
+    reserve:stage==='retry' ? async()=>{throw 'connection_active';} : stage==='reserve' ? waiting : undefined,
+    visible:stage==='visible' ? waiting : undefined,
+  });
+  try {
+    await h.start();
+    h.ui.systemOffline('离线');h.ui.systemOffline('离线');
+    if(stage==='retry')t.mock.timers.tick(100);else complete(9);
+    await flush();
+    const calls=h.calls.map(call=>call.name);
+    assert.equal(calls.filter(name=>name==='remote_tab_reserve').length,1);
+    assert.equal(calls.filter(name=>name==='remote_tab_cancel').length,stage==='retry'?0:1);
+    if(stage!=='retry') {
+      const reserve=h.calls.find(call=>call.name==='remote_tab_reserve').args;
+      assert.deepEqual(h.calls.find(call=>call.name==='remote_tab_cancel').args,
+        {tabId:h.id,clientGeneration:reserve.clientGeneration,generation:9});
+    }
+    assert.equal(calls.includes('remote_tab_observe'),false);
+    assert.equal(h.find('连接').disabled,true);
+  } finally {h.restore();}
+});
+
+test('system offline preserves an independently bound overlay workspace',async()=>{
+  const events=[];
+  const h=watchWorkspace(null,{networkProfileId:'overlay-fixture',onDashboard:event=>events.push(event.type)});
+  try {
+    await h.start();h.observation(1,'active');h.watch(1,1);
+    const before=[...events];
+    h.ui.systemOffline('离线');h.watch(1,2);
+    assert.deepEqual(events,[...before,'snapshot']);
+    assert.equal(h.calls.find(call=>call.name==='remote_tab_reserve').args.expectedNetworkProfileId,'overlay-fixture');
+    assert.equal(h.calls.some(call=>call.name==='remote_tab_cancel'),false);
+  } finally {h.restore();}
+});
 
 test('SW01 SW09: watch selection awaits native receiver and freezes pane plus terminal and revision',async()=>{
   const h=watchWorkspace();try {

@@ -191,3 +191,11 @@ unzip -p mac-s06-r11.zip result.json
 | 2026-11-19 Flutter D2 回宽自动恢复，`c9410f9` | Widget 红绿验证两轮复核反例：布局暂停的活跃观察拉宽自动恢复、等新帧期间资格保持、手动暂停与从未观察不自动；合成适配器。[运行摘要](evidence/desktop-split-resize-20261119/r2-c9410f9-widget-run-summary.json) |
 
 历史 S06 的连接、字节和 PTY 采样见[原验收记录](63-design-parity-and-direct-ssh.md#s06-双侧界面与真实回环验收)。macOS 原生窗口需要在同一次运行中验证两条真实连接、窗口来回变化、键盘切换和服务端 PTY 与输入计数。[S06 隔离运行入口](../validation/remote-harness/README-s06-real-ssh.md)
+
+## Flutter 分屏关闭焦点主机
+
+**通过 — Ubuntu 24.04 隔离回环 Widget。** 2026-11-19，R3 stock 在 `2cd636f40b07928d31b1f487c653dbd0dbe4f380` 先从正常首页打开两条真实 SSH/herdr 观察，再关闭焦点 A。B 仍用原连接在同一终端推进画面，未自动启用输入。主动停止 B 后，对端确认两条连接均已关闭，驱动退出后再查一致。两侧各连接 1 次、收到 0/0 字节。[stock 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44517427428/job/135536975870)
+
+同源 guarded 使用隔离受保护输入扩展，两端实际收到 9/1 字节，绑定正确，两视图主动停止并等待本地取消完成。两种模式的 PTY 均保持 119 × 40，观察到 0 次 resize。临时授权、进程和密钥清理均通过。关闭 A 后 B 推进与退出前独立对端关闭确认由 stock 用例覆盖。[guarded 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44518193618/job/135542178535)
+
+R1 未确认最终关闭。R2 云端通过，本机显式等待取消时仍复现 `network_transport_failed`。R3 修正关闭顺序后，本机真实回环连续通过 5/5。归档基线与 R3 的 Flutter 产品树一致，主代理对该共享适配器的 M3-05 独立复跑也通过。此处覆盖固定 Widget 视口和隔离回环，原生窗口、窗口宽度往返、物理输入法及真实网络提供方仍待验证。[两个官方 ZIP、SHA-256 与本机复验](evidence/flutter-desktop-shared-host-close-20261119/README.md)

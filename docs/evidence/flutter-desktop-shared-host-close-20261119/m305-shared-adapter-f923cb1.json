@@ -1,0 +1,33 @@
+{
+  "test": "M3-05 Flutter input receipt recovery",
+  "sourceSHA": "f923cb10a25f90738f0e741cd9e2e27ecc3073ab",
+  "flutterVersion": "3.47.9",
+  "hostPlatform": "Darwin",
+  "status": "passed",
+  "scope": "production Flutter app widgets and adapter; loopback TCP/SSH; synthetic herdr RPC and native journal IPC",
+  "widgetStages": [
+    "product_home",
+    "initial_a_full_delta",
+    "unknown_a_target_locked",
+    "switch_b_a_lock_retained",
+    "reconnect_a_fresh_full",
+    "manual_confirmation_no_replay",
+    "stopped"
+  ],
+  "observedTargets": [
+    "A",
+    "B",
+    "A"
+  ],
+  "authenticatedSshConnections": 3,
+  "confirmedSshClosures": 3,
+  "recordedInputRequests": 1,
+  "exactInputBytes": 6,
+  "droppedReceipts": 1,
+  "resolvedManuallyWithoutReplay": true,
+  "cleanup": {
+    "peerExited": true,
+    "listenerClosed": true,
+    "temporaryDirectoryRemoved": true
+  }
+}

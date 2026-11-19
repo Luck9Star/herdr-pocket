@@ -22,7 +22,7 @@ import uuid
 import xml.etree.ElementTree as ET
 
 from android_gui import AndroidWebView, PACKAGE, SERIAL, adb, dashboard_add_selector, system_keyboard, public_ime_diagnostic
-from flutter_android_gui import parse_system_ime, DeviceFailure
+from flutter_android_gui import parse_system_ime, SystemImeFailure, DeviceFailure
 from paired_gui import GuiFailure, wait_for
 from terminal_screenshot_gate import ECHO_MARKER, ScreenshotGateError, verify_terminal_screenshot
 
@@ -1031,7 +1031,7 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
     if active_navigation:
         # Before/after facts around the second explicit open: fixed IME enums,
         # bounded geometry, zero-input peer; retained on any later failure.
-        second_open.append(second_open_checkpoint(browser,fixture))
+        second_open.append(second_open_checkpoint(browser,fixture,progress))
         try:
             native_active_tap(browser,'#ssh-focus')
             system_keyboard(True)
@@ -1039,9 +1039,9 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
             active_peer(fixture)
         except GuiFailure as error:
             if not hasattr(error,'second_open_checkpoint'):
-                error.second_open_checkpoint=second_open+[second_open_checkpoint(browser,fixture)]
+                error.second_open_checkpoint=second_open+[second_open_checkpoint(browser,fixture,progress)]
             raise
-        second_open.append(second_open_checkpoint(browser,fixture))
+        second_open.append(second_open_checkpoint(browser,fixture,progress))
     else:
         browser.click('#ssh-focus')
     wait_for(lambda: browser.evaluate("document.activeElement === document.querySelector('#ssh-terminal .xterm-helper-textarea')"),
@@ -1101,37 +1101,44 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
             **({'terminalScreenshot':terminal_proof} if terminal_proof else {}),
             'peer':{k:True for k in ('authAccepted','ptyRequested','shellRequested','markerReceived','sessionClosed')}}
 
-def second_open_checkpoint(browser, fixture):
+def second_open_checkpoint(browser, fixture, progress=None):
     """Bounded second-open facts only: IME enums, editor focus booleans,
-    geometry, and same-connection peer counts.
+    geometry, and bounded same-connection peer counts.
 
     Read-only; no raw DOM text, credentials, screenshots, taps or focus changes.
     Every fact is a fixed boolean/enum; an unreadable fact stays null so miss,
-    foreign focus and transition states stay distinguishable.
+    foreign focus and transition states stay distinguishable. When a writable
+    progress dict is supplied, a copy is stored immediately so later failures
+    (editor focus waits, echo waits) cannot lose this checkpoint.
     """
-    checkpoint={}
+    checkpoint={'peerCounts':None,'peerClosed':None}
     try:
         raw=parse_system_ime(adb('shell','dumpsys','input_method'), adb('shell','dumpsys','window','displays'), PACKAGE)
         checkpoint['ime']=public_ime_diagnostic(raw.get('diagnostic'))
+    except SystemImeFailure as error:
+        # keep the whitelisted enums the classifier already produced
+        checkpoint['ime']=error.public_diagnostic()
     except (DeviceFailure,GuiFailure):
         checkpoint['ime']={}
     checkpoint['editorFocus']=public_editor_focus(browser)
     diagnostic=active_diagnostic(browser,fixture)
-    checkpoint['geometry']=diagnostic.get('geometry')
-    # Keep the already-whitelisted same-connection counters, not just a flag.
-    snapshot=fixture.snapshot()
-    events=snapshot.get('connectionEvents') if isinstance(snapshot,dict) else None
-    live=events[-1] if isinstance(events,list) and events else None
-    if isinstance(live,dict):
-        checkpoint['peerCounts']={key:live.get(key) for key in
+    checkpoint['geometry']=diagnostic.get('geometry') if isinstance(diagnostic,dict) else None
+    # bounded peer facts already validated by active_diagnostic (int ranges,
+    # exact connection count); never call fixture.snapshot() unbounded here.
+    bounded=diagnostic.get('peer') if isinstance(diagnostic,dict) else None
+    if isinstance(bounded,dict):
+        checkpoint['peerCounts']={key:bounded[key] for key in
             ('authAttempts','authSuccesses','ptyRequests','shellRequests','inputBytes')
-            if type(live.get(key)) is int}
-        checkpoint['peerClosed']=snapshot.get('sessionClosed') is True
+            if type(bounded.get(key)) is int}
+        checkpoint['peerClosed']=bounded.get('closed') is True
     try:
         active_peer(fixture, input_bytes=0)
         checkpoint['peerUnchanged']=True
     except (GuiFailure,AttributeError):
         checkpoint['peerUnchanged']=False
+    if isinstance(progress,dict):
+        stored=progress.setdefault('secondOpenFacts',[])
+        if isinstance(stored,list): stored.append(dict(checkpoint))
     return checkpoint
 
 
@@ -1435,10 +1442,16 @@ def main():
         second_open_facts=getattr(error,'second_open_checkpoint',None)
         if isinstance(second_open_facts,list) and 1<=len(second_open_facts)<=3:
             report['secondOpenFacts']=second_open_facts
+        stored_facts=progress.get('secondOpenFacts')
+        if isinstance(stored_facts,list) and 1<=len(stored_facts)<=3:
+            report['secondOpenFacts']=stored_facts
         report['errorCode']=public_driver_error(error)
         if progress.get('stage') in DRIVER_STAGES: report['failureStage']=progress['stage']
     except Exception:
         report['errorCode']='direct_fixture_or_driver_failed'
+        stored_facts=progress.get('secondOpenFacts')
+        if isinstance(stored_facts,list) and 1<=len(stored_facts)<=3:
+            report['secondOpenFacts']=stored_facts
         if progress.get('stage') in DRIVER_STAGES: report['failureStage']=progress['stage']
     (output/'manifest.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
     if report['status']!='passed': raise SystemExit(1)

@@ -794,12 +794,15 @@ class ActiveNavigationTests(unittest.TestCase):
                     'focusCount':1,'focusOwner':'owned','editorOwner':'none','imeInsetsState':'hidden',
                     'visibility':'hidden'}
         focus={'editorPresent':True,'editorActive':True,'documentFocused':True,'imeKnown':True,'imeVisible':False}
+        bounded_peer={'connections':2,'authAttempts':1,'authSuccesses':1,'ptyRequests':1,
+                      'shellRequests':1,'inputBytes':0,'closed':False}
         with patch.object(driver,'adb',return_value='dump'), \
              patch.object(driver,'parse_system_ime',return_value={'diagnostic':diagnostic}), \
              patch.object(driver,'public_editor_focus',return_value=focus), \
-             patch.object(driver,'active_diagnostic',return_value={'geometry':{'viewport':[393,851,0,851]}}), \
+             patch.object(driver,'active_diagnostic',return_value={'geometry':{'viewport':[393,851,0,851]},'peer':bounded_peer}), \
              patch.object(driver,'active_peer') as peer:
-            checkpoint=driver.second_open_checkpoint(browser,fixture)
+            progress={}
+            checkpoint=driver.second_open_checkpoint(browser,fixture,progress)
         self.assertEqual(checkpoint['ime'],driver.public_ime_diagnostic(diagnostic))
         self.assertEqual(checkpoint['editorFocus'],focus)
         self.assertEqual(checkpoint['geometry'],{'viewport':[393,851,0,851]})
@@ -808,6 +811,7 @@ class ActiveNavigationTests(unittest.TestCase):
         self.assertFalse(checkpoint['peerClosed'])
         self.assertTrue(checkpoint['peerUnchanged'])
         peer.assert_called_once_with(fixture,input_bytes=0)
+        self.assertEqual(progress['secondOpenFacts'],[checkpoint])
 
     def test_second_open_checkpoint_explicitly_misses_when_driver_facts_absent(self):
         browser=Mock(); fixture=Mock()
@@ -820,10 +824,21 @@ class ActiveNavigationTests(unittest.TestCase):
         self.assertEqual(checkpoint,{'ime':{},
             'editorFocus':{'editorPresent':None,'editorActive':None,'documentFocused':None,
                            'imeKnown':None,'imeVisible':None},
-            'geometry':None,
-            'peerCounts':{'authAttempts':1,'authSuccesses':1,'ptyRequests':1,
-                          'shellRequests':1,'inputBytes':0},
-            'peerClosed':False,'peerUnchanged':False})
+            'geometry':None,'peerCounts':None,'peerClosed':None,'peerUnchanged':False})
+
+    def test_second_open_checkpoint_keeps_whitelisted_enums_on_system_ime_failure(self):
+        browser=Mock(); fixture=Mock()
+        partial={'formatVersion':1,'reason':'focus_foreign','serviceCount':1,'displayCount':1,
+                 'focusCount':1,'focusOwner':'foreign','editorOwner':'none',
+                 'imeInsetsState':'unavailable','visibility':'unavailable'}
+        failure=driver.SystemImeFailure('android_system_ime_target_mismatch',partial)
+        with patch.object(driver,'adb',return_value='dump'), \
+             patch.object(driver,'parse_system_ime',side_effect=failure), \
+             patch.object(driver,'active_diagnostic',return_value={}), \
+             patch.object(driver,'active_peer'):
+            checkpoint=driver.second_open_checkpoint(browser,fixture)
+        self.assertEqual(checkpoint['ime'],driver.public_ime_diagnostic(partial))
+        self.assertEqual(checkpoint['ime']['reason'],'focus_foreign')
 
     def test_public_editor_focus_normalizes_shapes_and_nulls_on_miss(self):
         browser=Mock()

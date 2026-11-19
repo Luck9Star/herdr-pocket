@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -14,6 +15,9 @@ import tauri_android_config_document as config
 
 PROVIDER = 'com.google.android.documentsui'
 FOLDER = 'hp-config-fixture'
+ACTIVITY = config.PACKAGE + '/.MainActivity'
+CANONICAL_ACTIVITY = config.PACKAGE + '/' + config.PACKAGE + '.MainActivity'
+SYSTEM_PICKER = PROVIDER + '/com.android.documentsui.picker.PickActivity'
 
 
 def node(resource='', content='', *, package=PROVIDER, **attributes):
@@ -24,6 +28,60 @@ def node(resource='', content='', *, package=PROVIDER, **attributes):
 
 def chooser(*content):
     return '<hierarchy rotation="0">' + ''.join(content) + '</hierarchy>'
+
+
+class ForegroundTests(unittest.TestCase):
+    def test_api35_displays_subcommand_contains_focus_windows_subcommand_omits(self):
+        outputs = {
+            'windows': ('WINDOW MANAGER WINDOWS (dumpsys window windows)\n'
+                        f'  Window #0 Window{{7ba u0 {ACTIVITY}}}:\n    mDisplayId=0\n'),
+            'displays': ('WINDOW MANAGER DISPLAY CONTENTS (dumpsys window displays)\n'
+                         f'  Display: mDisplayId=0\n    mCurrentFocus=Window{{7ba u0 {ACTIVITY}}}\n'),
+        }
+        with patch.object(config, 'adb', side_effect=lambda *args, **opts: outputs[args[-1]]):
+            self.assertEqual(config.foreground(), CANONICAL_ACTIVITY)
+
+    def test_focus_rejects_other_users_displays_and_conflicting_windows(self):
+        for raw, reason in (
+            (f'Display: mDisplayId=0\n mCurrentFocus=Window{{7ba u10 {ACTIVITY}}}', 'other_user'),
+            (f'Display: mDisplayId=1\n mCurrentFocus=Window{{7ba u0 {ACTIVITY}}}', 'display_unproven'),
+            (f'Display: mDisplayId=0\n mCurrentFocus=Window{{7ba u0 {ACTIVITY}}}\n'
+             ' mCurrentFocus=null', 'focus_ambiguous'),
+            ('Display: mDisplayId=0\n mCurrentFocus=null', 'no_focused_window'),
+            ('Display: mDisplayId=0\n mCurrentFocus=Window{7ba u0 NotificationShade}', 'system_window'),
+        ):
+            with self.subTest(reason=reason), patch.object(config, 'adb', return_value=raw):
+                self.assertEqual(config.focus_sample(), (None, reason))
+
+    def test_launcher_resolves_only_one_component_of_owned_package_on_user_zero(self):
+        with patch.object(config, 'adb', return_value='priority=0 match=0x108000\n' + ACTIVITY) as adb:
+            self.assertEqual(config.resolve_launcher(), CANONICAL_ACTIVITY)
+            self.assertEqual(adb.call_args.args, (
+                'shell', 'cmd', 'package', 'resolve-activity', '--brief', '--user', '0',
+                '-a', 'android.intent.action.MAIN', '-c', 'android.intent.category.LAUNCHER',
+                '-p', config.PACKAGE))
+        for raw in ('app.private.example/.Hidden', ACTIVITY + '\n' + config.PACKAGE + '/.Other'):
+            with patch.object(config, 'adb', return_value=raw):
+                with self.assertRaisesRegex(GuiFailure, '^app_launcher_unconfirmed$'):
+                    config.resolve_launcher()
+
+    def test_failure_diagnostics_use_enum_for_hidden_window_activity_and_process(self):
+        def adb(*args, **kwargs):
+            if args[-1] == 'displays':
+                return 'Display: mDisplayId=0\n mCurrentFocus=Window{7ba u0 app.private.example/.Hidden}'
+            if args[-1] == 'activities':
+                return 'topResumedActivity=ActivityRecord{f8e u0 ' + ACTIVITY + ' t86}'
+            if args[0] == 'shell' and args[1].startswith('pidof'):
+                return 'absent'
+            self.fail('unexpected ADB read')
+
+        with patch.object(config, 'adb', side_effect=adb):
+            self.assertEqual(config.launch_failure_facts(CANONICAL_ACTIVITY, '983'), {
+                'window': 'other_activity', 'resumedActivity': 'launcher', 'process': 'disappeared'})
+            self.assertEqual(config.launch_failure_facts(CANONICAL_ACTIVITY, None)['process'], 'not_observed')
+        with patch.object(config, 'adb', side_effect=GuiFailure('raw untrusted detail')):
+            self.assertEqual(config.launch_failure_facts(CANONICAL_ACTIVITY, '983'), {
+                'window': 'unavailable', 'resumedActivity': 'unavailable', 'process': 'unavailable'})
 
 
 class PickerTests(unittest.TestCase):
@@ -73,12 +131,36 @@ class PickerTests(unittest.TestCase):
         with patch.object(config, 'owned_display', return_value=(1080, 2000)):
             picker = config.Picker({})
         picker.package = PROVIDER
+        picker.window = SYSTEM_PICKER
         with patch.object(config, 'wait_for', return_value=(10, 20, 100, 60)), \
                 patch.object(config, 'foreground', return_value=config.PACKAGE), \
                 patch.object(config, 'adb') as adb:
             with self.assertRaisesRegex(GuiFailure, '^documents_ui_unconfirmed$'):
                 picker.tap(ancestor='dir_list', label='owned')
             adb.assert_not_called()
+
+    def test_picker_requires_actual_picker_activity_and_exact_launcher_on_return(self):
+        with patch.object(config, 'owned_display', return_value=(1080, 2000)):
+            picker = config.Picker({'pickerOpens': 0})
+        picker.launcher = CANONICAL_ACTIVITY
+
+        def one_sample(probe, code):
+            return probe() or config.require(False, code)
+
+        with patch.object(config, 'wait_for', side_effect=one_sample):
+            with patch.object(config, 'foreground', return_value=PROVIDER + '/.files.FilesActivity'):
+                with self.assertRaisesRegex(GuiFailure, '^documents_ui_unconfirmed$'):
+                    picker.enter()
+            self.assertEqual(picker.report['pickerOpens'], 0)
+            with patch.object(config, 'foreground', return_value=SYSTEM_PICKER):
+                picker.enter()
+            self.assertEqual(picker.report['pickerOpens'], 1)
+            with patch.object(config, 'foreground', return_value=config.PACKAGE + '/.OtherActivity'):
+                with self.assertRaisesRegex(GuiFailure, '^picker_return_unconfirmed$'):
+                    picker.wait_return()
+            with patch.object(config, 'foreground', return_value=CANONICAL_ACTIVITY):
+                picker.wait_return()
+            self.assertEqual(picker.report['pickerStep'], 'app_foreground')
 
 
 class ArchiveTests(unittest.TestCase):
@@ -235,6 +317,102 @@ class EvidenceTests(unittest.TestCase):
         self.assertNotIn('install', events)
         self.assertNotIn('folder-removed', events)
         self.assertEqual(report['cleanup'], {'hierarchyFile': True})
+
+    def test_startup_requires_real_process_and_exact_foreground_before_exercise(self):
+        for scenario in ('launcher', 'system_window', 'process_exited'):
+            with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as root:
+                avd = Path(root) / 'avd'
+                avd.mkdir()
+                apk = Path(root) / 'fixture.apk'
+                apk.touch()
+                env = {'GITHUB_ACTIONS': 'true', 'GITHUB_REF': 'refs/heads/codex/local',
+                       'ANDROID_SERIAL': config.SERIAL, 'ANDROID_AVD_HOME': str(avd),
+                       'RUNNER_TEMP': root}
+                report = {'cleanup': {}}
+                installed = forwarded = False
+                events = []
+                socket = 'localabstract:webview_devtools_remote_42'
+                browser = SimpleNamespace(ws=SimpleNamespace(connected=True))
+                browser.close = lambda: setattr(browser.ws, 'connected', False)
+
+                def adb(*args, **kwargs):
+                    nonlocal installed, forwarded
+                    fixed = {
+                        ('devices',): f'List of devices attached\n{config.SERIAL}\tdevice',
+                        ('shell', 'getprop', 'ro.kernel.qemu'): '1',
+                        ('shell', 'getprop', 'ro.build.version.sdk'): '35',
+                        ('shell', 'am', 'get-current-user'): '0',
+                        ('shell', 'dumpsys', 'activity', 'activities'):
+                            'mResumedActivity: ActivityRecord{f8e u0 ' + ACTIVITY + ' t52}',
+                    }
+                    if args in fixed:
+                        return fixed[args]
+                    if args[:4] == ('shell', 'pm', 'list', 'packages'):
+                        return 'package:' + config.PACKAGE if installed else ''
+                    if args[0] == 'install':
+                        installed = True
+                        return 'Success'
+                    if args[0] == 'uninstall':
+                        installed = False
+                        return 'Success'
+                    if args[:4] == ('shell', 'cmd', 'package', 'resolve-activity'):
+                        events.append('resolve')
+                        return ACTIVITY
+                    if args[:2] == ('shell', 'monkey'):
+                        events.append('launch')
+                        self.assertEqual(args[2:], ('-p', config.PACKAGE, '-c',
+                                                   'android.intent.category.LAUNCHER', '1'))
+                        return 'Events injected: 1'
+                    if args == ('shell', 'pidof', config.PACKAGE):
+                        if installed:
+                            events.append('pid')
+                            return '42'
+                        return ''
+                    if args == ('shell', 'cat', '/proc/net/unix'):
+                        return '' if scenario == 'process_exited' else '0000 @webview_devtools_remote_42'
+                    if args == ('forward', 'tcp:0', socket):
+                        forwarded = True
+                        return '5056'
+                    if args == ('forward', '--list'):
+                        return f'{config.SERIAL} tcp:5056 {socket}' if forwarded else ''
+                    if args == ('forward', '--remove', 'tcp:5056'):
+                        forwarded = False
+                        return ''
+                    if args == ('shell', 'dumpsys', 'window', 'displays'):
+                        events.append('focus')
+                        title = 'NotificationShade' if scenario == 'system_window' else ACTIVITY
+                        return f'Display: mDisplayId=0\n mCurrentFocus=Window{{ab1 u0 {title}}}'
+                    if len(args) == 2 and args[0] == 'shell' and args[1].startswith('pidof '):
+                        return 'absent' if scenario == 'process_exited' else 'present'
+                    if args[:2] == ('shell', 'am') or args[1] in ('mkdir', 'rm', 'rmdir', 'test'):
+                        return ''
+                    self.fail('unexpected command')
+
+                def one_sample(probe, code, *, timeout=25):
+                    return probe() or config.require(False, code)
+
+                with patch.dict(os.environ, env, clear=True), patch.object(config, 'adb', side_effect=adb), \
+                        patch.object(config, 'wait_download_storage'), \
+                        patch.object(config, 'owned_display', return_value=(1080, 2000)), \
+                        patch.object(config, '_connect_ready', return_value=browser), \
+                        patch.object(config, 'wait_for', side_effect=one_sample), \
+                        patch.object(config, 'exercise') as exercise:
+                    if scenario == 'launcher':
+                        config.device_run(apk, report)
+                        exercise.assert_called_once()
+                    else:
+                        code = 'webview_socket_missing' if scenario == 'process_exited' else 'app_foreground_unconfirmed'
+                        with self.assertRaisesRegex(GuiFailure, '^' + code + '$'):
+                            config.device_run(apk, report)
+                        exercise.assert_not_called()
+                self.assertEqual(events[:4], ['resolve', 'launch', 'pid', 'focus'])
+                self.assertTrue(all(report['cleanup'].values()))
+                self.assertFalse(installed)
+                self.assertFalse(forwarded)
+                self.assertEqual(report['launch']['window'], 'system_window' if scenario == 'system_window'
+                                 else 'launcher')
+                if scenario == 'process_exited':
+                    self.assertEqual(report['launch']['process'], 'disappeared')
 
 
 if __name__ == '__main__':

@@ -16,8 +16,14 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from android_gui import PACKAGE, SERIAL, adb
 from paired_gui import GuiFailure, wait_for
 from tauri_android_direct_ssh import _connect_ready
+from tauri_auth_failure_diagnostic import component, window_component
 
 PICKERS = {'com.android.documentsui', 'com.google.android.documentsui'}
+SYSTEM_COMPONENTS = {'android', 'com.android.systemui', 'com.android.intentresolver',
+                     'com.android.permissioncontroller', 'com.google.android.permissioncontroller',
+                     'com.android.launcher3', 'com.google.android.apps.nexuslauncher'}
+SYSTEM_WINDOWS = {'StatusBar', 'NotificationShade', 'Keyguard', 'InputMethod', 'NavigationBar0',
+                  f'Application Error: {PACKAGE}', f'Application Not Responding: {PACKAGE}'}
 ARCHIVE = 'herdr-pocket.hpkt'
 CORRUPT = 'herdr-pocket-corrupt.hpkt'
 DOWNLOADS = '/storage/emulated/0/Download'
@@ -31,6 +37,7 @@ REJECTED = '无法验证或解密文件，或文件不受支持；没有导入�
 HOME_RECORDS = 'no_backup/host-records-v1/hosts.json'
 ERRORS = {'unsafe_runner', 'unowned_device', 'invalid_display', 'install_unconfirmed',
           'app_foreground_unconfirmed', 'app_package_unconfirmed', 'debug_forward_invalid',
+          'app_launcher_unconfirmed', 'app_launch_command_failed', 'app_process_unconfirmed',
           'webview_socket_missing', 'webview_not_ready', 'documents_ui_unconfirmed',
           'picker_hierarchy_invalid', 'picker_target_unconfirmed', 'picker_directory_unconfirmed',
           'picker_return_unconfirmed', 'archive_read_failed',
@@ -81,10 +88,99 @@ def catalog(font):
     return raw
 
 
+def focus_sample():
+    # WindowManager's "windows" listing has no current-focus field on Android 15.
+    try:
+        raw = adb('shell', 'dumpsys', 'window', 'displays', timeout=5)
+    except GuiFailure:
+        return None, 'unavailable'
+    if re.findall(r'^[ \t]*Display: mDisplayId=(\d+)\b', raw, re.M) != ['0']:
+        return None, 'display_unproven'
+    values = re.findall(r'^[ \t]*mCurrentFocus[ \t]*=[ \t]*([^\r\n]*)', raw, re.M)
+    if len(values) != 1:
+        return None, 'focus_ambiguous' if values else 'focus_missing'
+    value = values[0].strip()
+    if value == 'null':
+        return None, 'no_focused_window'
+    match = re.fullmatch(r'Window\{[0-9a-fA-F]{1,32}[ \t]+u([0-9]{1,6})[ \t]+([^{}]{1,256})\}',
+                         value)
+    if not match:
+        return None, 'window_unrecognized'
+    user, title = match.groups()
+    if user != '0':
+        return None, 'other_user'
+    target = window_component(raw)
+    return target, ('component' if target else
+                    'system_window' if title in SYSTEM_WINDOWS else 'window_unrecognized')
+
+
 def foreground():
-    value = adb('shell', 'dumpsys', 'window', 'windows')
-    matches = re.findall(r'^\s*mCurrentFocus=Window\{[^\n{}]*\su0\s+([a-zA-Z0-9_.]+)/', value, re.M)
-    return matches[0] if len(matches) == 1 else None
+    return focus_sample()[0]
+
+
+def picker_activity(target):
+    if not target:
+        return False
+    owner, activity = target.split('/')
+    return owner in PICKERS and activity in {
+        'com.android.documentsui.picker.PickActivity', owner + '.picker.PickActivity'}
+
+
+def target_kind(target, launcher):
+    owner = target.split('/')[0]
+    if target == launcher:
+        return 'launcher'
+    if owner == PACKAGE:
+        return 'other_app_activity'
+    if picker_activity(target):
+        return 'documents_ui'
+    if owner in SYSTEM_COMPONENTS or owner in PICKERS:
+        return 'system_activity'
+    return 'other_activity'
+
+
+def resolve_launcher():
+    try:
+        raw = adb('shell', 'cmd', 'package', 'resolve-activity', '--brief', '--user', '0',
+                  '-a', 'android.intent.action.MAIN', '-c', 'android.intent.category.LAUNCHER',
+                  '-p', PACKAGE, timeout=5)
+    except GuiFailure:
+        raise GuiFailure('app_launcher_unconfirmed') from None
+    matches = {component(line.strip()) for line in raw.splitlines()} - {None}
+    require(len(matches) == 1 and next(iter(matches)).startswith(PACKAGE + '/'),
+            'app_launcher_unconfirmed')
+    return matches.pop()
+
+
+def launch_failure_facts(launcher, pid):
+    target, note = focus_sample()
+    facts = {'window': target_kind(target, launcher) if target else note,
+             'resumedActivity': 'unavailable', 'process': 'unavailable'}
+    try:
+        raw = adb('shell', 'dumpsys', 'activity', 'activities', timeout=5)
+        records = re.findall(r'^[ \t]*(topResumedActivity|mResumedActivity)[ \t]*[:=][ \t]*'
+                             r'ActivityRecord\{[^\n{}]*?[ \t]+u(\d+)[ \t]+(\S+)', raw, re.M)
+        top = [item[1:] for item in records if item[0] == 'topResumedActivity']
+        observed = {(user, component(name)) for user, name in (top or [item[1:] for item in records])}
+        if len(observed) != 1:
+            facts['resumedActivity'] = 'ambiguous' if observed else 'not_observed'
+        else:
+            user, target = observed.pop()
+            facts['resumedActivity'] = ('other_user' if user != '0' else
+                                        target_kind(target, launcher) if target else 'unrecognized')
+    except GuiFailure:
+        pass
+    try:
+        # An explicit marker distinguishes a successful absent read from an ADB failure.
+        state = adb('shell', f'pidof {PACKAGE} >/dev/null; '
+                    'case $? in 0) printf present;; 1) printf absent;; esac', timeout=5)
+        if state == 'present':
+            facts['process'] = 'present'
+        elif state == 'absent':
+            facts['process'] = 'disappeared' if pid else 'not_observed'
+    except GuiFailure:
+        pass
+    return facts
 
 
 def owned_display():
@@ -162,23 +258,26 @@ class Picker:
     def __init__(self, report):
         self.size = owned_display()
         self.package = None
+        self.window = None
+        self.launcher = None
         self.report = report
         self.scratch = '/data/local/tmp/hp-doc-ui-' + secrets.token_hex(12) + '.xml'
         self.scratch_cleanup_failed = False
 
     def enter(self):
         self.report['pickerStep'] = 'foreground'
-        self.package = wait_for(lambda: (package if (package := foreground()) in PICKERS else None),
-                                'documents_ui_unconfirmed')
+        self.window = wait_for(lambda: target if picker_activity(target := foreground()) else None,
+                               'documents_ui_unconfirmed')
+        self.package = self.window.split('/')[0]
         self.report['pickerOpens'] += 1
 
     def hierarchy(self):
-        if foreground() != self.package:
+        if not self.window or foreground() != self.window:
             return None
         try:
             adb('shell', 'uiautomator', 'dump', self.scratch, check=False, timeout=10)
             result = adb('exec-out', 'cat', self.scratch, check=False)
-            return result if foreground() == self.package else None
+            return result if foreground() == self.window else None
         finally:
             try:
                 adb('shell', 'rm', '-f', self.scratch)
@@ -196,7 +295,7 @@ class Picker:
             return before if before and sample() == before else None
 
         left, top, right, bottom = wait_for(stable, 'picker_target_unconfirmed', timeout=30)
-        require(foreground() == self.package, 'documents_ui_unconfirmed')
+        require(self.window and foreground() == self.window, 'documents_ui_unconfirmed')
         adb('shell', 'input', 'tap', (left + right) // 2, (top + bottom) // 2)
 
     def directory(self, folder):
@@ -220,11 +319,11 @@ class Picker:
 
     def cancel(self):
         self.report['pickerStep'] = 'cancel'
-        require(foreground() == self.package, 'documents_ui_unconfirmed')
+        require(self.window and foreground() == self.window, 'documents_ui_unconfirmed')
         adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
 
     def wait_return(self):
-        wait_for(lambda: foreground() == PACKAGE, 'picker_return_unconfirmed')
+        wait_for(lambda: self.launcher and foreground() == self.launcher, 'picker_return_unconfirmed')
         self.report['pickerStep'] = 'app_foreground'
 
 
@@ -404,6 +503,8 @@ def device_run(apk, report):
     forward_socket = None
     install_attempted = False
     owned_directory = False
+    launch = None
+    pid = None
 
     def clean(name, action):
         try:
@@ -455,22 +556,44 @@ def device_run(apk, report):
         install_attempted = True
         require(adb('install', str(apk), timeout=90).splitlines()[-1:] == ['Success'] and installed(),
                 'install_unconfirmed')
-        adb('shell', 'monkey', '-p', PACKAGE, '-c', 'android.intent.category.LAUNCHER', '1')
-        wait_for(lambda: foreground() == PACKAGE, 'app_foreground_unconfirmed', timeout=60)
-        pid = wait_for(lambda: adb('shell', 'pidof', PACKAGE, check=False), 'webview_socket_missing')
-        require(re.fullmatch(r'[1-9][0-9]*', pid), 'webview_socket_missing')
+        launch = report['launch'] = {'launcherResolved': False, 'launchCommandReturned': False,
+                                     'processObserved': False}
+        report['stage'] = 'resolve_launcher'
+        picker.launcher = resolve_launcher()
+        launch['launcherResolved'] = True
+        report['stage'] = 'launch_app'
+        try:
+            adb('shell', 'monkey', '-p', PACKAGE, '-c', 'android.intent.category.LAUNCHER', '1')
+        except GuiFailure:
+            raise GuiFailure('app_launch_command_failed') from None
+        launch['launchCommandReturned'] = True
+        report['stage'] = 'app_process'
+        pid = wait_for(lambda: adb('shell', 'pidof', PACKAGE, check=False, timeout=5),
+                       'app_process_unconfirmed', timeout=60)
+        require(re.fullmatch(r'[1-9][0-9]{0,9}', pid), 'app_process_unconfirmed')
+        launch['processObserved'] = True
+        report['stage'] = 'webview_socket'
         socket = 'webview_devtools_remote_' + pid
         wait_for(lambda: any(line.endswith(' @' + socket) for line in
                  adb('shell', 'cat', '/proc/net/unix', check=False).splitlines()),
                  'webview_socket_missing', timeout=60)
         target = 'localabstract:' + socket
+        report['stage'] = 'webview_forward'
         require(not forward_endpoints(target), 'debug_forward_invalid')
         forward_socket = target
         port = adb('forward', 'tcp:0', target)
         require(port.isdigit() and 0 < int(port) <= 65535, 'debug_forward_invalid')
         require(forward_endpoints(target) == ['tcp:' + port], 'debug_forward_invalid')
+        report['stage'] = 'webview_ready'
         browser = wait_for(lambda: _connect_ready(int(port)), 'webview_not_ready', timeout=60)
+        report['stage'] = 'app_foreground'
+        wait_for(lambda: foreground() == picker.launcher, 'app_foreground_unconfirmed', timeout=60)
+        launch['window'] = 'launcher'
         exercise(browser, picker, folder, report)
+    except GuiFailure:
+        if launch is not None and 'window' not in launch:
+            launch.update(launch_failure_facts(picker.launcher, pid if launch['processObserved'] else None))
+        raise
     finally:
         report['cleanup']['hierarchyFile'] = not picker.scratch_cleanup_failed
         if browser is not None:

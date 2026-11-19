@@ -60,7 +60,7 @@ PASTE_UI_STEPS = frozenset(('product_entered', 'product_returned', 'snapshot_ent
                             'form_entered', 'form_observed'))
 PASTE_CONSENT_RESULTS = frozenset(('window_unproven', 'menu_unbound', 'action_unbound', 'not_hittable', 'unsafe_frame', 'tapped'))
 PASTE_STATES = {
-    'observation': frozenset(('not_foreground', 'owner_missing', 'field_missing', 'field_ambiguous', 'field_populated',
+    'observation': frozenset(('snapshot_unavailable', 'not_foreground', 'owner_missing', 'field_missing', 'field_ambiguous', 'field_populated',
                               'field_empty', 'menu_observed', 'overlay_observed', 'read_failure_visible')),
     'consent_returned': PASTE_CONSENT_RESULTS,
     'edit_consent_returned': PASTE_CONSENT_RESULTS,
@@ -116,7 +116,7 @@ NATIVE_FAILURES = frozenset((
     'native_mobile_confirmation_owner_unproven', 'native_mobile_password_owner_unproven',
     'native_mobile_submit_owner_unproven', 'native_mobile_return_owner_unproven',
     'native_encrypted_key_owner_unproven', 'native_encrypted_key_method_unproven',
-    'native_encrypted_key_paste_unproven', 'native_encrypted_key_rejection_unproven',
+    'native_encrypted_key_paste_unproven', 'native_encrypted_key_paste_snapshot_unavailable', 'native_encrypted_key_rejection_unproven',
     'native_encrypted_key_credentials_retained')) | MOBILE_PASSWORD_FAILURES | ENCRYPTED_AUTH_FAILURES
 HOME_MEMBERS = frozenset(('brand', 'headerAdd', 'emptyAdd', 'homeHeading', 'emptyHeading',
                          'zeroHosts', 'ordinaryShortcut', 'addHeading', 'sshOption'))
@@ -1503,6 +1503,11 @@ class Checkpoints:
             if stage == 'native_failure':
                 code = payload.get('nativeFailureCode')
                 require(type(code) is str and code in NATIVE_FAILURES, 'tauri_ios_native_diagnostic_invalid')
+                if code == 'native_encrypted_key_paste_snapshot_unavailable':
+                    require(phase == 'encrypted_key_paste' and self.index < len(self.stages)
+                            and self.stages[self.index] in ('encrypted_key_wrong_ready', 'encrypted_key_retry_ready')
+                            and set(payload) == {'stage', 'nativeCheckpoint', 'nativeFailureCode'},
+                            'tauri_ios_native_diagnostic_invalid')
                 if code in ENCRYPTED_AUTH_FAILURES:
                     require(phase in ('encrypted_key_select_key', 'encrypted_key_select_password'),
                             'tauri_ios_native_diagnostic_invalid')

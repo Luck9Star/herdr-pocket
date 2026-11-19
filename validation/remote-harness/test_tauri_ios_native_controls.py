@@ -57,6 +57,86 @@ class NativeControlPolicyTests(unittest.TestCase):
         self.assertEqual(draft.count('try tapMobileButton(before.paste,'), 1)
         self.assertEqual(draft.count('.press(forDuration:'), 1)
 
+    def test_missing_post_touch_root_sample_cannot_authorize_a_paste_action(self):
+        draft = self.production_method('func encryptedDraft(')
+        poll = draft.split('repeat {', 1)[1].split('} while Date() < deadline', 1)[0]
+        self.assertNotIn('let rows = try observedNodes()', poll)
+        unavailable, observed = poll.split('lastSnapshotUnavailable = false', 1)
+        self.assertIn('guard let rows = try pasteObservedNodes()', unavailable)
+        self.assertIn('"snapshot_unavailable"', unavailable)
+        self.assertIn('continue', unavailable)
+        self.assertNotIn('tapNativePasteConsent(', unavailable)
+        self.assertNotIn('.press(forDuration:', unavailable)
+        self.assertIn('tapNativePasteConsent(', observed)
+        self.assertLess(draft.index('try require(!lastSnapshotUnavailable'), draft.index('let pasted = try encryptedForm'))
+
+    def test_post_touch_snapshot_recovers_passively_but_invalid_trees_and_strict_reads_fail(self):
+        program = r'''
+import Foundation
+enum Role { case application, window, webView, field }
+protocol XCUIElementSnapshot {
+    var elementType: Role { get }
+    var frame: CGRect { get }
+    var children: [any XCUIElementSnapshot] { get }
+}
+struct Row: XCUIElementSnapshot {
+    let elementType: Role
+    var frame: CGRect = CGRect(x: 0, y: 0, width: 440, height: 956)
+    var children: [any XCUIElementSnapshot] = []
+}
+struct Observed {
+    let snapshot: any XCUIElementSnapshot
+    let path: [Int]
+    let window: CGRect?
+    let windowPath: [Int]
+    let webs: [CGRect]
+    let webPath: [Int]
+}
+enum SampleFailure: Error, Equatable { case unknownRoot, treeLimit }
+final class App {
+    var samples: [Row?]
+    var reads = 0
+    init(_ samples: [Row?]) { self.samples = samples }
+    func snapshot() throws -> any XCUIElementSnapshot {
+        reads += 1
+        guard let row = samples.removeFirst() else { throw SampleFailure.unknownRoot }
+        return row
+    }
+}
+final class Adapter {
+    let app: App
+    init(_ samples: [Row?]) { app = App(samples) }
+    func require(_ truth: Bool, _ code: String) throws {
+        if !truth {
+            precondition(code == "native_tree_limit")
+            throw SampleFailure.treeLimit
+        }
+    }
+''' + "\n".join(self.production_method(name) for name in (
+            'func observedNodes() throws', 'func observedNodes(from root:', 'func pasteObservedNodes() throws')) + r'''
+}
+let field = Row(elementType: .field)
+let web = Row(elementType: .webView, children: [field])
+let window = Row(elementType: .window, children: [web])
+let root = Row(elementType: .application, children: [window])
+let recovery = Adapter([nil, root, nil])
+let unavailable = try recovery.pasteObservedNodes()
+precondition(unavailable == nil && recovery.app.reads == 1)
+let observed = try recovery.pasteObservedNodes()!
+precondition(recovery.app.reads == 2 && observed.last?.path == [0, 0, 0])
+precondition(observed.last?.windowPath == [0] && observed.last?.webPath == [0, 0])
+let latest = try recovery.pasteObservedNodes()
+precondition(latest == nil && recovery.app.reads == 3, "an unavailable latest observation cannot reuse the old tree")
+let untouched = Adapter([nil])
+do { _ = try untouched.observedNodes(); fatalError("normal observations remain strict") }
+catch SampleFailure.unknownRoot { precondition(untouched.app.reads == 1) }
+let oversized = Row(elementType: .application, children: Array(repeating: field, count: 9999))
+let invalid = Adapter([oversized])
+do { _ = try invalid.pasteObservedNodes(); fatalError("a tree-limit failure must not be swallowed") }
+catch SampleFailure.treeLimit { precondition(invalid.app.reads == 1) }
+'''
+        self.compile_and_run(program)
+
     def test_production_home_wait_separates_slow_initialization_from_unsafe_navigation(self):
         # Exercise the production launch methods with deterministic XCTest
         # observations and an injectable clock for the cold-start deadline.

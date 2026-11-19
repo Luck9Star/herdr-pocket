@@ -811,7 +811,20 @@ final class TauriDirectSSHUITests: XCTestCase {
 
     @MainActor
     private func observedNodes() throws -> [Observed] {
-        var pending: [(any XCUIElementSnapshot, [Int], CGRect?, [Int], [CGRect], [Int])] = [(try app.snapshot(), [], nil, [], [], [])]
+        try observedNodes(from: app.snapshot())
+    }
+
+    @MainActor
+    private func pasteObservedNodes() throws -> [Observed]? {
+        // The optional post-touch sample may be unavailable during a native transition.
+        // Only snapshot acquisition is optional. An invalid tree still fails the test.
+        guard let root = try? app.snapshot() else { return nil }
+        return try observedNodes(from: root)
+    }
+
+    @MainActor
+    private func observedNodes(from root: any XCUIElementSnapshot) throws -> [Observed] {
+        var pending: [(any XCUIElementSnapshot, [Int], CGRect?, [Int], [CGRect], [Int])] = [(root, [], nil, [], [], [])]
         var result: [Observed] = []
         while let (node, path, inheritedWindow, inheritedWindowPath, inheritedWebs, inheritedWebPath) = pending.popLast() {
             let isWindow = node.elementType == .window
@@ -2805,9 +2818,16 @@ final class TauriDirectSSHUITests: XCTestCase {
         var confirmed = false
         var method = "productPaste"
         let fallbackNotice = "无法读取剪贴板，可在私钥框用系统粘贴。"
+        var lastSnapshotUnavailable = false
         try trace("snapshot_entered")
         repeat {
-            let rows = try observedNodes()
+            guard let rows = try pasteObservedNodes() else {
+                lastSnapshotUnavailable = true
+                try trace("observation", "snapshot_unavailable")
+                Thread.sleep(forTimeInterval: 0.2)
+                continue
+            }
+            lastSnapshotUnavailable = false
             let connection = connectionRows(rows, in: before.pem)
             let drafts = connection.filter { sameIdentity($0.snapshot, before.pem.owner.snapshot) }
             if app.state != .runningForeground {
@@ -2851,6 +2871,7 @@ final class TauriDirectSSHUITests: XCTestCase {
             }
             Thread.sleep(forTimeInterval: 0.2)
         } while Date() < deadline
+        try require(!lastSnapshotUnavailable, "native_encrypted_key_paste_snapshot_unavailable")
         try trace("form_entered")
         let pasted = try encryptedForm(port: port, owner: owner)
         let ready = !credentialEmpty(pasted.pem.live.snapshot) && credentialEmpty(pasted.passphrase.live.snapshot) &&

@@ -2147,6 +2147,7 @@ class EncryptedKeyFixtureTests(unittest.TestCase):
             state.accept(event | {'step': 'prepared'})
             state.index = state.stages.index(ready)
             expected = [{'step': 'product_entered'}, {'step': 'product_returned'}, {'step': 'snapshot_entered'},
+                        {'step': 'observation', 'state': 'snapshot_unavailable'},
                         {'step': 'observation', 'state': 'field_empty'}, {'step': 'observation', 'state': 'menu_observed'},
                         {'step': 'consent_entered'}, {'step': 'consent_returned', 'state': 'menu_unbound'},
                         {'step': 'observation', 'state': 'field_populated'}, {'step': 'form_entered'},
@@ -2162,6 +2163,21 @@ class EncryptedKeyFixtureTests(unittest.TestCase):
             self.assertNotIn('PRIVATE', json.dumps(state.result))
             self.assertEqual(state.stages[state.index], ready)
             state.result.pop('nativeCheckpoint')
+
+    def test_persistent_snapshot_failure_is_allowed_only_in_the_post_touch_slot(self):
+        for ready in ('encrypted_key_wrong_ready', 'encrypted_key_retry_ready'):
+            state = ios.Checkpoints(None, None, '/unused', {}, encrypted=object())
+            event = {'stage': 'native_failure', 'nativeCheckpoint': 'encrypted_key_paste',
+                     'nativeFailureCode': 'native_encrypted_key_paste_snapshot_unavailable'}
+            state.index = state.stages.index(ready) - 1
+            with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                state.accept(event)
+            state.index = state.stages.index(ready)
+            with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                state.accept(event | {'raw': 'PRIVATE-ERROR'})
+            state.accept(event)
+            self.assertEqual(state.result['nativeFailureCode'], event['nativeFailureCode'])
+            self.assertNotIn('PRIVATE', json.dumps(state.result))
 
     def test_auth_choice_diagnostics_distinguish_selection_and_selected_form(self):
         for phase in ios.ENCRYPTED_AUTH_PHASES:

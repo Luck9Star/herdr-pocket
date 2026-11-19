@@ -306,8 +306,21 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   void openDirectSsh() {
     tabs.select(null);
     if (sshClosedNotice) setState(() => sshClosedNotice = false);
-    Navigator.push<void>(context, MaterialPageRoute(builder: (_) => DirectSshPage(tokens: widget.tokens,
-      onReturnAfterDisconnect: () { if (mounted) setState(() => sshClosedNotice = true); })));
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute(builder: (_) => DirectSshPage(
+        tokens: widget.tokens,
+        catalog: catalog,
+        closeCatalogTabs: (ids) {
+          for (final id in ids) {
+            tabs.closeHost(id);
+          }
+        },
+        onReturnAfterDisconnect: () {
+          if (mounted) setState(() => sshClosedNotice = true);
+        },
+      )),
+    );
   }
 
   Future<void> chooseConnection() async {

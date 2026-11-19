@@ -8,6 +8,8 @@ import 'package:flutter/services.dart' show Clipboard;
 import 'package:terminal_view/terminal_view.dart';
 import 'design_tokens.dart';
 import 'macos_secure_credential_field.dart';
+import 'host_catalog.dart';
+import 'config_transfer_page.dart';
 
 String formatDirectSshTarget(String username, String host, int port) {
   final displayHost = host.contains(':') && !(host.startsWith('[') && host.endsWith(']')) ? '[$host]' : host;
@@ -19,9 +21,17 @@ enum DirectSshConnectFailure { keyParse, socket, handshake, handshakeTimeout, au
 
 /// Standalone SSH shell. Host key verification precedes every authentication.
 class DirectSshPage extends StatefulWidget {
-  const DirectSshPage({super.key, required this.tokens, this.onReturnAfterDisconnect});
+  const DirectSshPage({
+    super.key,
+    required this.tokens,
+    this.onReturnAfterDisconnect,
+    this.catalog,
+    this.closeCatalogTabs,
+  });
   final DesignTokens tokens;
   final VoidCallback? onReturnAfterDisconnect;
+  final HostCatalog? catalog;
+  final void Function(Set<String>)? closeCatalogTabs;
   @override
   State<DirectSshPage> createState() => _DirectSshPageState();
 }
@@ -30,6 +40,11 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   final host = TextEditingController(), port = TextEditingController(text: '22'), user = TextEditingController();
   final secret = TextEditingController(), passphrase = TextEditingController();
   final targetScroll = ScrollController();
+  final terminalFocus = FocusNode();
+  GlobalKey<TerminalViewState> terminalViewKey = GlobalKey<TerminalViewState>();
+  final terminalFont = TextEditingController();
+  bool settingsActive = false;
+  String? settingsNotice;
   Terminal? terminal;
   SSHSocket? socket;
   SSHClient? client;
@@ -111,12 +126,16 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     super.initState(); WidgetsBinding.instance.addObserver(this);
     for (final field in [host, port, user]) { field.addListener(changed); }
     secret.addListener(credentialsChanged); passphrase.addListener(credentialsChanged);
+    widget.catalog?.addListener(catalogChanged);
+  }
+  void catalogChanged() {
+    if (mounted) setState(() {});
   }
   Terminal createTerminal(int generation) {
     final value = Terminal(maxLines: 2000);
     value.onOutput = (data) {
       final current = shell;
-      if (generation == epoch && identical(value, terminal) && foreground && connected && current != null) current.write(Uint8List.fromList(utf8.encode(data)));
+      if (generation == epoch && identical(value, terminal) && foreground && connected && !settingsActive && current != null) current.write(Uint8List.fromList(utf8.encode(data)));
     };
     value.onResize = (cols, rows, px, py) {
       if (generation == epoch && identical(value, terminal) && foreground && connected) shell?.resizeTerminal(cols, rows, px, py);
@@ -139,6 +158,9 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     cancelKeyPaste();
     if (busy && connectPhase != DirectSshConnectPhase.idle && connectFailure == null) connectFailure = DirectSshConnectFailure.cancelled;
     epoch++; connected = false; busy = false; pendingTarget = null; activeTarget = null;
+    settingsActive = false;
+    terminalViewKey.currentState?.closeKeyboard();
+    terminalFocus.unfocus();
     if (targetScroll.hasClients) targetScroll.jumpTo(0);
     retireTerminal();
     secret.clear(); passphrase.clear();
@@ -164,9 +186,12 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    widget.catalog?.removeListener(catalogChanged);
     secret.removeListener(credentialsChanged); passphrase.removeListener(credentialsChanged);
     stop(notify: false);
     targetScroll.dispose();
+    terminalFocus.dispose();
+    terminalFont.dispose();
     for (final field in [host, port, user, secret, passphrase]) { field.dispose(); }
     super.dispose();
   }
@@ -544,15 +569,524 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     for (final item in {'Ctrl-C':'\u0003', 'Ctrl-D':'\u0004', 'Enter':'\r'}.entries)
       TextButton(onPressed: () => current.textInput(item.value), child: Text(item.key)),
   ]));
+  void retireMobileInput() {
+    terminalViewKey.currentState?.closeKeyboard();
+    terminalFocus.unfocus();
+    terminalViewKey = GlobalKey<TerminalViewState>();
+  }
+
+  void selectMobileTerminal(bool settings) {
+    if (!connected) return;
+    FocusScope.of(context).unfocus();
+    retireMobileInput();
+    setState(() {
+      settingsActive = settings;
+      settingsNotice = null;
+      if (settings) {
+        terminalFont.text = '${widget.catalog?.terminalFontSize ?? 14}';
+      }
+    });
+  }
+
+  Future<void> saveMobileTerminalFont() async {
+    final catalog = widget.catalog;
+    final size = int.tryParse(terminalFont.text.trim());
+    if (catalog == null || size == null || size < 10 || size > 28) {
+      setState(() => settingsNotice = '请输入 10–28 的终端字号。');
+      return;
+    }
+    try {
+      final revision = catalog.revision;
+      await catalog.updateTerminalFontSize(size, expectedRevision: revision);
+      if (mounted) setState(() => settingsNotice = '终端字号已保存。');
+    } catch (_) {
+      if (mounted) setState(() => settingsNotice = '字号保存未确认，请重新读取后重试。');
+    }
+  }
+
+  Widget mobileConnectedNavigation() {
+    final entries = [
+      (Icons.dashboard_outlined, '看板'),
+      (Icons.terminal, '终端'),
+      (Icons.language, '网络'),
+      (Icons.settings_outlined, '设置'),
+    ];
+    return Material(
+      color: widget.tokens.color('card'),
+      child: SafeArea(
+        top: false,
+        child: Container(
+          key: const ValueKey('direct-terminal-tabs'),
+          height: 56,
+          foregroundDecoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(color: widget.tokens.color('border')),
+            ),
+          ),
+          child: Row(
+            children: [
+              for (var i = 0; i < entries.length; i++)
+                Expanded(
+                  child: InkWell(
+                    key: ValueKey(
+                      [
+                        'direct-tab-board',
+                        'direct-tab-terminal',
+                        'direct-tab-network',
+                        'direct-tab-settings',
+                      ][i],
+                    ),
+                    onTap: i == 1
+                        ? () => selectMobileTerminal(false)
+                        : i == 3 && widget.catalog != null
+                        ? () => selectMobileTerminal(true)
+                        : null,
+                    child: Semantics(
+                      button: true,
+                      enabled: i == 1 || (i == 3 && widget.catalog != null),
+                      selected: settingsActive ? i == 3 : i == 1,
+                      child: Stack(
+                        alignment: Alignment.topCenter,
+                        children: [
+                          Positioned(
+                            top: 4,
+                            child: Container(
+                              width: 40,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                color: (settingsActive ? i == 3 : i == 1)
+                                    ? widget.tokens.color('brandSoft')
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                entries[i].$1,
+                                size: 24,
+                                color: widget.tokens.color(
+                                  (settingsActive ? i == 3 : i == 1)
+                                      ? 'brand'
+                                      : 'textSecondary',
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            top: 36,
+                            child: Text(
+                              entries[i].$2,
+                              textScaler: TextScaler.noScaling,
+                              style: TextStyle(
+                                fontSize: 12,
+                                height: 1,
+                                color: widget.tokens.color(
+                                  (settingsActive ? i == 3 : i == 1)
+                                      ? 'brand'
+                                      : 'textSecondary',
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  PreferredSizeWidget mobileActiveHeader() => AppBar(
+    key: const ValueKey('direct-active-header'),
+    automaticallyImplyLeading: false,
+    centerTitle: false,
+    titleSpacing: mobileMargin,
+    backgroundColor: widget.tokens.color('canvas'),
+    shape: Border(bottom: BorderSide(color: widget.tokens.color('border'))),
+    title: Text(settingsActive ? '设置' : '普通 SSH'),
+    actions: settingsActive
+        ? null
+        : [
+            Padding(
+              padding: EdgeInsets.only(right: mobileMargin),
+              child: SizedBox(
+                width: 60,
+                height: 44,
+                child: TextButton(
+                  key: const ValueKey('direct-disconnect'),
+                  style: TextButton.styleFrom(
+                    backgroundColor: widget.tokens.color('dangerSoft'),
+                    foregroundColor: widget.tokens.color('dangerText'),
+                    padding: EdgeInsets.zero,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: () {
+                    userDisconnected = true;
+                    mobileAuth = false;
+                    stop(message: '已断开；未重放输入。');
+                  },
+                  child: const Text('断开'),
+                ),
+              ),
+            ),
+          ],
+  );
+  Widget mobileKey(
+    String id,
+    String label,
+    VoidCallback action, {
+    double width = 44,
+  }) => SizedBox(
+    width: width,
+    height: 44,
+    child: TextButton(
+      key: ValueKey('direct-key-$id'),
+      onPressed: action,
+      style: TextButton.styleFrom(
+        padding: EdgeInsets.zero,
+        minimumSize: Size(width, 44),
+        backgroundColor: widget.tokens.color('termKeyBg'),
+        foregroundColor: widget.tokens.color('termText'),
+        side: BorderSide(color: widget.tokens.color('termKeyBorder')),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(fontFamily: 'ProbeNerd', fontSize: 12),
+      ),
+    ),
+  );
+  Widget mobileTerminalKeys(Terminal current) {
+    final keys = [
+      mobileKey('esc', 'Esc', () => current.textInput('\u001b')),
+      mobileKey('tab', 'Tab', () => current.textInput('\t')),
+      mobileKey('up', '↑', () => current.keyInput(TerminalKey.arrowUp)),
+      mobileKey('down', '↓', () => current.keyInput(TerminalKey.arrowDown)),
+      mobileKey('left', '←', () => current.keyInput(TerminalKey.arrowLeft)),
+      mobileKey('right', '→', () => current.keyInput(TerminalKey.arrowRight)),
+      mobileKey(
+        'ctrl-c',
+        'Ctrl-C',
+        () => current.textInput('\u0003'),
+        width: 54,
+      ),
+      mobileKey(
+        'ctrl-d',
+        'Ctrl-D',
+        () => current.textInput('\u0004'),
+        width: 54,
+      ),
+      mobileKey('enter', 'Enter', () => current.textInput('\r'), width: 54),
+    ];
+    Widget row(List<Widget> items) => SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (var i = 0; i < items.length; i++) ...[
+            if (i > 0) const SizedBox(width: 4),
+            items[i],
+          ],
+        ],
+      ),
+    );
+    return SizedBox(
+      key: const ValueKey('direct-terminal-keys'),
+      width: double.infinity,
+      height: MediaQuery.sizeOf(context).width < 360 ? 92 : 44,
+      child: MediaQuery.sizeOf(context).width < 360
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                row(keys.take(4).toList()),
+                const SizedBox(height: 4),
+                row(keys.skip(4).toList()),
+              ],
+            )
+          : row(keys),
+    );
+  }
+
+  Widget mobileTerminalWorkspace() {
+    final t = widget.tokens;
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final margin = mobileMargin;
+    final minimumHeight =
+        24.0 +
+        44 +
+        16 +
+        80 +
+        (MediaQuery.sizeOf(context).width < 360 ? 92 : 44);
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        primary: false,
+        child: SizedBox(
+          height: constraints.maxHeight < minimumHeight
+              ? minimumHeight
+              : constraints.maxHeight,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(margin, 12, margin, 12),
+            child: Column(
+              children: [
+                SizedBox(
+                  key: const ValueKey('direct-terminal-status'),
+                  height: 44,
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 62,
+                        height: 24,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: t.color('successSoft'),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: t.color('successBorder')),
+                        ),
+                        child: Text(
+                          '已连接',
+                          textScaler: TextScaler.noScaling,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: t.color('successText'),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final style = TextStyle(
+                              fontFamily: 'ProbeNerd',
+                              fontSize: MediaQuery.sizeOf(context).width < 360
+                                  ? 11
+                                  : 12,
+                            );
+                            final painter = TextPainter(
+                              text: TextSpan(
+                                text: activeTarget ?? '',
+                                style: style,
+                              ),
+                              textDirection: Directionality.of(context),
+                              textScaler: MediaQuery.textScalerOf(context),
+                              maxLines: 1,
+                            )..layout();
+                            final longTarget =
+                                painter.width > constraints.maxWidth;
+                            painter.dispose();
+                            return Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (longTarget)
+                                  const Text(
+                                    '连接目标 · 左右滑动查看',
+                                    textScaler: TextScaler.noScaling,
+                                    style: TextStyle(fontSize: 10),
+                                  ),
+                                Flexible(
+                                  child: SingleChildScrollView(
+                                    key: const ValueKey('direct-target-scroll'),
+                                    controller: targetScroll,
+                                    scrollDirection: Axis.horizontal,
+                                    child: Text(
+                                      activeTarget ?? '',
+                                      key: const ValueKey(
+                                        'direct-active-target',
+                                      ),
+                                      maxLines: 1,
+                                      softWrap: false,
+                                      style: style,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      SizedBox(
+                        width: 44,
+                        height: 44,
+                        child: IconButton(
+                          key: const ValueKey('direct-keyboard-toggle'),
+                          tooltip: keyboardVisible ? '收起键盘' : '打开键盘',
+                          padding: EdgeInsets.zero,
+                          onPressed: () {
+                            if (keyboardVisible) {
+                              setState(retireMobileInput);
+                            } else {
+                              terminalViewKey.currentState?.requestKeyboard();
+                            }
+                          },
+                          icon: Container(
+                            width: 44,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: t.color('card'),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: t.color('borderStrong'),
+                              ),
+                            ),
+                            child: Icon(
+                              keyboardVisible
+                                  ? Icons.keyboard_hide_outlined
+                                  : Icons.keyboard_outlined,
+                              color: t.color('brand'),
+                              size: 24,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: Container(
+                    key: const ValueKey('direct-terminal-panel'),
+                    foregroundDecoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: t.color('termBorder')),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: TerminalView(
+                        terminal!,
+                        key: terminalViewKey,
+                        focusNode: terminalFocus,
+                        theme: t.terminalTheme,
+                        autoResize: true,
+                        padding: const EdgeInsets.all(12),
+                        textStyle: TerminalStyle(
+                          fontFamily: 'ProbeNerd',
+                          fontSize: (widget.catalog?.terminalFontSize ?? 14)
+                              .toDouble(),
+                          height: 20 / 14,
+                          fontFamilyFallback: [
+                            ...?Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.fontFamilyFallback,
+                            ...const TerminalStyle().fontFamilyFallback,
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                mobileTerminalKeys(terminal!),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget mobileActiveSettings() {
+    final t = widget.tokens;
+    final catalog = widget.catalog;
+    return ListView(
+      key: const ValueKey('direct-settings'),
+      padding: EdgeInsets.fromLTRB(mobileMargin, 20, mobileMargin, 24),
+      children: [
+        Container(
+          key: const ValueKey('direct-settings-active'),
+          height: 44,
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: t.color('successSoft'),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: t.color('successBorder')),
+          ),
+          child: Text(
+            '普通 SSH 会话保持连接',
+            style: TextStyle(
+              color: t.color('successText'),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        mobileTargetCard(activeTarget ?? ''),
+        const SizedBox(height: 16),
+        mobileField(
+          '终端字号（10–28）',
+          SizedBox(
+            height: 48,
+            child: TextField(
+              key: const ValueKey('direct-settings-font'),
+              controller: terminalFont,
+              keyboardType: TextInputType.number,
+              decoration: mobileInput('14'),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 48,
+          child: OutlinedButton(
+            key: const ValueKey('direct-settings-save'),
+            style: mobileSecondaryButton,
+            onPressed: catalog?.ready == true && catalog?.writing == false
+                ? saveMobileTerminalFont
+                : null,
+            child: const Text('保存字号'),
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 48,
+          child: OutlinedButton(
+            key: const ValueKey('direct-settings-transfer'),
+            style: mobileSecondaryButton,
+            onPressed:
+                catalog?.ready == true &&
+                    catalog?.writing == false &&
+                    catalog?.pendingCreation == null &&
+                    widget.closeCatalogTabs != null
+                ? () => Navigator.push<void>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ConfigTransferPage(
+                        catalog: catalog!,
+                        closeTabs: widget.closeCatalogTabs!,
+                      ),
+                    ),
+                  )
+                : null,
+            child: const Text('导入 / 导出配置'),
+          ),
+        ),
+        if (settingsNotice != null) ...[
+          const SizedBox(height: 12),
+          Semantics(liveRegion: true, child: Text(settingsNotice!)),
+        ],
+      ],
+    );
+  }
   @override
   Widget build(BuildContext context) => PopScope<void>(
-    canPop: hostKeyChange == null,
+    canPop: hostKeyChange == null && !settingsActive,
     onPopInvokedWithResult: (didPop, result) {
+      if (!didPop && settingsActive && connected) {
+        selectMobileTerminal(false);
+      }
       if (didPop && busy) stop(notify: false);
       if (didPop && userDisconnected) { userDisconnected = false; widget.onReturnAfterDisconnect?.call(); }
     },
     child: Scaffold(
-      appBar: mobileLayout && !connected ? mobileHeader(hostKeyChange != null ? '主机指纹发生变化' : mobileAuth && !hostKeyReviewRequired ? 'SSH 账号认证' : '普通 SSH',
+      bottomNavigationBar: mobileLayout && connected && MediaQuery.viewInsetsOf(context).bottom == 0 ? mobileConnectedNavigation() : null,
+      appBar: mobileLayout && connected ? mobileActiveHeader() : mobileLayout && !connected ? mobileHeader(hostKeyChange != null ? '主机指纹发生变化' : mobileAuth && !hostKeyReviewRequired ? 'SSH 账号认证' : '普通 SSH',
         canGoBack: hostKeyChange == null && (ModalRoute.of(context)?.impliesAppBarDismissal ?? false), showStop: busy, onBack: mobileAuth && !hostKeyReviewRequired ? backFromMobileAuth
           : userDisconnected ? returnAfterDisconnect : null)
         : AppBar(title: const Text('普通 SSH'),
@@ -561,7 +1095,8 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
         ? MergeSemantics(child: Semantics(identifier: 'direct-back', label: '返回主机列表', child: BackButton(onPressed: mobileLayout && mobileAuth && !connected
           ? backFromMobileAuth : null))) : null,
       actions: [if (busy || connected) TextButton(onPressed: () { userDisconnected = mobileLayout && connected; mobileAuth = false; stop(message: '已断开；未重放输入。'); }, child: const Text('断开'))]),
-    body: SafeArea(child: hostKeyChange != null ? (mobileLayout ? mobileHostKeyChangeView() : hostKeyChangeView()) : connected ? LayoutBuilder(
+    body: SafeArea(child: hostKeyChange != null ? (mobileLayout ? mobileHostKeyChangeView() : hostKeyChangeView()) : connected && mobileLayout ? IndexedStack(
+      index: settingsActive ? 1 : 0, children: [mobileTerminalWorkspace(), mobileActiveSettings()]) : connected ? LayoutBuilder(
       builder: (context, constraints) => SingleChildScrollView(primary: false, child: SizedBox(
         // Keyboard transitions can leave less room than the status and keys.
         // Keep a usable terminal and let the connected workspace scroll.

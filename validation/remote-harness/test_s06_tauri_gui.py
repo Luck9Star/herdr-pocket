@@ -100,7 +100,8 @@ class TauriSplitEvidenceTests(unittest.TestCase):
             self.assertEqual(tick.call_count, 6)
 
     def test_tick_failure_exports_only_the_stage_and_hit_geometry(self):
-        layout = {'reason': 'row-hit', 'final': {'hits': ['terminal'] * 3, 'rowY': 930}}
+        layout = {'reason': 'row-hit', 'final': {'rowY': 930, 'points': [
+            {'x': x, 'y': 930, 'inClient': True, 'target': 'terminal'} for x in (53.2, 137.2, 296.8)]}}
         row = {'text': 'S06 B tick 000041', 'layout': layout}
 
         def one_poll(probe, code, timeout):
@@ -116,6 +117,12 @@ class TauriSplitEvidenceTests(unittest.TestCase):
                     ui.ticks(['a', 'b'], (1,), (41,), 'narrow_active')
             report = json.loads((Path(directory) / 's06-tauri-tick-failure.json').read_text())
             self.assertEqual(report, {'stage': 'narrow_active', 'sides': {'1': layout}})
+
+    def test_tick_rejects_obscured_sample_even_with_matching_row_text(self):
+        ui = SplitDriver(SimpleNamespace())
+        sample = {'text': 'S06 B tick 000041', 'layout': {'reason': 'row-clipped'}}
+        with patch.object(ui, 'read', return_value=sample):
+            self.assertIsNone(ui.rendered_tick('panel', 1))
 
     def test_tick_rejects_scroll_that_moves_dom_or_selected_focus(self):
         ui = SplitDriver(SimpleNamespace())

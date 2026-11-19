@@ -17,22 +17,43 @@ const viewport=panel?.querySelector('.term-scroll'), host=viewport?.querySelecto
 const screen=host?.querySelector('.xterm-screen'), row=screen?.querySelector('.xterm-rows')?.children[22];
 if(!row || !row.getClientRects().length)return {text:null,layout:{reason:'row-missing'}};
 const focus=document.activeElement, selected=panel.dataset.focus;
-function measure(){
-    const canvas=screen.getBoundingClientRect(), line=row.getBoundingClientRect(), clip=viewport.getBoundingClientRect();
-    const y=line.top+line.height/2;
-    const hits=[0,10,29].map(col=>{
-        const x=canvas.left+(col+.5)*canvas.width/80;
-        if(x<0 || x>=innerWidth || y<0 || y>=innerHeight)return 'outside-window';
-        const hit=document.elementFromPoint(x,y);
-        return hit && host.contains(hit) ? 'terminal' : 'clipped-or-covered';
-    });
-    return {hits, rowY:Math.round(y), screenHeight:Math.round(canvas.height),
-        clipTop:Math.round(clip.top), clipBottom:Math.round(clip.top+viewport.clientHeight),
-        terminalScrollTop:Math.round(viewport.scrollTop), terminalScrollHeight:viewport.scrollHeight,
-        pageScrollY:Math.round(scrollY), windowWidth:innerWidth, windowHeight:innerHeight};
+const round=value=>Math.round(value*10)/10;
+function hitTarget(x,y){
+    if(x<0 || x>=innerWidth || y<0 || y>=innerHeight)return 'outside-window';
+    const hit=document.elementFromPoint(x,y);
+    if(!hit)return 'no-target';
+    if(host.contains(hit))return 'terminal';
+    // A scrollport hit could be its browser-painted scrollbar area.
+    if(hit===viewport)return 'scrollport';
+    if(hit.closest('.route-tabs'))return 'navigation';
+    if(hit.closest('.terminal-selection'))return 'selection-dialog';
+    if(hit.closest('.tab-mobile-controls'))return 'input-controls';
+    if(panel.contains(hit))return 'panel';
+    return 'outside-panel';
 }
-const initial=measure(), hit=data=>data.hits.every(value=>value==='terminal');
-if(!hit(initial))row.scrollIntoView({block:'nearest',inline:'start',behavior:'instant'});
+function measure(){
+    const canvas=screen.getBoundingClientRect(), line=row.getBoundingClientRect(), rect=viewport.getBoundingClientRect();
+    const y=line.top+line.height/2;
+    const left=rect.left+viewport.clientLeft, top=rect.top+viewport.clientTop;
+    const right=left+viewport.clientWidth, bottom=top+viewport.clientHeight;
+    const points=[0,10,29].map(col=>{
+        const x=canvas.left+(col+.5)*canvas.width/80;
+        const inClient=x>=left && x<right && y>=top && y<bottom;
+        return {x:round(x),y:round(y),inClient,target:hitTarget(x,y)};
+    });
+    return {points,rowY:round(y),screenHeight:round(canvas.height),
+        client:{left:round(left),top:round(top),right:round(right),bottom:round(bottom)},
+        clearance:round(Math.min(y-Math.max(top,0),Math.min(bottom,innerHeight)-y)),
+        terminalScrollTop:round(viewport.scrollTop),terminalScrollLeft:round(viewport.scrollLeft),
+        terminalScrollHeight:viewport.scrollHeight,terminalScrollWidth:viewport.scrollWidth,
+        pageScrollY:round(scrollY),windowWidth:innerWidth,windowHeight:innerHeight,
+        devicePixelRatio,visualViewportScale:window.visualViewport?.scale ?? null};
+}
+const initial=measure(), hit=data=>data.points.every(point=>point.inClient && point.target==='terminal');
+// Keep the sample away from an edge where a native scrollbar may overlap it.
+// A regular scroll can only move the row as far as the content allows.
+if(!hit(initial) || initial.clearance<24)
+    row.scrollIntoView({block:'center',inline:'start',behavior:'instant'});
 const final=measure();
 const focusPreserved=document.activeElement===focus && panel.dataset.focus===selected;
 return {text:focusPreserved && hit(final) ? row.textContent.replace(/\u00a0/g,' ').trim() : null,
@@ -292,8 +313,7 @@ class SplitDriver:
         self.tick_layouts[side] = layout
         if layout['reason'] == 'focus-changed':
             raise GuiFailure('s06_tauri_tick_scroll_changed_focus')
-        text = sample['text']
-        return observed_tick(text, side) if text is not None else None
+        return observed_tick(sample['text'], side) if layout['reason'] == 'row-hit' else None
 
     def ticks(self, panels, sides, floors=None, stage='sample'):
         self.tick_layouts = {}

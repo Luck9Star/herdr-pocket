@@ -864,6 +864,7 @@ for (const [outcome, options] of [
 
       h.setCompact(true);
       assert.equal(n["ssh-closed-feedback"].hidden, false);
+      assert.equal(n["ssh-closed-feedback"].dataset.phase, confirmed ? "confirmed" : "failed");
       assert.equal(n["ssh-closed-title"].textContent, confirmed ? "本机已断开" : "本机连接关闭失败");
       assert.equal(n["ssh-return-home"].hidden, false);
       h.setCompact(false);

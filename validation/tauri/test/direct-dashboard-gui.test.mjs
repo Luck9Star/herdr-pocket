@@ -1998,10 +1998,12 @@ test('ordinary SSH natural exit shows confirmed local retirement and genuine rem
     assert.equal(n['ssh-live'].hidden, true);
     assert.equal(n['ssh-closed-feedback'].hidden, false);
     assert.equal(n['ssh-closed-title'].textContent, '正在断开…');
+    assert.equal(n['ssh-closed-feedback'].dataset.phase, 'pending');
     assert.equal(n['ssh-password'].value, '');
     finishClose(null);
     await flush();
     assert.equal(n['ssh-closed-title'].textContent, '本机已断开');
+    assert.equal(n['ssh-closed-feedback'].dataset.phase, 'confirmed');
     assert.equal(n['ssh-closed-detail'].textContent, '远端已报告结束，凭据已清空。重连时请重新填写。');
     assert.equal(n['ssh-return-home'].hidden, false);
     n['ssh-return-home'].click();
@@ -2023,16 +2025,32 @@ test('returning home before ordinary SSH close resolves updates only that dashbo
     assert.equal(n['home-dashboard'].hidden, false);
     assert.equal(n['home-ssh'].hidden, true);
     assert.equal(n['host-ssh-disconnected'].textContent, '正在断开…');
+    assert.equal(n['host-ssh-disconnected'].dataset.phase, 'pending');
     channel.onmessage({sessionId:'s1', seq:2, kind:'exit'});
     assert.equal(n['host-ssh-disconnected'].textContent, '正在断开…');
     finishClose(null);
     await flush();
     assert.equal(n['home-dashboard'].hidden, false);
     assert.equal(n['host-ssh-disconnected'].textContent, '本机已断开');
+    assert.equal(n['host-ssh-disconnected'].dataset.phase, 'confirmed');
     channel.onmessage({sessionId:'s1', seq:3, kind:'exit', exitSignal:'other'});
     assert.equal(n['host-ssh-disconnected'].textContent, '本机已断开；远端已报告结束。');
     assert.deepEqual(h.calls.filter(c => c.name === 'ssh_shell_close').map(c => c.args.sessionId), ['s1']);
   } finally { finishClose(null); await flush(); h.restore(); }
+});
+
+test('ordinary SSH failed close retains its phase on the returned dashboard', async () => {
+  const h = await setup({compactEntry:{matches:false, addEventListener(){}}, sshInvoke:name => name === 'ssh_shell_open' ? 's1' : false});
+  const n = h.nodes;
+  try {
+    await openOrdinary(h, 's1');
+    n['ssh-disconnect'].click();
+    await flush();
+    assert.equal(n['ssh-closed-feedback'].dataset.phase, 'failed');
+    n['ssh-return-home'].click();
+    assert.equal(n['host-ssh-disconnected'].dataset.phase, 'failed');
+    assert.equal(n['host-ssh-disconnected'].textContent, '本机连接关闭失败');
+  } finally { h.restore(); }
 });
 
 test('ordinary SSH late failure and exit cannot overwrite another route or newer terminal', async () => {

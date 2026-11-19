@@ -17,6 +17,7 @@ from flutter_linux_direct_ssh import (
     key_rejection_evidence,
     locked_dependencies,
     read_exchange,
+    rotation_session,
     window_geometry,
 )
 from PIL import Image
@@ -120,6 +121,29 @@ class PrivateExchangeTests(unittest.TestCase):
             fixture.snapshot.return_value = dict(facts, connections=2, connectionEvents=[probe, probe])
             with self.assertRaisesRegex(GuiFailure, 'connection_count_invalid'):
                 key_rejection_evidence(fixture, root, 'wrong-passphrase', rejected)
+
+    def test_rotated_session_requires_b_exactly_once_and_closes_before_exit(self):
+        session = {'id': 4, 'hostKey': 'B', 'authAttempts': 1, 'authSuccesses': 1,
+                   'ptyRequests': 1, 'shellRequests': 1, 'outputBytes': 102,
+                   'handshakeCompleted': True, 'authAccepted': True, 'inputBytes': 9,
+                   'markerReceived': True, 'singleMarkerLineExact': True,
+                   'closed': True, 'sessionClosed': True, 'closeReason': 'peer_eof'}
+
+        def check(expected, **changes):
+            facts = {'connections': 4, 'connectionsClosed': True,
+                     'connectionEvents': [{}, {}, {}, dict(session, **changes)]}
+            if expected is None:
+                rotation_session(facts, sent=True, closed=True)
+            else:
+                with self.assertRaisesRegex(GuiFailure, expected):
+                    rotation_session(facts, sent=True, closed=True)
+
+        check(None)
+        check('signed_session_unproven', hostKey='A')
+        check('signed_session_unproven', authAttempts=2)
+        check('key_input_not_exact', inputBytes=18)
+        check('key_input_not_exact', singleMarkerLineExact=False)
+        check('close_order_invalid', closeReason='fixture_stopped')
 
     def test_only_the_existing_sdk_lock_extension_is_accepted(self):
         block = '    source: sdk\n    version: "0.0.0"\n'

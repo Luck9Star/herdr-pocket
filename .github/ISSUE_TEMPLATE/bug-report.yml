@@ -1,0 +1,49 @@
+name: 报告故障
+description: 提供可复现的步骤和愿意公开的诊断结论
+body:
+  - type: markdown
+    attributes:
+      value: |
+        此 Issue 公开。请用合成值代替主机地址、账号和设备标识。
+        凭据、配对资料、指纹值、终端正文、日志、截图和配置文件请留在本机。
+        诊断字段初始为空，只填写愿意公开的内容。
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从关联页面或操作写起。偶发时可说明触发条件和频率。
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: 预期与实际结果
+      description: 描述界面或行为的差异，可用合成文字说明。
+    validations:
+      required: true
+  - type: input
+    id: app-environment
+    attributes:
+      label: 平台和版本（选填）
+      description: 填写可公开的系统版本、Flutter 或 Tauri、应用版本或源码提交。
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: 运行环境（选填）
+      options:
+        - 本机代码检查或 Widget 测试
+        - 模拟器或虚拟机
+        - 实体设备上运行应用
+  - type: dropdown
+    id: network
+    attributes:
+      label: 网络范围（选填）
+      options:
+        - 本地回环或合成网络
+        - 隔离测试网络
+        - 实际跨网
+  - type: input
+    id: diagnosis
+    attributes:
+      label: 可公开的诊断结论（选填）
+      description: 手选相关的阶段、判定状态或固定错误码，例如指纹已变更、认证失败或首帧未到。

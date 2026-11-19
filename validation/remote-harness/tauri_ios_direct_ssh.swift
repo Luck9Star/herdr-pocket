@@ -278,6 +278,7 @@ enum NativeActiveContext: String {
 enum NativeHomeReadiness {
     enum State: String {
         case ready, loading, shell, error, alert, unexpected, notForeground = "not_foreground"
+        case compactAddPending = "compact_add_pending"
         case unidentifiedStartup = "unidentified_startup"
     }
 
@@ -307,6 +308,13 @@ enum NativeHomeReadiness {
         if flags["loading"] == true { return .loading }
         if home["knownEmptyHome"] as? Bool == true && permitsNavigation(state, from: "emptyHome") { return .ready }
         return .shell
+    }
+    static func compactAddReady(_ geometry: [String: Any], witnessed: CGRect) -> Bool {
+        // The compact card sets a 48 CSS px minimum with initial-scale=1.
+        guard NativeFramePolicy.valid(witnessed), witnessed.height >= 48,
+              let frame = geometry["frame"] as? [Double], frame.count == 4, frame[3] >= 48 else { return false }
+        return geometry["role"] as? String == "button" &&
+            ["enabled", "hittable", "ownerResolved", "fullyVisible"].allSatisfy { geometry[$0] as? Bool == true }
     }
 
     static func canResampleUnidentifiedStartup(_ state: [String: Any], home: [String: Any]) -> Bool {
@@ -2464,6 +2472,10 @@ final class TauriDirectSSHUITests: XCTestCase {
             try require(false, "native_control_missing")
             throw NSError(domain: "native_control_missing", code: 1)
         }
+        return try navigationGeometry(current)
+    }
+    @MainActor
+    private func navigationGeometry(_ current: LiveControl) throws -> [String: Any] {
         let snapshot = current.snapshot
         let owner = controlOwner(snapshot, try observedNodes())
         let measured = owner.flatMap { controlVisibleFrame($0, current) }
@@ -2479,6 +2491,11 @@ final class TauriDirectSSHUITests: XCTestCase {
             "hittable": current.hittable, "ownerResolved": owner != nil,
             "centerVisible": measured != nil && visible.contains(center) && visible.contains(selectedCenter),
             "fullyVisible": measured != nil && visible.contains(snapshot.frame) && visible.contains(selectedFrame)]
+    }
+    @MainActor
+    private func currentCompactAddReady() throws -> Bool {
+        guard let witness = pageButtons["emptyAdd"], let live = liveOnPath(witness) else { return false }
+        return NativeHomeReadiness.compactAddReady(try navigationGeometry(live), witnessed: witness.snapshot.frame)
     }
 
     @MainActor
@@ -2532,6 +2549,11 @@ final class TauriDirectSSHUITests: XCTestCase {
                 "webFrames": witness.webs.map { NativeFramePolicy.diagnosticRect($0) }]
         }
         let geometry = try navigationGeometry(item)
+        if compactRoute && nativePhase == "encrypted_key_open_add" && member == "emptyAdd" {
+            let witnessed = pageButtons[member]?.snapshot.frame ?? .null
+            try require(NativeHomeReadiness.compactAddReady(geometry, witnessed: witnessed),
+                        "native_encrypted_key_empty_add_unproven")
+        }
         let allowed = geometry["ownerResolved"] as? Bool == true && geometry["centerVisible"] as? Bool == true &&
             geometry["enabled"] as? Bool == true && geometry["hittable"] as? Bool == true
         let started = ProcessInfo.processInfo.systemUptime
@@ -2578,22 +2600,27 @@ final class TauriDirectSSHUITests: XCTestCase {
         repeat {
             let sampledAt = clock()
             let state = try navigationState(publish: false)
-            let checkedAt = clock()
-            sampleSeconds += checkedAt - sampledAt
             strictSamples += 1
             // The first snapshot may be slow and represent an earlier layout.
             // Give an unfinished app time to advance and take a fresh sample.
-            if strictSamples == 1 { deadline = checkedAt + 35 }
+            if strictSamples == 1 { deadline = clock() + 35 }
             outcome = NativeHomeReadiness.classify(state, home: lastHomeSample!)
+            if nativePhase == "encrypted_key_open_add", outcome == .ready, state["compactEmptyHome"] as? Bool == true,
+               try !currentCompactAddReady() {
+                outcome = .compactAddPending
+            }
             if strictSamples == 1 && outcome == .unexpected &&
                 NativeHomeReadiness.canResampleUnidentifiedStartup(state, home: lastHomeSample!) {
                 outcome = .unidentifiedStartup
             }
+            let checkedAt = clock()
+            sampleSeconds += checkedAt - sampledAt
             if transitions.last?["state"] as? String != outcome.rawValue {
                 transitions.append(["state": outcome.rawValue, "elapsedMs": milliseconds(checkedAt - start)])
             }
             // The unidentified first observation gets only one passive resample.
-            guard outcome == .loading || outcome == .shell || outcome == .unidentifiedStartup else { break }
+            guard outcome == .loading || outcome == .shell || outcome == .compactAddPending ||
+                  outcome == .unidentifiedStartup else { break }
             let slice = min(4, deadline - clock())
             if slice <= 0 { break }
             if markerSeen { Thread.sleep(forTimeInterval: slice) }
@@ -2610,6 +2637,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         try post("native_home", ["nativeCheckpoint": nativePhase, "home": lastHomeSample!, "readiness": readiness])
         switch outcome {
         case .ready: return
+        case .compactAddPending: try require(false, "native_encrypted_key_empty_add_unproven")
         case .error: try require(false, "native_home_known_loading_error")
         case .alert: try require(false, "native_home_alert_present")
         case .notForeground: try require(false, "native_home_not_foreground")

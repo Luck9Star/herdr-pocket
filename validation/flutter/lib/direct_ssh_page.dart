@@ -66,7 +66,6 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   String status = '填写连接信息后先探测主机密钥。';
   bool busy = false, connected = false, keyAuth = false, foreground = true;
   bool mobileAuth = false, userDisconnected = false;
-  bool desktopCloseAttempt = false;
   bool closeLocalConfirmed = false;
   bool closeRemoteReported = false;
   bool closeCleanupFailed = false;
@@ -158,7 +157,6 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     current.onOutput = null; current.onResize = null; current.dispose();
   }
   void resetCloseOutcome() {
-    desktopCloseAttempt = false;
     closeLocalConfirmed = false;
     closeRemoteReported = false;
     closeCleanupFailed = false;
@@ -198,7 +196,6 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   void disconnect() {
     final wasConnected = connected;
     userDisconnected = wasConnected;
-    desktopCloseAttempt = !mobileLayout && wasConnected;
     closeLocalConfirmed = false;
     closeRemoteReported = false;
     closeCleanupFailed = false;
@@ -1267,7 +1264,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
       Expanded(child: TerminalView(terminal!, theme: widget.tokens.terminalTheme, autoResize: true,
         textStyle: const TerminalStyle(fontFamily: 'ProbeNerd', fontSize: 14))),
       terminalKeys(terminal!),
-    ])))) : desktopCloseAttempt && userDisconnected ? desktopDisconnectedForm() : mobileLayout ? (mobileAuth && !hostKeyReviewRequired ? mobileAuthForm() : mobileTargetForm()) : ListView(key: const ValueKey('direct-form'), padding: const EdgeInsets.all(16), children: [
+    ])))) : userDisconnected && !mobileLayout ? desktopDisconnectedForm() : mobileLayout ? (mobileAuth && !hostKeyReviewRequired ? mobileAuthForm() : mobileTargetForm()) : ListView(key: const ValueKey('direct-form'), padding: const EdgeInsets.all(16), children: [
       Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 560), child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Container(

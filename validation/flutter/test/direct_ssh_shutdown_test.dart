@@ -6,6 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/direct_ssh_page.dart';
+import 'package:herdr_flutter_probe/host_catalog.dart';
+import 'package:herdr_flutter_probe/host_catalog_page.dart';
+import 'host_catalog_test.dart' show MemoryCatalogStorage;
 
 class _Session extends Fake implements SSHSession {
   _Session(this.events) {
@@ -158,6 +161,64 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('pending result follows current width when mobile expands', (tester) async {
+    tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);
+    final tokens = (await tester.runAsync(DesignTokens.load))!; final returned = <bool>[];
+    await tester.pumpWidget(MaterialApp(theme: tokens.theme.copyWith(platform: TargetPlatform.iOS), home: Builder(builder: (context) =>
+      TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => DirectSshPage(tokens: tokens,
+        onReturnAfterDisconnect: returned.add))), child: const Text('open')))));
+    await tester.tap(find.text('open')); await tester.pumpAndSettle();
+    final dynamic state = tester.state(find.byType(DirectSshPage)); final session = _connect(state, <String>[]); await tester.pump();
+    await tester.tap(find.widgetWithText(TextButton, '断开')); await tester.pump();
+    tester.view.physicalSize = const Size(700, 844); await tester.pump(); await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byKey(const ValueKey('direct-closed-feedback')), findsOneWidget);
+    expect(tester.getTopLeft(find.byKey(const ValueKey('direct-closed-feedback'))).dx, moreOrLessEquals(104, epsilon: .1));
+    expect(find.text('正在断开本机连接'), findsOneWidget);
+    expect(find.byKey(const ValueKey('direct-return-home')).hitTestable(), findsOneWidget);
+    await tester.pump(const Duration(seconds: 4)); await tester.pump();
+    await tester.pumpWidget(const SizedBox()); expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('local success follows current width when mobile expands to desktop', (tester) async {
+    tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);
+    final tokens = (await tester.runAsync(DesignTokens.load))!; final returned = <bool>[];
+    await tester.pumpWidget(MaterialApp(theme: tokens.theme.copyWith(platform: TargetPlatform.iOS), home: Builder(builder: (context) =>
+      TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => DirectSshPage(tokens: tokens,
+        onReturnAfterDisconnect: returned.add))), child: const Text('open')))));
+    await tester.tap(find.text('open')); await tester.pumpAndSettle();
+    final dynamic state = tester.state(find.byType(DirectSshPage)); final session = _connect(state, <String>[]); await tester.pump();
+    await tester.tap(find.widgetWithText(TextButton, '断开')); await tester.pump();
+    session.peerClosed.complete(); await tester.pump(); await tester.pump();
+    tester.view.physicalSize = const Size(980, 844); await tester.pump(); await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byKey(const ValueKey('direct-closed-feedback')), findsOneWidget);
+    expect(tester.getTopLeft(find.byKey(const ValueKey('direct-closed-feedback'))).dx, moreOrLessEquals(264, epsilon: .1));
+    expect(find.text('本机已断开'), findsOneWidget);
+    expect(find.byKey(const ValueKey('direct-return-home')).hitTestable(), findsOneWidget);
+    await tester.pumpWidget(const SizedBox()); expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('local failure follows current width when desktop narrows to mobile', (tester) async {
+    tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(980, 844);
+    addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);
+    final tokens = (await tester.runAsync(DesignTokens.load))!; final returned = <bool>[];
+    await tester.pumpWidget(MaterialApp(theme: tokens.theme.copyWith(platform: TargetPlatform.iOS), home: Builder(builder: (context) =>
+      TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => DirectSshPage(tokens: tokens,
+        onReturnAfterDisconnect: returned.add))), child: const Text('open')))));
+    await tester.tap(find.text('open')); await tester.pumpAndSettle();
+    final dynamic state = tester.state(find.byType(DirectSshPage)); final session = _connect(state, <String>[]); await tester.pump();
+    (state.client as _Client).closeThrows = true; (state.socket as _Socket).destroyThrows = true;
+    await tester.tap(find.widgetWithText(TextButton, '断开')); await tester.pump();
+    session.peerClosed.complete(); await tester.pump(); await tester.pump();
+    tester.view.physicalSize = const Size(390, 844); await tester.pump(); await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byKey(const ValueKey('direct-closed-feedback')), findsOneWidget);
+    expect(tester.getTopLeft(find.byKey(const ValueKey('direct-closed-feedback'))).dx, moreOrLessEquals(24, epsilon: .1));
+    expect(find.text('本机连接关闭失败'), findsOneWidget);
+    expect(find.byKey(const ValueKey('direct-return-home')).hitTestable(), findsOneWidget);
+    await tester.pumpWidget(const SizedBox()); expect(tester.takeException(), isNull);
+  });
+
   testWidgets('local close failure reports failure and returns home', (tester) async {
     tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(980, 780);
     addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);
@@ -252,6 +313,43 @@ void main() {
     client.closeGate!.completeError(StateError('fixture: delayed local close failure'));
     await tester.pump(); await tester.pump();
     expect(returned, [false]);
+  });
+
+  testWidgets('late return from retired route does not overwrite newer outcome', (tester) async {
+    tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);
+    final catalog = HostCatalog(storage: MemoryCatalogStorage(), clock: () => 1000); await catalog.load();
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    await tester.pumpWidget(MaterialApp(theme: tokens.theme.copyWith(platform: TargetPlatform.iOS), home: HostCatalogPage(
+      tokens: tokens, catalog: catalog, offlineBuilder: (_) => const SizedBox())));
+    await tester.pumpAndSettle();
+    Future<void> openDirect() async {
+      final entry = find.byKey(const ValueKey('hosts-direct-ssh'));
+      await tester.ensureVisible(entry); await tester.tap(entry); await tester.pumpAndSettle();
+    }
+    await openDirect();
+    final dynamic a = tester.state(find.byType(DirectSshPage));
+    final aClient = _Client(<String>[]); final aSocket = _Socket(<String>[]); final aSession = _Session(<String>[]);
+    a.setState(() { a.socket = aSocket; a.client = aClient; a.shell = aSession; a.terminal = a.createTerminal(a.epoch); a.activeTarget = 'a@127.0.0.1:22'; a.connected = true; });
+    await tester.pump();
+    aClient.closeThrows = true; aClient.closeGate = Completer<void>(); aSocket.destroyThrows = true;
+    await tester.tap(find.widgetWithText(TextButton, '断开')); await tester.pump();
+    aSession.peerClosed.complete(); await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('direct-return-home'))); await tester.pumpAndSettle();
+    expect(find.byType(DirectSshPage), findsNothing);
+    expect(find.byKey(const ValueKey('home-ssh-closed')), findsNothing);
+    await openDirect();
+    final dynamic b = tester.state(find.byType(DirectSshPage)); final bSession = _connect(b, <String>[]); await tester.pump();
+    await tester.tap(find.widgetWithText(TextButton, '断开')); await tester.pump();
+    bSession.peerClosed.complete(); await tester.pump(); await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('direct-return-home'))); await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home-ssh-closed')), findsOneWidget);
+    expect(find.text('本机已断开'), findsOneWidget);
+    aClient.closeGate!.completeError(StateError('fixture: delayed local close failure'));
+    await tester.pump(); await tester.pump();
+    expect(find.text('本机已断开'), findsOneWidget);
+    expect(find.text('本机连接关闭失败'), findsNothing);
+    await tester.pumpWidget(const SizedBox()); expect(tester.takeException(), isNull);
   });
 
   testWidgets('no peer EOF is bounded even after leaving the page', (

@@ -2,7 +2,7 @@
 
 2026-11-19，本地验证通过两壳的活动终端、模拟键盘开合和设置往返。用户约定是从活动终端切到看板、网络或设置的实际页面后，保留原 SSH 会话和回显。切走时禁止终端输入，从底栏返回终端时保持键盘收起。主动断开才关闭本轮测试会话。
 
-两壳修前使用 `0705b9b70ac1cda2b58b20e0ebaf7596cbd8ebcb`。Flutter 修后为 `b6f89a3bcf317bdf69211d6a3c11ce7c7f491b71`，包含 `e47b593`。Tauri 修后为 `ea1694c29e3d9f5a12fca35875d54c3b9396ea55`。画板来自 `c063e785da173ad41bc740cf0dc64eaa8ccce3fb` 的[冻结设计](../design/penpot/direct-ssh-mobile.md)。Flutter Android 原生模拟器已通过本批导航验收，其余平台与壳仍待各自的正式作业。[普通 SSH 原生证据](72-mobile-ssh-auth-snapshot.md)
+两壳修前使用 `0705b9b70ac1cda2b58b20e0ebaf7596cbd8ebcb`。Flutter 修后为 `b6f89a3bcf317bdf69211d6a3c11ce7c7f491b71`，包含 `e47b593`。Tauri 修后为 `ea1694c29e3d9f5a12fca35875d54c3b9396ea55`。画板来自 `c063e785da173ad41bc740cf0dc64eaa8ccce3fb` 的[冻结设计](../design/penpot/direct-ssh-mobile.md)。Flutter Android 与 Flutter iOS 模拟器均通过本批导航验收，Tauri 两端的 R1 保留失败记录。[普通 SSH 原生证据](72-mobile-ssh-auth-snapshot.md)
 
 ## 同尺寸画面与测量
 
@@ -53,3 +53,17 @@ shasum -a 256 "$capture_design/boards/geometry.json"
 同轮换钥案按 `A → B → B → B` 完成拒绝、取消保留 A、重探与显式确认 B。前三条连接均零认证、零 PTY、零输入，最后一条密码连接有一次认证、一次 PTY 和一次 Shell，收到 9 字节输入并输出 102 字节，主动断开后全部关闭。两案的原生终端截图均通过标记、令牌与回显序列 OCR 门禁。八项导航检查点只属于普通案。两案的 `physicalImeVerified=false`，系统键盘开合与驱动文本输入已有证据，系统输入法组词仍待验证。ADB 转发和反向转发、测试包、Flutter 进程、夹具及模拟器清理均通过。[服务端、截图与清理摘要](evidence/mobile-ssh-terminal-navigation-20261119/native/flutter-android-r1/official-index.json)
 
 长期保留的前后图取两轮换钥后的已连接终端，系统键盘均可见。两轮系统镜像属性一致，屏幕原图均为 1080 × 2340 px。前图来自 [R2 的 `bda3c59`](https://github.com/Luck9Star/herdr-pocket/actions/runs/44415430480/job/135194350049)，后图来自本轮 `cffe85c`。归档校验了解码像素及原图和归档 SHA256。普通案原图也通过 OCR，两轮的普通案截图分别处于键盘展开和收起，未作为同状态图对照。设备图用于观察原生画面，逐锚 2 pt 结果沿用上文独立本地量测。[换钥后终端修前](evidence/mobile-ssh-terminal-navigation-20261119/native/flutter-android-r1/rotation-terminal-before.png) · [换钥后终端修后](evidence/mobile-ssh-terminal-navigation-20261119/native/flutter-android-r1/rotation-terminal-after.png)
+
+## Flutter iOS 原生模拟器 R2
+
+`2861a0b685b747d71a9d11cdf44eebf5d1d792c3` 在 iPhone 11、iOS 26.2 模拟器上通过。普通案依次检查键盘开合、看板进入／返回、网络进入／返回和设置进入／返回。八步服务端始终为连接 #2，累计一次成功认证、一次 PTY、一次 Shell，输入为零且连接未关闭。驱动确认返回同一终端。在八步之后提交 9 字节输入，服务端记录 102 字节输出，设备确认断开并清理临时凭据，两条连接均在驱动退出前关闭。[运行 44458501334](https://github.com/Luck9Star/herdr-pocket/actions/runs/44458501334/job/135339294777) · [正式工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44458501334/artifacts/14498459988)
+
+换钥案按 `A → B → B → B` 验证拒绝、取消保留 A、重探和显式确认 B。前三条连接零认证、零 PTY、零输入，末条密码会话成功认证并建立一次 PTY 和一次 Shell，收到 9 字节输入、102 字节输出。两案均主动断开并通过原生截图 OCR。换钥案沿用独立的换钥检查点，八步导航属于普通案。两案记录 `physicalImeVerified=false`。模拟器、应用、Flutter 进程、回环夹具和临时文件均清理完成。[服务端、OCR 与清理摘要](evidence/mobile-ssh-terminal-navigation-20261119/native/flutter-ios-r2/official-index.json)
+
+归档保存两张 828 × 1792 px 的本轮终端截图，去除 PNG 文本及 EXIF 后解码像素与原图一致。普通案的键盘已收起，换钥案截图下方出现系统键盘提示。旧 [Flutter iOS R2 原生证据](72-mobile-ssh-auth-snapshot.md#r2-联合复验)使用同型号和像素尺寸，但两张旧原图都显示正常展开的系统键盘，因此两轮图片仅作回合记录，分开保留。[本轮普通终端](evidence/mobile-ssh-terminal-navigation-20261119/native/flutter-ios-r2/ordinary-terminal.png) · [本轮换钥终端](evidence/mobile-ssh-terminal-navigation-20261119/native/flutter-ios-r2/key-change-terminal.png)
+
+本批 Flutter iOS R1 在 Python 预检的回环夹具有序关闭断言失败，未进入设备 GUI，也没有该壳的原生工件。R2 先修正夹具等待对端 EOF 的顺序，再定向重跑 Flutter。[Flutter iOS R1 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44457385579/job/135335613074)
+
+## Tauri 原生 R1 状态
+
+Tauri Android R1 在连接阶段报告 `direct_active_ui_invalid`。Tauri iOS R1 在活动流程检查点报告 `native_visible_frame_invalid`，换钥未运行。两端的原生导航均仍待复验。[Tauri Android 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44457386325/job/135335615405) · [Tauri iOS 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44457385579/job/135335613248)

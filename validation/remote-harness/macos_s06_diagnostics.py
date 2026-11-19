@@ -8,7 +8,7 @@ import tempfile
 TEST_SELECTION = 'RunnerTests/MacosS06UITests/testTwoPairedPeersInNativeWindow'
 STAGES = ('entered', 'channelConfigured', 'releaseRead', 'releaseDecoded', 'targetsValidated',
           'channelRoundTrip', 'display', 'homepage', 'pairA', 'pairB', 'keyA', 'keyB',
-          'connectA', 'connectB', 'split', 'frames', 'keyboard', 'resize', 'resume', 'stop', 'remove')
+          'connectA', 'connectB', 'split', 'frames', 'keyboard', 'resize', 'autoResume', 'stop', 'remove')
 PAIR_CONTROLS = {'entry', 'host', 'port', 'user', 'session', 'socket', 'herdr', 'hostKey', 'device',
                  'fingerprint', 'targetReview', 'create', 'copy', 'response', 'preview', 'sourceReview',
                  'accept', 'connect', 'back'}
@@ -25,6 +25,9 @@ FAILURES = {'private_channel_send_failed', 'private_channel_receive_failed',
             'public_clipboard_write_failed',
             'reviewed_host_response_unavailable', 'reviewed_host_response_invalid',
             'peer_close_unconfirmed_while_window_running', 'peer_close_receipt_invalid', 'native_visible_peer_marker_missing',
+            'native_visible_peer_marker_mismatch', 'native_visible_tick_invalid',
+            'native_visible_snapshot_field_unavailable', 'native_visible_snapshot_copy_control_unavailable',
+            'native_visible_snapshot_copy_unavailable', 'native_resumed_peer_tick_not_fresh',
             'native_tab_focus_unreachable', 'unexpected_native_error'} | {
                 'private_channel_' + failure for failure in CHANNEL_FAILURES}
 STARTUP = {

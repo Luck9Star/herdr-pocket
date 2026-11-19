@@ -85,9 +85,10 @@ final class MacosS06UITests: XCTestCase {
     }
 
     private func matches(_ name: String, scope: Scope, kind: XCUIElement.ElementType = .any,
-                         prefix: Bool = false) -> [XCUIElement] {
+                         prefix: Bool = false, publicValue: Bool = false) -> [XCUIElement] {
         let region = bounds(scope)
-        return query(name, kind: kind, prefix: prefix).allElementsBoundByIndex.filter { within(region, $0) }
+        return query(name, kind: kind, prefix: prefix, root: publicValue ? window : nil, publicValue: publicValue)
+            .allElementsBoundByIndex.filter { within(region, $0) }
     }
 
     private func scroll(_ scope: Scope, _ amount: CGFloat, pairing: Bool = false) {
@@ -131,7 +132,8 @@ final class MacosS06UITests: XCTestCase {
     }
 
     private func reveal(_ name: String, in scope: Scope = .whole, kind: XCUIElement.ElementType = .any,
-                        prefix: Bool = false, enabled: Bool = false, pair control: PairControl? = nil) throws -> XCUIElement {
+                        prefix: Bool = false, enabled: Bool = false, pair control: PairControl? = nil,
+                        publicValue: Bool = false, missing: String = "unique_visible_control_missing") throws -> XCUIElement {
         if let control { trace("PAIR_CONTROL", control.rawValue) }
         func hit() -> XCUIElement? {
             let candidates: [XCUIElement]
@@ -141,7 +143,7 @@ final class MacosS06UITests: XCTestCase {
                 if kind == .textField && role.count != 1 { return nil }
                 candidates = role.filter { within(region, $0) }
             } else {
-                candidates = matches(name, scope: scope, kind: kind, prefix: prefix)
+                candidates = matches(name, scope: scope, kind: kind, prefix: prefix, publicValue: publicValue)
             }
             let found = candidates.filter { $0.isHittable && (!enabled || $0.isEnabled) }
             return found.count == 1 ? found[0] : nil
@@ -155,7 +157,7 @@ final class MacosS06UITests: XCTestCase {
             }
         }
         if let control { tracePairAX(name, kind: kind, scope: scope, prefix: prefix, control: control) }
-        throw Failure.check("unique_visible_control_missing")
+        throw Failure.check(missing)
     }
 
     private func click(_ name: String, in scope: Scope = .whole, kind: XCUIElement.ElementType = .button,
@@ -279,8 +281,23 @@ final class MacosS06UITests: XCTestCase {
         if !toggle { try click("显示与选择工具", in: scope, kind: .any) }
         try click("选择终端文本", in: scope)
         _ = try reveal("\(peer.session) / \(peer.paneId) / \(peer.terminalId) · 打开时 seq", in: scope, prefix: true)
-        let field = try reveal("终端可见区域文本 · 只读", in: scope, kind: .textField)
-        let text = (field.value as? String) ?? ""
+        // The macOS embedder publishes the read-only field as static text and
+        // its AXValue holds the label. Read the frozen screen via its normal Copy action.
+        let field = try reveal("终端可见区域文本 · 只读", in: scope, kind: .staticText, publicValue: true,
+                               missing: "native_visible_snapshot_field_unavailable")
+        field.click()
+        app.typeKey("a", modifierFlags: .command)
+        clipboard.clearContents()
+        let empty = clipboard.changeCount
+        defer { clipboard.clearContents() }
+        try reveal("复制选区", in: scope, kind: .button, enabled: true,
+                   missing: "native_visible_snapshot_copy_control_unavailable").click()
+        let text = try until("native_visible_snapshot_copy_unavailable") {
+            guard self.clipboard.changeCount != empty,
+                  let value = self.clipboard.string(forType: .string),
+                  0 < value.utf8.count, value.utf8.count <= 65536 else { return nil as String? }
+            return value
+        }
         let tokens = text.split(whereSeparator: { $0.isWhitespace })
         let matches = tokens.indices.dropLast().filter { tokens[$0] == peer.marker }
         try require(matches.count == 1, "native_visible_peer_marker_missing")
@@ -290,6 +307,13 @@ final class MacosS06UITests: XCTestCase {
         guard let tick = Int(value), tick > 0 else { throw Failure.check("native_visible_tick_invalid") }
         try click("取消并清除文本", in: scope)
         return tick
+    }
+
+    private func advancingResumedTick(_ peer: Peer, in scope: Scope, after previous: Int) throws -> Int {
+        try until("native_resumed_peer_tick_not_fresh") {
+            let next = try self.tick(peer, in: scope)
+            return next > previous ? next : nil
+        }
     }
 
     private func checkStock(in scope: Scope) throws {
@@ -422,6 +446,7 @@ final class MacosS06UITests: XCTestCase {
         try selectWithKeys(a, in: .right)
         _ = try reveal("\(b.title) · 观察中", in: .left, kind: .button)
         app.typeKey("x", modifierFlags: [])
+        let beforeNarrow = try tick(b, in: .left)
         mark("resize")
         let narrow = try resize(700)
         _ = try reveal("分屏空间不足", prefix: true)
@@ -430,11 +455,14 @@ final class MacosS06UITests: XCTestCase {
         let returned = try resize(1440)
         try checkLayout(left: b, right: a)
         _ = try reveal("\(a.title) · 输入焦点", in: .right, kind: .button)
-        _ = try reveal("\(b.title) · 已暂停", in: .left, kind: .button)
-        mark("resume")
-        try click("恢复原目标观察", in: .left)
-        let resumed = try tick(b, in: .left)
-        try require(resumed > secondB, "native_resumed_peer_tick_not_fresh")
+        mark("autoResume")
+        _ = try reveal("\(b.title) · 观察中", in: .left, kind: .button)
+        // Selection is only enabled on a live frame. Each copy opens a new
+        // bound snapshot; a retained old screen cannot advance both samples.
+        let firstRestored = try advancingResumedTick(b, in: .left, after: beforeNarrow)
+        let secondRestored = try advancingResumedTick(b, in: .left, after: firstRestored)
+        _ = try reveal("\(a.title) · 输入焦点", in: .right, kind: .button)
+        _ = try reveal("\(b.title) · 观察中", in: .left, kind: .button)
         try checkStock(in: .left); try checkStock(in: .right)
         mark("stop")
         try send(.stopRequested, Data([1]))
@@ -448,8 +476,9 @@ final class MacosS06UITests: XCTestCase {
         try remove(b, other: a)
         let checks = ["homepage", "reviewedPairings", "twoVisibleTargets", "bothTicksAdvanced",
                       "stockControlsDisabled", "keyboardFocus", "narrowStowed", "originalSidesRestored",
-                      "explicitResume", "stoppedBoth", "localProfilesAbsentFromBoard", "channelRoundTrip"]
+                      "autoResumedOriginalObservation", "stoppedBoth", "localProfilesAbsentFromBoard", "channelRoundTrip"]
         let evidence: [String: Any] = ["widths": [start, narrow, returned],
+                                       "autoResumeTicks": [beforeNarrow, firstRestored, secondRestored],
                                        "checks": Dictionary(uniqueKeysWithValues: checks.map { ($0, true) })]
         try send(.result, JSONSerialization.data(withJSONObject: evidence))
     }

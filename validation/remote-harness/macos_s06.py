@@ -21,8 +21,9 @@ HERE = Path(__file__).resolve().parent
 HERDR_SHA256 = 'fb77c2232a05a8035421382c894392f4174e4e38a18e48af3dd0290157c3a7e2'
 SESSIONS = {'et': 's06-a', 'ts': 's06-b'}
 MARKERS = {'et': 'HPS06A', 'ts': 'HPS06B'}
+MARKER_ROW, MARKER_COLUMN = 12, 5
 CHECKS = ('homepage', 'reviewedPairings', 'twoVisibleTargets', 'bothTicksAdvanced', 'stockControlsDisabled',
-          'keyboardFocus', 'narrowStowed', 'originalSidesRestored', 'explicitResume', 'stoppedBoth',
+          'keyboardFocus', 'narrowStowed', 'originalSidesRestored', 'autoResumedOriginalObservation', 'stoppedBoth',
           'localProfilesAbsentFromBoard', 'channelRoundTrip')
 
 
@@ -77,7 +78,9 @@ def fixtures(binary, base):
             original = r'\x1b[23;1HSynthetic observe tick'
             if text.count(original) != 1:
                 raise GuiFailure('s06_capture_template_invalid')
-            script.write_text(text.replace(original, r'\x1b[12;1H' + marker))
+            # Visible screen selection excludes partially clipped edge cells.
+            position = rf'\x1b[{MARKER_ROW};{MARKER_COLUMN}H'
+            script.write_text(text.replace(original, position + marker))
             fixture = {'frames': [{'data': '\x1b[2J\x1b[HNative S06 owned peer\r\n'}]}
             (root / 'terminal-fixture.json').write_text(json.dumps(fixture))
 
@@ -150,7 +153,7 @@ def test_command(xcode, bundle):
 
 
 def checked_ui_result(raw):
-    if (not isinstance(raw, dict) or set(raw) != {'checks', 'widths'}
+    if (not isinstance(raw, dict) or set(raw) != {'checks', 'widths', 'autoResumeTicks'}
             or not isinstance(raw['checks'], dict) or set(raw['checks']) != set(CHECKS)
             or any(raw['checks'][name] is not True for name in CHECKS)):
         raise GuiFailure('s06_native_ui_checks_incomplete')
@@ -159,6 +162,11 @@ def checked_ui_result(raw):
             any(type(value) is not int or abs(value - expected) > 2
                 for value, expected in zip(widths, (1440, 700, 1440)))):
         raise GuiFailure('s06_native_window_widths_invalid')
+    ticks = raw['autoResumeTicks']  # One before narrowing, two new snapshots after widening.
+    if (not isinstance(ticks, list) or len(ticks) != 3 or
+            any(type(value) is not int or not 1 <= value <= 999999 for value in ticks) or
+            not ticks[0] < ticks[1] < ticks[2]):
+        raise GuiFailure('s06_native_auto_resume_ticks_invalid')
     return raw
 
 

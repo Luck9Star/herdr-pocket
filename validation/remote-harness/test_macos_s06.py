@@ -52,7 +52,8 @@ class MacosS06Checks(unittest.TestCase):
                 fixture_sshd_config(root, 2345, 'fixture', invalid)
 
     def test_native_report_rejects_missing_checks_and_fake_widths(self):
-        report = {'checks': dict.fromkeys(runner.CHECKS, True), 'widths': [1440, 700, 1440]}
+        report = {'checks': dict.fromkeys(runner.CHECKS, True), 'widths': [1440, 700, 1440],
+                  'autoResumeTicks': [280, 310, 318]}
         self.assertEqual(runner.checked_ui_result(report), report)
         for key in runner.CHECKS:
             changed = copy.deepcopy(report)
@@ -64,6 +65,21 @@ class MacosS06Checks(unittest.TestCase):
                 runner.checked_ui_result({**report, 'widths': widths})
         self.assertIn('localProfilesAbsentFromBoard', report['checks'])
         self.assertNotIn('localIdentitiesRemoved', report['checks'])
+
+    def test_native_report_requires_auto_resumed_original_observation_and_advancing_ticks(self):
+        report = {'checks': dict.fromkeys(runner.CHECKS, True), 'widths': [1440, 700, 1440],
+                  'autoResumeTicks': [280, 310, 318]}
+        self.assertIn('autoResumedOriginalObservation', report['checks'])
+        self.assertEqual(runner.checked_ui_result(report), report)
+        previous = copy.deepcopy(report)
+        del previous['checks']['autoResumedOriginalObservation']
+        previous['checks']['explicitResume'] = True
+        with self.assertRaisesRegex(GuiFailure, 'checks_incomplete'):
+            runner.checked_ui_result(previous)
+        for ticks in (None, [280, 310], [280, 280, 310], [280, 310, 310], [280, 310, 299],
+                      [True, 310, 318], [280, 310, 1000000]):
+            with self.assertRaisesRegex(GuiFailure, 'auto_resume_ticks_invalid'):
+                runner.checked_ui_result({**report, 'autoResumeTicks': ticks})
 
     def test_workflow_installs_and_verifies_candidate_before_build_and_native_run(self):
         lines = [line.strip() for line in WORKFLOW.read_text().splitlines()]
@@ -261,9 +277,11 @@ class MacosS06Checks(unittest.TestCase):
                         full = re.search(pattern, pixels[0])
                         self.assertIsNotNone(full)
                         # herdr only writes the changed digits in a delta.
-                        move = re.search(rb'\x1b\[12;([0-9]+)H(?:\x1b\[[0-9;]+m)*([0-9]+)', pixels[1])
+                        move_pattern = rf'\x1b\[{runner.MARKER_ROW};([0-9]+)H(?:\x1b\[[0-9;]+m)*([0-9]+)'
+                        move = re.search(move_pattern.encode(), pixels[1])
                         self.assertIsNotNone(move)
-                        start = int(move.group(1)) - 8
+                        first_digit = runner.MARKER_COLUMN + len(config['marker']) + 1
+                        start = int(move.group(1)) - first_digit
                         digits, replacement = full.group(1), move.group(2)
                         self.assertTrue(0 <= start < start + len(replacement) <= len(digits))
                         updated = digits[:start] + replacement + digits[start + len(replacement):]

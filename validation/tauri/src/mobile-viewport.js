@@ -47,7 +47,7 @@ export function observeMobileViewport(view = globalThis.window, root = globalThi
 
 // Only a visible Android SSH terminal samples its system keyboard, including when
 // WebView does not emit a resize. While closed, actual UI activity wakes sampling.
-export function observeAndroidSshIme(view, doc, readInsets) {
+export function observeAndroidSshIme(view, doc, readInsets, options = {}) {
   const viewport = view.visualViewport, root = doc.documentElement, body = doc.body;
   const nodes = ['host-home', 'home-ssh', 'ssh-live'].map(id => doc.getElementById(id));
   if (!viewport || nodes.some(node => !node)) return () => {};
@@ -90,12 +90,23 @@ export function observeAndroidSshIme(view, doc, readInsets) {
     current.pending = false;
     current.sample = value;
     paint();
+    // A fixed WebView emits no resize when the IME finally shows. While the
+    // terminal editor still owns focus, keep a slow watch after the wake window
+    // so a late IME confirmation is adopted; focus/route/blur still stop it.
+    const editor = typeof options.getEditor === 'function' ? options.getEditor() : null;
+    const editorHeld = editor ? doc.activeElement === editor : false;
     if (value?.imeVisible === true || view.performance.now() < current.until) {
       current.timer = view.setTimeout(() => {
         current.timer = undefined;
         if (scope === current && active()) void sample(current);
         else if (scope === current) reset();
       }, 160);
+    } else if (editorHeld) {
+      current.timer = view.setTimeout(() => {
+        current.timer = undefined;
+        if (scope === current && active() && doc.activeElement === editor) void sample(current);
+        else if (scope === current) reset();
+      }, 500);
     }
   }
   const wake = () => {

@@ -169,6 +169,51 @@ test('native Android SSH IME covers unchanged and already reduced viewports, the
   assert.equal(f.props.has('--hp-ssh-ime-inset'),false);
 });
 
+test('late Android IME confirmation after the wake window still updates the page', async t=>{
+  // R5 second-open shape: tap wakes sampling, insets report imeVisible:false for
+  // longer than the 2s window, then the IME becomes visible with no further
+  // viewport event on a fixed WebView. The page must still adopt the state.
+  const f = fixture(), timers = new Map(), nodes = ['host-home', 'home-ssh', 'ssh-live'].map(()=>({hidden:false}));
+  const ids = Object.fromEntries(['host-home', 'home-ssh', 'ssh-live'].map((id,index)=>[id,nodes[index]]));
+  let mutation, now = 0, focused = true, nextTimer = 0;
+  let next = {imeVisible:false};
+  const old = globalThis.MutationObserver;
+  globalThis.MutationObserver = class {constructor(fn) {mutation=fn;} observe() {} disconnect() {}};
+  t.after(()=> {globalThis.MutationObserver=old;});
+  const editor = {isConnected:true};
+  const doc = {documentElement:f.root, body:f.body, hidden:false, hasFocus:()=>focused, activeElement:editor,
+    getElementById:id=>ids[id], addEventListener:(name,fn)=>f.callbacks.set('d:'+name,fn),
+    removeEventListener:name=>f.callbacks.delete('d:'+name)};
+  Object.assign(f.view, {innerWidth:393,innerHeight:851,devicePixelRatio:2,performance:{now:()=>now},
+    setTimeout:fn=>{timers.set(++nextTimer,fn);return nextTimer;},clearTimeout:id=>timers.delete(id)});
+  Object.assign(f.viewport, {height:851,offsetTop:0,scale:1});
+  const settle = async()=>{await Promise.resolve(); await Promise.resolve();};
+  const tick = async(delta=160)=>{
+    now+=delta; const [id,fn] = timers.entries().next().value;
+    timers.delete(id); fn(); await settle();
+  };
+  const stop = observeAndroidSshIme(f.view,doc,()=>next,{getEditor:()=>editor});
+  t.after(stop);
+  await settle();
+  const hit = {target:{closest:()=>true}};
+  f.callbacks.get('d:pointerdown')(hit);
+  // 2s window expires with IME still closed; editor keeps focus
+  await tick(2000);
+  assert.equal(f.classes.has('ssh-ime-visible'),false,'window expired with IME still closed');
+  next = {imeVisible:true,viewHeightPx:1702,imeOverlapPx:600};
+  // late IME confirmation arrives with no further viewport event
+  await tick(600);
+  assert.equal(f.classes.has('ssh-ime-visible'),true,'late IME confirmation adopted');
+  assert.equal(f.props.get('--hp-ssh-ime-height'),'551px');
+  assert.equal(f.props.get('--hp-ssh-ime-inset'),'300px');
+  // focus leaving the editor stops the slow watch
+  doc.activeElement = null;
+  next = {imeVisible:false};
+  await tick(600);
+  assert.equal(f.classes.has('ssh-ime-visible'),false);
+  assert.equal(timers.size,0,'watch ends when the editor loses focus');
+});
+
 test('Android SSH header scroll tracking stops during review and outside the route',()=>{
   const f=fixture(), nodes={'host-home':{hidden:false},'home-ssh':{hidden:false},'ssh-key-change':{hidden:true}};
   const previous={ResizeObserver:globalThis.ResizeObserver,MutationObserver:globalThis.MutationObserver};

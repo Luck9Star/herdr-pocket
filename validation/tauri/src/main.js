@@ -45,7 +45,8 @@ void platformReady?.then(() => {
   if (shellPlatform.current() !== 'android') return;
   document.documentElement.classList.add('android-edge-to-edge');
   observeAndroidSshHeader();
-  observeAndroidSshIme(window, document, () => invoke('mobile_system_top_inset'));
+  observeAndroidSshIme(window, document, () => invoke('mobile_system_top_inset'),
+    {getEditor: () => document.querySelector('#ssh-live:not([hidden]) #ssh-terminal .xterm-helper-textarea')});
 });
 observeMobileViewport(undefined, undefined, undefined, native ? async () => {
   await platformReady;

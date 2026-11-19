@@ -202,6 +202,8 @@ R1 未确认最终关闭。R2 云端通过，本机显式等待取消时仍复�
 
 ## Tauri 分屏键盘退出与窗口变化
 
+**Guarded R12 单次通过（Ubuntu 24.04 原生 GTK，两条真实回环 SSH）。** 2026-11-20，原生窗口经历 1440→700→1440，B 三次采样均保留原编辑器和焦点，A 因布局暂停并在回宽后以同一目标的新完整帧恢复只读。可信退出组合键只消费一次。随后通过界面依次关闭 A、B，A 关闭时 B 仍在线。退出驱动前两侧各认证一次、各有合格关闭记录、均无 reset，原 socket 均已消失。首键对端字节为 0／1，最终为 9／1，两个远端 PTY 均无尺寸变化。手动暂停仍由下文 stock R7 独立覆盖，其他平台及手机真机仍需对应验收。[R12 原 ZIP、阶段证据与 SHA-256](evidence/tauri-gtk-guarded-r12-20261120/README.md)
+
 **D1 逐键退出通过（Ubuntu 24.04 原生 GTK，固定宽屏，隔离 SSH/herdr）。** 2026-11-19，guarded R6 在 `c14af9d0bec0a5451318378bf5abaf1c94fd25b9` 上从首页配对两条连接。B 收到明确输入的 1 字节后，真实 WebDriver 键盘按下一次 `Ctrl+Shift+F6`。焦点移到 A 原有的「设为输入焦点」按钮，当前选中的终端保持 B，B 退出逐键输入，两侧均处于只读观察，原目标和连接保留。随后 A 明确发送一次草稿，SSH 对端最终收到 9／1 字节，退出驱动前两条连接均已关闭。guarded R7 在 `5e50a4d` 的固定 1440 × 1200 原生窗口复验通过，六项退出断言、9／1 字节及两条原 SSH 的关闭均独立核对。[guarded R6 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44524014037/job/135562342657) · [原件、六项断言与复核方法](evidence/tauri-gtk-focus-resize-r6-20261119/README.md) · [guarded R7 原件](evidence/tauri-gtk-focus-resize-r7-20261119/README.md#guarded-原生逐键退出) · [guarded R7 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44533705204/job/135596416871)
 
 **D2 逐键期间收窄与回宽通过（WebKit 和 Chromium，受控 IPC）。** 1440 → 700 → 1440 时，B 保留原 xterm 编辑器、DOM 焦点及输入资格。A 因布局暂停，回宽后等待同一目标的新完整帧，再恢复只读观察。手动暂停的 A 在回宽后仍保持暂停。两种浏览器都运行生产前端和 xterm，连接、输入受理与帧由夹具提供。[D2 原图、报告与复跑](evidence/tauri-active-input-split-resize-20261119/README.md) · [D1 浏览器修前后](evidence/tauri-desktop-focus-escape-20261119/README.md)

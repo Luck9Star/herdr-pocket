@@ -30,6 +30,7 @@ Future<void> tap(
   String key, {
   void Function()? beforeTap,
   bool requireEnabled = false,
+  bool stableHitPoint = false,
   void Function(String, bool)? onObservation,
   Duration timeout = const Duration(seconds: 45),
 }) => tapControl(
@@ -38,6 +39,7 @@ Future<void> tap(
   key,
   beforeTap: beforeTap,
   requireEnabled: requireEnabled,
+  stableHitPoint: stableHitPoint,
   onObservation: onObservation,
   timeout: timeout,
 );
@@ -49,9 +51,22 @@ Future<void> tapControl(
   void Function()? beforeTap,
   bool requireEnabled = false,
   bool reveal = true,
+  bool stableHitPoint = false,
   void Function(String, bool)? onObservation,
   Duration timeout = const Duration(seconds: 45),
 }) async {
+  if (stableHitPoint) {
+    await tapControlAtStablePoint(
+      tester,
+      finder,
+      name,
+      beforeTap: beforeTap,
+      reveal: reveal,
+      timeout: timeout,
+      onObservation: onObservation,
+    );
+    return;
+  }
   final deadline = DateTime.now().add(timeout);
   Rect? lastRect;
   var stable = 0;
@@ -94,6 +109,109 @@ Future<void> tapControl(
   if (stable < 2) fail('direct_ssh_control_not_ready_$name');
   expect(finder.hitTestable(), findsOneWidget);
   await tester.tap(finder);
+  await tester.pump(const Duration(milliseconds: 200));
+}
+
+// Used only for the second encrypted-key connect: a fixed screen point must
+// hit the same enabled button in two frames and immediately before one tap.
+Future<void> tapControlAtStablePoint(
+  WidgetTester tester,
+  Finder finder,
+  String name, {
+  void Function()? beforeTap,
+  required bool reveal,
+  required Duration timeout,
+  void Function(String, bool)? onObservation,
+}) async {
+  bool hits(Element element, Offset point) {
+    final object = element.renderObject;
+    if (object is! RenderBox || !object.hasSize || object.size.isEmpty)
+      return false;
+    final local = object.globalToLocal(point);
+    if (!(Offset.zero & object.size).contains(local)) return false;
+    final alignment = Alignment(
+      2 * local.dx / object.size.width - 1,
+      2 * local.dy / object.size.height - 1,
+    );
+    return finder
+        .hitTestable(at: alignment)
+        .evaluate()
+        .any((e) => identical(e, element));
+  }
+
+  final deadline = DateTime.now().add(timeout);
+  Element? candidate;
+  VoidCallback? action;
+  Offset? point;
+  var stable = false;
+  while (DateTime.now().isBefore(deadline)) {
+    final elements = finder.evaluate().toList();
+    if (elements.length != 1) {
+      if (candidate != null) {
+        onObservation?.call(elements.isEmpty ? 'missing' : 'multiple', false);
+        fail('direct_ssh_control_not_ready_$name');
+      }
+      candidate = null;
+      point = null;
+      onObservation?.call(elements.isEmpty ? 'missing' : 'multiple', false);
+    } else {
+      final element = elements.single;
+      if (candidate == null &&
+          reveal &&
+          finder.hitTestable().evaluate().isEmpty) {
+        await tester.ensureVisible(finder);
+      }
+      await tester.pump(const Duration(milliseconds: 100));
+      final current = finder.evaluate().toList();
+      if (current.length != 1 || !identical(current.single, element)) {
+        if (candidate != null) fail('direct_ssh_control_not_ready_$name');
+        candidate = null;
+        point = null;
+        continue;
+      }
+      final enabledAction = tester.widget<FilledButton>(finder).onPressed;
+      final centerHit = finder.hitTestable().evaluate().length == 1;
+      if (candidate != null) {
+        if (!identical(candidate, element) ||
+            action != enabledAction ||
+            enabledAction == null ||
+            point == null ||
+            !hits(element, point)) {
+          onObservation?.call(enabledAction == null ? 'disabled' : 'not_hit', false);
+          fail('direct_ssh_control_not_ready_$name');
+        }
+        stable = true;
+        onObservation?.call('ready', true);
+        break;
+      }
+      candidate = enabledAction != null && centerHit ? element : null;
+      action = enabledAction;
+      point = candidate == null ? null : tester.getCenter(finder);
+      onObservation?.call(
+        enabledAction == null
+            ? 'disabled'
+            : !centerHit
+            ? 'not_hit'
+            : 'unstable',
+        false,
+      );
+    }
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+  beforeTap?.call();
+  final current = finder.evaluate().toList();
+  if (!stable ||
+      point == null ||
+      candidate == null ||
+      current.length != 1 ||
+      !identical(current.single, candidate) ||
+      tester.widget<FilledButton>(finder).onPressed != action ||
+      action == null ||
+      !hits(candidate, point)) {
+    onObservation?.call('not_hit', false);
+    fail('direct_ssh_control_not_ready_$name');
+  }
+  await tester.tapAt(point);
   await tester.pump(const Duration(milliseconds: 200));
 }
 
@@ -671,6 +789,7 @@ Future<void> runEncryptedDirectSshUi(
     tester,
     'direct-connect',
     requireEnabled: true,
+    stableHitPoint: true,
     onObservation: connectDiagnostic,
   );
   step('encrypted_wait_terminal');

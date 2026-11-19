@@ -217,26 +217,41 @@ Future<TextEditingController> prepareEncryptedKey(
     expect(tester.widget<TextField>(field).controller!.text == text, isTrue);
   }
 
-  Future<void> pastePem() async {
+  Future<void> pastePem({bool traceCorrectKey = false}) async {
+    void observe(String phase) {
+      if (traceCorrectKey) step(phase);
+    }
+
+    observe('key_retry_editor');
     expect(tester.widget<TextField>(pem).controller!.text.isEmpty, isTrue);
+    observe('key_retry_clipboard_seed');
     await Clipboard.setData(ClipboardData(text: target.privateKey!));
+    var pasteVerified = false;
     try {
+      observe('key_retry_paste_available');
       expect(
         tester.widget<OutlinedButton>(control('direct-paste-key')).onPressed,
         isNotNull,
       );
+      observe('key_retry_paste_tap');
       await tap(tester, 'direct-paste-key');
+      observe('key_retry_pem_readback');
       await waitUi(
         tester,
         () =>
             tester.widget<TextField>(pem).controller!.text == target.privateKey,
         'linux_direct_paste_timeout',
       );
+      observe('key_retry_paste_feedback');
       expect(find.text('私钥已粘贴，仅本次使用。'), findsOneWidget);
+      pasteVerified = true;
     } finally {
       // This belongs to the disposable X11 display, including on test failure.
+      // Preserve the actual failing phase when the body failed.
+      if (pasteVerified) observe('key_retry_clipboard_clear');
       await Clipboard.setData(const ClipboardData(text: ''));
     }
+    observe('key_retry_clipboard_empty');
     expect(
       (await Clipboard.getData(Clipboard.kTextPlain))?.text?.isNotEmpty ??
           false,
@@ -296,10 +311,12 @@ Future<TextEditingController> prepareEncryptedKey(
   );
   await checkpoint('wrong-passphrase', const {'rejectedLocally': true});
 
-  step('key_valid_passphrase');
-  await pastePem();
+  await pastePem(traceCorrectKey: true);
+  step('key_retry_passphrase_required');
   expect(connectDisabled(), isTrue);
+  step('key_valid_passphrase');
   await fill(passphrase, target.passphrase!);
+  step('key_retry_target_bound');
   expect(sameTrust(target.fingerprint), isTrue);
   final rotated = target.rotatedFingerprint;
   if (rotated != null) {
@@ -486,6 +503,7 @@ Future<void> runLinuxOrdinary(
     await tester.pump();
     expect(credential.text == target.password, isTrue);
   }
+  if (target.encrypted) step('key_connect_tap');
   await tap(
     tester,
     'direct-connect',

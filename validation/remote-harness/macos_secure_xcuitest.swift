@@ -258,14 +258,46 @@ final class SecureCredentialUITests: XCTestCase {
         return bits
     }
 
+    private func ordinaryValues(_ nodes: [any XCUIElementSnapshot]) -> [String] {
+        nodes.filter { $0.elementType == .textField }.compactMap { $0.value as? String }.filter { !$0.isEmpty }
+    }
+
     private func ordinaryMetrics(_ app: XCUIApplication, sentinel: String) throws -> Bool {
         let nodes = try snapshotNodes(app)
-        let values = nodes.compactMap { $0.value as? String }.filter { !$0.isEmpty }
-        let seen = !sentinel.isEmpty && values.contains { $0.contains(sentinel) }
+        let values = ordinaryValues(nodes)
+        let seen = !sentinel.isEmpty && values.contains(sentinel)
         print("HP_XCUI_ORDINARY=nodes:\(min(nodes.count,10000)),values:\(min(values.count,10000)),sentinel:\(seen ? 1 : 0)")
         fflush(stdout)
-        XCTAssertGreaterThan(nodes.count, 5, "system accessibility tree is empty")
         return seen
+    }
+
+    private func verifyOrdinarySentinel(_ app: XCUIApplication, address: XCUIElement) throws {
+        tap(app, address)
+        app.typeKey("a", modifierFlags: .command)
+        app.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])
+        let clearDeadline = Date().addingTimeInterval(5)
+        var addressCleared = false
+        repeat {
+            // Confirm the keyboard clear reached the real address; the subsequent readback is AX only.
+            addressCleared = try targetDiagnostics(app, phase: "sentinelClear", emit: false)?[8] == true
+            if addressCleared { break }
+            usleep(100_000)
+        } while Date() < clearDeadline
+        XCTAssertTrue(addressCleared, "ordinary field sentinel not read back: address was not cleared")
+
+        let nonce = UUID().uuidString.lowercased().filter { $0 != "-" }
+        let sentinel = "hpaddress" + String(nonce.prefix(16))
+        app.typeText(sentinel)
+        let valueDeadline = Date().addingTimeInterval(8)
+        repeat {
+            let values = ordinaryValues(try snapshotNodes(app))
+            if values.contains(sentinel) { break }
+            usleep(100_000)
+        } while Date() < valueDeadline
+        let seen = try ordinaryMetrics(app, sentinel: sentinel)
+        print("HP_XCUI_INPUT=phase:sentinel,target:\(seen ? 1 : 0)")
+        fflush(stdout)
+        XCTAssertTrue(seen, "ordinary field sentinel not read back: system text field value")
     }
 
     private func verifyFingerprint(_ app: XCUIApplication, expected: String, phase: String) throws -> Bool {
@@ -337,23 +369,28 @@ final class SecureCredentialUITests: XCTestCase {
         XCTFail("password or passphrase not cleared, or a retired secure field remains in the system tree")
     }
 
+    private func containsCloseTitle(_ text: [String], title: String) -> Bool {
+        let separators = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "；;，,。•：:"))
+        return text.contains { $0.components(separatedBy: separators).contains(title) }
+    }
+
     private func verifyLocalDisconnect(_ app: XCUIApplication, secrets: [String]) throws {
         let returnHome = app.buttons.matching(NSPredicate(format: "label == %@", "返回首页"))
-        let title = "本机已断开"
         let deadline = Date().addingTimeInterval(15)
-        var closed = false
+        var closeConfirmed = false
+        var systemTitle = false
+        var returnAvailable = false
         repeat {
             let text = try snapshotNodes(app).flatMap { [$0.label, $0.value as? String ?? ""] }
-            let titlePublished = text.contains { value in
-                value == title || value.hasPrefix(title + "\n") || value.hasPrefix(title + " ") ||
-                    value.hasPrefix(title + "；")
-            }
-            closed = titlePublished && text.contains { $0.contains("HPCLOSE:L1F0") } &&
-                returnHome.count == 1 && returnHome.firstMatch.isEnabled
-            if closed { break }
+            closeConfirmed = text.contains { $0.contains("HPCLOSE:L1F0") }
+            systemTitle = containsCloseTitle(text, title: "本机已断开")
+            returnAvailable = returnHome.count == 1 && returnHome.firstMatch.isEnabled
+            if closeConfirmed && systemTitle && returnAvailable { break }
             usleep(100_000)
         } while Date() < deadline
-        XCTAssertTrue(closed, "disconnect did not return to form")
+        XCTAssertTrue(closeConfirmed, "disconnect did not return to form: local close state")
+        XCTAssertTrue(systemTitle, "disconnect did not return to form: system outcome title")
+        XCTAssertTrue(returnAvailable, "disconnect did not return to form: return action")
         try verifyClearedCredentials(app)
         try assertNoSecrets(app, secrets)
     }
@@ -381,9 +418,8 @@ final class SecureCredentialUITests: XCTestCase {
     }
 
     private func typeOrdinaryOnce(_ app: XCUIApplication, field: XCUIElement, value: String, phase: String,
-                                  replace: Bool = false, controllerBit: Int? = nil) throws {
+                                  controllerBit: Int) throws {
         tap(app, field)
-        if replace { app.typeKey("a", modifierFlags: .command) }
         app.typeText(value)
         try verifyOrdinaryValue(app, field: field, value: value, phase: phase, controllerBit: controllerBit)
     }
@@ -640,8 +676,7 @@ final class SecureCredentialUITests: XCTestCase {
         clickEntryBack(app, phase: "maskingBack")
         XCTAssertTrue(address.waitForExistence(timeout: 15), "named address group or ordinary input missing")
         try verifyClearedCredentials(app)
-        let sentinel = "hp-address-" + UUID().uuidString
-        try typeOrdinaryOnce(app, field: address, value: sentinel, phase: "sentinel", replace: true)
+        try verifyOrdinarySentinel(app, address: address)
         mark("ordinarySentinelObserved")
         app.terminate()
     }

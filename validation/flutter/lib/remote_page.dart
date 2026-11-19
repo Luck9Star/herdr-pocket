@@ -372,9 +372,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     if (tabClosing != null) return;
     if (widget.visibility?.value == false) {
       // Eligibility for a layout auto-resume is earned only when this hide
-      // actually paused a live observation; an already-paused or not-yet-
-      // observing pane gains nothing from a later narrow/widen cycle (D2).
-      final wasObserving = !viewPaused && live;
+      // actually paused an established observation — live now, or resumed and
+      // still waiting for its new full. An already-paused (manual) or never-
+      // observed pane gains nothing from a later narrow/widen cycle (D2).
+      final wasObserving = !viewPaused && (live || observationEpoch > 0);
       final pausedByLayout = wasObserving && widget.layoutHidden?.value == true;
       showingFontDiagnostics = false;
       resetKeyboardControls();

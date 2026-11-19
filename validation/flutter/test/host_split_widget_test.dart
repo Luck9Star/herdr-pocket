@@ -262,6 +262,14 @@ void main() {
     final resumeB2 = find.descendant(of: bView, matching: find.byKey(const ValueKey('remote-resume')));
     await tester.ensureVisible(resumeB2); await tester.tap(resumeB2); await tester.pump();
     expect(bAdapter.resumes, 2); // manual entry still works
+    // Second reviewer case: a pane that resumed and is still waiting for its
+    // new full (live=false) must not lose layout eligibility. A second full
+    // round-trip with no frame delivered still auto-resumes the same target.
+    tester.view.physicalSize = const Size(700, 900); await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(1440, 900); await tester.pumpAndSettle();
+    expect(bAdapter.resumes, 3); // auto-resume on the final widen, same target
+    expect(bAdapter.writes, ['probeB:B']); // zero remote input added
+    expect(bAdapter.calls, 1); // no reconnect
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox()); tabs.dispose(); catalog.dispose();
   });

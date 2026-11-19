@@ -42,6 +42,12 @@ class Failure(ValueError):
     pass
 
 
+class ScreenshotReadFailure(Failure):
+    def __init__(self, diagnostic):
+        super().__init__('direct_android_screenshot_' + diagnostic['outcome'])
+        self.diagnostic = diagnostic
+
+
 def checked_paths(app, output, env):
     if (env.get('GITHUB_ACTIONS') != 'true' or not env.get('GITHUB_REF', '').startswith('refs/heads/codex/') or
             not re.fullmatch(r'[0-9a-f]{40}', env.get('GITHUB_SHA', '')) or
@@ -252,6 +258,80 @@ def read_public_json(relative, limit=4096, *, package_known=False):
     return checked_public_reply(reply, relative, limit)
 
 
+SCREENSHOT_MAX_BYTES = 8_000_000
+PNG_SIGNATURE = b'\x89PNG\r\n\x1a\n'
+
+
+def screenshot_read_failure(source, operation, outcome, reply=None, expected=None):
+    offline = (b'error: device offline', b'adb: error: device offline', b'adb: device offline', b'device offline')
+    observed_offline = reply is not None and any(stream.strip() in offline for stream in (reply.stdout, reply.stderr))
+    # A later state check is evidence about this observation, not necessarily
+    # the earlier ADB call. Keep the failure category unless that call said offline.
+    diagnostic = {'source': source, 'operation': operation,
+                  'outcome': 'offline' if observed_offline else outcome,
+                  'deviceState': 'offline' if observed_offline else encrypted_device_state()}
+    if reply is not None:
+        diagnostic.update(returnCode=reply.returncode, stdoutBytes=len(reply.stdout), stderrBytes=len(reply.stderr))
+    if expected is not None:
+        diagnostic['expectedBytes'] = expected
+    raise ScreenshotReadFailure(diagnostic)
+
+
+def screenshot_adb(*args, source, operation, expected=None):
+    try:
+        return adb(*args, check=False)
+    except subprocess.TimeoutExpired:
+        screenshot_read_failure(source, operation, 'read_timeout', expected=expected)
+
+
+def screenshot_missing(reply, command, path):
+    missing = {f"{command}: {path}: No such file or directory".encode(),
+               f"{command}: '{path}': No such file or directory".encode()}
+    lines = [stream.strip() for stream in (reply.stdout, reply.stderr) if stream.strip()]
+    return bool(lines) and all(line in missing for line in lines)
+
+
+def read_screen_png(source, *, relative=None, name=None):
+    expected, path = None, None
+    if source == 'integration':
+        if (not re.fullmatch(r'cache/herdr-direct-ssh-[0-9]+', relative or '') or
+                name not in ('connected', 'rotation-connected')):
+            raise Failure('direct_android_screenshot_path_invalid')
+        path = f'{relative}/{name}.png'
+        metadata = screenshot_adb('shell', '-T', 'run-as', PACKAGE, 'stat', '-c', '%s', path,
+                                  source=source, operation='stat')
+        size = metadata.stdout.strip()
+        if metadata.returncode or metadata.stderr or not re.fullmatch(rb'[0-9]{1,12}', size):
+            outcome = 'missing' if screenshot_missing(metadata, 'stat', path) else 'stat_failed'
+            screenshot_read_failure(source, 'stat', outcome, metadata)
+        expected = int(size)
+        if expected == 0 or expected > SCREENSHOT_MAX_BYTES:
+            screenshot_read_failure(source, 'stat', 'empty' if not expected else 'oversize', metadata, expected)
+        command = ('exec-out', 'run-as', PACKAGE, 'cat', path)
+    elif source == 'device':
+        command = ('exec-out', 'screencap', '-p')
+    else:
+        raise Failure('direct_android_screenshot_path_invalid')
+    reply = screenshot_adb(*command, source=source, operation='read', expected=expected)
+    missing = path is not None and screenshot_missing(reply, 'cat', path)
+    if reply.returncode or reply.stderr or missing:
+        outcome = 'missing' if missing else 'read_failed'
+        screenshot_read_failure(source, 'read', outcome, reply, expected)
+    if not reply.stdout:
+        screenshot_read_failure(source, 'read', 'empty', reply, expected)
+    if len(reply.stdout) > SCREENSHOT_MAX_BYTES:
+        screenshot_read_failure(source, 'read', 'oversize', reply, expected)
+    has_signature = reply.stdout.startswith(PNG_SIGNATURE)
+    if (expected is not None and len(reply.stdout) < expected and
+            (has_signature or PNG_SIGNATURE.startswith(reply.stdout))):
+        screenshot_read_failure(source, 'read', 'short_read', reply, expected)
+    if not has_signature:
+        screenshot_read_failure(source, 'read', 'signature_invalid', reply, expected)
+    if expected is not None and len(reply.stdout) != expected:
+        screenshot_read_failure(source, 'read', 'size_mismatch', reply, expected)
+    return reply.stdout
+
+
 def screen_checkpoint(request, completed, fixture, rotation_fixture, relative, output, *, require_rotation=True):
     # Device writes the actual surface first and publishes this fixed-shape
     # request atomically. Each acknowledgement refers to exactly one frame.
@@ -280,14 +360,13 @@ def screen_checkpoint(request, completed, fixture, rotation_fixture, relative, o
     if tag in completed and completed[tag]['accepted']:
         raise Failure('direct_android_screen_already_accepted')
     name = 'connected' if tag == 'ordinary' else 'rotation-connected'
-    png = adb('exec-out', 'run-as', PACKAGE, 'cat', relative + '/' + name + '.png').stdout
-    if not png.startswith(b'\x89PNG\r\n\x1a\n') or len(png) > 8_000_000:
-        raise Failure('direct_android_screenshot_invalid')
-    # Capture Android's displayed framebuffer while the SSH screen remains
-    # active; this is independent of integration_test's surface conversion.
-    device_png = adb('exec-out', 'screencap', '-p').stdout
-    if not device_png.startswith(b'\x89PNG\r\n\x1a\n') or len(device_png) > 8_000_000:
-        raise Failure('direct_android_screenshot_invalid')
+    try:
+        png = read_screen_png('integration', relative=relative, name=name)
+        # Capture the displayed framebuffer independently of the Flutter surface.
+        device_png = read_screen_png('device')
+    except ScreenshotReadFailure as error:
+        error.diagnostic.update(tag=tag, attempt=attempt)
+        raise
     # Both screenshots must use the Flutter view's full physical dimensions.
     # Preserve originals and geometry for diagnosing a cropped surface or inset.
     sizes = {}
@@ -531,6 +610,8 @@ def run(args, env):
         primary = str(error) if isinstance(error, Failure) else 'direct_android_runner_failed'
         report['failureCode'] = primary
         report['diagnostic'] = safe_failure(error, phase)
+        if isinstance(error, ScreenshotReadFailure):
+            report['screenshotReadDiagnostic'] = error.diagnostic
     finally:
         report['lastPhase'] = phase
         report['protocol'] = fixture.snapshot()
@@ -1082,6 +1163,8 @@ def run_encrypted(args, env, *, rotating=False):
         primary = str(error) if isinstance(error, Failure) else 'direct_android_runner_failed'
         report['failureCode'] = primary
         report['diagnostic'] = safe_failure(error, phase)
+        if isinstance(error, ScreenshotReadFailure):
+            report['screenshotReadDiagnostic'] = error.diagnostic
         if process is not None:
             startup['deviceState'] = encrypted_device_state()
     finally:

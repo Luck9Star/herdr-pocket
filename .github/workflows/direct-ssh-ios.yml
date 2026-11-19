@@ -207,6 +207,7 @@ jobs:
             ${{ runner.temp }}/tauri-direct-ssh-verified/key-change-review.png
             ${{ runner.temp }}/tauri-direct-ssh-verified/key-change-terminal.png
             ${{ runner.temp }}/tauri-direct-ssh-verified/key-change-terminal-ocr.json
+            ${{ runner.temp }}/tauri-direct-ssh-verified/tauri-manual-key-empty-home.png
             ${{ runner.temp }}/tauri-direct-ssh-verified/tauri-manual-key-terminal.png
             ${{ runner.temp }}/tauri-direct-ssh-verified/tauri-manual-key-terminal-ocr.json
           if-no-files-found: warn

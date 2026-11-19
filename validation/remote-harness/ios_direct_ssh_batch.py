@@ -22,6 +22,7 @@ class BatchFailure(RuntimeError):
 TERMINAL_PROOFS = {'ordinary-terminal.png': 'ordinary-terminal-ocr.json',
                    'key-change-terminal.png': 'key-change-terminal-ocr.json'}
 TAURI_MANUAL_KEY_PROOF = {'tauri-manual-key-terminal.png': 'tauri-manual-key-terminal-ocr.json'}
+TAURI_MANUAL_KEY_HOME = 'tauri-manual-key-empty-home.png'
 ENCRYPTED_KEY_PROOF = {'encrypted-key-terminal.png': 'encrypted-key-terminal-ocr.json'}
 ENCRYPTED_ROTATION_PROOF = {'encrypted-rotation-terminal.png': 'encrypted-rotation-terminal-ocr.json'}
 ENCRYPTED_ROTATION_REVIEW = 'encrypted-rotation-review.png'
@@ -208,7 +209,7 @@ def publish_evidence(root, destination, *, shell, source_sha, include_encrypted_
     artifacts = report.get('artifacts', {})
     if encrypted_key_manual_only:
         terminal_proofs = TAURI_MANUAL_KEY_PROOF
-        required = allowed = set(terminal_proofs)
+        required = allowed = set(terminal_proofs) | {TAURI_MANUAL_KEY_HOME}
     elif encrypted_rotation:
         terminal_proofs = ENCRYPTED_ROTATION_PROOF
         required = allowed = {ENCRYPTED_ROTATION_REVIEW, *terminal_proofs}
@@ -220,6 +221,16 @@ def publish_evidence(root, destination, *, shell, source_sha, include_encrypted_
             any(not isinstance(value, str) or not re.fullmatch(r'[0-9a-f]{64}', value)
                 for value in artifacts.values())):
         raise BatchFailure('ios_batch_artifact_manifest_invalid')
+    if encrypted_key_manual_only and TAURI_MANUAL_KEY_HOME in artifacts:
+        home_capture = report.get('shortcutCapture')
+        if (report.get('scope') != 'owned_loopback_ordinary_ssh_encrypted_key_manual'
+                or report.get('client') != 'tauri' or report.get('platform') != 'ios-simulator'
+                or not isinstance(home_capture, dict)
+                or home_capture.get('imageFile') != TAURI_MANUAL_KEY_HOME
+                or home_capture.get('imageSha256') != artifacts[TAURI_MANUAL_KEY_HOME]
+                or home_capture.get('systemCapture') != 'XCUIScreen.main'
+                or type(home_capture.get('peerConnections')) is not int or home_capture['peerConnections'] != 0):
+            raise BatchFailure('ios_batch_tauri_manual_key_home_ref_invalid')
     if passed and not required.issubset(artifacts):
         raise BatchFailure('ios_batch_required_images_missing')
     if passed and encrypted_key_manual_only:
@@ -254,7 +265,7 @@ def publish_evidence(root, destination, *, shell, source_sha, include_encrypted_
         if not encrypted_key_case_valid(case):
             raise BatchFailure('ios_batch_encrypted_key_case_missing')
     published = {'result.json'}
-    for name in sorted(allowed):
+    for name in sorted(allowed, key=lambda name: (name == TAURI_MANUAL_KEY_HOME, name)):
         if name not in artifacts:
             continue
         try:
@@ -264,6 +275,8 @@ def publish_evidence(root, destination, *, shell, source_sha, include_encrypted_
             with Image.open(io.BytesIO(data)) as image:
                 if image.format != 'PNG' or image.width * image.height > 16_000_000:
                     raise BatchFailure('ios_batch_image_invalid')
+                if name == TAURI_MANUAL_KEY_HOME and list(image.size) != home_capture.get('screenPixels'):
+                    raise BatchFailure('ios_batch_tauri_manual_key_home_ref_invalid')
                 image.verify()
             proof_name = terminal_proofs.get(name)
             if proof_name:

@@ -121,7 +121,7 @@ class PublicEvidenceTests(unittest.TestCase):
         artifacts = {}
         if tauri_manual_key:
             proofs = batch.TAURI_MANUAL_KEY_PROOF
-            names = set(proofs)
+            names = set(proofs) | {batch.TAURI_MANUAL_KEY_HOME}
         elif encrypted_rotation:
             proofs = batch.ENCRYPTED_ROTATION_PROOF
             names = {batch.ENCRYPTED_ROTATION_REVIEW, *proofs}
@@ -162,6 +162,9 @@ class PublicEvidenceTests(unittest.TestCase):
                       cases={'ordinary': {'status': 'not_run'}, 'keyChange': {'status': 'not_run'}, 'encryptedKey': case},
                       cleanup={'simulatorDeleted': True, 'fixturesClosed': True, 'privateFilesRemoved': True,
                                'encryptedSecretsCleared': True, 'rawLogsUploaded': False})
+        home = batch.TAURI_MANUAL_KEY_HOME
+        report['shortcutCapture'] = {'imageFile': home, 'imageSha256': report['artifacts'][home],
+            'systemCapture': 'XCUIScreen.main', 'peerConnections': 0, 'screenPixels': [8, 8]}
         (root / 'result.json').write_text(json.dumps(report))
         return report
 
@@ -178,6 +181,8 @@ class PublicEvidenceTests(unittest.TestCase):
             lambda report, case: report['cleanup'].update(encryptedSecretsCleared=False),
             lambda report, case: case['terminalScreenshot'].update(noCredentialsVisible=False),
             lambda report, case: case['terminalScreenshot'].update(criteriaSha256='b' * 64),
+            lambda report, case: report['shortcutCapture'].update(peerConnections=1),
+            lambda report, case: report['artifacts'].pop(batch.TAURI_MANUAL_KEY_HOME),
         )
         for mutation in (None, *mutations):
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
@@ -194,7 +199,22 @@ class PublicEvidenceTests(unittest.TestCase):
                     self.assertEqual({p.name for p in destination.iterdir()}, {'result.json'})
                 else:
                     published = batch.publish_evidence(root, destination, **options)
-                    self.assertEqual(published, {'result.json', *batch.TAURI_MANUAL_KEY_PROOF, *batch.TAURI_MANUAL_KEY_PROOF.values()})
+                    self.assertEqual(published, {'result.json', batch.TAURI_MANUAL_KEY_HOME,
+                                                 *batch.TAURI_MANUAL_KEY_PROOF, *batch.TAURI_MANUAL_KEY_PROOF.values()})
+
+    def test_tauri_manual_key_failure_can_publish_only_the_bound_preinput_capture(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'source'
+            root.mkdir()
+            report = self.tauri_manual_key_report(root)
+            home = batch.TAURI_MANUAL_KEY_HOME
+            report.update(status='failed', artifacts={home: report['artifacts'][home]})
+            (root / 'result.json').write_text(json.dumps(report))
+            options = {'shell': 'tauri', 'source_sha': self.source_sha, 'encrypted_key_manual_only': True}
+            self.assertEqual(batch.publish_evidence(root, Path(directory) / 'safe', **options), {'result.json', home})
+            report['shortcutCapture']['screenPixels'] = [9, 8]
+            (root / 'result.json').write_text(json.dumps(report))
+            self.assertEqual(batch.publish_evidence(root, Path(directory) / 'mismatch', **options), {'result.json'})
 
     def encrypted_rotation_report(self, root):
         report = self.evidence(root, encrypted_rotation=True)

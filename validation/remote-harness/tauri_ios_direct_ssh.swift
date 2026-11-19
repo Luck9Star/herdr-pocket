@@ -740,6 +740,7 @@ enum NativeControlPolicy {
             case scope = "live_scope_changed", identity = "live_identity_changed", movement = "live_geometry_changed"
             case small = "button_size_or_role", disabled = "button_disabled", hit = "button_not_hittable"
             case occluded = "button_occluded"
+            case capture = "home_capture_unproven"
         }
         var issue: Issue? = .anchors
         var candidates = 0
@@ -864,9 +865,15 @@ enum NativeControlPolicy {
 // explicitly; no callback captures a UI object or actor-isolated local state.
 private final class CheckpointReply: @unchecked Sendable {
     private let lock = NSLock()
-    private var accepted = false
-    func set(_ value: Bool) { lock.lock(); accepted = value; lock.unlock() }
-    func get() -> Bool { lock.lock(); defer { lock.unlock() }; return accepted }
+    private var response: (accepted: Bool, visualTargetReady: Bool) = (false, false)
+    func set(accepted: Bool, visualTargetReady: Bool) {
+        lock.lock(); defer { lock.unlock() }
+        response = (accepted, visualTargetReady)
+    }
+    func get() -> (accepted: Bool, visualTargetReady: Bool) {
+        lock.lock(); defer { lock.unlock() }
+        return response
+    }
 }
 
 // The fixture configuration is read from a private test-bundle resource at run time.
@@ -889,6 +896,7 @@ final class TauriDirectSSHUITests: XCTestCase {
     private var manualHomeCardSeen = false
     private var shortcutEvidence = NativeControlPolicy.ShortcutEvidence()
     private var pageButtons: [String: Observed] = [:]
+    private var navigationFormOwner: Observed?
     private struct LiveControl {
         let element: XCUIElement
         let snapshot: any XCUIElementSnapshot
@@ -962,7 +970,8 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func post(_ stage: String, _ extra: [String: Any] = [:]) throws {
+    @discardableResult
+    private func post(_ stage: String, _ extra: [String: Any] = [:]) throws -> Bool {
         var request = URLRequest(url: URL(string: config["checkpointURL"] as! String)!)
         request.httpMethod = "POST"
         request.timeoutInterval = 100
@@ -983,7 +992,8 @@ final class TauriDirectSSHUITests: XCTestCase {
         let task = session.dataTask(with: request) { data, response, _ in
             if let http = response as? HTTPURLResponse, http.statusCode == 200,
                let data = data, let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                reply.set(value["ok"] as? Bool == true)
+                reply.set(accepted: value["ok"] as? Bool == true,
+                          visualTargetReady: value["visualTargetReady"] as? Bool == true)
             }
             done.signal()
         }
@@ -992,7 +1002,9 @@ final class TauriDirectSSHUITests: XCTestCase {
         if !completed { task.cancel() }
         // Do not call require here: a network failure must not recurse while
         // reporting a native failure to the same checkpoint server.
-        if !completed || !reply.get() { throw NSError(domain: "checkpoint_rejected", code: 1) }
+        let response = reply.get()
+        if !completed || !response.accepted { throw NSError(domain: "checkpoint_rejected", code: 1) }
+        return response.visualTargetReady
     }
 
     @MainActor
@@ -2701,6 +2713,7 @@ final class TauriDirectSSHUITests: XCTestCase {
         let legacyChoice = witness([(nil, "添加连接", false)] + choices)
         let selection = formSelection(tree)
         let noForm = selection.controls.values.allSatisfy { $0.reason == "missing" }
+        navigationFormOwner = selection.ownerResolved ? selection.controls["host"]?.index.map { tree[$0] } : nil
         let home = try homeDiagnostics(tree, compact: homeCard != nil,
             noOtherPage: noForm && mobileChoice == nil && legacyChoice == nil)
         lastHomeSample = home
@@ -2795,6 +2808,35 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
+    private func captureManualShortcut(_ card: [Observed], _ geometry: [String: Any]) throws -> Bool? {
+        let witness = card[1]
+        func sample() throws -> [Observed]? {
+            let state = try navigationState(publish: false)
+            guard NativeHomeReadiness.permitsNavigation(state, from: "emptyHome"),
+                  state["compactEmptyHome"] as? Bool == true, state["inputCount"] as? Int == 0,
+                  state["windowCount"] as? Int == 1, !app.keyboards.firstMatch.exists,
+                  let add = pageButtons["emptyAdd"], let shortcut = pageButtons["ordinaryShortcut"],
+                  stableCaptureLayout(card, [add, shortcut]) else { return nil }
+            return [add, shortcut]
+        }
+        let screen = app.frame
+        let occlusions = nativeOcclusions()
+        guard let first = try sample(), let window = witness.window, screen.origin == .zero, window == screen,
+              let visible = NativeFramePolicy.visible(window: window, screen: screen,
+                  webAncestors: witness.webs, occlusions: occlusions),
+              geometry["visibleFrame"] as? [Double] == rect(visible),
+              first.allSatisfy({ visible.contains($0.snapshot.frame) }) else { return nil }
+        try assertNoSecret(try nodes())
+        let shot = XCUIScreen.main.screenshot()
+        guard let second = try sample(), app.frame == screen, stableCaptureLayout(first, second),
+              Set(nativeOcclusions()) == Set(occlusions) else { return nil }
+        try assertNoSecret(try nodes())
+        return try post("native_shortcut_capture", ["nativeCheckpoint": nativePhase,
+            "geometry": geometry, "emptyAddFrame": rect(first[0].snapshot.frame), "windowFrame": rect(window),
+            "webFrames": witness.webs.map(rect), "pngBase64": shot.pngRepresentation.base64EncodedString()])
+    }
+
+    @MainActor
     private func navigate(_ member: String, compactRoute: Bool = false) throws -> (String, String, String) {
         let manualShortcut = nativePhase == "encrypted_key_open_add" && member == "ordinaryShortcut"
         let shortcutUnproven = "native_encrypted_key_home_shortcut_unproven"
@@ -2860,14 +2902,35 @@ final class TauriDirectSSHUITests: XCTestCase {
                 "webFrames": witness.webs.map { NativeFramePolicy.diagnosticRect($0) }]
         }
         let geometry: [String: Any]
+        var shortcutTap: XCUIElement?
         if manualShortcut {
-            guard let witness, let shortcutGeometry else {
+            guard let witness, let add = pageButtons["emptyAdd"], let shortcutGeometry else {
                 try require(false, shortcutUnproven, shortcutIssue: bindingIssue)
                 throw NSError(domain: shortcutUnproven, code: 1)
             }
-            if let issue = NativeControlPolicy.ShortcutEvidence.actionIssue(shortcutGeometry, witnessed: witness.snapshot.frame) {
-                try require(false, shortcutUnproven, shortcutIssue: issue)
+            let issue = NativeControlPolicy.ShortcutEvidence.actionIssue(shortcutGeometry, witnessed: witness.snapshot.frame)
+            let card = [add, witness]
+            guard let visualTargetReady = try captureManualShortcut(card, shortcutGeometry) else {
+                try require(false, shortcutUnproven, shortcutIssue: issue ?? .capture)
+                throw NSError(domain: shortcutUnproven, code: 1)
             }
+            try require(visualTargetReady && (issue == nil || issue == .small),
+                        shortcutUnproven, shortcutIssue: issue ?? .capture)
+            // Rebind after the image checkpoint and use XCTest's own hit point
+            // on that element. The screenshot never supplies a tap coordinate.
+            let rechecked = try navigationState(publish: false)
+            guard NativeHomeReadiness.permitsNavigation(rechecked, from: "emptyHome"),
+                  rechecked["windowCount"] as? Int == 1, !app.keyboards.firstMatch.exists,
+                  let currentAdd = pageButtons["emptyAdd"], let current = pageButtons[member],
+                  stableCaptureLayout(card, [currentAdd, current]),
+                  let live = liveOnPath(current), live.snapshot.frame == current.snapshot.frame,
+                  let visible = controlVisibleFrame(current, live), rect(visible) == shortcutGeometry["visibleFrame"] as? [Double],
+                  visible.contains(current.snapshot.frame),
+                  live.snapshot.isEnabled, live.hittable else {
+                try require(false, shortcutUnproven, shortcutIssue: .capture)
+                throw NSError(domain: shortcutUnproven, code: 1)
+            }
+            shortcutTap = live.element
             geometry = shortcutGeometry
         } else {
             geometry = try navigationGeometry(item)
@@ -2879,7 +2942,11 @@ final class TauriDirectSSHUITests: XCTestCase {
                 (manualShortcut && state["addTitleSeen"] as? Bool == true)
         }
         let started = ProcessInfo.processInfo.systemUptime
-        if allowed { item.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        if let shortcutTap {
+            shortcutTap.tap()
+        } else if allowed {
+            item.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
         var after = try navigationState()
         if allowed && (!manualShortcut || !reached(after)) {
             let deadline = Date().addingTimeInterval(6)
@@ -2905,15 +2972,20 @@ final class TauriDirectSSHUITests: XCTestCase {
             afterGeometry = item.exists ? try navigationGeometry(item) : NSNull()
         }
         var navigation: [String: Any] = ["nativeCheckpoint": nativePhase, "member": member, "selection": selection,
-            "method": "elementCenter", "performed": allowed, "geometry": geometry,
+            "method": manualShortcut ? "systemHitPoint" : "elementCenter", "performed": allowed, "geometry": geometry,
             "targetPresentAfter": !(afterGeometry is NSNull), "afterGeometry": afterGeometry,
             "elapsedMs": min(60000, max(0, Int((ProcessInfo.processInfo.systemUptime - started) * 1000))),
             "before": before, "after": after, "outcome": outcome]
         if let binding = binding { navigation["binding"] = binding }
+        let afterInShortcutScope = navigationFormOwner != nil && navigationFormOwner?.windowPath == witness?.windowPath &&
+            navigationFormOwner?.webPath == witness?.webPath && navigationFormOwner?.window == witness?.window &&
+            navigationFormOwner?.webs == witness?.webs
+        if manualShortcut { navigation["afterInShortcutScope"] = afterInShortcutScope }
         try post("native_navigation", navigation)
         if manualShortcut {
             try require(NativeHomeReadiness.permitsNavigation(after, from: "sshForm") &&
-                        after["addTitleSeen"] as? Bool == false && after["emptyHomeIdentity"] as? Bool == false,
+                        after["addTitleSeen"] as? Bool == false && after["emptyHomeIdentity"] as? Bool == false &&
+                        afterInShortcutScope,
                         "native_encrypted_key_home_shortcut_no_progress")
         }
         return (page, selection, geometry["role"] as! String)

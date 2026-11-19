@@ -1112,6 +1112,8 @@ class HomeDiagnosticsTests(unittest.TestCase):
             self.assertNotIn('navigationTrace', state.result)
 
     def test_manual_compact_home_accepts_only_one_bound_direct_shortcut(self):
+        from PIL import Image, ImageDraw
+
         class NoPeer:
             def snapshot(self):
                 return {'connections': 0}
@@ -1124,23 +1126,39 @@ class HomeDiagnosticsTests(unittest.TestCase):
         home['members']['compactShortcut'] = {'count': 1, 'roles': ['button']}
         readiness = {'outcome': 'ready', 'elapsedMs': 200, 'strictSampleMs': 200, 'strictSamples': 1,
                      'waitCalls': 0, 'samples': [{'state': 'ready', 'elapsedMs': 200}]}
+        add_frame = [40, 286, 360, 48]
         frame = [40, 346, 360, 48]
+        ax_label = [139, 359, 163, 22]
 
         def new_state(directory):
             state = ios.Checkpoints(None, None, directory, {}, encrypted=NoPeer())
             state.index = ios.ENCRYPTED_KEY_STAGES.index('encrypted_key_probe')
+            state.accept({'stage': 'native_progress', 'nativeCheckpoint': phase})
             state.accept({'stage': 'native_home', 'nativeCheckpoint': phase, 'home': home, 'readiness': readiness})
             return state
 
-        def navigation(after):
+        def navigation(after, bounds=ax_label):
             event = self.navigation('ordinaryShortcut', 'emptyHome', after)
-            event.update(nativeCheckpoint=phase, binding={
-                'witnessFrame': frame, 'liveFrame': frame, 'ownerFrame': frame,
+            event.update(nativeCheckpoint=phase, method='systemHitPoint', afterInShortcutScope=after == 'sshForm', binding={
+                'witnessFrame': bounds, 'liveFrame': bounds, 'ownerFrame': bounds,
                 'windowFrame': [0, 0, 440, 956], 'webFrames': [[0, 62, 440, 850]],
             })
             event['before']['compactEmptyHome'] = True
-            event['geometry'].update(role='button', frame=frame)
+            event['geometry'].update(role='button', frame=bounds)
             return event
+
+        def capture(event, painted=frame):
+            image = Image.new('RGB', (440, 956), '#ffffff')
+            draw = ImageDraw.Draw(image)
+            for box, style in ((add_frame, {'fill': '#4F46E5'}), (painted, {'outline': '#CBD5E1'})):
+                x, y, w, h = box
+                draw.rounded_rectangle((x, y, x + w - 1, y + h - 1), radius=10, **style)
+            png = io.BytesIO()
+            image.save(png, format='PNG')
+            return {'stage': 'native_shortcut_capture', 'nativeCheckpoint': phase,
+                    'geometry': event['geometry'], 'emptyAddFrame': add_frame,
+                    'windowFrame': event['binding']['windowFrame'], 'webFrames': event['binding']['webFrames'],
+                    'pngBase64': base64.b64encode(png.getvalue()).decode()}
 
         entry = {'stage': 'native_home_entry', 'nativeCheckpoint': phase, 'member': 'ordinaryShortcut',
                  'selection': 'uniqueIdentifier', 'role': 'button', 'enteredAddPage': False,
@@ -1148,10 +1166,24 @@ class HomeDiagnosticsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             state = new_state(directory)
             success = navigation('sshForm')
+            shot = capture(success)
+            with self.assertRaisesRegex(ios.Failure, 'tauri_ios_home_retry_unsafe'):
+                state.accept(success)
+            for change in ({'rawTree': 'PRIVATE'}, {'nativeCheckpoint': 'encrypted_key_host'},
+                           {'pngBase64': 'invalid'}, {'emptyAddFrame': [500, 286, 360, 48]},
+                           {'webFrames': [[0, 62, 440, 90]]}):
+                with self.subTest(change=change), self.assertRaisesRegex(ios.Failure, 'shortcut_capture_invalid'):
+                    state.accept({**shot, **change})
+            self.assertIs(state.accept(shot), True)
+            self.assertEqual(state.result['shortcutCapture']['paintedButtonFramesPx']['ordinaryShortcut'], frame)
+            self.assertEqual(state.result['shortcutCapture']['peerConnections'], 0)
+            with self.assertRaisesRegex(ios.Failure, 'shortcut_capture_invalid'):
+                state.accept(shot)
             alternate_routes = ({'member': 'emptyAdd'}, {'member': 'sshChoice'},
                                 {'nativeCheckpoint': 'encrypted_key_open_ssh'}, {'selection': 'uniqueLabel'},
+                                {'method': 'elementCenter'}, {'afterInShortcutScope': 'true'},
                                 {'binding': None}, {'performed': False, 'outcome': 'blocked'},
-                                {'binding': {**success['binding'], 'ownerFrame': [40, 347, 360, 48]}},
+                                {'binding': {**success['binding'], 'ownerFrame': [139, 360, 163, 22]}},
                                 {'geometry': {**success['geometry'], 'fullyVisible': False}},
                                 {'before': {**success['before'], 'addTitleSeen': True}})
             for change in alternate_routes:
@@ -1171,15 +1203,25 @@ class HomeDiagnosticsTests(unittest.TestCase):
                 state.accept(entry)
             self.assertEqual(len(state.result['navigationTrace']['encryptedKey']), 1)
             self.assertEqual(state.index, ios.ENCRYPTED_KEY_STAGES.index('encrypted_key_probe'))
-            for page in ('emptyHome', 'addChoice', 'unexpected'):
+        for page in ('emptyHome', 'addChoice', 'unexpected', 'sshForm'):
+            with tempfile.TemporaryDirectory() as directory:
                 missed = new_state(directory)
-                missed.accept(navigation(page))
+                event = {**navigation(page), 'afterInShortcutScope': False}
+                self.assertIs(missed.accept(capture(event)), True)
+                missed.accept(event)
                 with self.subTest(page=page), self.assertRaisesRegex(ios.Failure, 'home_entry_invalid'):
                     missed.accept(entry)
                 code = 'native_encrypted_key_home_shortcut_no_progress'
                 missed.accept({'stage': 'native_failure', 'nativeCheckpoint': phase, 'nativeFailureCode': code})
                 self.assertEqual(missed.result['nativeFailureCode'], code)
                 self.assertNotIn('homeEntry', missed.result)
+        with tempfile.TemporaryDirectory() as directory:
+            small = new_state(directory)
+            event = navigation('sshForm')
+            self.assertIs(small.accept(capture(event, painted=ax_label)), False)
+            with self.assertRaisesRegex(ios.Failure, 'tauri_ios_home_retry_unsafe'):
+                small.accept(event)
+            self.assertIn(ios.SHORTCUT_HOME_PNG, small.result['artifacts'])
 
     def test_compact_home_requires_owned_roles_and_two_real_navigation_actions(self):
         home = {**self.value(), 'compactEmptyHome': True}

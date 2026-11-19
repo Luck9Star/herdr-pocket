@@ -43,7 +43,8 @@ ERRORS = {'unsafe_runner', 'unowned_device', 'invalid_display', 'install_unconfi
           'picker_return_unconfirmed', 'archive_read_failed',
           'archive_invalid', 'tamper_guard_failed', 'catalog_read_failed', 'catalog_mismatch',
           'catalog_changed', 'configuration_ui_unconfirmed', 'shared_storage_mount_unconfirmed',
-          'download_parent_unconfirmed', 'download_folder_create_failed'}
+          'download_parent_unconfirmed', 'download_folder_create_failed', 'font_save_rejected',
+          'font_save_receipt_unavailable', 'font_save_receipt_unconfirmed'}
 
 
 def require(condition, error):
@@ -77,14 +78,19 @@ def binary_file(prefix, path, limit, error):
     return result.stdout
 
 
-def catalog(font):
+def catalog(font, *, facts=None, before=None):
+    if facts is not None:
+        facts['catalog'] = 'unreadable'
     raw = binary_file(['run-as', PACKAGE], HOME_RECORDS, 131072, 'catalog_read_failed')
     try:
         value = json.loads(raw)
     except (ValueError, UnicodeError):
         raise GuiFailure('catalog_read_failed') from None
-    require(value == {'version': 1, 'hosts': [], 'networkProfiles': [],
-                      'preferences': {'terminalFontSize': font}}, 'catalog_mismatch')
+    matches = value == {'version': 1, 'hosts': [], 'networkProfiles': [],
+                        'preferences': {'terminalFontSize': font}}
+    if facts is not None:
+        facts['catalog'] = 'expected' if matches else 'previous_bytes' if raw == before else 'mismatch'
+    require(matches, 'catalog_mismatch')
     return raw
 
 
@@ -337,7 +343,7 @@ def status(browser, selector, expected):
             + json.dumps(expected) + '; })()')
 
 
-def set_font(browser, font):
+def set_font(browser, font, *, facts=None, before=None):
     # This is a number input (select() is unavailable), so enter through a focused
     # control using CDP key events and text input, without assigning DOM values.
     selector = '#terminal-font-size'
@@ -348,9 +354,57 @@ def set_font(browser, font):
                                                'modifiers': 2, 'windowsVirtualKeyCode': 65})
     browser.call('Input.insertText', {'text': str(font)})
     require(browser.read(selector, 'value') == str(font), 'configuration_ui_unconfirmed')
-    browser.click('#terminal-font-save')
-    status(browser, '#terminal-font-status', '字号已保存；不改变远端终端尺寸。')
-    return catalog(font)
+    if facts is None:
+        facts = {}
+    facts.update(receipt='unavailable', catalog='not_read')
+    try:
+        snapshot = browser.call('Runtime.evaluate', {'expression': """(() => {
+            const node = document.querySelector('#terminal-font-status');
+            return node ? [node, node.firstChild, node.textContent] : null;
+        })()""", 'returnByValue': False})
+    except GuiFailure:
+        raise GuiFailure('font_save_receipt_unavailable') from None
+    handle = snapshot.get('result', {}).get('objectId')
+    require(isinstance(handle, str) and bool(handle) and 'exceptionDetails' not in snapshot,
+            'font_save_receipt_unavailable')
+    # The same success text remains visible during both writes. Its previous Text
+    # node is stale even when its contents match. Keep only a read-only CDP handle.
+    verify = """function () {
+        const [node, child, text] = this;
+        if (node !== document.querySelector('#terminal-font-status')) return 'unavailable';
+        if (node.firstChild === child && node.textContent === text) return 'waiting';
+        if (!node.getClientRects().length) return 'unavailable';
+        if (node.textContent === '字号已保存；不改变远端终端尺寸。') return 'saved';
+        if (node.textContent === '字号保存未确认；请核查后重试。' ||
+            node.textContent === '请输入 10 至 28 的整数。') return 'rejected';
+        return 'unexpected';
+    }"""
+
+    def saved():
+        try:
+            result = browser.call('Runtime.callFunctionOn', {'objectId': handle,
+                                  'functionDeclaration': verify, 'returnByValue': True})
+        except GuiFailure:
+            facts['receipt'] = 'unavailable'
+            raise GuiFailure('font_save_receipt_unavailable') from None
+        observed = result.get('result', {}).get('value')
+        if 'exceptionDetails' in result or observed not in ('waiting', 'saved', 'rejected', 'unexpected'):
+            observed = 'unavailable'
+        facts['receipt'] = observed
+        require(observed not in ('unavailable', 'unexpected'), 'font_save_receipt_unavailable')
+        require(observed != 'rejected', 'font_save_rejected')
+        return observed == 'saved'
+
+    try:
+        facts['receipt'] = 'waiting'
+        browser.click('#terminal-font-save')
+        wait_for(saved, 'font_save_receipt_unconfirmed')
+        return catalog(font, facts=facts, before=before)
+    finally:
+        try:
+            browser.call('Runtime.releaseObject', {'objectId': handle})
+        except GuiFailure:
+            pass  # The device cleanup still closes the debugger connection.
 
 
 def exercise(browser, picker, folder, report):
@@ -384,7 +438,8 @@ def exercise(browser, picker, folder, report):
     password = secrets.token_hex(16)
     checked(browser, "document.querySelector('#host-empty')?.hidden === false")
     browser.click('#nav-settings')
-    original = set_font(browser, FONT)
+    report['preferenceSave'] = {}
+    original = set_font(browser, FONT, facts=report['preferenceSave'])
     open_panel()
 
     report['stage'] = 'cancel_picker'
@@ -426,7 +481,8 @@ def exercise(browser, picker, folder, report):
 
     report['stage'] = 'set_control_preference'
     button('关闭')
-    baseline = set_font(browser, CONTROL_FONT)
+    report['preferenceSave'] = {}
+    baseline = set_font(browser, CONTROL_FONT, facts=report['preferenceSave'], before=original)
     open_panel()
     for stage, filename, secret in (('wrong_passphrase', ARCHIVE, 'invalid-' + password),
                                     ('tampered_file', CORRUPT, password)):

@@ -30,6 +30,91 @@ def chooser(*content):
     return '<hierarchy rotation="0">' + ''.join(content) + '</hierarchy>'
 
 
+def catalog_bytes(font):
+    return json.dumps({'version': 1, 'hosts': [], 'networkProfiles': [],
+                       'preferences': {'terminalFontSize': font}}, separators=(',', ':')).encode()
+
+
+class FontSaveTests(unittest.TestCase):
+    class Browser:
+        def __init__(self, publish):
+            self.publish = publish
+            self.saves = 0
+            self.reads = 0
+            self.release_count = 0
+
+        def evaluate(self, expression):
+            # The initial page still displays the first successful save's text.
+            return True
+
+        def click(self, selector):
+            if selector == '#terminal-font-save':
+                self.saves += 1
+
+        def read(self, selector, prop):
+            return str(config.CONTROL_FONT)
+
+        def call(self, method, params):
+            if method == 'Runtime.evaluate':
+                return {'result': {'objectId': 'fixture-status-snapshot'}}
+            if method == 'Runtime.callFunctionOn':
+                self.reads += 1
+                return {'result': {'value': self.publish(self.reads)}}
+            if method == 'Runtime.releaseObject':
+                self.release_count += 1
+            return {}
+
+    def test_old_success_cannot_complete_new_save_before_durable_write(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / 'owned-catalog'
+            path.write_bytes(catalog_bytes(config.FONT))
+
+            def publish(reads):
+                if reads == 1:
+                    return 'waiting'
+                temp = path.with_suffix('.new')
+                temp.write_bytes(catalog_bytes(config.CONTROL_FONT))
+                temp.replace(path)
+                return 'saved'
+
+            browser = self.Browser(publish)
+            with patch.object(config, 'binary_file', side_effect=lambda *args: path.read_bytes()) as read:
+                self.assertEqual(config.set_font(browser, config.CONTROL_FONT),
+                                 catalog_bytes(config.CONTROL_FONT))
+            self.assertEqual((browser.saves, browser.reads, browser.release_count), (1, 2, 1))
+            read.assert_called_once()
+
+    def test_fresh_success_with_wrong_catalog_remains_a_failure(self):
+        prior = catalog_bytes(config.FONT)
+        for raw, classification in ((prior, 'previous_bytes'), (catalog_bytes(17), 'mismatch')):
+            with self.subTest(classification=classification):
+                browser = self.Browser(lambda reads: 'saved')
+                facts = {}
+                with patch.object(config, 'binary_file', return_value=raw):
+                    with self.assertRaisesRegex(GuiFailure, '^catalog_mismatch$'):
+                        config.set_font(browser, config.CONTROL_FONT, facts=facts, before=prior)
+                self.assertEqual(facts, {'receipt': 'saved', 'catalog': classification})
+                self.assertEqual((browser.saves, browser.release_count), (1, 1))
+
+    def test_no_fresh_success_does_not_read_catalog_or_retry(self):
+        for receipt, code in (('waiting', 'font_save_receipt_unconfirmed'),
+                              ('rejected', 'font_save_rejected')):
+            with self.subTest(receipt=receipt):
+                browser = self.Browser(lambda reads: receipt)
+                facts = {}
+
+                def one_read(probe, error):
+                    return probe() or config.require(False, error)
+
+                with patch.object(config, 'binary_file') as read, \
+                        patch.object(config, 'wait_for', side_effect=one_read):
+                    with self.assertRaisesRegex(GuiFailure, '^' + code + '$'):
+                        config.set_font(browser, config.CONTROL_FONT, facts=facts)
+                read.assert_not_called()
+                self.assertEqual(facts, {'receipt': receipt, 'catalog': 'not_read'})
+                self.assertEqual((browser.saves, browser.release_count), (1, 1))
+
+
 class ForegroundTests(unittest.TestCase):
     def test_api35_displays_subcommand_contains_focus_windows_subcommand_omits(self):
         outputs = {

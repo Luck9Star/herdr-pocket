@@ -2,7 +2,7 @@
 
 2026-11-19，本地验证通过两壳的活动终端、模拟键盘开合和设置往返。用户约定是从活动终端切到看板、网络或设置的实际页面后，保留原 SSH 会话和回显。切走时禁止终端输入，从底栏返回终端时保持键盘收起。主动断开才关闭本轮测试会话。
 
-两壳修前使用 `0705b9b70ac1cda2b58b20e0ebaf7596cbd8ebcb`。Flutter 修后为 `b6f89a3bcf317bdf69211d6a3c11ce7c7f491b71`，包含 `e47b593`。Tauri 修后为 `ea1694c29e3d9f5a12fca35875d54c3b9396ea55`。画板来自 `c063e785da173ad41bc740cf0dc64eaa8ccce3fb` 的[冻结设计](../design/penpot/direct-ssh-mobile.md)。iOS 和 Android 原生模拟器结果留待独立作业，原生设备矩阵沿用已有记录。[普通 SSH 原生证据](72-mobile-ssh-auth-snapshot.md)
+两壳修前使用 `0705b9b70ac1cda2b58b20e0ebaf7596cbd8ebcb`。Flutter 修后为 `b6f89a3bcf317bdf69211d6a3c11ce7c7f491b71`，包含 `e47b593`。Tauri 修后为 `ea1694c29e3d9f5a12fca35875d54c3b9396ea55`。画板来自 `c063e785da173ad41bc740cf0dc64eaa8ccce3fb` 的[冻结设计](../design/penpot/direct-ssh-mobile.md)。Flutter Android 原生模拟器已通过本批导航验收，其余平台与壳仍待各自的正式作业。[普通 SSH 原生证据](72-mobile-ssh-auth-snapshot.md)
 
 ## 同尺寸画面与测量
 
@@ -44,4 +44,12 @@ shasum -a 256 "$capture_design/boards/geometry.json"
 - Flutter 的导航回归在同一修后源码另开隔离夹具运行。两档均经真实看板、网络和设置页，返回后仍是原 Shell 和 Terminal 对象。看板、网络以底栏返回，设置的 320 pt 用系统返回，390 pt 用终端标签。每档从打开到主动断开，服务端只有一次密码认证、一次 PTY。切走时注入的输入与过期键盘回调未发往服务端，返回后的输入和终端回显可见。[Widget 回归源码](../validation/flutter/test/direct_ssh_mobile_terminal_test.dart)
 - Tauri 的前后截图由 WebKit 加临时 IPC 桥，经仓库的 Rust 普通 SSH 代码连接独立 Paramiko 回环。每档、每版均为一次仅探测连接和一条认证会话。服务端对后者记录一次密码认证、一次 PTY、一次 Shell，接收 X、七个辅助键和 Y，最终主动关闭。脚本另在看板、网络和设置可见时注入前端终端输出事件，返回后校验事件仍显示在原会话，且返回时终端输入控件未获焦。实际回环输入回显、DOM 导航和该前端注入各自有独立断言。
 
-[按版本和视口的服务端计数与导航摘要](evidence/mobile-ssh-terminal-navigation-20261119/navigation.json)仅保留固定夹具计数和断言结果。两壳的系统键盘组词、原生壳生命周期、实体设备和真实跨网仍待验证。较高字体缩放的结论也需单独验证，本轮截图均为 1× 字号。
+[按版本和视口的服务端计数与导航摘要](evidence/mobile-ssh-terminal-navigation-20261119/navigation.json)仅保留固定夹具计数和断言结果。本机对照截图均为 1× 字号，系统输入法组词、实体设备、真实跨网和更高字体缩放仍需独立验证。
+
+## Flutter Android 原生模拟器 R1
+
+`cffe85c7b650f45ea5fe1f2b63063bc66a377e3f` 在 Android API 35 的 `pixel_5` 配置、x86_64 Google APIs 系统镜像上通过。普通案经过八个顺序检查点，包括键盘开启／收起，及看板、网络、设置各自进入／返回。每一步均在服务端连接 #2 上记录一次成功认证、一次 PTY、一次 Shell、零输入，连接保持打开。设备驱动核验各页返回的是同一终端。检查完成后才提交 9 字节的夹具输入，服务端记录 102 字节输出。界面确认主动断开和临时凭据清理，服务端两条连接均在驱动退出前关闭。[运行 44457386191](https://github.com/Luck9Star/herdr-pocket/actions/runs/44457386191/job/135335614812) · [正式工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44457386191/artifacts/14499051205)
+
+同轮换钥案按 `A → B → B → B` 完成拒绝、取消保留 A、重探与显式确认 B。前三条连接均零认证、零 PTY、零输入，最后一条密码连接有一次认证、一次 PTY 和一次 Shell，收到 9 字节输入并输出 102 字节，主动断开后全部关闭。两案的原生终端截图均通过标记、令牌与回显序列 OCR 门禁。八项导航检查点只属于普通案。两案的 `physicalImeVerified=false`，系统键盘开合与驱动文本输入已有证据，系统输入法组词仍待验证。ADB 转发和反向转发、测试包、Flutter 进程、夹具及模拟器清理均通过。[服务端、截图与清理摘要](evidence/mobile-ssh-terminal-navigation-20261119/native/flutter-android-r1/official-index.json)
+
+长期保留的前后图取两轮换钥后的已连接终端，系统键盘均可见。两轮系统镜像属性一致，屏幕原图均为 1080 × 2340 px。前图来自 [R2 的 `bda3c59`](https://github.com/Luck9Star/herdr-pocket/actions/runs/44415430480/job/135194350049)，后图来自本轮 `cffe85c`。归档校验了解码像素及原图和归档 SHA256。普通案原图也通过 OCR，两轮的普通案截图分别处于键盘展开和收起，未作为同状态图对照。设备图用于观察原生画面，逐锚 2 pt 结果沿用上文独立本地量测。[换钥后终端修前](evidence/mobile-ssh-terminal-navigation-20261119/native/flutter-android-r1/rotation-terminal-before.png) · [换钥后终端修后](evidence/mobile-ssh-terminal-navigation-20261119/native/flutter-android-r1/rotation-terminal-after.png)

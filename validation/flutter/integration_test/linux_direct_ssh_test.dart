@@ -3,7 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show LogicalKeyboardKey, PhysicalKeyboardKey;
+import 'package:flutter/services.dart'
+    show Clipboard, ClipboardData, LogicalKeyboardKey, PhysicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/direct_ssh_page.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
@@ -23,19 +24,34 @@ class LinuxTarget {
   LinuxTarget.parse(Map<String, dynamic> value)
     : port = value['port'] as int,
       fingerprint = value['fingerprint'] as String,
-      password = value['password'] as String {
-    if (value.length != 3 ||
+      password = value['password'] as String?,
+      privateKey = value['privateKey'] as String?,
+      passphrase = value['passphrase'] as String?,
+      wrongPassphrase = value['wrongPassphrase'] as String? {
+    final disposableSecret = RegExp(r'^[a-f0-9]{32}$');
+    final validCredential = privateKey == null
+        ? value.length == 3 && disposableSecret.hasMatch(password ?? '')
+        : value.length == 5 &&
+              !value.containsKey('password') &&
+              privateKey!.startsWith('-----BEGIN OPENSSH PRIVATE KEY-----\n') &&
+              privateKey!.trimRight().endsWith(
+                '-----END OPENSSH PRIVATE KEY-----',
+              ) &&
+              disposableSecret.hasMatch(passphrase ?? '') &&
+              disposableSecret.hasMatch(wrongPassphrase ?? '') &&
+              wrongPassphrase != passphrase;
+    if (!validCredential ||
         port < 1024 ||
         port > 65535 ||
-        !RegExp(r'^SHA256:[A-Za-z0-9+/]{43}$').hasMatch(fingerprint) ||
-        !RegExp(r'^[a-f0-9]{32}$').hasMatch(password)) {
+        !RegExp(r'^SHA256:[A-Za-z0-9+/]{43}$').hasMatch(fingerprint)) {
       throw StateError('linux_direct_fixture_invalid');
     }
   }
 
   final int port;
   final String fingerprint;
-  final String password;
+  final String? password, privateKey, passphrase, wrongPassphrase;
+  bool get encrypted => privateKey != null;
   String get label => 'fixture@127.0.0.1:$port';
 }
 
@@ -107,6 +123,116 @@ Map<String, Object> outcomePixels(WidgetTester tester, Finder outcome) {
       right > left && bottom > top, isTrue);
   return {'surface': [size.width.round(), size.height.round()],
     'outcomeBounds': [left, top, right - left, bottom - top]};
+}
+
+Future<TextEditingController> prepareEncryptedKey(
+  WidgetTester tester,
+  LinuxTarget target,
+  Checkpoint checkpoint,
+  void Function(String) step,
+) async {
+  final dynamic state = tester.state(find.byType(DirectSshPage));
+  final pem = control('direct-secret'),
+      passphrase = control('direct-passphrase');
+  final connect = control('direct-connect');
+  bool sameTrust() =>
+      state.fingerprint == target.fingerprint &&
+      state.checkedTarget == state.target;
+  bool cleared() => state.secret.text.isEmpty && state.passphrase.text.isEmpty;
+  bool connectDisabled() =>
+      tester.widget<FilledButton>(connect).onPressed == null;
+  Future<void> fill(Finder field, String text) async {
+    await tester.ensureVisible(field);
+    await tester.enterText(field, text);
+    await tester.pump();
+    expect(tester.widget<TextField>(field).controller!.text == text, isTrue);
+  }
+
+  Future<void> pastePem() async {
+    expect(tester.widget<TextField>(pem).controller!.text.isEmpty, isTrue);
+    await Clipboard.setData(ClipboardData(text: target.privateKey!));
+    try {
+      expect(
+        tester.widget<OutlinedButton>(control('direct-paste-key')).onPressed,
+        isNotNull,
+      );
+      await tap(tester, 'direct-paste-key');
+      await waitUi(
+        tester,
+        () =>
+            tester.widget<TextField>(pem).controller!.text == target.privateKey,
+        'linux_direct_paste_timeout',
+      );
+      expect(find.text('私钥已粘贴，仅本次使用。'), findsOneWidget);
+    } finally {
+      // This belongs to the disposable X11 display, including on test failure.
+      await Clipboard.setData(const ClipboardData(text: ''));
+    }
+    expect(
+      (await Clipboard.getData(Clipboard.kTextPlain))?.text?.isNotEmpty ??
+          false,
+      isFalse,
+    );
+  }
+
+  step('key_mode_switch');
+  expect(sameTrust() && cleared(), isTrue);
+  await fill(pem, 'disposable-mode-switch');
+  await tap(tester, 'direct-auth-key');
+  final passwordToKeyCleared =
+      cleared() &&
+      sameTrust() &&
+      tester.widget<TextField>(passphrase).obscureText;
+  expect(passwordToKeyCleared, isTrue);
+  await pastePem();
+  expect(connectDisabled(), isTrue);
+  await fill(passphrase, target.wrongPassphrase!);
+  await tap(tester, 'direct-auth-password');
+  final keyToPasswordCleared =
+      cleared() &&
+      sameTrust() &&
+      tester.widget<TextField>(pem).obscureText &&
+      passphrase.evaluate().isEmpty &&
+      connectDisabled();
+  expect(keyToPasswordCleared, isTrue);
+  await checkpoint('mode-switch', {
+    'passwordToKeyCleared': passwordToKeyCleared,
+    'keyToPasswordCleared': keyToPasswordCleared,
+    'sameTrust': sameTrust(),
+  });
+
+  step('key_wrong_passphrase');
+  await tap(tester, 'direct-auth-key');
+  await pastePem();
+  expect(connectDisabled(), isTrue);
+  await fill(passphrase, target.wrongPassphrase!);
+  await tap(
+    tester,
+    'direct-connect',
+    requireEnabled: true,
+    stableHitPoint: true,
+  );
+  const rejected = '私钥无法解析或解密；请检查完整 PEM 和私钥口令。尚未连接远端。';
+  await waitUi(
+    tester,
+    () => find.text(rejected).hitTestable().evaluate().length == 1,
+    'linux_direct_wrong_passphrase_not_rejected',
+  );
+  expect(
+    cleared() &&
+        sameTrust() &&
+        connectDisabled() &&
+        find.byType(TerminalView).evaluate().isEmpty,
+    isTrue,
+  );
+  await checkpoint('wrong-passphrase', const {'rejectedLocally': true});
+
+  step('key_valid_passphrase');
+  await pastePem();
+  expect(connectDisabled(), isTrue);
+  await fill(passphrase, target.passphrase!);
+  expect(sameTrust(), isTrue);
+  return tester.widget<TextField>(passphrase).controller!;
 }
 
 Future<void> runLinuxOrdinary(
@@ -214,7 +340,7 @@ Future<void> runLinuxOrdinary(
     stableHitPoint: true,
   );
 
-  step('password');
+  step(target.encrypted ? 'private_key' : 'password');
   await waitUi(
     tester,
     () =>
@@ -242,16 +368,24 @@ Future<void> runLinuxOrdinary(
   expect(passwordField.obscureText, isTrue);
   final credential = passwordField.controller!;
   expect(credential.text.isEmpty, isTrue);
-  await tester.ensureVisible(password);
-  await tester.enterText(password, target.password);
-  await tester.pump();
-  expect(credential.text == target.password, isTrue);
+  TextEditingController? passphraseCredential;
+  if (target.encrypted) {
+    passphraseCredential = await prepareEncryptedKey(tester, target, checkpoint, step);
+  } else {
+    await tester.ensureVisible(password);
+    await tester.enterText(password, target.password!);
+    await tester.pump();
+    expect(credential.text == target.password, isTrue);
+  }
   await tap(
     tester,
     'direct-connect',
     requireEnabled: true,
     stableHitPoint: true,
   );
+
+  bool credentialsEmpty() => credential.text.isEmpty &&
+      (passphraseCredential?.text.isEmpty ?? true);
 
   step('connected');
   final terminalView = find.byType(TerminalView),
@@ -268,7 +402,7 @@ Future<void> runLinuxOrdinary(
     'linux_direct_terminal_timeout',
   );
   expect(
-    tester.widget<Text>(bound).data == target.label && credential.text.isEmpty,
+    tester.widget<Text>(bound).data == target.label && credentialsEmpty(),
     isTrue,
   );
   expect(
@@ -323,7 +457,7 @@ Future<void> runLinuxOrdinary(
   );
   expect(
     tester.widget<Text>(bound).data == target.label &&
-        credential.text.isEmpty &&
+        credentialsEmpty() &&
         control('direct-form').evaluate().isEmpty,
     isTrue,
   );
@@ -358,7 +492,7 @@ Future<void> runLinuxOrdinary(
     ),
     findsOneWidget,
   );
-  expect(credential.text, isEmpty);
+  expect(credentialsEmpty(), isTrue);
   expect(password, findsNothing);
   expect(control('direct-passphrase'), findsNothing);
   expect(connect, findsNothing);
@@ -406,7 +540,7 @@ Future<void> runLinuxOrdinary(
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   const directory = String.fromEnvironment('HERDR_FLUTTER_LINUX_DIRECT_DIR');
-  testWidgets('native Linux ordinary SSH password', (tester) async {
+  testWidgets('native Linux ordinary SSH', (tester) async {
     if (!Platform.isLinux ||
         !kDebugMode ||
         !directory.startsWith('/') ||
@@ -419,10 +553,12 @@ void main() {
       pending.renameSync('$directory/$name.json');
     }
 
+    final targetFile = File('$directory/target.json');
     final target = LinuxTarget.parse(
-      jsonDecode(File('$directory/target.json').readAsStringSync())
+      jsonDecode(targetFile.readAsStringSync())
           as Map<String, dynamic>,
     );
+    if (target.encrypted) targetFile.deleteSync();
     await runLinuxOrdinary(
       tester,
       target,

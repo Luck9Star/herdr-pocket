@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 
 from direct_ssh_fixture import DirectSshFixture
+from ios_encrypted_key_fixture import EncryptedKeyFixture
 from paired_gui import GuiFailure, owned_process, wait_for
 from PIL import ImageGrab
 from tauri_linux_direct_ssh import (
@@ -36,7 +37,8 @@ from candidate import lock_packages
 
 TEST = 'linux_direct_ssh_test.dart'
 SHARED_STEPS = 'direct_ssh_ui_steps.dart'
-PHASES = ('home', 'form', 'probe', 'password', 'connected', 'input', 'capture', 'disconnect', 'return_home')
+PHASES = ('home', 'form', 'probe', 'password', 'private_key', 'key_mode_switch', 'key_wrong_passphrase',
+          'key_valid_passphrase', 'connected', 'input', 'capture', 'disconnect', 'return_home')
 PENDING_PIXELS = {'terminal_screenshot_echo_not_visible', 'terminal_screenshot_token_not_visible',
                   'terminal_screenshot_proof_not_adjacent'}
 
@@ -198,7 +200,18 @@ def capture_outcome(request):
     return png, evidence
 
 
-def exchange(process, root, fixture, report):
+def key_rejection_evidence(fixture, root, phase, result):
+    expected = ({'passwordToKeyCleared', 'keyToPasswordCleared', 'sameTrust'}
+                if phase == 'mode-switch' else {'rejectedLocally'})
+    require(result.keys() == expected and all(value is True for value in result.values()),
+            'flutter_linux_key_checkpoint_invalid')
+    require(not os.path.lexists(root / 'target.json'), 'flutter_linux_key_material_not_consumed')
+    facts = fixture.snapshot()
+    probe_evidence(facts, 1)
+    return {**result, 'connections': 1, 'authenticationAttempts': 0}
+
+
+def exchange(process, root, fixture, report, *, encrypted=False):
     def request(name, *, timeout=45):
         def available():
             result = read_exchange(root, name)
@@ -208,11 +221,19 @@ def exchange(process, root, fixture, report):
             return None
         return wait_for(available, f'flutter_linux_checkpoint_timeout_{name}', timeout=timeout)[0]
 
+    def verify_session(*, sent, closed):
+        facts = fixture.snapshot()
+        session_evidence(facts, sent=sent, closed=closed)
+        if encrypted:
+            require(facts['connectionEvents'][1].get('singleMarkerLineExact') is sent,
+                    'flutter_linux_key_input_not_exact')
+
     images = {}
-    for phase in ('probe', 'connected', 'capture', 'disconnect', 'complete'):
+    before_connect = ('mode-switch', 'wrong-passphrase') if encrypted else ()
+    for phase in ('probe', *before_connect, 'connected', 'capture', 'disconnect', 'complete'):
         report['checkpoint'] = phase
         value = request(phase, timeout=1000 if phase == 'probe' else 45)
-        require(phase in ('probe', 'capture', 'disconnect', 'complete') or value == {},
+        require(phase in ('probe', *before_connect, 'capture', 'disconnect', 'complete') or value == {},
                 'flutter_linux_unexpected_exchange_fields')
         if phase == 'probe':
             require(value.keys() == {'algorithm'} and value['algorithm'] in ('ssh-rsa', 'rsa-sha2-256', 'rsa-sha2-512'),
@@ -221,28 +242,31 @@ def exchange(process, root, fixture, report):
             probe_evidence(fixture.snapshot(), 1)
             report['fingerprintMatchedBeforeConfirm'] = True
             report['displayedHostKeyAlgorithm'] = value['algorithm']
+        elif phase in before_connect:
+            evidence = key_rejection_evidence(fixture, root, phase, value)
+            report['modeSwitch' if phase == 'mode-switch' else 'wrongPassphrase'] = evidence
         elif phase == 'connected':
             wait_for(lambda: len(fixture.snapshot()['connectionEvents']) == 2 and fixture.snapshot()[
                 'connectionEvents'][1]['outputBytes'] > 0, 'flutter_linux_shell_output_missing', timeout=5)
-            session_evidence(fixture.snapshot(), sent=False, closed=False)
+            verify_session(sent=False, closed=False)
             report['fingerprintConfirmed'] = True
         elif phase == 'capture':
-            session_evidence(fixture.snapshot(), sent=True, closed=False)
+            verify_session(sent=True, closed=False)
             images['ordinary-terminal.png'], report['terminal'] = capture(value, fixture.screen_token)
-            session_evidence(fixture.snapshot(), sent=True, closed=False)
+            verify_session(sent=True, closed=False)
         else:
             require(fixture.wait_for_connections_closed(2), 'flutter_linux_peer_close_unconfirmed')
-            session_evidence(fixture.snapshot(), sent=True, closed=True)
+            verify_session(sent=True, closed=True)
             name = 'disconnect' if phase == 'disconnect' else 'home'
             images[f'ordinary-{name}.png'], report[f'{name}Outcome'] = capture_outcome(value)
-            session_evidence(fixture.snapshot(), sent=True, closed=True)
+            verify_session(sent=True, closed=True)
         (root / f'{phase}.ok').touch(exist_ok=False)
     require(process.wait(timeout=40) == 0, 'flutter_linux_test_failed_after_home')
     report.update(returnedHome=True, credentialFieldsCleared=True)
     return images
 
 
-def run(app, source, report):
+def run(app, source, report, *, encrypted=False):
     with tempfile.TemporaryDirectory(prefix='hp-flutter-linux-direct-') as temp:
         root = Path(temp)
         env = {k: v for k, v in os.environ.items() if not k.startswith('HERDR_') and k not in ('SSH_AUTH_SOCK', 'SSH_AGENT_PID')}
@@ -252,18 +276,24 @@ def run(app, source, report):
             env[f'XDG_{kind}_{"DIR" if kind == "RUNTIME" else "HOME"}'] = str(path)
         report['checkpoint'] = 'prepare'
         report['sourceVerification'] = prepare(app, source, env, root / 'pub.log')
-        with DirectSshFixture(screen_proof=True, channel_deadline=time.monotonic() + 1400) as fixture:
+        factory = EncryptedKeyFixture if encrypted else DirectSshFixture
+        with factory(screen_proof=True, channel_deadline=time.monotonic() + 1400) as fixture:
             target = root / 'target.json'
-            target.write_text(json.dumps({'port': fixture.port, 'fingerprint': fixture.fingerprint,
-                                          'password': fixture.password}), encoding='utf-8')
-            target.chmod(0o600)
+            credentials = ({'privateKey': fixture.private_key, 'passphrase': fixture.passphrase,
+                            'wrongPassphrase': fixture.wrong_passphrase}
+                           if encrypted else {'password': fixture.password})
+            # Open with an owner-only mode before writing; the Flutter driver consumes the key file once.
+            with os.fdopen(
+                    os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w', encoding='utf-8') as stream:
+                json.dump({'port': fixture.port, 'fingerprint': fixture.fingerprint, **credentials}, stream)
+            credentials.clear()
             report['target'] = {'host': '127.0.0.1', 'port': fixture.port, 'username': fixture.username,
                                 'algorithm': 'ssh-rsa', 'fingerprint': fixture.fingerprint}
             args = ['flutter', 'test', '--no-pub', '--reporter', 'expanded', '-d', 'linux',
                     f'--dart-define=HERDR_FLUTTER_LINUX_DIRECT_DIR={root}', f'integration_test/{TEST}']
             with owned_process(args, cwd=app, env=env, log=root / 'flutter.log') as process:
                 try:
-                    images = exchange(process, root, fixture, report)
+                    images = exchange(process, root, fixture, report, encrypted=encrypted)
                 finally:
                     report['peer'] = fixture.snapshot()  # Before any forced teardown.
                     stage = read_exchange(root, 'stage')
@@ -272,9 +302,14 @@ def run(app, source, report):
         report['checkpoint'] = 'cleanup'
         require(process.poll() is not None and port_is_released(fixture.port) and fixture.password == '',
                 'flutter_linux_cleanup_unconfirmed')
+        if encrypted:
+            require(not any((fixture.private_key, fixture.passphrase, fixture.wrong_passphrase)),
+                    'flutter_linux_key_cleanup_unconfirmed')
     require(not root.exists(), 'flutter_linux_fixture_directory_remains')
     report['cleanup'] = {'ownedFlutterProcessStopped': True, 'peerListenerReleased': True,
                          'fixturePasswordCleared': True, 'fixtureDirectoryRemoved': True}
+    if encrypted:
+        report['cleanup']['fixtureKeyAndPassphrasesCleared'] = True
     return images
 
 
@@ -283,6 +318,7 @@ def main():
     parser.add_argument('--app', required=True, type=Path)
     parser.add_argument('--source-sha', required=True)
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--authentication', choices=('password', 'key'), default='password')
     args = parser.parse_args()
     app = args.app.resolve()
     temp = Path(os.environ.get('RUNNER_TEMP', '/')).resolve()
@@ -293,10 +329,10 @@ def main():
         parser.error('use the isolated Linux Flutter workflow and its generated scaffold')
     args.output.mkdir(parents=True, exist_ok=False)
     report = {'schemaVersion': 1, 'sourceSHA': args.source_sha, 'platform': 'Linux Flutter debug GTK / Xvfb',
-              'authentication': 'password', 'scope': 'native Flutter integration_test with Flutter test input and X11 pixels',
+              'authentication': 'publickey' if args.authentication == 'key' else 'password', 'scope': 'native Flutter integration_test with Flutter test input and X11 pixels',
               'physicalImeVerified': False, 'status': 'failed'}
     try:
-        images = run(app, args.source_sha, report)
+        images = run(app, args.source_sha, report, encrypted=args.authentication == 'key')
         for name, png in images.items():
             (args.output / name).write_bytes(png)
         report.update(status='passed', checkpoint='complete')

@@ -5,6 +5,7 @@ root = Path(__file__).resolve().parents[1]
 repo = root.parents[1]
 sys.path.insert(0, str(repo / 'validation/shared'))
 from android_notices import verify as verify_packaged_notices
+sys.path.insert(0, str(repo / 'validation/pairing'))
 from linux_pairing_notices import verify_deb as verify_linux_notices
 sys.path.insert(0, str(repo / 'validation/network-profiles'))
 from android_sources import production_java_hashes
@@ -72,7 +73,8 @@ if os.getenv('PROBE_PLATFORM')=='android':
     manifest['toolchains']['androidTargetAbi']=os.getenv('ANDROID_TARGET_ABI','not recorded')
 for f in [root/'package-lock.json',root/'src-tauri/Cargo.lock',root/'core/Cargo.lock',repo/'validation/transport-rust/Cargo.lock']:
     if f.exists(): shutil.copy2(f,out/f'{f.parent.name}-{f.name}')
-shutil.copytree(repo/'validation/shared',out/'shared',dirs_exist_ok=True,ignore=shutil.ignore_patterns('.gitattributes'))
+shutil.copytree(repo/'validation/shared',out/'shared',dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns('.gitattributes', '__pycache__', '*.pyc'))
 js_notices = collect_js_notices(root)
 js_notice_manifest = {}
 for filename, record in js_notices.items():

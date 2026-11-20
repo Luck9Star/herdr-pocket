@@ -72,7 +72,7 @@ jobs:
       matrix:
         route: ${{ fromJSON(inputs.linux_flutter_stock_restart && '["flutter"]' || contains(fromJSON('["flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) && '["flutter"]' || contains(fromJSON('["password","tauri-key","tauri-key-rotation"]'), inputs.linux_direct_ssh) && '["tauri"]' || inputs.s06_split && (inputs.s06_route == 'tauri' && '["tauri"]' || inputs.s06_route == 'both' && '["flutter","tauri"]' || '["flutter"]') || inputs.flutter_only && '["flutter"]' || '["flutter","tauri"]') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: ${{ inputs.linux_keyring && 75 || matrix.route == 'tauri' && inputs.s06_split && 65 || 45 }}
+    timeout-minutes: ${{ inputs.linux_keyring && 75 || matrix.route == 'tauri' && 65 || 45 }}
     env:
       CARGO_TERM_COLOR: never
     steps:
@@ -251,21 +251,24 @@ jobs:
           name: input-fixture-${{ github.sha }}
           path: ${{ runner.temp }}/input-fixture
       - name: Prepare the private Linux Secret Service and public-key verifier
-        if: inputs.linux_keyring
+        if: ${{ inputs.linux_keyring || (matrix.route == 'tauri' && !contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh)) }}
         env:
           GUI_ROUTE: ${{ matrix.route }}
+          LINUX_KEYRING: ${{ inputs.linux_keyring }}
         run: |
           packages=(gnome-keyring dbus-x11 xvfb xauth)
           if [ "$GUI_ROUTE" = flutter ]; then
             packages+=(clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev)
           fi
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120 install -y "${packages[@]}"
-          identity=validation/linux-secure-identity
-          target="$RUNNER_TEMP/linux-pairing-public-target"
-          cargo +1.96.0 build --locked --release --manifest-path "$identity/Cargo.toml" --target-dir "$target"
-          cc -Wall -Werror -I"$identity" validation/remote-harness/linux_pairing_public.c \
-            "$target/release/libherdr_linux_secure_identity.a" -lutil -lrt -pthread -lm -ldl \
-            -o "$RUNNER_TEMP/linux-pairing-public"
+          if [ "$LINUX_KEYRING" = true ]; then
+            identity=validation/linux-secure-identity
+            target="$RUNNER_TEMP/linux-pairing-public-target"
+            cargo +1.96.0 build --locked --release --manifest-path "$identity/Cargo.toml" --target-dir "$target"
+            cc -Wall -Werror -I"$identity" validation/remote-harness/linux_pairing_public.c \
+              "$target/release/libherdr_linux_secure_identity.a" -lutil -lrt -pthread -lm -ldl \
+              -o "$RUNNER_TEMP/linux-pairing-public"
+          fi
       - name: Build the normal Flutter GTK application
         if: inputs.linux_flutter_stock_restart
         working-directory: ${{ runner.temp }}/flutter-gui
@@ -310,7 +313,12 @@ jobs:
           else
             screen_args=()
             if [ "$S06_SPLIT" = true ]; then screen_args=(-s '-screen 0 1920x1400x24'); fi
-            xvfb-run -a "${screen_args[@]}" dbus-run-session -- "${command[@]}"
+            # Production Tauri pairing always uses Secret Service, including
+            # guarded and S06 routes. This supplies isolation, not the extra
+            # public-key/restart proof selected by --linux-keyring-probe.
+            export GDK_BACKEND=x11
+            xvfb-run -a "${screen_args[@]}" "$python" validation/remote-harness/linux_pairing_keyring.py -- \
+              "${command[@]}"
           fi
       - name: Record the S06 GTK typography environment
         if: always() && matrix.route == 'tauri' && inputs.s06_split
@@ -321,7 +329,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always() && !contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh)
         with:
-          name: paired-gui-${{ matrix.route }}-${{ inputs.linux_keyring && 'system-store-' || '' }}${{ inputs.linux_flutter_stock_restart && 'external-restart-' || '' }}${{ inputs.s06_split && 's06-' || '' }}${{ (inputs.input_fixture || inputs.s06_guarded) && 'guarded-input' || 'stock-observe' }}-${{ github.sha }}
+          name: paired-gui-${{ matrix.route }}-${{ inputs.linux_keyring && 'system-store-' || matrix.route == 'tauri' && 'private-keyring-session-' || '' }}${{ inputs.linux_flutter_stock_restart && 'external-restart-' || '' }}${{ inputs.s06_split && 's06-' || '' }}${{ (inputs.input_fixture || inputs.s06_guarded) && 'guarded-input' || 'stock-observe' }}-${{ github.sha }}
           path: ${{ runner.temp }}/paired-evidence/
           retention-days: 14
           if-no-files-found: warn

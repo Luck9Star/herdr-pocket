@@ -8,6 +8,7 @@ from pathlib import Path
 import plistlib
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -82,6 +83,7 @@ class LinuxNoticeTests(unittest.TestCase):
                     shutil.copy2(self.source / filename, destination / filename)
                 ci.package(app, 'linux', output)
                 manifest = json.loads((output / 'manifest.json').read_text())
+                self.assertEqual(list((output / 'shared').rglob('linux_pairing_notices.*')), [])
                 self.assertEqual(manifest['linuxPackagedNotices'], {
                     f'bundle/data/third-party/secret-service-5.1.0/{name}':
                         hashlib.sha256((self.source / name).read_bytes()).hexdigest() for name in self.notice_names})
@@ -227,6 +229,10 @@ class SharedDiagnosticAssetsTests(unittest.TestCase):
         root = self.tauri_source()
         subprocess.run([shutil.which('node'), root / 'scripts/prepare-fixtures.mjs'], cwd=root,
                        check=True, capture_output=True, text=True)
+        for assets in (app / 'assets/shared', root / 'public/shared'):
+            self.assertEqual(list(assets.glob('linux_pairing_notices.*')), [])
+            self.assertEqual((assets / 'android_notices.py').read_bytes(),
+                             (self.shared / 'android_notices.py').read_bytes())
         for name in (self.diagnostic, self.theme_prompts):
             with self.subTest(asset=name):
                 source = (self.shared / name).read_bytes()
@@ -239,6 +245,59 @@ class SharedDiagnosticAssetsTests(unittest.TestCase):
         self.assertEqual(hashlib.sha256(expected).hexdigest(), font['sha256'])
         self.assertEqual((app / 'assets/shared' / font['file']).read_bytes(), expected)
         self.assertEqual((root / 'public/shared' / font['file']).read_bytes(), expected)
+
+    @unittest.skipUnless(shutil.which('node'), 'real Tauri resource copier requires an existing Node executable')
+    def test_all_shared_copy_paths_exclude_preexisting_python_caches(self):
+        tauri = self.tauri_source()
+        validation = tauri.parent
+        for name in ('flutter', 'pairing', 'network-profiles', 'config-transfer', 'linux-secure-identity'):
+            shutil.copytree(ci.ROOT / 'validation' / name, validation / name,
+                            ignore=shutil.ignore_patterns('__pycache__', '*.pyc', 'target'))
+        for name in ('tauri/package.json', 'tauri/package-lock.json', 'tauri/scripts/package-artifacts.py',
+                     'tauri/scripts/js_notices.py', 'transport-rust/src/lib.rs'):
+            target = validation / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ci.ROOT / 'validation' / name, target)
+        locks = json.loads((tauri / 'package-lock.json').read_text())['packages']
+        for name in ('@xterm/xterm', '@xterm/addon-unicode-graphemes'):
+            locked = locks['node_modules/' + name]
+            (tauri / 'node_modules' / name / 'package.json').write_text(json.dumps(
+                {'name': name, 'version': locked['version'], 'license': locked['license']}))
+
+        shared = validation / 'shared'
+        assets = {path.relative_to(shared): path.read_bytes() for path in shared.rglob('*') if path.is_file()}
+        caches = ('__pycache__/linux_pairing_notices.cpython-315.pyc',
+                  'fonts/loose.pyc', 'fonts/__pycache__/python-cache-marker.txt')
+        for name in caches:
+            path = shared / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'synthetic local cache')
+
+        output = self.root / 'flutter-artifacts'
+        env = dict(os.environ, GITHUB_SHA='a' * 40, PROBE_PLATFORM='linux', BUILD_OUTCOME='not-run',
+                   PYTHONDONTWRITEBYTECODE='1')
+        with patch.object(ci, 'ROOT', validation.parent), patch.dict(os.environ, env), \
+                patch.object(ci.host_platform, 'platform', return_value='fixture'), \
+                patch.object(ci.subprocess, 'check_output', return_value='fixture'):
+            app = self.flutter_scaffold()
+            (app / 'build/windows/x64/runner/Debug').mkdir(parents=True)
+            ci.package(app, 'windows', output)
+        subprocess.run([shutil.which('node'), tauri / 'scripts/prepare-fixtures.mjs'], cwd=tauri,
+                       check=True, capture_output=True)
+        subprocess.run([sys.executable, tauri / 'scripts/package-artifacts.py'], cwd=tauri,
+                       env=env, check=True, capture_output=True)
+
+        for destination in (app / 'assets/shared', output / 'shared',
+                            tauri / 'public/shared', tauri / 'artifacts/shared'):
+            with self.subTest(destination=destination):
+                self.assertFalse(list(destination.rglob('__pycache__')))
+                self.assertFalse(list(destination.rglob('*.pyc')))
+                expected = {path: value for path, value in assets.items()
+                            if destination != tauri / 'artifacts/shared' or path.name != '.gitattributes'}
+                self.assertEqual({path.relative_to(destination): path.read_bytes()
+                                  for path in destination.rglob('*') if path.is_file()}, expected)
+        for name in caches:
+            self.assertEqual((shared / name).read_bytes(), b'synthetic local cache')
 
     @unittest.skipUnless(shutil.which('node'), 'real Tauri resource copier requires an existing Node executable')
     def test_tampered_diagnostic_cannot_reach_tauri_public_assets(self):

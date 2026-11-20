@@ -154,11 +154,12 @@ def snapshot_diagnostics(result):
             'nestedKnownFields': protocol_diagnostics(snapshot) if isinstance(snapshot, dict) else None}
 
 
-def gui_report_fields(route, result, input_fixture=False, *, import_replace=False, linux_keyring=False, flutter_stock=False):
+def gui_report_fields(route, result, input_fixture=False, *, import_replace=False, linux_keyring=False,
+                      private_keyring_session=False, flutter_stock=False):
     """Keep test route, required frame evidence and runtime limits distinct."""
     scopes = {
         'tauri-android': 'API35 emulator WebView and AndroidKeyStore-wrapped identity',
-        'tauri': 'Linux GTK WebView with native process-memory test identity',
+        'tauri': 'Linux GTK WebView; identity storage not independently verified',
         'flutter': 'Flutter widget with explicit test signer, catalog and input journal',
         'flutter-android': 'API35 Flutter debug app with production HostCatalogPage and native AndroidKeyStore-wrapped identity',
     }
@@ -179,6 +180,8 @@ def gui_report_fields(route, result, input_fixture=False, *, import_replace=Fals
                         all(result.get(name) is False for name in
                             ('storageMocked', 'signerInjected', 'framesInjected')))
         unverified.append('Flutter release/profile application runtime')
+    if private_keyring_session and route == 'tauri' and not linux_keyring:
+        scopes[route] = 'Linux GTK WebView in an isolated Secret Service session; keyring binding not independently verified'
     if linux_keyring:
         scopes[route] = ('Linux GTK integration_test driving the real Flutter pairing widgets and native channels'
                          if route == 'flutter' else 'stock Linux GTK WebView with private Secret Service')
@@ -202,7 +205,8 @@ def gui_report_fields(route, result, input_fixture=False, *, import_replace=Fals
     fields = {'scope': scopes[route], 'frameEvidence': frames[route], 'unverified': unverified}
     if import_replace:
         fields.update(scope=('Linux GTK WebView config replacement with private Secret Service' if linux_keyring
-                             else 'Linux GTK WebView config replacement with native process-memory test identities'),
+                             else 'Linux GTK WebView config replacement in an isolated Secret Service session; keyring binding not independently verified' if private_keyring_session
+                             else 'Linux GTK WebView config replacement; identity storage not independently verified'),
                       frameEvidence='public visible-terminal-text UI snapshots; native WebDriver actions')
         unverified.extend(['desktop window resize', 'desktop keyboard focus and routing',
                            'non-BMP import password entry'])
@@ -361,6 +365,7 @@ def main():
     blocked_fixture = None
     args.blocked_targets = []
     args.linux_keyring = None
+    args.private_keyring_session = False
     env = {k: v for k, v in os.environ.items()
            if not k.startswith('HERDR_') and k not in ('SSH_AUTH_SOCK', 'SSH_AGENT_PID', 'BASH_ENV')}
     env.update(XDG_CONFIG_HOME=str(root / 'config'), XDG_STATE_HOME=str(root / 'state'),
@@ -436,6 +441,14 @@ def main():
             time.sleep(0.1)
 
     try:
+        if args.paired_gui == 'tauri':
+            from linux_pairing_keyring import MARKER, KeyringFailure, private_home
+            if os.environ.get(MARKER):
+                try:
+                    private_home()
+                    args.private_keyring_session = True
+                except KeyringFailure as error:
+                    raise ProbeFailure(str(error)) from None
         version = subprocess.run(['/usr/sbin/sshd', '-V'], env=env, stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE, timeout=5)
         version_text = (version.stdout + version.stderr).decode('ascii', errors='replace').strip()
@@ -553,6 +566,7 @@ LogLevel VERBOSE
             report.update(milestone=milestone,
                           **gui_report_fields(args.paired_gui, {'status': 'failed'}, bool(args.input_fixture),
                                               import_replace=import_replace, linux_keyring=bool(args.linux_keyring),
+                                              private_keyring_session=args.private_keyring_session,
                                               flutter_stock=bool(args.flutter_stock_app)))
             report.pop('cancelScope', None)
             if args.s06_split:
@@ -563,6 +577,7 @@ LogLevel VERBOSE
                 result = run_gui(args, root, env, config)
             report.update(gui_report_fields(args.paired_gui, result, bool(args.input_fixture),
                                             import_replace=import_replace, linux_keyring=bool(args.linux_keyring),
+                                            private_keyring_session=args.private_keyring_session,
                                             flutter_stock=bool(args.flutter_stock_app)))
             report['checks'].append(result)
             publish()

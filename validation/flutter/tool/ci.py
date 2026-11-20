@@ -16,8 +16,10 @@ from tempfile import TemporaryDirectory
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[3]
+SHARED_ASSET_IGNORE = shutil.ignore_patterns('__pycache__', '*.pyc')
 sys.path.insert(0, str(ROOT / 'validation/shared'))
 from android_notices import verify as verify_packaged_notices
+sys.path.insert(0, str(ROOT / 'validation/pairing'))
 from linux_pairing_notices import FLUTTER_NOTICE_DIR, NOTICE_FILES, verify_tar as verify_linux_notices
 VERSION = '3.47.9'
 COMMIT = 'c197ca5199e9ee5661e865596c9c07294dfab51c'
@@ -185,7 +187,7 @@ def prepare(destination):
     font = shared / fixture['font']['file']
     if hashlib.sha256(font.read_bytes()).hexdigest() != fixture['font']['sha256']:
         raise SystemExit('Shared font checksum mismatch')
-    shutil.copytree(shared, destination / 'assets/shared', ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+    shutil.copytree(shared, destination / 'assets/shared', ignore=SHARED_ASSET_IGNORE)
     notices = destination / 'assets/rust-notices'
     notices.mkdir(parents=True, exist_ok=True)
     for name in ['RUSSH-NOTICE.md', 'russh-0.65.0-source.json', 'russh-0.65.0-local-close.patch']:
@@ -346,7 +348,7 @@ def package(destination, platform, output):
         if digest + '  ' + filename not in fixture_checksums:
             raise SystemExit('Shared fixture checksum mismatch: ' + filename)
         fixture_provenance[field] = digest
-    shutil.copytree(shared, output / 'shared', dirs_exist_ok=True)
+    shutil.copytree(shared, output / 'shared', dirs_exist_ok=True, ignore=SHARED_ASSET_IGNORE)
     shutil.copytree(ROOT / 'validation/flutter/licenses', output / 'remote-dependency-licenses', dirs_exist_ok=True)
     shutil.copy2(ROOT / 'validation/flutter/remote-dependencies.json', output / 'remote-dependencies.json')
     sdk = os.environ.get('ANDROID_HOME', '')

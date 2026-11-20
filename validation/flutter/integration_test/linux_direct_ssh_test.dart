@@ -279,6 +279,9 @@ Future<TextEditingController> prepareEncryptedKey(
       observe('key_retry_paste_tap');
       await tap(tester, 'direct-paste-key');
       observe('key_retry_pem_readback');
+      await waitUi(tester, () => control('direct-edit-pem').evaluate().isNotEmpty,
+          'linux_direct_paste_collapse_timeout');
+      await tap(tester, 'direct-edit-pem');
       await waitUi(
         tester,
         () =>

@@ -787,6 +787,8 @@ Future<void> runEncryptedDirectSshUi(
         ),
       );
       await tap(tester, 'direct-paste-key');
+      await until(tester, () => control('direct-edit-pem').evaluate().isNotEmpty);
+      await tap(tester, 'direct-edit-pem');
       await until(
         tester,
         () =>

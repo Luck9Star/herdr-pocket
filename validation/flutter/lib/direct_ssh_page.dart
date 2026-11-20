@@ -56,6 +56,10 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   final secret = TextEditingController(), passphrase = TextEditingController();
   final targetScroll = ScrollController();
   final terminalFocus = FocusNode();
+  final pemFocus = FocusNode();
+  bool editingPem = false;
+  final pemLayoutKey = GlobalKey();
+  double? pemEditorHeight;
   GlobalKey<TerminalViewState> terminalViewKey = GlobalKey<TerminalViewState>();
   final desktopTerminalFocus = FocusNode(debugLabel: 'ordinary SSH desktop input');
   final desktopTerminalScroll = ScrollController();
@@ -125,7 +129,20 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     return !encrypted || passphrase.text.isNotEmpty;
   }
   void cancelKeyPaste() { pasteRevision++; pastingKey = false; pasteStatus = null; }
-  void credentialsChanged() { cancelKeyPaste(); if (mounted) setState(() {}); }
+  void rememberPemHeight() { pemEditorHeight = pemLayoutKey.currentContext?.size?.height ?? pemEditorHeight; }
+  void credentialsChanged() { rememberPemHeight(); cancelKeyPaste(); if (mounted) setState(() {}); }
+  void pemFocusChanged() { if (mounted) { rememberPemHeight(); setState(() { editingPem = pemFocus.hasFocus; }); } }
+  void editPem() {
+    setState(() { editingPem = true; });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && keyAuth && editingPem) pemFocus.requestFocus();
+    });
+  }
+  Widget collapsedPem({required bool enabled}) => OutlinedButton(
+    key: const ValueKey('direct-edit-pem'), onPressed: enabled ? editPem : null,
+    child: const Text('已填写私钥 · 重新编辑'));
+  bool get pemCollapsed => keyAuth && secret.text.isNotEmpty && !editingPem;
+
 
   Future<void> pastePrivateKey() async {
     if (!keyAuth || busy || connected || pastingKey || !foreground) return;
@@ -153,6 +170,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     super.initState(); WidgetsBinding.instance.addObserver(this);
     for (final field in [host, port, user]) { field.addListener(changed); }
     secret.addListener(credentialsChanged); passphrase.addListener(credentialsChanged);
+    pemFocus.addListener(pemFocusChanged);
     widget.catalog?.addListener(catalogChanged);
     widget.desktopDestination?.addListener(desktopDestinationChanged);
   }
@@ -370,6 +388,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
     widget.catalog?.removeListener(catalogChanged);
     secret.removeListener(credentialsChanged); passphrase.removeListener(credentialsChanged);
     stop(notify: false);
+    pemFocus.removeListener(pemFocusChanged); pemFocus.dispose();
     targetScroll.dispose();
     terminalFocus.dispose();
     desktopTerminalFocus.dispose();
@@ -788,7 +807,8 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
           enabled: credentialEnabled, label: label, identifier: id,
           decoration: mobileInput('').copyWith(contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3))));
       }
-      return SizedBox(height: height, child: TextField(key: ValueKey(id), controller: controller, enabled: credentialEnabled,
+      if (pem && pemCollapsed) return SizedBox(height: height, child: collapsedPem(enabled: credentialEnabled));
+      return SizedBox(height: height, child: TextField(key: ValueKey(id), controller: controller, focusNode: pem ? pemFocus : null, onTapOutside: pem ? (_) => pemFocus.unfocus() : null, enabled: credentialEnabled,
         obscureText: !pem, minLines: pem ? 2 : 1, maxLines: pem ? 2 : 1,
         decoration: mobileInput(pem ? '粘贴已有私钥的完整 PEM' : '未填写')));
     }
@@ -1580,11 +1600,11 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
             onChanged: busy || hostKeyReviewRequired ? null : (value) => setState(() { cancelKeyPaste(); keyAuth = value; secret.clear(); passphrase.clear(); })),
           const SizedBox(height: 12),
           Semantics(container: true, explicitChildNodes: true, label: keyAuth ? '私钥 PEM（仅本次使用）' : '密码（仅本次使用）',
-            child: !keyAuth && !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS
+            child: pemCollapsed ? SizedBox(height: pemEditorHeight, child: collapsedPem(enabled: !busy && !hostKeyReviewRequired)) : !keyAuth && !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS
               ? MacosSecureCredentialField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy && !hostKeyReviewRequired,
                   label: '密码（仅本次使用）', identifier: 'direct-secret')
-              : TextField(key: const ValueKey('direct-secret'), controller: secret, enabled: !busy && !hostKeyReviewRequired, obscureText: !keyAuth,
-              minLines: keyAuth ? 2 : 1, maxLines: keyAuth ? 2 : 1, decoration: InputDecoration(label: ExcludeSemantics(child: Text(keyAuth ? '私钥 PEM（仅本次使用）' : '密码（仅本次使用）'))))),
+              : KeyedSubtree(key: keyAuth ? pemLayoutKey : null, child: TextField(key: const ValueKey('direct-secret'), controller: secret, focusNode: keyAuth ? pemFocus : null, onTapOutside: keyAuth ? (_) => pemFocus.unfocus() : null, enabled: !busy && !hostKeyReviewRequired, obscureText: !keyAuth,
+              minLines: keyAuth ? 2 : 1, maxLines: keyAuth ? 2 : 1, decoration: InputDecoration(label: ExcludeSemantics(child: Text(keyAuth ? '私钥 PEM（仅本次使用）' : '密码（仅本次使用）')))))),
           if (keyAuth) ...[
             TextButton(key: const ValueKey('direct-paste-key'), onPressed: busy || pastingKey || !foreground || hostKeyReviewRequired ? null : pastePrivateKey,
               child: const Text('粘贴私钥')),

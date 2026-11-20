@@ -51,6 +51,7 @@ jobs:
           tar -xJf "$RUNNER_TEMP/zig.tar.xz" -C "$RUNNER_TEMP/fixture-zig" --strip-components=1
           test "$("$RUNNER_TEMP/fixture-zig/zig" version)" = 0.16.0
           echo "ZIG=$RUNNER_TEMP/fixture-zig/zig" >> "$GITHUB_ENV"
+          echo "ZIG_GLOBAL_CACHE_DIR=$HOME/.cache/zig" >> "$GITHUB_ENV"
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: |
@@ -76,6 +77,16 @@ jobs:
           # Codeberg's archive endpoint can stall. Seed Zig's cache from the
           # same upstream commit and keep the vendored URL and hash intact.
           scratch="$(mktemp -d "$RUNNER_TEMP/translate-c.XXXXXX")"
+          cached_archive="$ZIG_GLOBAL_CACHE_DIR/p/$TRANSLATE_C_HASH.tar.gz"
+          if [ -e "$cached_archive" ] || [ -L "$cached_archive" ]; then
+            if [ -f "$cached_archive" ] && [ ! -L "$cached_archive" ] &&
+              package_hash="$("$ZIG" fetch --global-cache-dir "$scratch/verify" "$cached_archive")" &&
+              [ "$package_hash" = "$TRANSLATE_C_HASH" ]; then
+              echo "translate-c package hash (cached): $package_hash"
+              exit 0
+            fi
+            mv -- "$cached_archive" "$scratch/rejected-package"
+          fi
           git init -q "$scratch/source"
           timeout -k 5s 90s git -C "$scratch/source" -c http.followRedirects=false \
             fetch --no-tags --depth=1 "$TRANSLATE_C_SOURCE.git" "$TRANSLATE_C_REV"

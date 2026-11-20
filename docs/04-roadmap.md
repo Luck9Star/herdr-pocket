@@ -130,7 +130,7 @@ Flutter 平台流与节点 GUI 随后在 `d6c4285` 接入，两套当前源码�
 - [ ] **M1-06** 按主机分组的看板、待处理项、同步时间与失去连接状态。
   **待验证。** 看板、会话筛选、同步与陈旧状态已有源码及 Android 配对观察证据。待处理项、掉线和前台刷新需在真实设备组合复测。[同步模型](23-mobile-session-watch.md) · [Android 看板](40-android-paired-dashboard-validation.md) · [看板搜索复测](58-session-handoff-2026-11-09-r2.md)
 - [ ] **M1-07** 手机看板进入多个终端标签并切换；桌面主机侧栏、列表与多标签/分屏工作台，支持窗口调整和键盘导航，始终只有一个明确输入焦点。
-  **待验证。** 手机标签已有实现与 Android 全帧恢复证据。Ubuntu S06 有 Flutter Widget 真实双连接结果，Tauri 原生 GTK R12 在同一次双 SSH 运行中通过逐键窗口往返、退出及主动关闭。Flutter 最新 D2 在合成 Widget 中通过阈值、窗口变化和键盘导航验证。macOS 普通 SSH 单窗口及无界面双回环已有独立记录，原生双连接在当前签名环境下未验证。[标签](22-mobile-terminal-tabs.md) · [普通 SSH 实窗](63-design-parity-and-direct-ssh.md) · [S06 与 D2 证据](74-desktop-split-resize.md)
+  **待验证。** 手机标签已有实现与 Android 全帧恢复证据。Ubuntu 私有密钥环 S06 R2 的两壳只读双连接通过，Flutter GTK integration 验收焦点侧关闭及另一侧继续，Tauri 原生 GTK 验收窗口往返和手动暂停。Tauri 原生 GTK guarded R12 的逐键、窗口往返与关闭已有独立证据。Flutter D2 的阈值与键盘导航由合成 Widget 覆盖。macOS 普通 SSH 单窗口及无界面双回环已有独立记录，原生双连接在当前签名环境下未验证。[标签](22-mobile-terminal-tabs.md) · [普通 SSH 实窗](63-design-parity-and-direct-ssh.md) · [S06 与 D2 证据](74-desktop-split-resize.md)
 - [x] **M1-08** 从看板进入准确目标，观察终端，区分当前画面与旧画面。
   **已通过。** （2026-11-10 勾选：两壳在 API 35 模拟器完成明确 pane 选择、full/delta 与主动停止，停止后画面正确标记陈旧——[15](15-mobile-gui-validation.md)、run `42659301059`（Flutter）、run `42681783874`（Tauri，`stoppedStale: true`）；为模拟器级证据。）
 - [ ] **M1-09** 五端默认观察，显式进入完整逐键终端，支持快捷键、组合键与交互 TUI；手机提供辅助键、草稿编辑和多行粘贴预览。
@@ -140,7 +140,7 @@ Flutter 平台流与节点 GUI 随后在 `d6c4285` 接入，两套当前源码�
 - [ ] **M1-11** 重连后重新同步状态与全量画面；目标退出或身份变化时关闭发送。
   **待验证。** Android 两壳受保护路径分批有隐藏后取新 full 的证据。服务重启、代际变化、实际切网和五端恢复仍须验证。[0011 / 0014](58-session-handoff-2026-11-09-r2.md) · [目标替换与旧帧](23-mobile-session-watch.md)
 - [ ] **M1-12** 本地凭据安全保存与删除入口，诊断日志脱敏。
-  **待验证。** Android API 35 模拟器有软件 KeyMint 签名与删除证据，macOS 有普通 SSH 安全输入专项。Linux 两壳在私有 GNOME Secret Service 完成官方单主机配对及回环认证，Tauri 另以独立原生进程复用原密钥。Linux 测试包的两份许可与修改来源均已比对。共享桥已验锁定和不可用时拒绝操作，桌面双进程的两类正式负例待验。不同密钥环、硬件密钥、五端存储删除与诊断脱敏仍按平台验收。 [设备身份](55-mobile-shared-network-device.md) · [诊断](53-mobile-connection-diagnostics.md) · [Mac 安全输入](63-design-parity-and-direct-ssh.md) · [Linux 密钥环证据](evidence/linux-pairing-secret-service-20261120/README.md)
+  **待验证。** Android API 35 模拟器有软件 KeyMint 签名与删除证据，macOS 有普通 SSH 安全输入专项。Linux 两壳在私有 GNOME Secret Service 完成官方单主机和 S06 两组回环认证，Tauri 的单主机另验独立进程复用原密钥。Flutter 外部双进程作业停在像素检查。Linux 定向测试包的两份许可、修改来源与外层诊断资产均已比对。共享桥已验锁定和不可用时拒绝操作，桌面双进程的两类正式负例待验。不同密钥环、硬件密钥、五端存储删除与诊断脱敏仍按平台验收。 [设备身份](55-mobile-shared-network-device.md) · [诊断](53-mobile-connection-diagnostics.md) · [Mac 安全输入](63-design-parity-and-direct-ssh.md) · [Linux 密钥环证据](evidence/linux-pairing-secret-service-20261120/README.md)
 
 验收：手机新用户无需桌面 GUI 也能扫码接入，畸形资料与错配/过期/已完成响应被拒，手动兜底可用；扫码后所需入网/授权步骤明确，实际 SSH 认证成功才计配对完成。五端加密迁移在错误口令/篡改/冲突下不部分导入或自动信任。再通过首连、逐键/TUI、草稿/粘贴、多标签、模式切换、目标变化和恢复；手机辅助与桌面分屏不串目标。保存实际输入及反馈，证明主机、session、目标和内容一致。逐键中断不积压，未知不重放；未通过的平台记录实验或未支持。
 

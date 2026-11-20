@@ -34,10 +34,10 @@ Ubuntu 24.04 x86_64、一次性 GNOME Secret Service、回环 OpenSSH 9.6p1 与 
 
 ### Linux 双主机 S06 R1
 
-两端作业均失败，仍记录终端输入 0 字节及夹具撤销、清理。失败的焦点操作与后续窗口、恢复和断开验收仍需另取证。 [双主机 R1](https://github.com/Luck9Star/herdr-pocket/actions/runs/44672498778)
+两端作业均失败，仍记录终端输入 0 字节及夹具撤销、清理。本轮停在焦点和布局路径，后续同范围复验见 R2。 [双主机 R1](https://github.com/Luck9Star/herdr-pocket/actions/runs/44672498778)
 
 - Flutter 在重新等待分屏恢复时退出，固定错误码 `s06_widget_exited_before_focused_close_s06_split_resume`。当时只有一个标签可见，A 的观察以 `cancelled` 结束，B 仍持续收帧，未到达焦点侧关闭断言。 [Flutter job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44672498778/job/136076491061)
-- Tauri 已取得双侧原生画面和分屏几何，焦点操作返回 `s06_tauri_input_focus_webdriver_click_stale_element_reference`。首轮回执未定位到该阶段的具体点击。后续本机 GTK 夹具在节点替换时复现旧错误，`bee84cab` 只在确知点击未派发时重定位一次。实际双主机交互需在后续版本重新验收。 [Tauri job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44672498778/job/136076490769)
+- Tauri 已取得双侧原生画面和分屏几何，焦点操作返回 `s06_tauri_input_focus_webdriver_click_stale_element_reference`。首轮回执未定位到该阶段的具体点击。后续本机 GTK 夹具在节点替换时复现旧错误，`bee84cab` 只在确知点击未派发时重定位一次。正式双主机复验见 R2。 [Tauri job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44672498778/job/136076490769)
 
 ### 五端构建与 Linux 包内许可
 
@@ -47,7 +47,34 @@ Ubuntu 24.04 x86_64、一次性 GNOME Secret Service、回环 OpenSSH 9.6p1 与 
 | Flutter 实验候选 | 同一提交应用 `terminal_view` 0.5.0 实验补丁第 2 版，补丁检查、macOS 渲染及 Android、iOS、macOS、Linux、Windows 构建共 7 个 job 全绿。Ubuntu 的组合字符渲染探针为 138→169。应用包为开发测试制品。 [候选矩阵](https://github.com/Luck9Star/herdr-pocket/actions/runs/44673360914) · [候选 Linux build](https://github.com/Luck9Star/herdr-pocket/actions/runs/44673360914/job/136081274539) |
 | Tauri 验证包 | Android、iOS 模拟器、iOS 设备目标、macOS、Linux、Windows 共 6 个 job 全绿。Android 为临时 debug 签名，iOS 设备目标为无签名构建，Linux 生成 amd64 Debian 测试包。 [Tauri 矩阵](https://github.com/Luck9Star/herdr-pocket/actions/runs/44672510155) · [Linux build](https://github.com/Luck9Star/herdr-pocket/actions/runs/44672510155/job/136076535159) |
 
-直接读回 Flutter 两个 tar 和 Tauri Debian 包的 `LICENSE-APACHE`、`LICENSE-MIT`、`UPSTREAM`，分别与同一源码的 vendored Secret Service 5.1.0 三份文件及包清单摘要比对。R1 的外侧诊断仍有旧 Python 工具和字节码，Tauri 浏览器预览也含旧工具。`2c720887` 迁移校验器，`37e2d4a9` 排除来源目录的旧字节码。两项修正的复验范围为本机 Vite、共享资产逐字节比对和 Linux 打包夹具。五端构建待另验生产签名、安装运行、实体设备、物理输入法、实际跨网和用户环境中的其他密钥环。 [Linux 包摘要与路径](official-r1-receipt.json)
+直接读回 Flutter 两个 tar 和 Tauri Debian 包的 `LICENSE-APACHE`、`LICENSE-MIT`、`UPSTREAM`，分别与同一源码的 vendored Secret Service 5.1.0 三份文件及包清单摘要比对。R1 的外侧诊断仍有旧 Python 工具和字节码，Tauri 浏览器预览也含旧工具。`2c720887` 迁移校验器，`37e2d4a9` 排除来源目录的旧字节码。R2 正式定向复验这两个修正。五端构建待另验生产签名、安装运行、实体设备、物理输入法、实际跨网和用户环境中的其他密钥环。 [R1 Linux 包摘要与路径](official-r1-receipt.json)
+
+## 官方运行 R2
+
+下列四个运行的源码均为 `1abdfe4425b667dbb23311870338df9b299d91fb`、第 1 次尝试。已将六个 ZIP 与 GitHub 的 SHA-256 比对，校验 CRC 和内附校验表列出的文件。回执保留作业、工件、Linux 包和三张原图的摘要。 [R2 脱敏回执](official-r2-receipt.json) · [归档校验和](SHA256SUMS)
+
+### Linux 双主机 S06 R2
+
+Ubuntu 24.04 x86_64，两端私有 Secret Service 的两把设备公钥均与各自回环 OpenSSH 认证匹配。同名 pane 的两个 terminal 分别推进。两端只读运行的对端输入分别为 0／0 字节，两个远端 PTY 均无尺寸变化，夹具授权、进程和密钥清理完成。 [双主机 R2](https://github.com/Luck9Star/herdr-pocket/actions/runs/44677046419)
+
+- Flutter 由 `integration_test` 驱动真实 GTK runner 与原生目录。关闭焦点标签时，先确认原 SSH 已关闭，另一侧继续在原连接收帧。随后主动停止幸存侧，退出驱动前及退出后均确认两侧关闭。两侧共 10／14 帧，各连接一次。此次没有独立程序重启、原生窗口宽度往返或像素验收。 [Flutter job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44677046419/job/136091248572)
+- Tauri 通过原生 GTK/WebView 走完 1440→700→1440。原目标、左右位置和选中输入侧保持。布局暂停的副侧在回宽后在原连接显示新完整帧，手动暂停的观察在回宽后仍须主动恢复。DOM 焦点采样为 B、面板外、面板外。随后分别用界面关闭 A、B，关闭 A 时 B 仍在线，退出驱动前两端各认证一次、各关闭一次、均无 reset，两个原 socket 均消失。 [Tauri job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44677046419/job/136091248786) · [原始工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44677046419/artifacts/14602811287)
+
+| Tauri 原图 | 像素尺寸 | 画面 |
+| --- | --- | --- |
+| [收窄](s06-tauri-resize-narrow.png) | 700 × 1200 | B 保持观察，另一侧显示已暂停。 |
+| [回宽恢复](s06-tauri-resize-wide-restored.png) | 1440 × 1200 | 原左右面板各自显示观察画面。 |
+| [手动暂停回宽](s06-tauri-resize-manual-paused.png) | 1440 × 1200 | 停在旧画面，选中侧显示主动恢复按钮。 |
+
+三张 PNG 保留原 ZIP 字节。画面仅含隔离终端样本、测试窗格标识和界面。受保护输入、物理输入法、实际跨网及其他密钥环由独立场景取证。
+
+### Flutter 外部驱动单主机
+
+首次正式外部驱动的 Flutter GTK 作业完成明确授权及同钥 SSH 认证，随后以 `stock_flutter_observation_pixels_missing` 结束。工件未留下窗口原图或第二进程验收回执，临时授权已撤销，专用进程和密钥已清理。此处只记录像素检查断点。 [外部驱动作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44677046387/job/136091247782) · [原始工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44677046387/artifacts/14603410208)
+
+### Linux 测试包定向复验
+
+Flutter 实验候选通过 Ubuntu 补丁与锁定检查，安全测试 696 通过、43 跳过，渲染回归 10 通过，随后生成 Linux debug tar。Tauri 生成 Linux amd64 Debian 测试包。两个包内的两份许可与 `UPSTREAM` 均与同一源码逐字节一致。两份外侧 `shared/` 和 Tauri 浏览器预览的 59 个共享资产均与源码一致，且无迁走的校验脚本、`__pycache__` 或 `.pyc`。R2 只复验 Linux 构建产物，R1 记录原五端矩阵。 [Flutter 候选 Linux job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44677046405/job/136092777380) · [Flutter 候选检查](https://github.com/Luck9Star/herdr-pocket/actions/runs/44677046405/job/136091246849) · [Tauri Linux job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44677046240/job/136091246844)
 
 ## 复跑与回滚依据
 

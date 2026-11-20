@@ -16,7 +16,8 @@ import 'package:flutter/material.dart'
         TextButton,
         TextField,
         Theme;
-import 'package:flutter/rendering.dart' show DiagnosticsDebugCreator, RenderBox;
+import 'package:flutter/rendering.dart'
+    show DiagnosticsDebugCreator, RenderBox, SemanticsNode;
 import 'package:flutter/services.dart'
     show
         LogicalKeyboardKey,
@@ -410,26 +411,104 @@ Future<void> runWindowsDirectSshPublicKey(
   tester.testTextInput.enterText(privateKey);
   await tester.idle();
   await tester.pump();
-  bool keyReady() =>
-      focusBound() &&
-      input.controller.text == privateKey &&
-      passphrase.controller!.text.isEmpty &&
-      tester.widget<SelectableText>(approvedTarget).data == target.label;
   expect(
-    keyReady(),
+    focusBound() &&
+        input.controller.text == privateKey &&
+        passphrase.controller!.text.isEmpty &&
+        tester.widget<SelectableText>(approvedTarget).data == target.label,
     isTrue,
     reason: 'windows_direct_publickey_readback_failed',
   );
+  final semantics = tester.ensureSemantics();
+  bool semanticKeyAbsent() {
+    // Inspect values in memory only; never publish the private key.
+    final root =
+        // ignore: deprecated_member_use
+        tester.binding.pipelineOwner.semanticsOwner!.rootSemanticsNode!;
+    var absent = true;
+    void inspect(SemanticsNode node) {
+      final data = node.getSemanticsData();
+      final parts = privateKey.split('\n').where((line) => line.length >= 20);
+      if (parts.any(
+        (line) => data.label.contains(line) || data.value.contains(line),
+      )) {
+        absent = false;
+      }
+      node.visitChildren((child) {
+        inspect(child);
+        return true;
+      });
+    }
+
+    inspect(root);
+    return absent;
+  }
+
+  final editPem = control('direct-edit-pem');
+  Future<void> blurAndVerify() async {
+    await tapControl(tester, passphraseField, 'windows_passphrase');
+    await waitUi(
+      tester,
+      () =>
+          pemField.evaluate().isEmpty &&
+          editPem.hitTestable().evaluate().length == 1,
+      'windows_direct_publickey_collapse_timeout',
+    );
+    expect(editable, findsNothing);
+    expect(find.text('已填写私钥 · 重新编辑').hitTestable(), findsOneWidget);
+    expect(
+      semanticKeyAbsent(),
+      isTrue,
+      reason: 'windows_direct_publickey_semantics_exposed',
+    );
+    expect(passphrase.controller!.text.isEmpty, isTrue);
+  }
+
+  await blurAndVerify();
+  await tapControl(tester, editPem, 'windows_pem_reopen');
+  await waitUi(
+    tester,
+    () =>
+        editable.evaluate().length == 1 &&
+        tester
+            .state<EditableTextState>(editable)
+            .widget
+            .focusNode
+            .hasPrimaryFocus,
+    'windows_direct_publickey_reopen_focus_timeout',
+  );
+  final reopened = tester.state<EditableTextState>(editable).widget;
+  expect(
+    identical(View.of(tester.element(editable)), view) &&
+        reopened.controller.text == privateKey &&
+        !reopened.obscureText &&
+        !reopened.readOnly &&
+        passphrase.controller!.text.isEmpty,
+    isTrue,
+    reason: 'windows_direct_publickey_reopen_readback_failed',
+  );
+  await blurAndVerify();
+  semantics.dispose();
   await checkpoint('key_entry', const {
     'privateKeyExact': true,
     'passphraseEmpty': true,
+    'collapsedSemanticsAbsent': true,
+    'summaryHit': true,
+    'reopenedExactFocused': true,
+    'collapsedAgain': true,
   });
   await tap(
     tester,
     'direct-connect',
     requireEnabled: true,
     stableHitPoint: true,
-    beforeTap: () => expect(keyReady(), isTrue),
+    beforeTap: () => expect(
+      pemField.evaluate().isEmpty &&
+          editPem.hitTestable().evaluate().length == 1 &&
+          passphrase.controller!.text.isEmpty &&
+          tester.widget<SelectableText>(approvedTarget).data == target.label,
+      isTrue,
+    ),
   );
   privateKey = '';
 

@@ -64,6 +64,16 @@ class SharedDiagnosticAssetsTests(unittest.TestCase):
     diagnostic = 'terminal-font-diagnostics-v1.json'
     theme_prompts = 'theme-prompt-samples-v1.json'
 
+    def test_linux_pairing_sources_are_staged_without_invoking_cargo(self):
+        app = self.flutter_scaffold()
+        runner = app / 'linux/runner'
+        registration = (runner / 'my_application.cc').read_text()
+        self.assertEqual(registration.count('RegisterHerdrLinuxPairingChannels('), 1)
+        self.assertIn('fl_engine_get_binary_messenger(fl_view_get_engine(view))', registration)
+        self.assertIn('herdr_pairing.cmake', (runner / 'CMakeLists.txt').read_text())
+        self.assertIn('+1.96.0 build --locked', (runner / 'herdr_pairing.cmake').read_text())
+        self.assertEqual(ci.pairing_provenance('macos', None)['linuxSources'], [])
+
     def test_secure_appkit_factory_is_included_only_in_generated_macos_runner(self):
         app = self.flutter_scaffold()
         mac = (app / 'macos/Runner/MainFlutterWindow.swift').read_text()
@@ -98,6 +108,8 @@ class SharedDiagnosticAssetsTests(unittest.TestCase):
                 'ios/Runner/AppDelegate.swift': 'GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)',
                 'android/app/src/main/AndroidManifest.xml': '<manifest><application /></manifest>',
                 'android/app/build.gradle.kts': 'namespace = "dev.herdr.herdr_flutter_probe"\napplicationId = "dev.herdr.herdr_flutter_probe"\n',
+                'linux/runner/my_application.cc': '#include "my_application.h"\n  fl_register_plugins(FL_PLUGIN_REGISTRY(view));\n',
+                'linux/runner/CMakeLists.txt': 'target_link_libraries(herdr_flutter_probe PRIVATE flutter)\n',
             }
             for name, text in files.items():
                 target = app / name

@@ -68,7 +68,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
   bool get needsNetworkBinding => savedProfile?.requiresNetworkBinding ?? (importedOverlayProvider != null || retainedNetworkBinding);
   bool get pageVisible => widget.visibility?.value ?? true;
   bool get scanAvailable => !kIsWeb && [TargetPlatform.android,TargetPlatform.iOS].contains(defaultTargetPlatform);
-  bool get platformAvailable => widget.keys != null || (!kIsWeb && [TargetPlatform.android,TargetPlatform.iOS,TargetPlatform.macOS].contains(defaultTargetPlatform));
+  bool get platformAvailable => widget.keys != null || (!kIsWeb && [TargetPlatform.android,TargetPlatform.iOS,TargetPlatform.macOS,TargetPlatform.linux].contains(defaultTargetPlatform));
   String status = '先审查目标，再由此设备生成独立身份。仅公开请求可以交给主机。';
   int revision = 0;
   bool appResumed = true;
@@ -179,8 +179,12 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
   Future<void> create() async {
     if (busy || scanning || !appResumed || pairing != null || !targetReviewed || creationUnknown || profileBlocked || !pageVisible || !platformAvailable) return;
     final ticket = ++revision;
+    final store = keys;
+    final linuxKeys = NativeDeviceKeys.linuxStore && store is NativeDeviceKeys ? store : null;
     String? handle;
+    String? reservation, pendingId;
     var createStarted = false;
+    var reservedCreateReturned = false;
     var phase = '核验连接资料';
     setState(() { busy = true; sourceReviewed = false; });
     try {
@@ -193,22 +197,37 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
       if (!RegExp(r'^[A-Za-z0-9 -]{1,48}$').hasMatch(device)) throw const RemoteFailure('invalid_pairing');
       final fullLabel = '${checked.host} / ${checked.session}';
       final label = savedProfile?.label ?? (fullLabel.length > 64 ? fullLabel.substring(0,64) : fullLabel);
+      if (linuxKeys != null) {
+        if (widget.catalog == null) throw const RemoteFailure('catalog_unavailable');
+        reservation = await linuxKeys.reserve();
+        if (!mounted || ticket != revision) return;
+      }
       if (widget.catalog != null) {
         phase = '保存创建意图';
-        await widget.catalog!.beginCreation(values,label,sourceProfileId:savedProfile?.hasIdentity == false ? savedProfile!.id : null);
-        if (!mounted || ticket != revision) { await widget.catalog!.clearUnstartedCreation(widget.catalog!.pendingCreation!['id'] as String); return; }
+        await widget.catalog!.beginCreation(values,label,sourceProfileId:savedProfile?.hasIdentity == false ? savedProfile!.id : null,
+          reservedHandle:reservation ?? '');
+        pendingId = widget.catalog!.pendingCreation!['id'] as String;
+        if (!mounted || ticket != revision) { await widget.catalog!.clearUnstartedCreation(pendingId,reservedHandle:reservation ?? ''); return; }
       }
       createStarted = true; PairingPage.retainedCreationUnknown = true;
       phase = '创建设备身份';
-      handle = await keys.create();
-      PairingPage.retainedOrphan = handle;
-      if (widget.catalog != null) {
-        phase = '保存本机密钥引用';
-        await widget.catalog!.recordCreatedHandle(handle);
+      if (linuxKeys != null) {
+        handle = reservation!;
+        PairingPage.retainedOrphan = handle;
+        await linuxKeys.createReserved(handle);
+        reservedCreateReturned = true;
+      } else {
+        handle = await keys.create();
+        PairingPage.retainedOrphan = handle;
+        if (widget.catalog != null) {
+          phase = '保存本机密钥引用';
+          await widget.catalog!.recordCreatedHandle(handle);
+        }
       }
       phase = '读取设备公钥';
       final publicKey = await keys.public(handle);
       if (!mounted || ticket != revision) {
+        if (linuxKeys != null) return; // The journal owns the same handle after native dispatch.
         try { await keys.delete(handle); if (widget.catalog?.pendingCreation?['handle'] == handle) await widget.catalog!.clearDeletedCreation(handle); if (PairingPage.retainedOrphan == handle) { PairingPage.retainedOrphan = null; PairingPage.retainedCreationUnknown = false; } } catch (_) { PairingPage.retainedCreationUnknown = true; }
         return;
       }
@@ -225,12 +244,23 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
       setState(() { pairing = p; identityAvailable = true; target = Map.unmodifiable(values); busy = false; targetReviewed = false;
         status = '等待主机审查 · 授权结果未知；公开请求有效 600 秒'; });
       widget.onRequest?.call(Map.unmodifiable(p.request));
-    } catch (_) {
-      if (handle != null && (savedProfile == null || !savedProfile!.hasIdentity)) { try { await keys.delete(handle); if (widget.catalog?.pendingCreation?['handle'] == handle) await widget.catalog!.clearDeletedCreation(handle); PairingPage.retainedOrphan = null; } catch (_) { PairingPage.retainedOrphan = handle; } }
+    } catch (error) {
+      if (linuxKeys != null) {
+        if (createStarted && !reservedCreateReturned && pendingId != null && reservation != null && error is RemoteFailure &&
+            const {'device_key_locked','device_key_store_unavailable'}.contains(error.code)) {
+          // These native codes on creation guarantee nothing was written.
+          try {
+            await widget.catalog!.clearUnstartedCreation(pendingId,reservedHandle:reservation);
+            PairingPage.retainedOrphan = null;
+            createStarted = false;
+          } catch (_) { /* Keep the reservation for rechecking after any unknown write. */ }
+        }
+      } else if (handle != null && (savedProfile == null || !savedProfile!.hasIdentity)) { try { await keys.delete(handle); if (widget.catalog?.pendingCreation?['handle'] == handle) await widget.catalog!.clearDeletedCreation(handle); PairingPage.retainedOrphan = null; } catch (_) { PairingPage.retainedOrphan = handle; } }
       PairingPage.retainedCreationUnknown = createStarted;
       if (mounted && ticket == revision) setState(() { busy = false; targetReviewed = false;
+        if (linuxKeys != null && widget.catalog?.ready == false) profileBlocked = true;
         creationUnknown = createStarted;
-        status = createStarted ? '${phase}未完成 · 设备安全存储不可用或创建结果未知 · 请核验原身份，不会重放创建' : '${phase}未完成 · 未创建设备身份'; });
+        status = linuxDeviceKeyNotice(error) ?? (createStarted ? '${phase}未完成 · 设备安全存储不可用或创建结果未知 · 请核验原身份，不会重放创建' : '${phase}未完成 · 未创建设备身份'); });
     }
   }
   bool requestAvailable(PendingDevicePairing p) => p.state == 'awaiting-host' && !p.consumed && now < (p.request['expires_at'] as int);
@@ -335,8 +365,15 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
       if (!mounted || ticket != revision || profileBlocked || !pageVisible || !identical(pairing,p)) return;
       if (actual != p.request['public_key']) throw const RemoteFailure('device_key_changed');
       setState(() { identityAvailable = true; status = '本机原身份已匹配 · 请核验主机指纹后主动审查连接'; });
-    } catch (_) {
-      if (mounted && ticket == revision && !profileBlocked && pageVisible && identical(pairing,p)) setState(() { identityAvailable = false; status = '原设备密钥丢失、锁定或公钥不符 · 连接禁用，不生成替代身份；可保留资料核验或明确删除'; });
+    } catch (error) {
+      if (mounted && ticket == revision && !profileBlocked && pageVisible && identical(pairing,p)) {
+        final reason = linuxDeviceKeyNotice(error);
+        setState(() {
+          identityAvailable = false;
+          status = reason == null ? '原设备密钥丢失、锁定或公钥不符 · 连接禁用，不生成替代身份；可保留资料核验或明确删除'
+            : '$reason。主机资料及原引用已保留。';
+        });
+      }
     }
   }
   Future<void> persistPairing({PendingDevicePairing? candidate}) async {

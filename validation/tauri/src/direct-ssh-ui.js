@@ -268,14 +268,9 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     if (summary.style) summary.style.height = '';
     applyLock();
     if (focus) {
-      const reveal = () => {
-        if (editor.hidden) return;
-        editor.focus();
-        editor.setSelectionRange?.(editor.value.length, editor.value.length);
-        if (!compact()) revealAuthField();
-      };
-      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(reveal);
-      else reveal();
+      editor.focus();
+      editor.setSelectionRange?.(editor.value.length, editor.value.length);
+      if (!compact()) revealAuthField();
     }
     return true;
   }

@@ -107,7 +107,8 @@ NATIVE_FAILURES = frozenset((
     'native_mobile_confirmation_owner_unproven', 'native_mobile_password_owner_unproven',
     'native_mobile_submit_owner_unproven', 'native_mobile_return_owner_unproven',
     'native_encrypted_key_owner_unproven', 'native_encrypted_key_method_unproven',
-    'native_encrypted_key_entry_unproven', 'native_encrypted_key_rejection_unproven',
+    'native_encrypted_key_entry_unproven', 'native_encrypted_key_reopen_keyboard_missing',
+    'native_encrypted_key_rejection_unproven',
     'native_encrypted_key_credentials_retained', 'native_encrypted_key_empty_add_unproven',
     'native_encrypted_key_home_shortcut_unproven', 'native_encrypted_key_home_shortcut_no_progress')) | MOBILE_PASSWORD_FAILURES | ENCRYPTED_AUTH_FAILURES
 HOME_MEMBERS = frozenset(('brand', 'headerAdd', 'emptyAdd', 'homeHeading', 'emptyHeading',

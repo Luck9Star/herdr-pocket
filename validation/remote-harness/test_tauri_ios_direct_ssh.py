@@ -986,10 +986,15 @@ class CaptureDiagnosticsTests(unittest.TestCase):
         self.assertIn('private func collapsedPEMControl', source)
         self.assertIn('$0.snapshot.identifier == "ssh-key-summary"', source)
         self.assertIn('$0.snapshot.label == "已填写私钥 · 重新编辑"', source)
-        self.assertIn('(collapsedPEM || filled.pem.live.snapshot.value as? String == pem)', source)
+        self.assertIn('guard summaries.count == 1, editors.isEmpty', source)
+        self.assertIn('requireCollapsedPEM: true', source)
+        self.assertGreaterEqual(source.count('requireCollapsedPEM: true'), 2)
+        self.assertIn('try require(collapsedPEM &&', source)
+        self.assertIn('native_encrypted_key_reopen_keyboard_missing', source)
+        strict_gate = source.index('try require(collapsedPEM, failure)')
         secret_gate = source.index('try require(suspicious.isEmpty, "native_secret_exposed")')
-        collapsed_gate = source.index('try require(editor != nil || collapsedPEM, failure)')
-        self.assertLess(secret_gate, collapsed_gate)
+        self.assertLess(secret_gate, strict_gate)
+        self.assertNotIn('try require(editor != nil || collapsedPEM, failure)', source)
 
     def test_fixed_capture_diagnostics_export_and_bound(self):
         detail = {'anchor': 'terminal', 'matchCount': 2, 'reason': 'geometry_ambiguous',

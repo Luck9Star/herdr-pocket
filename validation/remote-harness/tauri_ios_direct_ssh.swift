@@ -3288,7 +3288,8 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func encryptedForm(port: Int, owner: RevealedControl, notice: String? = nil) throws ->
+    private func encryptedForm(port: Int, owner: RevealedControl, notice: String? = nil,
+                               requireCollapsedPEM: Bool = false) throws ->
         (pem: RevealedControl, passphrase: RevealedControl, submit: RevealedControl) {
         var targets: [(String?, String, Bool)] = [("ssh-step-title", "SSH 账号认证", false),
             ("ssh-reviewed-endpoint", target(port), false), ("ssh-approved-note", "本次主机密钥已确认", false),
@@ -3304,7 +3305,9 @@ final class TauriDirectSSHUITests: XCTestCase {
         try require(passwords.allSatisfy { !NativeFramePolicy.valid($0.snapshot.frame) && credentialEmpty($0.snapshot) },
                     "native_encrypted_key_method_unproven")
         let pem: RevealedControl
-        if let anchor = encryptedFieldAnchor(.pem, rows) {
+        if requireCollapsedPEM {
+            pem = try collapsedPEMControl(rows, owner: owner)
+        } else if let anchor = encryptedFieldAnchor(.pem, rows) {
             let control = try mobileControl(anchor, rows, failure)
             try require(sameControlScope(control, owner) && control.live.snapshot.isEnabled, failure)
             pem = control
@@ -3354,20 +3357,36 @@ final class TauriDirectSSHUITests: XCTestCase {
 
         try phase("passphrase")
         try typeEncryptedCredential(entered.passphrase, text: passphrase, keyboardWasHidden: false)
-        var filled = try encryptedForm(port: port, owner: entered.passphrase)
+        var filled = try encryptedForm(port: port, owner: entered.passphrase, requireCollapsedPEM: true)
         // UIKit may briefly show the last typed character. Observe only and
         // stop without submitting if the secure field never shows a mask.
         let deadline = Date().addingTimeInterval(2)
         while !NativeControlPolicy.credentialMasked(filled.passphrase.live.snapshot.value) && Date() < deadline {
             Thread.sleep(forTimeInterval: 0.2)
-            filled = try encryptedForm(port: port, owner: entered.passphrase)
+            filled = try encryptedForm(port: port, owner: entered.passphrase, requireCollapsedPEM: true)
         }
-        let collapsedPEM = isCollapsedPEM(filled.pem)
-        try require((collapsedPEM || filled.pem.live.snapshot.value as? String == pem) &&
+        var collapsedPEM = isCollapsedPEM(filled.pem)
+        try require(collapsedPEM &&
                     NativeControlPolicy.credentialMasked(filled.passphrase.live.snapshot.value) &&
                     filled.submit.owner.snapshot.isEnabled && filled.submit.live.snapshot.isEnabled, failure)
+        try filled.pem.live.element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        try require(app.keyboards.firstMatch.waitForExistence(timeout: 2), "native_encrypted_key_reopen_keyboard_missing")
+        let reopenedRows = try observedNodes()
+        guard let reopenedAnchor = encryptedFieldAnchor(.pem, reopenedRows) else {
+            try require(false, failure)
+            throw NSError(domain: failure, code: 1)
+        }
+        let reopenedEditor = try mobileControl(reopenedAnchor, reopenedRows, failure)
+        try require(sameControlScope(reopenedEditor, entered.passphrase) &&
+                    reopenedEditor.live.snapshot.value as? String == pem, failure)
+        try post(prefix + "_pem_reopened")
+        try filled.passphrase.live.element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        var secured = try encryptedForm(port: port, owner: entered.passphrase, requireCollapsedPEM: true)
+        collapsedPEM = isCollapsedPEM(secured.pem)
+        try require(collapsedPEM && NativeControlPolicy.credentialMasked(secured.passphrase.live.snapshot.value) &&
+                    secured.submit.owner.snapshot.isEnabled && secured.submit.live.snapshot.isEnabled, failure)
         let observed = try observedNodes()
-        let editor = confirmedPEMEditor(observed, previous: filled.pem, pem: pem)
+        let editor = confirmedPEMEditor(observed, previous: secured.pem, pem: pem)
         let passphrases = ["ordinaryPassword", "rotationPassword", "encryptedWrongPassphrase", "encryptedPassphrase"]
             .compactMap { config[$0] as? String }
         let bodyLines = NativeControlPolicy.encryptedPEMBodyLines(pem)
@@ -3379,7 +3398,7 @@ final class TauriDirectSSHUITests: XCTestCase {
                 pem: pem, bodyLines: bodyLines, passwords: passphrases, representation: representation)
             let headerHit = headerHits.contains(true), bodyHit = bodyHits.contains(true), passwordHit = passwordHits.contains(true)
             guard headerHit || bodyHit || passwordHit else { return nil }
-            let pemOwner = editor?.owner ?? filled.pem.owner
+            let pemOwner = editor?.owner ?? secured.pem.owner
             let path = node.path, pemPath = pemOwner.path
             let relation = path == pemPath ? "same" : pemPath.starts(with: path) ? "ancestor" :
                 path.starts(with: pemPath) ? "descendant" : "other"
@@ -3396,9 +3415,9 @@ final class TauriDirectSSHUITests: XCTestCase {
                 "secretDiagnostic": ["count": min(suspicious.count, 10000), "candidates": Array(suspicious.prefix(12))]])
         }
         try require(suspicious.isEmpty, "native_secret_exposed")
-        try require(editor != nil || collapsedPEM, failure)
+        try require(collapsedPEM, failure)
         try post(prefix + "_ready")
-        return filled.submit
+        return secured.submit
     }
 
     @MainActor

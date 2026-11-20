@@ -429,6 +429,92 @@ class SharedEasyTierAuditTests(unittest.TestCase):
             write.assert_not_called()
 
 
+class SharedEasyTierInputAuditTests(unittest.TestCase):
+    def setUp(self):
+        from flutter_android_dual_overlay import shared_input_checkpoint
+        self.checkpoint = shared_input_checkpoint
+        self.bytes = {'et': b'', 'ts': b''}
+        self.previous = {'et': 0, 'ts': 0}
+        self.first = {'et': True, 'ts': True}
+        self.closed = set()
+        self.drift = {}
+        self.baselines = {}
+        self.progress = {}
+
+    def audit(self, role, expected):
+        current = self.bytes[role]
+        result = dict(acceptedSessions=1, newSessions=int(self.first[role]),
+                      capturedBytes=len(current), newInputBytes=len(current) - self.previous[role],
+                      exactBytes=current == expected, authorizationActive=True,
+                      soleApprovedSession=True, inputAttributionAmbiguous=False,
+                      sessions=[dict(ordinal=1, approvedDevice=True, active=role not in self.closed,
+                                     capturedBytes=len(current),
+                                     peerClose='client_disconnect' if role in self.closed else 'unconfirmed')])
+        self.first[role] = False
+        self.previous[role] = len(current)
+        return dict(result, **self.drift.get(role, {}))
+
+    def point(self, stage):
+        self.checkpoint(stage, self.audit, self.baselines, self.progress)
+
+    def test_exact_a_b_then_original_survivor_and_separate_shutdown(self):
+        self.point('shared_ready')
+        self.point('shared_a_input_before')
+        self.bytes['et'] = b'E'
+        self.point('shared_a_input_after')
+        self.point('shared_b_input_before')
+        self.bytes['ts'] = b'T'
+        self.point('shared_b_input_after')
+        self.closed.add('et')
+        self.point('shared_a_released')
+        self.point('shared_survivor_before')
+        self.bytes['ts'] = b'Tt'
+        self.point('shared_survivor_after')
+        self.closed.add('ts')
+        self.point('shared_b_released')
+        self.point('shared_node_stopped')
+        self.assertEqual(self.progress['foregroundPeerWrites'], {
+            'shared_a_input_after': {'a': 1, 'b': 0}, 'shared_b_input_after': {'a': 1, 'b': 1},
+            'shared_survivor_after': {'a': 1, 'b': 2}})
+
+    def test_wrong_peer_same_length_replay_reauthentication_and_attribution_fail_closed(self):
+        attempts = ((b'X', b'', {}), (b'EE', b'', {}), (b'', b'E', {}),
+                    (b'E', b'', {'acceptedSessions': 2}), (b'E', b'', {'newSessions': 1}),
+                    (b'E', b'', {'inputAttributionAmbiguous': True}),
+                    (b'E', b'', {'sessions': [dict(ordinal=1, approvedDevice=True, active=True,
+                                                  capturedBytes=0, peerClose='unconfirmed')]}))
+        for a, b, drift in attempts:
+            with self.subTest(a=a, b=b, drift=drift):
+                self.setUp()
+                self.point('shared_ready')
+                self.point('shared_a_input_before')
+                self.bytes.update(et=a, ts=b)
+                self.drift['et'] = drift
+                with self.assertRaises(DualOverlayDeviceFailure):
+                    self.point('shared_a_input_after')
+                self.assertNotIn('foregroundPeerWrites', self.progress)
+
+    def test_survivor_confirmation_requires_a_already_closed_without_reset(self):
+        self.point('shared_ready')
+        self.bytes.update(et=b'E', ts=b'T')
+        self.previous.update(et=1, ts=1)
+        with self.assertRaisesRegex(DualOverlayDeviceFailure, 'host_audit_session_changed'):
+            self.point('shared_survivor_before')
+        self.closed.add('et')
+        self.drift['et'] = {'sessions': [dict(ordinal=1, approvedDevice=True, active=False,
+                                             capturedBytes=1, peerClose='peer_reset')]}
+        with self.assertRaisesRegex(DualOverlayDeviceFailure, 'shared_peer_closed_by_reset'):
+            self.point('shared_survivor_before')
+
+    def test_receipt_can_precede_capture_without_retrying_any_write(self):
+        self.point('shared_ready')
+        self.point('shared_a_input_before')
+        with patch('time.sleep', side_effect=lambda _delay: self.bytes.update(et=b'E')) as wait:
+            self.point('shared_a_input_after')
+        wait.assert_called_once()
+        self.assertEqual(self.progress['foregroundPeerWrites']['shared_a_input_after'], {'a': 1, 'b': 0})
+
+
 class FailedHostAuditTests(unittest.TestCase):
     def test_failure_snapshot_only_keeps_bounded_counters(self):
         class Control:

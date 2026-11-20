@@ -18,6 +18,8 @@ const enabled = bool.fromEnvironment('HERDR_ANDROID_DUAL_OVERLAY');
 const runId = String.fromEnvironment('HERDR_ANDROID_DUAL_RUN_ID');
 const firstStop = String.fromEnvironment('HERDR_ANDROID_DUAL_FIRST_STOP');
 const sharedEasyTier = bool.fromEnvironment('HERDR_ANDROID_SHARED_EASYTIER');
+const sharedInput = bool.fromEnvironment('HERDR_ANDROID_SHARED_EASYTIER_INPUT');
+const sharedScenario = sharedInput ? 'shared-easytier-input' : 'shared-easytier';
 const exchangePath = '/data/user/0/dev.herdr.herdr_flutter_probe/files/dual-overlay-exchange';
 
 List<Map<String, Object>> safeFailureFrames(StackTrace stack) {
@@ -47,6 +49,15 @@ Future<Map<String, Object>> observeSharedEasyTier(
   final started = await runtime.profileStatus(profile);
   expect(started.state, 'engine-started');
   final originalBinding = started.binding!;
+  Future<void> requireSameNode() async {
+    final current = await runtime.profileStatus(profile);
+    expect(current.state, 'engine-started');
+    expect(current.binding?.same(originalBinding), isTrue);
+  }
+  Future<void> checkpoint(String stage) async {
+    await steps.stage(stage);
+    expect(await steps.awaitFile('${stage.replaceAll('_', '-')}.txt'), 'accepted');
+  }
   await steps.navigation(0);
   final aHost = await steps.pairHost('et', aProfile);
   await tester.pageBack(); await tester.pump();
@@ -57,12 +68,37 @@ Future<Map<String, Object>> observeSharedEasyTier(
   await steps.bindHost(bHost, networkId, 'QA EasyTier', 'easytier');
 
   final aTab = await steps.openAndObserve('et', aHost);
+  final aTerminal = tester.widget<TerminalView>(find.byType(TerminalView)).terminal;
+  final aInput = sharedInput ? steps.sharedInputTarget(aTab, aHost, originalBinding) : null;
   await steps.navigation(0);
   final bTab = await steps.openAndObserve('ts', bHost);
   expect(aTab, isNot(bTab));
+  final bTerminal = tester.widget<TerminalView>(find.byType(TerminalView)).terminal;
+  final bInput = sharedInput ? steps.sharedInputTarget(bTab, bHost, originalBinding) : null;
+  await checkpoint('shared_ready');
+  final receipts = <String>{};
+  if (sharedInput) {
+    expect(identical(aInput!.connection, bInput!.connection), isFalse);
+    expect(aInput.sameEndpoint(bInput), isFalse);
+    await steps.resumeTab('et', aTab, aTerminal, marker: 'Synthetic observe tick');
+    await steps.commitSharedDraft(role: 'et', character: 'E', tabKey: aTab, hostId: aHost,
+      binding: originalBinding, original: aInput, receipts: receipts,
+      beforeConfirmation: () => checkpoint('shared_a_input_before'),
+      afterReceipt: () async {
+        await checkpoint('shared_a_input_after');
+        await steps.stage('shared_a_input_echo');
+      });
+    await steps.resumeTab('ts', bTab, bTerminal, marker: 'Synthetic observe tick');
+    await requireSameNode();
+    await steps.commitSharedDraft(role: 'ts', character: 'T', tabKey: bTab, hostId: bHost,
+      binding: originalBinding, original: bInput, receipts: receipts,
+      beforeConfirmation: () => checkpoint('shared_b_input_before'),
+      afterReceipt: () async {
+        await checkpoint('shared_b_input_after');
+        await steps.stage('shared_b_input_echo');
+      });
+  }
   final terminal = tester.widget<TerminalView>(find.byType(TerminalView)).terminal;
-  await steps.stage('shared_ready');
-  expect(await steps.awaitFile('shared-ready.txt'), 'accepted');
   await steps.stage('shared_close_a');
   await steps.closeHostTab(aTab);
   final afterCloseSequence = existing.displayedSequence(tester);
@@ -71,34 +107,42 @@ Future<Map<String, Object>> observeSharedEasyTier(
     identical(tester.widget<TerminalView>(find.byType(TerminalView)).terminal, terminal) &&
     (existing.displayedSequence(tester) ?? -1) > afterCloseSequence!);
   expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected, isTrue);
-  final afterA = await runtime.profileStatus(profile);
-  expect(afterA.state, 'engine-started');
-  expect(afterA.binding?.same(originalBinding), isTrue);
-  await steps.stage('shared_a_released');
-  expect(await steps.awaitFile('shared-a-released.txt'), 'accepted');
+  await requireSameNode();
+  await checkpoint('shared_a_released');
+  if (sharedInput) {
+    expect(find.byKey(ValueKey(aTab)), findsNothing);
+    await existing.tapStablePointer(tester, find.byKey(ValueKey(bTab)));
+    expect(identical(tester.widget<TerminalView>(find.byType(TerminalView)).terminal, terminal), isTrue);
+    await steps.commitSharedDraft(role: 'ts', character: 't', tabKey: bTab, hostId: bHost,
+      binding: originalBinding, original: bInput!, receipts: receipts,
+      beforeConfirmation: () => checkpoint('shared_survivor_before'),
+      afterReceipt: () async {
+        await checkpoint('shared_survivor_after');
+        await steps.stage('shared_survivor_echo');
+      });
+    expect(receipts.length, 3);
+  }
 
   await steps.stage('shared_close_b');
   await steps.closeHostTab(bTab);
-  final afterB = await runtime.profileStatus(profile);
-  expect(afterB.state, 'engine-started');
-  expect(afterB.binding?.same(originalBinding), isTrue);
-  await steps.stage('shared_b_released');
-  expect(await steps.awaitFile('shared-b-released.txt'), 'accepted');
+  await requireSameNode();
+  await checkpoint('shared_b_released');
   await steps.stopNetwork('et', networkId);
   final stopped = await runtime.profileStatus(profile);
   expect(stopped.state, 'stopped');
   expect(stopped.binding, isNull);
-  await steps.stage('shared_node_stopped');
-  expect(await steps.awaitFile('shared-node-stopped.txt'), 'accepted');
-  return {'status': 'passed', 'scenario': 'shared-easytier', 'sameReviewedBinding': true,
+  await checkpoint('shared_node_stopped');
+  return {'status': 'passed', 'scenario': sharedScenario, 'sameReviewedBinding': true,
     'bothInitialFrames': true, 'survivorAdvancedOnOriginalView': true,
-    'noAutomaticInput': true, 'bothTabsClosedBeforeNodeStop': true, 'nodeExplicitlyStopped': true};
+    'noAutomaticInput': true, 'bothTabsClosedBeforeNodeStop': true, 'nodeExplicitlyStopped': true,
+    if (sharedInput) ...{'foregroundDraftActions': receipts.length,
+      'reviewedTargetAndNewReceiptForEachAction': true, 'peerEchoAfterEachAction': true}};
 }
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets('two reviewed herdr targets retain provider boundaries on Android', (tester) async {
-    if (!kDebugMode || !Platform.isAndroid || !enabled ||
+    if (!kDebugMode || !Platform.isAndroid || !enabled || (sharedInput && !sharedEasyTier) ||
         !RegExp(r'^[0-9]{1,20}$').hasMatch(runId) ||
         (sharedEasyTier ? firstStop.isNotEmpty : !{'et', 'ts'}.contains(firstStop))) {
       throw StateError('dual_device_fixture_required');
@@ -108,7 +152,7 @@ void main() {
     await existing.until(tester, configFile.existsSync, seconds: 90);
     final dynamic decoded = jsonDecode(configFile.readAsStringSync());
     if (decoded is! Map<String, dynamic> || decoded['runId'] != runId ||
-        (sharedEasyTier ? decoded['scenario'] != 'shared-easytier' : decoded['firstStop'] != firstStop)) {
+        (sharedEasyTier ? decoded['scenario'] != sharedScenario : decoded['firstStop'] != firstStop)) {
       throw StateError('dual_device_config_invalid');
     }
     String value(String key) {

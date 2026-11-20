@@ -4,6 +4,7 @@ import argparse
 import base64
 import json
 import re
+import secrets
 
 HERE = Path(__file__).resolve().parent
 
@@ -68,6 +69,10 @@ def prepare(app, fixture=None):
         if test_source.count('__HP_FIXTURE_BASE64__') != 1:
             raise ValueError('macos_xcui_test_source_unexpected')
         test_source = test_source.replace('__HP_FIXTURE_BASE64__', encoded)
+        sentinel = 'hpaddress' + secrets.token_hex(16)
+        if test_source.count('__HP_ADDRESS_SENTINEL__') != 1:
+            raise ValueError('macos_xcui_test_source_unexpected')
+        test_source = test_source.replace('__HP_ADDRESS_SENTINEL__', sentinel)
         dart = app / 'lib/direct_ssh_page.dart'
         dart_text = dart.read_text()
         form_point = "    return entryList(desktop: desktop, key: const ValueKey('direct-form'), children: [\n"
@@ -78,6 +83,7 @@ def prepare(app, fixture=None):
             raise ValueError('macos_xcui_dart_unexpected')
         diagnostic = '''      if (desktop) Text('HPAX:H${host.text.trim() == "127.0.0.1" ? 1 : 0}P${port.text.trim() == "PASSWORD_PORT" ? 1 : 0}K${port.text.trim() == "KEY_PORT" ? 1 : 0}U${user.text.trim() == "fixture" ? 1 : 0}V${valid ? 1 : 0}B${busy ? 1 : 0}F${foreground ? 1 : 0}E${status.startsWith("探测失败") ? 1 : 0}A${host.text.isEmpty ? 1 : 0}N${user.text.isEmpty ? 1 : 0}T${port.text == "22" ? 1 : 0}D${port.text.isEmpty ? 1 : 0}C${fingerprint != null && checkedTarget == target ? 1 : 0}', style: const TextStyle(fontSize: 1)),
 '''.replace('PASSWORD_PORT',str(config['port'])).replace('KEY_PORT',str(config['keyPort']))
+        sentinel_diagnostic = "      if (desktop) Text('HPSENT:S${host.text == \"" + sentinel + "\" ? 1 : 0}', style: const TextStyle(fontSize: 1)),\n"
         cleared_diagnostic = '''Text('HPCLEAR:K${secret.text.isEmpty ? 1 : 0}P${passphrase.text.isEmpty ? 1 : 0}', style: const TextStyle(fontSize: 1)),
 '''
         close_diagnostic = '''Text('HPCLOSE:L${closeLocalConfirmed ? 1 : 0}F${closeCleanupFailed ? 1 : 0}', style: const TextStyle(fontSize: 1)),
@@ -93,7 +99,7 @@ def prepare(app, fixture=None):
             raise ValueError('macos_xcui_dart_unexpected')
         dart_text = dart_text.replace(connect_point, connect_point + "\n    if (keyAuth) debugPrint('HP_XCUI_STAGE=keyConnectHandlerEntered');", 1)
         dart_text = dart_text.replace(parse_point, "      if (keyAuth) debugPrint('HP_XCUI_STAGE=keyPemParsed');\n" + parse_point, 1)
-        dart_text = dart_text.replace(form_point, form_point + diagnostic + '      if (desktop) ' + cleared_diagnostic)
+        dart_text = dart_text.replace(form_point, form_point + diagnostic + sentinel_diagnostic + '      if (desktop) ' + cleared_diagnostic)
         dart_text = dart_text.replace(cleared_point, cleared_point + '        ' + cleared_diagnostic + '        ' + close_diagnostic, 1)
         dart.write_text(dart_text.replace(paste_point, key_diagnostic + paste_point, 1))
     project.write_text(text)

@@ -258,12 +258,8 @@ final class SecureCredentialUITests: XCTestCase {
         return bits
     }
 
-    private func pemEditorCount(_ app: XCUIApplication, _ privateKey: String) throws -> Int {
-        let marker = privateKey.components(separatedBy: "\n").first!
-        return try snapshotNodes(app).filter { node in
-            (node.elementType == .textField || node.elementType == .textView) &&
-            [node.label, node.value as? String ?? ""].contains { $0.contains(marker) }
-        }.count
+    private func ordinaryEditorCount(_ app: XCUIApplication) throws -> Int {
+        try snapshotNodes(app).filter { $0.elementType == .textField || $0.elementType == .textView }.count
     }
 
     private func verifyPemCollapsed(_ app: XCUIApplication, _ privateKey: String) throws {
@@ -287,14 +283,22 @@ final class SecureCredentialUITests: XCTestCase {
 
     private func openPemSummary(_ app: XCUIApplication, _ privateKey: String) throws {
         try verifyPemCollapsed(app, privateKey)
+        let collapsedEditors = try ordinaryEditorCount(app)
+        usleep(100_000)
+        XCTAssertEqual(try ordinaryEditorCount(app), collapsedEditors, "PEM editor baseline changed")
         clickFormButton(app, label: "已填写私钥 · 重新编辑")
         let deadline = Date().addingTimeInterval(8)
+        var lastBits: [Bool]?, editorAdded = false, summaryGone = false
         repeat {
-            let bits = try keyInputBits(app)
-            let editors = try pemEditorCount(app, privateKey)
-            if bits?[0] == true && bits?[6] == true && bits?[7] == false && editors == 1 { return }
+            lastBits = try keyInputBits(app)
+            editorAdded = try ordinaryEditorCount(app) == collapsedEditors + 1
+            summaryGone = app.buttons.matching(NSPredicate(format: "label == %@", "已填写私钥 · 重新编辑")).count == 0
+            if lastBits?[0] == true && lastBits?[6] == true && lastBits?[7] == false &&
+                summaryGone && editorAdded { return }
             usleep(100_000)
         } while Date() < deadline
+        print("HP_XCUI_PEM=visible:\(lastBits == nil ? 0 : 1),draft:\(lastBits?[0] == true ? 1 : 0),focus:\(lastBits?[6] == true ? 1 : 0),expanded:\(lastBits?[7] == false ? 1 : 0),editoradded:\(editorAdded ? 1 : 0),summarygone:\(summaryGone ? 1 : 0)")
+        fflush(stdout)
         XCTFail("PEM editor focus and draft unconfirmed")
     }
 
@@ -302,10 +306,9 @@ final class SecureCredentialUITests: XCTestCase {
         nodes.filter { $0.elementType == .textField }.compactMap { $0.value as? String }.filter { !$0.isEmpty }
     }
 
-    private func ordinaryValue(_ address: XCUIElement) throws -> String? {
-        let node = try address.snapshot()
-        guard node.elementType == .textField else { return nil }
-        return node.value as? String
+    private func sentinelMatches(_ app: XCUIApplication) throws -> Bool {
+        let values = try snapshotNodes(app).flatMap { [$0.label, $0.value as? String ?? ""] }
+        return values.contains { $0.contains("HPSENT:S1") }
     }
 
     private func ordinaryMetrics(_ app: XCUIApplication, sentinelObserved: Bool = false) throws {
@@ -327,9 +330,8 @@ final class SecureCredentialUITests: XCTestCase {
         XCTAssertEqual(addresses.count, 1, "named address group or ordinary input missing")
         XCTAssertTrue(address.isEnabled, "requested control is disabled")
 
-        let nonce = UUID().uuidString.lowercased().filter { $0 != "-" }
-        let sentinel = "hpaddress" + String(nonce.prefix(16))
-        XCTAssertFalse(try ordinaryValue(address) == sentinel, "ordinary field sentinel unexpectedly present before editing")
+        let sentinel = "__HP_ADDRESS_SENTINEL__"
+        XCTAssertFalse(try sentinelMatches(app), "ordinary field sentinel unexpectedly present before editing")
         tap(app, address)
 
         // The retained address is a short, single line. Drag from after its end to before its
@@ -343,19 +345,21 @@ final class SecureCredentialUITests: XCTestCase {
                       app.secureTextFields.count == 0, "ordinary input target changed")
         // The Flutter AX proxy may not own AppKit keyboard focus; type once via
         // the foreground app after the guarded mouse selection, then read back.
+        let addressFrame = address.frame
         app.typeText(sentinel)
 
         let deadline = Date().addingTimeInterval(8)
         var seen = false
         repeat {
-            seen = try ordinaryValue(address) == sentinel
+            let exact = try sentinelMatches(app)
+            seen = addresses.count == 1 && address.exists && address.frame == addressFrame && exact
             if seen { break }
             usleep(100_000)
         } while Date() < deadline
         try ordinaryMetrics(app, sentinelObserved: seen)
         print("HP_XCUI_INPUT=phase:sentinel,target:\(seen ? 1 : 0)")
         fflush(stdout)
-        XCTAssertTrue(seen, "ordinary field sentinel not read back: system text field value")
+        XCTAssertTrue(seen, "ordinary field sentinel not read back: address controller")
     }
 
     private func verifyFingerprint(_ app: XCUIApplication, expected: String, phase: String) throws -> Bool {

@@ -221,6 +221,8 @@ jobs:
           hit_metrics=[{'phase':phase,**dict(zip(('exists','enabled','hittable','insideWindow'),[v=='1' for v in bits]))} for phase,*bits in hits[:12]]
           key_input=re.findall(r'hp_xcui_keyinput=visible:([01]),key:([01]),passphrase:([01]),sentinel:([01]),empty:([01]),length:([01]),trimmed:([01])(?=\s|$)',log)
           key_input=[dict(zip(('visible','key','passphrase','sentinel','empty','lengthMatches','trimmedMatches'),(v=='1' for v in row))) for row in key_input[:4]]
+          pem_open=re.findall(r'hp_xcui_pem=visible:([01]),draft:([01]),focus:([01]),expanded:([01]),editoradded:([01]),summarygone:([01])(?=\s|$)',log)
+          pem_open=[dict(zip(('visible','draftExact','focused','expanded','editorAdded','summaryGone'),(v=='1' for v in row))) for row in pem_open[:2]]
           form_metrics=re.findall(r'hp_xcui_form=phase:(paste|connect),count:([0-9]),enabled:([01]),hittable:([01]),inside:([01]),scroll:([01])',log)
           form_metrics=[{'phase':phase,'count':int(count),**dict(zip(('enabled','hittable','insideViewport','scrollView'),(v=='1' for v in bits)))} for phase,count,*bits in form_metrics[:4]]
           pass_fields=re.findall(r'hp_xcui_passfield=native:([0-9]),groups:([0-9])',log)
@@ -273,7 +275,7 @@ jobs:
                   'failureMethod':failure_method,'failedMethods':failed_methods,'buildDiagnostics':diagnostics,'failureSourceLines':failure_lines,'fixedFailures':fixed_failures,
                   'failureCategories':categories,'xcresultDetailsAvailable':details_available,'homeMetrics':home_metrics,
                   'fallbackHomeMetrics':metrics[1] if len(metrics)>1 else {},
-                  'ordinaryMetrics':ordinary,'backMetrics':back_metrics,'secureMetrics':secure_metrics,'hitMetrics':hit_metrics,'keyInputMetrics':key_input,'formMetrics':form_metrics,'passphraseFieldMetrics':pass_fields,'keyGeometry':key_geometry,'nativePassphraseField':native_field,'confirmationMetrics':confirmations,'fingerprintMetrics':fingerprints,'peerConnectionCounts':peer_connections,
+                  'pemOpenMetrics':pem_open,'ordinaryMetrics':ordinary,'backMetrics':back_metrics,'secureMetrics':secure_metrics,'hitMetrics':hit_metrics,'keyInputMetrics':key_input,'formMetrics':form_metrics,'passphraseFieldMetrics':pass_fields,'keyGeometry':key_geometry,'nativePassphraseField':native_field,'confirmationMetrics':confirmations,'fingerprintMetrics':fingerprints,'peerConnectionCounts':peer_connections,
                   'inputMetrics':inputs,'inputDetails':input_details,'targetMetrics':target_metrics,
                   'progress':progress,'rawLogsUploaded':False}
           if not ok:

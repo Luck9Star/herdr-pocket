@@ -407,7 +407,8 @@ class HostCatalog extends ChangeNotifier {
     final network = networkFor(host);
     final binding = jsonEncode({'networkProfileId':host.networkProfileId,'network':network?.toJson()});
     return NetworkConnectionBinding(network,() {
-      if (_disposed || (!ready && !_recoveringConfigImport)) return false;
+      // A read in flight retains the last frozen binding. Commands still require ready.
+      if (_disposed || (!ready && !_reading && !_recoveringConfigImport)) return false;
       final current = profiles.where((p) => p.id == host.id && p.enabled && !p.retired).toList();
       if (current.length != 1 || current.single.requiresNetworkBinding || !sameHostTarget(current.single.target,host.target) ||
           !samePairingBinding(current.single,host)) return false;

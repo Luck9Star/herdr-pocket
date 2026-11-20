@@ -992,6 +992,129 @@
         "keyPassphraseFocusConfirmed": null
       },
       "encryptedKeyPeerAuthenticated": false
+    },
+    "flutter-macos-r5": {
+      "runId": 44669750093,
+      "jobId": 136067618868,
+      "jobConclusion": "success",
+      "artifactId": 14600465378,
+      "artifactExpiresAt": "2026-12-04T03:53:05Z",
+      "sourceSha": "b31b6934608aec7d3fba439d97a8bbc243563f21",
+      "zipBytes": 2018,
+      "zipSha256": "77e737e9ff5ecc494128ba84e6cdf3946bc6f04afda0a48dff349255ec271753",
+      "runAttempt": 1,
+      "manifestStatus": "passed",
+      "manifestFile": "result.json",
+      "manifestSha256": "cd19a07d0739fda7c4ad787d7839871288664a17d9eadf748f3aa34d3704ebb3",
+      "png": {},
+      "testCounts": {
+        "totalTestCount": 4,
+        "passedTests": 4,
+        "failedTests": 0,
+        "skippedTests": 0
+      },
+      "cases": {
+        "testSystemMasking": {
+          "executed": true,
+          "passed": true
+        },
+        "testPasswordSSH": {
+          "executed": true,
+          "passed": true
+        },
+        "testEncryptedKeySSH": {
+          "executed": true,
+          "passed": true
+        },
+        "testReturnAndReopen": {
+          "executed": true,
+          "passed": true
+        }
+      },
+      "failureSourceLines": [],
+      "fixedFailures": [],
+      "pemCollapseMetrics": [
+        {
+          "phase": "pasted",
+          "stateBeforePresent": true,
+          "focusedBefore": false,
+          "collapsedBefore": true,
+          "stateAfterPresent": true,
+          "focusedAfter": false,
+          "collapsedAfter": true,
+          "summaryUnique": true,
+          "summaryClickable": true,
+          "pemLineExposed": false,
+          "keyBodyExposed": false
+        },
+        {
+          "phase": "firstblur",
+          "stateBeforePresent": true,
+          "focusedBefore": false,
+          "collapsedBefore": true,
+          "stateAfterPresent": true,
+          "focusedAfter": false,
+          "collapsedAfter": true,
+          "summaryUnique": true,
+          "summaryClickable": true,
+          "pemLineExposed": false,
+          "keyBodyExposed": false
+        },
+        {
+          "phase": "beforereopen",
+          "stateBeforePresent": true,
+          "focusedBefore": false,
+          "collapsedBefore": true,
+          "stateAfterPresent": true,
+          "focusedAfter": false,
+          "collapsedAfter": true,
+          "summaryUnique": true,
+          "summaryClickable": true,
+          "pemLineExposed": false,
+          "keyBodyExposed": false
+        },
+        {
+          "phase": "secondblur",
+          "stateBeforePresent": true,
+          "focusedBefore": false,
+          "collapsedBefore": true,
+          "stateAfterPresent": true,
+          "focusedAfter": false,
+          "collapsedAfter": true,
+          "summaryUnique": true,
+          "summaryClickable": true,
+          "pemLineExposed": false,
+          "keyBodyExposed": false
+        }
+      ],
+      "progress": {
+        "pemEditorFocused": true,
+        "pemCollapsedAfterNativeClick": true,
+        "pemReopenedExactFocused": true,
+        "pemCollapsedAgain": true,
+        "keyPassphraseNativeClicked": true,
+        "keyPassphraseFocusConfirmed": true,
+        "keyPassphraseConfirmed": true,
+        "encryptedKeyConnected": true,
+        "encryptedKeyDisconnectedAndCleared": true,
+        "returnAndReopenCleared": true,
+        "passphraseHiddenAfterFocusChanges": true,
+        "passwordHiddenFocused": true
+      },
+      "encryptedKeyPeerAuthenticated": true,
+      "systemTreeAndSecureFieldsVerified": true,
+      "embedderFallbackRequested": true,
+      "peerAuthenticationPtyShellAndClose": true,
+      "encryptedKeyPeerAuthenticationPtyShellAndClose": true,
+      "passwordPeerCloseObservedDuringDisconnectWindow": true,
+      "encryptedKeyPeerCloseObservedDuringDisconnectWindow": true,
+      "passwordInputProven": true,
+      "passphraseInputProven": true,
+      "peerConnectionCounts": {
+        "password": 5,
+        "encryptedKey": 2
+      },
+      "rawLogsUploaded": false
     }
   },
   "localHandoff": {

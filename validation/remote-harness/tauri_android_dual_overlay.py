@@ -1546,6 +1546,37 @@ def resume_shared_input_tab(browser, role, target, tab_id, tick):
     shared_tick(browser,role,target,tab_id,after=tick)
 
 
+def shared_input_frame(browser, role, target, tab_id):
+    title='QA host '+role.upper()+' · '+target['pane']+' · '+target['terminal']
+    prefix='Synthetic '+role.upper()+' ACK '
+    # Read only current DOM rows from the original active terminal. Return fixed
+    # evidence, without exposing terminal text or target identifiers.
+    frame=browser.evaluate(r"""(()=>{const view=document.querySelector('#view-content');
+      const result={state:'other_tab',ack:'none',tick:null};
+      if(!view || view.dataset.tabId!==%s ||
+         view.querySelector(':scope > p:first-child')?.textContent!==%s)return result;
+      result.state='inactive';
+      if(document.hidden || !view.getClientRects().length ||
+         view.querySelector('.tab-connection-actions')?.dataset.state!=='active' ||
+         !view.querySelector('.tab-frame-status')?.textContent.startsWith('当前观察画面。'))return result;
+      const rows=[...view.querySelectorAll('.terminal-host .xterm-rows > div')]
+        .filter(row=>row.getClientRects().length).map(row=>row.textContent.replace(/\u00a0/g,' ').trim());
+      result.state=rows.length ? 'current' : 'no_rows';
+      const prefix=%s, acks=rows.filter(row=>row.includes(prefix.trimEnd()));
+      if(acks.length>1)result.ack='multiple';
+      else if(acks.length===1)result.ack=acks[0]===prefix+'ONE' ? 'one' :
+        acks[0]===prefix+'TWO' ? 'two' : 'partial';
+      const ticks=rows.map(row=>/^Synthetic observe tick ([0-9]{6})$/.exec(row)).filter(Boolean);
+      if(ticks.length===1)result.tick=Number(ticks[0][1]);
+      return result;})()""" % (json.dumps(tab_id),json.dumps(title),json.dumps(prefix)))
+    if (not isinstance(frame,dict) or set(frame)!={'state','ack','tick'} or
+            frame['state'] not in ('other_tab','inactive','no_rows','current') or
+            frame['ack'] not in ('none','partial','one','two','multiple') or
+            (frame['tick'] is not None and (type(frame['tick']) is not int or not 0<frame['tick']<1000000))):
+        raise GuiFailure('dual_shared_input_frame_evidence_invalid')
+    return frame
+
+
 def shared_input_once(browser, control, report, phase, target, tab_id, inputs, receipt_ids, ensure_app):
     role, marker, ack=SHARED_WRITES[phase]
     side=SHARED_HOSTS[role]
@@ -1560,10 +1591,16 @@ def shared_input_once(browser, control, report, phase, target, tab_id, inputs, r
     shared_peer_state(control,report,phase+'_before',live=live,require_closed=closed,inputs=inputs)
     field='#view-content .tab-draft-field'
     receipt='#view-content details[data-role=input-receipt]'
-    marker_line='Synthetic '+role.upper()+' ACK '+ack
+    expected_ack=ack.lower()
     on_target=lambda:shared_tab_id(browser,role,target)==tab_id
-    if not on_target() or rendered_marker(browser,marker_line):
+    if not on_target():
         raise GuiFailure('dual_shared_input_target_mismatch')
+    before=shared_input_frame(browser,role,target,tab_id)
+    attempt['frameBefore']=before
+    if before['ack'] in (expected_ack,'multiple'):
+        raise GuiFailure('dual_shared_input_target_mismatch')
+    if before['state']!='current' or before['tick'] is None:
+        raise GuiFailure('dual_shared_input_baseline_missing')
     wait_named(browser,'#view-content','启用草稿输入')
     browser.click_named('#view-content','启用草稿输入','dual_draft_mode_missing')
     wait_for(lambda:on_target() and browser.evaluate(
@@ -1585,6 +1622,12 @@ def shared_input_once(browser, control, report, phase, target, tab_id, inputs, r
     prompt=f"发送到 QA host {role.upper()} · {target['pane']} · {target['terminal']}？"
     confirm_click(browser,'#view-content','发送草稿',prompt,once=True)
     attempt['nativeConfirmationObserved']=True
+    # Check exact cumulative bytes on the original connections independently
+    # of the UI receipt and frame. A frame timeout must retain this evidence.
+    inputs[side]+=marker
+    shared_peer_state(control,report,phase+'_after',live=live,require_closed=closed,inputs=inputs,
+                      pending=side,timeout=30)
+    attempt['peerBytesAndSessionVerified']=True
     wait_for(lambda:on_target() and shared_input_foreground(),'dual_shared_input_foreground_unconfirmed')
     wait_for(lambda:on_target() and browser.evaluate(
         "!!document.querySelector(%s + ':not([hidden])')?.getClientRects().length" % json.dumps(receipt)) is True,
@@ -1602,13 +1645,23 @@ def shared_input_once(browser, control, report, phase, target, tab_id, inputs, r
         raise GuiFailure('dual_shared_input_receipt_invalid')
     receipt_ids.add(match[1])
     attempt['uiAcceptedBytes']=1
-    wait_for(lambda:on_target() and rendered_marker(browser,marker_line),
-             'dual_shared_input_peer_frame_missing',timeout=60)
+
+    first_current_tick=None
+    def witness_frame():
+        nonlocal first_current_tick
+        frame=shared_input_frame(browser,role,target,tab_id)
+        attempt['latestFrame']=frame
+        tick=frame['tick']
+        if frame['state']!='current' or frame['ack']!=expected_ack or tick is None or tick<=before['tick']:
+            first_current_tick=None
+            return False
+        if first_current_tick is None:
+            first_current_tick=tick
+            attempt['ackFirstSeenTick']=tick
+        return tick>first_current_tick
+
+    wait_for(witness_frame,'dual_shared_input_peer_frame_missing',timeout=60)
     attempt['peerFrameRendered']=True
-    inputs[side]+=marker
-    shared_peer_state(control,report,phase+'_after',live=live,require_closed=closed,inputs=inputs,
-                      pending=side,timeout=30)
-    attempt['peerBytesAndSessionVerified']=True
 
 
 def run_shared_easytier(browser, session, report, ensure_app, *, active_input=False):

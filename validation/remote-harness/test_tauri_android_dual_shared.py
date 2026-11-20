@@ -210,58 +210,146 @@ class SharedInputUiTests(unittest.TestCase):
                     patch.object(dual,'foreground_component',return_value=f'{app}/{app}.MainActivity'):
                 self.assertEqual(dual.shared_input_foreground(),expected)
 
-    def send(self, *, rendered=True, reused=False, foreground=True):
+    def send(self, *, frames=(('two',12),('two',13)), reused=False, foreground=True, peer_error=False,
+             baseline=('one',11), expected=None):
         browser=Mock()
         browser.evaluate.return_value=True
         ident='1'*32
+        events=[]
         browser.read.side_effect=['', 't', '请求 ID：'+ident+
             ' · pane：pane · terminal：terminal · 受理 1 字节。主机已受理，命令结果请查看终端。']
         target={'pane':'pane','terminal':'terminal'}
         receipt_ids={ident} if reused else set()
         report={}
-        expected=('dual_shared_input_peer_frame_missing' if not rendered else
-                  'dual_shared_input_receipt_invalid' if reused else
-                  'dual_shared_input_foreground_unconfirmed' if not foreground else None)
+        samples=iter(dict(state='current',ack=ack,tick=tick) for ack,tick in (baseline,*frames))
         def observe(probe,code,**kwargs):
-            if not probe():
-                raise dual.GuiFailure(code)
-            return True
+            for _ in range(len(frames) if code=='dual_shared_input_peer_frame_missing' else 1):
+                if probe():
+                    return True
+            raise dual.GuiFailure(code)
+        def peer(_control,_report,checkpoint,**kwargs):
+            events.append(checkpoint)
+            if kwargs.get('pending'):
+                self.assertEqual(kwargs['inputs'],{'a':b'E','b':b'Tt'})
+                if peer_error:
+                    raise dual.GuiFailure('dual_shared_input_bytes_mismatch')
+        def frame(*_args):
+            events.append('frame')
+            return next(samples)
         with patch.multiple(dual,shared_tab_id=Mock(return_value='tab-b'),
                             shared_input_foreground=Mock(return_value=foreground),wait_named=Mock(),
-                            rendered_marker=Mock(side_effect=[False,rendered]),
-                            confirm_click=Mock(),shared_peer_state=Mock(),wait_for=observe):
+                            shared_input_frame=Mock(side_effect=frame),
+                            confirm_click=Mock(side_effect=lambda *_args,**_kw:events.append('confirm')),
+                            shared_peer_state=Mock(side_effect=peer),wait_for=observe):
             inputs={'a':b'E','b':b'T'}
             arguments=(browser,Mock(),report,'b_after_a_close',target,'tab-b',inputs,receipt_ids,Mock())
             if expected:
                 with self.assertRaisesRegex(dual.GuiFailure,'^'+expected+'$'):
                     dual.shared_input_once(*arguments)
-                self.assertEqual(dual.shared_peer_state.call_count,1)
             else:
                 dual.shared_input_once(*arguments)
                 self.assertEqual(inputs,{'a':b'E','b':b'Tt'})
+            if 'confirm' in events:
+                self.assertEqual(events[:4],['b_after_a_close_before','frame','confirm','b_after_a_close_after'])
                 end=dual.shared_peer_state.call_args
-                self.assertEqual(end.args[2],'b_after_a_close_after')
                 self.assertEqual(end.kwargs['require_closed'],('a',))
                 self.assertEqual(end.kwargs['pending'],'b')
-            # A failure or completed action cannot launch a second confirmation.
-            with self.assertRaisesRegex(dual.GuiFailure,'^dual_shared_input_already_attempted$'):
-                dual.shared_input_once(*arguments)
-            if foreground:
+                self.assertEqual(end.kwargs['live'],('b',))
                 dual.confirm_click.assert_called_once_with(browser,'#view-content','发送草稿',
                     '发送到 QA host TS · pane · terminal？',once=True)
             else:
                 dual.confirm_click.assert_not_called()
+            with self.assertRaisesRegex(dual.GuiFailure,'^dual_shared_input_already_attempted$'):
+                dual.shared_input_once(*arguments)
         self.assertNotIn(ident,json.dumps(report))
         return report['sharedInputActions']['b_after_a_close']
 
     def test_matched_receipt_requires_distinct_host_frame_and_peer_audit(self):
-        self.assertTrue(self.send()['peerBytesAndSessionVerified'])
-        receipt_only=self.send(rendered=False)
+        complete=self.send()
+        self.assertTrue(complete['peerBytesAndSessionVerified'])
+        self.assertTrue(complete['peerFrameRendered'])
+        self.assertEqual(complete['ackFirstSeenTick'],12)
+        self.assertEqual(complete['latestFrame']['tick'],13)
+        receipt_only=self.send(frames=(('one',12),('one',13)),
+                               expected='dual_shared_input_peer_frame_missing')
         self.assertEqual(receipt_only['uiAcceptedBytes'],1)
         self.assertNotIn('peerFrameRendered',receipt_only)
-        self.assertNotIn('peerBytesAndSessionVerified',receipt_only)
-        self.assertNotIn('uiAcceptedBytes',self.send(reused=True))
-        self.assertFalse(self.send(foreground=False)['nativeConfirmationAttempted'])
+        self.assertTrue(receipt_only.get('peerBytesAndSessionVerified'),
+                        'record exact original peer bytes before waiting for the screen')
+        self.assertEqual(receipt_only['latestFrame'],dict(state='current',ack='one',tick=13))
+        self.assertNotIn('uiAcceptedBytes',self.send(reused=True,expected='dual_shared_input_receipt_invalid'))
+        uncertain=self.send(peer_error=True,expected='dual_shared_input_bytes_mismatch')
+        self.assertNotIn('peerBytesAndSessionVerified',uncertain)
+        self.assertNotIn('latestFrame',uncertain)
+        self.assertFalse(self.send(foreground=False,expected='dual_shared_input_foreground_unconfirmed')
+                         ['nativeConfirmationAttempted'])
+
+    def test_stale_single_and_inconsistent_ack_frames_cannot_pass(self):
+        for frames in ((('two',11),('two',11)), (('two',12),('two',12)),
+                       (('two',12),('one',13),('two',14)), (('partial',12),('partial',13))):
+            with self.subTest(frames=frames):
+                action=self.send(frames=frames,expected='dual_shared_input_peer_frame_missing')
+                self.assertTrue(action['peerBytesAndSessionVerified'])
+                self.assertNotIn('peerFrameRendered',action)
+        before=self.send(baseline=('two',11),expected='dual_shared_input_target_mismatch')
+        self.assertFalse(before['nativeConfirmationAttempted'])
+
+    def test_frame_probe_returns_only_fixed_fields_for_original_visible_rows(self):
+        browser=Mock()
+        browser.evaluate.return_value={'state':'current','ack':'two','tick':13}
+        dual.shared_input_frame(browser,'ts',{'pane':'pane','terminal':'terminal'},'tab-b')
+        expression=browser.evaluate.call_args.args[0]
+        script=r"""
+        const expression=process.argv[1];
+        let rows, hidden=false, tabId='tab-b', state='active', title='QA host TS · pane · terminal';
+        const box=()=>[{}];
+        const view={
+          get dataset(){return {tabId};},
+          getClientRects:box,
+          querySelector(selector) {
+            if(selector===':scope > p:first-child')return {textContent:title};
+            if(selector==='.tab-connection-actions')return {dataset:{state}};
+            if(selector==='.tab-frame-status')return {textContent:'当前观察画面。'};
+          },
+          querySelectorAll(selector){
+            if(selector!=='.terminal-host .xterm-rows > div')throw Error('unexpected row scope');
+            return rows.map(([textContent,visible])=>({textContent,getClientRects:()=>visible?[{}]:[]}));
+          },
+        };
+        global.document={get hidden(){return hidden;},querySelector:()=>view};
+        const observe=()=>eval(expression);
+        const tick=['Synthetic observe tick 000013',true], valid=['Synthetic\u00a0TS ACK TWO  ',true];
+        rows=[valid,tick,['private row content',true]];
+        const exact=observe();
+        tabId='other'; const other=observe(); tabId='tab-b';
+        title='QA host ET · pane · terminal'; const otherTarget=observe(); title='QA host TS · pane · terminal';
+        hidden=true; const background=observe(); hidden=false;
+        state='paused'; const paused=observe(); state='active';
+        rows=[['Synthetic TS ACK',true],['TWO',true],tick]; const split=observe();
+        rows=[[valid[0],false],tick]; const hiddenRow=observe();
+        rows=[valid,['Synthetic TS ACK ONE',true],tick]; const distinctAcks=observe();
+        rows=[[valid[0],false]]; const noRows=observe();
+        rows=[valid,tick,tick]; const ambiguousTick=observe();
+        process.stdout.write(JSON.stringify([exact,other,otherTarget,background,paused,split,hiddenRow,
+          distinctAcks,noRows,ambiguousTick]));
+        """
+        result=subprocess.check_output(['node','-e',script,expression],text=True)
+        self.assertNotIn('private',result)
+        self.assertEqual(json.loads(result),[
+            dict(state='current',ack='two',tick=13),
+            dict(state='other_tab',ack='none',tick=None),
+            dict(state='other_tab',ack='none',tick=None),
+            dict(state='inactive',ack='none',tick=None),
+            dict(state='inactive',ack='none',tick=None),
+            dict(state='current',ack='partial',tick=13),
+            dict(state='current',ack='none',tick=13),
+            dict(state='current',ack='multiple',tick=13),
+            dict(state='no_rows',ack='none',tick=None),
+            dict(state='current',ack='two',tick=None),
+        ])
+        browser.evaluate.return_value={'state':'current','ack':'private row content','tick':13}
+        with self.assertRaisesRegex(dual.GuiFailure,'^dual_shared_input_frame_evidence_invalid$'):
+            dual.shared_input_frame(browser,'ts',{'pane':'pane','terminal':'terminal'},'tab-b')
 
     def test_unknown_native_dialog_tap_is_not_repeated(self):
         nodes=[{'text':'发送到 QA host TS · pane · terminal？'},

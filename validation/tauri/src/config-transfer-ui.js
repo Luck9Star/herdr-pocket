@@ -11,6 +11,23 @@ export function buildImportChoices(entries, selections) {
     return { index: entry.index, action, replaceIds };
   });
 }
+// Match a native-authorized replacement only to the leases reviewed in this UI.
+export function reviewedImportLeases(event, snapshot, selected) {
+  if(!Array.isArray(snapshot) || !Array.isArray(event?.hostIds) || !Array.isArray(event?.tabs))return [];
+  const ids=new Set(event.hostIds.filter(id=>selected.includes(id)));
+  return snapshot.flatMap(lease=>{
+    if(!ids.has(lease.hostId))return [];
+    const row=event.tabs.find(row=>Array.isArray(row) && row[0]===lease.tabId && row[1]===lease.clientGeneration && row[3]===lease.hostId);
+    if(lease.nativeGeneration!==null && (!row || row[2]!==lease.nativeGeneration))return [];
+    return [{...lease,nativeGeneration:row ? row[2] : null}];
+  });
+}
+export function reviewedImportLegacy(event, reviewed, current) {
+  const lease=event?.legacy;
+  return Array.isArray(lease) && !!reviewed && !!current && lease[0]===reviewed.generation && lease[2]===reviewed.hostId &&
+    (reviewed.nativeGeneration===null || lease[1]===reviewed.nativeGeneration) &&
+    (current.nativeGeneration===null || lease[1]===current.nativeGeneration) && current.hostId===reviewed.hostId && current.generation===reviewed.generation;
+}
 export function previewIsCurrent(requestEpoch, currentEpoch) { return requestEpoch === currentEpoch; }
 export function validExportPassword(value) {
   const points = Array.from(value);
@@ -24,16 +41,16 @@ export async function exportIfCurrent(encrypt, isCurrent, save) {
   return true;
 }
 
-export function initConfigTransfer({ native, invoke, getHosts, refreshHosts, onApplied, getTabImpacts=()=>[], onAffected=()=>{}, onSettled=()=>{} }) {
+export function initConfigTransfer({ native, invoke, getHosts, refreshHosts, onApplied, getTabImpacts=()=>[], captureLeases=()=>null, createRevokeChannel=()=>({}), onRevoked=()=>{} }) {
   const panel = document.getElementById('config-transfer');
   const opener = document.getElementById('config-transfer-open');
-  let ticket = null, plan = null, fileBytes = null, busy = false, pickerPending = false, epoch = 0, platform = null, catalog = null;
+  let ticket = null, plan = null, reviewedLeases = null, fileBytes = null, busy = false, pickerPending = false, epoch = 0, platform = null, catalog = null;
   const activeHostIds = new Set();
   const selectedNetworks = new Set(); let applyPreferences = false;
   const selections = new Map();
   const el = (tag, text, cls) => { const n = document.createElement(tag); if (text != null) n.textContent = text; if (cls) n.className = cls; return n; };
   function clearSecrets() { panel.querySelectorAll('input[type=password]').forEach(n => { n.value = ''; }); }
-  function discard() { const old = ticket; ticket = null; plan = null; activeHostIds.clear(); selections.clear(); selectedNetworks.clear(); applyPreferences = false; if (old) void invoke('config_discard', { ticket: old }).catch(() => {}); }
+  function discard() { const old = ticket; ticket = null; plan = null; reviewedLeases = null; activeHostIds.clear(); selections.clear(); selectedNetworks.clear(); applyPreferences = false; if (old) void invoke('config_discard', { ticket: old }).catch(() => {}); }
   function invalidate() { epoch++; discard(); fileBytes = null; clearSecrets(); panel.querySelector('.config-preview')?.remove(); }
   const describe = target => `${target.username}@${target.host}:${target.port} · 会话 ${target.session}`;
   function render() {
@@ -91,7 +108,7 @@ export function initConfigTransfer({ native, invoke, getHosts, refreshHosts, onA
         if (!previewIsCurrent(current, epoch)) return;
         const result = await invoke('config_preview', { bytes, password: secret }); clearSecrets();
         if (!previewIsCurrent(current, epoch)) { void invoke('config_discard', { ticket: result.ticket }).catch(() => {}); return; }
-        ticket = result.ticket; plan = result.plan;
+        ticket = result.ticket; plan = result.plan; reviewedLeases = captureLeases();
         if (Array.isArray(result.activeHostIds)) for (const id of result.activeHostIds) activeHostIds.add(id);
         if (result.activeHostId) activeHostIds.add(result.activeHostId);
         fileBytes = null; busy = false; render(); panel.querySelector('.config-preview h3')?.focus();
@@ -138,7 +155,7 @@ export function initConfigTransfer({ native, invoke, getHosts, refreshHosts, onA
         } else {
           const list = el('ul');
           for (const {label, state, input} of tabs) list.append(el('li', `${label} · ${state} · ${input}`));
-          contents.push(el('p', '当前选择影响以下工作台标签。'), list);
+          contents.push(el('p', '确认后将停止以下标签的连接；旧标签会保留最后画面供查看，可手动关闭，不能重新连接或发送。'), list);
         }
         affected.replaceChildren(...contents);
       }
@@ -147,19 +164,20 @@ export function initConfigTransfer({ native, invoke, getHosts, refreshHosts, onA
       apply.onclick = async () => {
         if (busy) return;
         let choices; try { choices = buildImportChoices(plan.entries, selections); } catch { message('请逐条选择操作；同一冲突不能被多条同时替换。'); return; }
-        const usedTicket = ticket, selectedNetworkKeys=[...selectedNetworks], shouldApplyPreferences=applyPreferences, current=epoch; ticket = null; plan = null; activeHostIds.clear(); selections.clear(); selectedNetworks.clear(); applyPreferences=false; catalog=null; busy = true; exp.disabled=true; apply.disabled = true; close.disabled = true;
+        const usedTicket = ticket, leaseSnapshot=reviewedLeases, selectedNetworkKeys=[...selectedNetworks], shouldApplyPreferences=applyPreferences, current=epoch; ticket = null; plan = null; activeHostIds.clear(); selections.clear(); selectedNetworks.clear(); applyPreferences=false; catalog=null; busy = true; exp.disabled=true; apply.disabled = true; close.disabled = true;
         let result=null, confirmed=false, refreshFailed=false;
         const affectedIds=choices.flatMap(c=>c.replaceIds || []);
-        try { await onAffected(affectedIds); result = await invoke('config_apply', { ticket: usedTicket, choices, selectedNetworks:selectedNetworkKeys, applyPreferences:shouldApplyPreferences }); await onApplied(result); confirmed=true; }
+        const onRevoke=createRevokeChannel();
+        onRevoke.onmessage=event=>onRevoked(event,leaseSnapshot,affectedIds);
+        try { result = await invoke('config_apply', { ticket: usedTicket, choices, selectedNetworks:selectedNetworkKeys, applyPreferences:shouldApplyPreferences, onRevoke }); await onApplied(result); confirmed=true; }
         catch { /* the single-use write may have completed; never replay */ }
-        try {await onSettled(affectedIds);} catch { /* cleanup result remains unknown */ }
         try { await refreshHosts(); } catch { refreshFailed=true; }
         let updated=null;
         try { updated=await invoke('network_list'); if (!updated || !Array.isArray(updated.profiles)) throw Error('invalid_catalog'); } catch { updated=null; }
         busy=false; clearSecrets();
         if (!previewIsCurrent(current,epoch) || panel.hidden) return;
         catalog=updated; render();
-        const outcome=confirmed ? `导入完成：主机新增 ${result.added.length}，主机旧身份停用保留 ${result.retired.length}，移除旧主机资料 ${result.removedIds.length}。网络配置请核对当前状态；字号偏好${shouldApplyPreferences ? '已按选择应用' : '未选择覆盖'}。新目标需重新配对。` : '导入结果未确认；请先核对主机、网络配置和字号的当前状态，不会自动重试。';
+        const outcome=confirmed ? `导入完成：主机新增 ${result.added.length}，主机旧身份停用保留 ${result.retired.length}，移除旧主机资料 ${result.removedIds.length}。网络配置请核对当前状态；字号偏好${shouldApplyPreferences ? '已按选择应用' : '未选择覆盖'}。新目标需重新配对。` : '导入结果未确认；请先核对主机、网络配置和字号的当前状态，再重新预览并审查，不会自动重试。';
         panel.querySelector('[role=status]').textContent=outcome + (!catalog ? ' 网络目录读取未确认，暂不能导出。' : '') + (refreshFailed ? ' 主机目录读取未确认。' : '');
       }; previewBox.append(apply); panel.append(previewBox);
     }

@@ -41,7 +41,7 @@ class DirectSshPage extends StatefulWidget {
   final ValueChanged<bool>? onReturnAfterDisconnect;
   final HostCatalog? catalog;
   final HostTabs? catalogTabs;
-  final void Function(Set<String>)? closeCatalogTabs;
+  final FutureOr<void> Function(Set<String>)? closeCatalogTabs;
   final ValueListenable<bool>? sessionVisible;
   final ValueChanged<int>? onSelectDestination;
   final Widget Function(Widget page, ValueChanged<int> select, [int? selected])? desktopFlowShell;

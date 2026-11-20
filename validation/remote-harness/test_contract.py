@@ -1,7 +1,10 @@
 """Local tests only exercise evidence/isolation guards, never SSH or a host."""
 import importlib.util
+import io
+from contextlib import redirect_stderr
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('remote_harness', Path(__file__).with_name('run-ci.py'))
 harness = importlib.util.module_from_spec(spec)
@@ -36,6 +39,31 @@ class HarnessGuards(unittest.TestCase):
             with self.assertRaises(harness.ProbeFailure):
                 harness.require_runner(env)
         harness.require_runner({'GITHUB_ACTIONS': 'true', 'GITHUB_RUN_ID': '123', 'GITHUB_REF': 'refs/heads/codex/test'})
+
+    def test_import_route_requires_stock_desktop_tauri_before_fixture_setup(self):
+        env = {'GITHUB_ACTIONS': 'true', 'GITHUB_RUN_ID': '123', 'GITHUB_REF': 'refs/heads/codex/test',
+               'HERDR_S06_IMPORT_REPLACE': '1'}
+        for flags in (['--paired-gui', 'tauri'],
+                      ['--paired-gui', 'flutter', '--s06-split'],
+                      ['--paired-gui', 'tauri', '--s06-split', '--input-fixture', 'guarded']):
+            with self.subTest(flags=flags), patch.dict(harness.os.environ, env), \
+                 patch('sys.argv', ['run-ci.py', '--output', 'unused', *flags]), redirect_stderr(io.StringIO()) as stderr:
+                with self.assertRaises(SystemExit) as error:
+                    harness.main()
+                self.assertEqual(error.exception.code, 2)
+                self.assertIn('S06 import replacement requires stock Tauri --s06-split', stderr.getvalue())
+
+    def test_import_route_limits_its_manifest_to_visible_stock_replacement(self):
+        for status in ('failed', 'passed'):
+            report = harness.gui_report_fields('tauri', {'status': status}, import_replace=True)
+            self.assertIn('config replacement', report['scope'])
+            self.assertIn('visible-terminal-text UI snapshots', report['frameEvidence'])
+            for item in ('desktop window resize', 'desktop keyboard focus and routing',
+                         'non-BMP import password entry', 'remote input from this GUI'):
+                self.assertIn(item, report['unverified'])
+                normal = harness.gui_report_fields('tauri', {'status': status}, input_fixture=True)
+                if item != 'remote input from this GUI':
+                    self.assertNotIn(item, normal['unverified'])
 
     def test_report_allowlist_drops_config_and_remote_output(self):
         raw = result(privateKeyPem='PRIVATE FIXTURE', stdout='REMOTE DATA', config={'password': 'never-copy'})

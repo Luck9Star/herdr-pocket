@@ -40,3 +40,7 @@ actionlint .github/workflows/paired-gui-validation.yml
 ```
 
 需安装 `validation/pairing/requirements.txt` 才能实际执行九项证据与诊断门槛测试；缺少依赖时会明确跳过。Flutter 用例仅由隔离 runner 设置 `HERDR_S06_*` 环境后运行，常规套会明确跳过。
+
+Tauri stock 导入专项由 `s06_split=true`、`s06_route=tauri`、`s06_import_replace=true` 启用，`s06_guarded` 保持关闭。manifest 的 `milestone` 和作业检查的 `testId` 均为 `M1-05-tauri-real-ssh-config-replacement`。驱动从正常配对入口建立两条已审查的连接，核对目标、原标签的可见推进帧及服务端零输入后进入导入。窗口缩放、键盘焦点与迟到按键由默认 S06 验收覆盖。
+
+专项用固定公共载荷临时生成真实加密的 HPKT，通过 Linux WebView 文件输入选择，再使用一次性 ASCII 口令解密、预览和确认替换。服务端核对第一条原连接关闭，界面核对旧画面保留、连接按钮禁用及手动关标签。第二条原连接只认证一次，手动恢复后可见 tick 继续递增。最终在驱动退出前，两条连接均确认关闭，服务端接收输入仍为零。`s06-tauri-import-replace.json` 及 manifest 的 `importReplace` 记录各阶段认证、关闭与重置次数和可见 tick 数值。真实运行范围以对应 SHA 的工件为准。

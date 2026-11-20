@@ -15,6 +15,10 @@ class Element {
   append(...xs){for(const x of xs)this.children.push(x);}
   replaceChildren(...xs){this.children=[];this.append(...xs);}
   setAttribute(k,v){this.attrs[k]=v;}
+  cloneNode(deep){const copy=new Element(this.tagName);Object.assign(copy,{className:this.className,textContent:this.textContent,hidden:this.hidden,attrs:{...this.attrs},dataset:{...this.dataset}});if(deep)copy.append(...this.children.map(child=>child.cloneNode(true)));return copy;}
+  querySelectorAll(selector){const selectors=selector.split(',').map(s=>s.trim());return this.all().filter(node=>selectors.some(s=>s.startsWith('.') ? node.className.split(' ').includes(s.slice(1)) : s.startsWith('[') ? Object.hasOwn(node.attrs,s.slice(1,-1)) : node.tagName===s));}
+  removeAttribute(k){delete this.attrs[k];}
+  remove(){}
   getAttribute(k){return this.attrs[k] ?? null;}
   addEventListener(name,fn){(this.events ??= {})[name] ??= []; this.events[name].push(fn);}
   dispatch(name,event={}){for(const fn of this.events?.[name] || [])fn({target:this,...event});}

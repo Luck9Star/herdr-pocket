@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
@@ -202,6 +203,8 @@ class HostCatalog extends ChangeNotifier {
   int terminalFontSize = 14;
   String revision = '',status = '尚未读取本机主机资料';
   bool ready = false,writing = false;
+  bool _recoveringConfigImport = false;
+  bool get recoveringConfigImport => _recoveringConfigImport;
   bool _reading = false;
   bool get reading => _reading;
   bool _disposed = false;
@@ -252,12 +255,22 @@ class HostCatalog extends ChangeNotifier {
         }
       }
       if (raw.contents.isEmpty) pendingCreation = null;
-      profiles = List.unmodifiable(loaded); networkProfiles = List.unmodifiable(networks); terminalFontSize = loadedFontSize; revision = raw.revision; ready = true;
+      profiles = List.unmodifiable(loaded); networkProfiles = List.unmodifiable(networks); terminalFontSize = loadedFontSize; revision = raw.revision; ready = true; _recoveringConfigImport = false;
       status = profiles.isEmpty ? '没有本机主机资料 · 请明确新增配对' : '已恢复 ${profiles.length} 个本机资料 · 连接前需重新审查';
-    } catch (_) { if (ticket == generation) { profiles = const []; networkProfiles = const []; ready = false; status = '资料损坏、存储锁定或不可用 · 已停止，不覆盖原记录或自动创建密钥'; } }
+    } catch (_) {
+      if (ticket == generation) {
+        ready = false;
+        if (_recoveringConfigImport) {
+          status = '目录读取未确认 · 已有连接继续只读观察，请重新读取核验';
+        } else {
+          profiles = const []; networkProfiles = const [];
+          status = '资料损坏、存储锁定或不可用 · 已停止，不覆盖原记录或自动创建密钥';
+        }
+      }
+    }
     if (ticket == generation) { _reading = false; _notify(); }
   }
-  Future<void> _mutate(List<HostProfile> Function(List<HostProfile>) action,{Map<String,dynamic>? pending,bool replacePending=false,VoidCallback? beforeSave,Future<void> Function()? beforeSaveCheck,List<NetworkProfile> Function(List<NetworkProfile>)? networkAction,int? fontSize}) {
+  Future<void> _mutate(List<HostProfile> Function(List<HostProfile>) action,{Map<String,dynamic>? pending,bool replacePending=false,VoidCallback? beforeSave,Future<void> Function()? beforeSaveCheck,List<NetworkProfile> Function(List<NetworkProfile>)? networkAction,int? fontSize,bool configImport=false}) {
     final captured = generation;
     final operation = _tail.then((_) async {
       if (_disposed || !ready || generation != captured) throw const RemoteFailure('catalog_unavailable');
@@ -281,9 +294,13 @@ class HostCatalog extends ChangeNotifier {
         final updated = await storage.save(revision,text);
         if (generation != captured) throw const RemoteFailure('catalog_stale');
         profiles = List.unmodifiable(next); networkProfiles = List.unmodifiable(nextNetworks); terminalFontSize = nextFontSize; pendingCreation = nextPending; revision = updated; status = '本机资料已保存 · 不代表主机授权或当前在线';
-      } catch (_) {
+      } catch (error) {
         if (saveStarted) {
-          ready = false; generation++; status = '保存结果未知或版本冲突 · 已锁定写入，请重新读取核验，不重放保存';
+          ready = false; generation++;
+          _recoveringConfigImport = configImport;
+          status = error is RemoteFailure && error.code == 'catalog_conflict'
+            ? '目录版本冲突 · 本次未保存，请重新读取核验'
+            : '保存结果未知 · 已锁定写入，请重新读取核验';
         } else { status = '操作前检查未通过 · 尚未写入，请修正或重新审查'; }
         rethrow;
       }
@@ -385,11 +402,12 @@ class HostCatalog extends ChangeNotifier {
     return found.single;
   }
   NetworkConnectionBinding freezeNetwork(HostProfile host) {
+    if (!ready) throw const RemoteFailure('catalog_unavailable');
     if (host.requiresNetworkBinding) throw const RemoteFailure('network_binding_required');
     final network = networkFor(host);
     final binding = jsonEncode({'networkProfileId':host.networkProfileId,'network':network?.toJson()});
     return NetworkConnectionBinding(network,() {
-      if (!ready || _disposed) return false;
+      if (_disposed || (!ready && !_recoveringConfigImport)) return false;
       final current = profiles.where((p) => p.id == host.id && p.enabled && !p.retired).toList();
       if (current.length != 1 || current.single.requiresNetworkBinding || !sameHostTarget(current.single.target,host.target) ||
           !samePairingBinding(current.single,host)) return false;
@@ -397,7 +415,7 @@ class HostCatalog extends ChangeNotifier {
         final n = networkFor(current.single);
         return (n == null || n.enabled) && jsonEncode({'networkProfileId':current.single.networkProfileId,'network':n?.toJson()}) == binding;
       } catch (_) { return false; }
-    },changes:this,fontSize:() => terminalFontSize);
+    },changes:this,fontSize:() => terminalFontSize,commandsAllowed:() => ready && !_disposed);
   }
   Future<void> addNetwork(NetworkProfile profile) => _mutate((list) => list,networkAction:(list) {
     if (profile.revision != 1 || list.any((p) => p.id == profile.id)) throw const RemoteFailure('network_profile_stale');
@@ -470,7 +488,7 @@ class HostCatalog extends ChangeNotifier {
     return (hosts:hosts,networks:networks,fontSize:fontSize);
   }
   Future<void> applyConfigImport(ConfigImportPlan plan,List<ConfigImportChoice> choices,{Set<String> selectedNetworks=const {},bool applyPreferences=false,
-      void Function(Set<String>)? beforeCommit}) {
+      FutureOr<void> Function(Set<String>)? beforeCommit}) {
     if (writing) throw const RemoteFailure('catalog_busy');
     choices = List<ConfigImportChoice>.unmodifiable(choices);
     selectedNetworks = Set<String>.unmodifiable(selectedNetworks);
@@ -479,8 +497,8 @@ class HostCatalog extends ChangeNotifier {
     return _mutate((_) {
       prepared = _prepareConfigImport(plan,choices,selectedNetworks,applyPreferences);
       return prepared.hosts;
-    },networkAction:(_) => prepared.networks,fontSize:applyPreferences ? plan.config!.terminalFontSize : null,
-      beforeSave:() => beforeCommit?.call({for (var i = 0; i < choices.length; i++)
+    },networkAction:(_) => prepared.networks,fontSize:applyPreferences ? plan.config!.terminalFontSize : null,configImport:true,
+      beforeSaveCheck:beforeCommit == null ? null : () async => await beforeCommit({for (var i = 0; i < choices.length; i++)
         if (choices[i].action == ConfigImportAction.replace) ...plan.conflicts[i].map((p) => p.id)}));
   }
 

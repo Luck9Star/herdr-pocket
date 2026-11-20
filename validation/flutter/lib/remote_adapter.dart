@@ -464,6 +464,7 @@ class _Attempt {
   final int generation;
   final RemoteEvidence evidence;
   final cancelled = Completer<void>();
+  final retired = Completer<bool>();
   RemoteFailure? failure;
   final waits = RemoteWaitGroup(), inputWaits = RemoteWaitGroup(),
     observationWaits = RemoteWaitGroup(), watchWaits = RemoteWaitGroup();
@@ -530,6 +531,7 @@ class RemoteReadOnlyAdapter {
     _observerTerminator.stop(session);
   }
   RemoteInputJournalReview? Function(RemoteInputTarget target)? captureInputJournalReview;
+  bool Function()? canDispatchDial;
   int generation = 0, _connectionCount = 0;
   _Attempt? _attempt;
   bool _activeRead = false, _dialPending = false;
@@ -542,6 +544,9 @@ class RemoteReadOnlyAdapter {
   RemoteInputTarget? get inputTarget => _attempt?.inputTarget;
   RemoteInputCapability? get inputCapability => _journalState?.ready == true ? _attempt?.inputCapability : null;
   RemoteDashboard? get currentDashboard => _attempt?.dashboard;
+  /// The original attempt releases its transport only after late dial, channel
+  /// opens and client close have settled. Ordinary cancel remains immediate.
+  Future<bool> get transportRetirement => _attempt?.retired.future ?? Future<bool>.value(true);
   bool isInputJournalReadCurrent(RemoteInputJournalReadTicket ticket) {
     final a = _attempt,state = _journalState;
     return a != null && state != null && _valid(a) && a.failure == null && !a.observationPaused &&
@@ -1014,6 +1019,7 @@ class RemoteReadOnlyAdapter {
   Future<RemoteSnapshot> _read(RemoteConfig config, {RemoteProgress? onProgress,
       DashboardConsumer? onDashboard, FrameConsumer? onFrame,
       required void Function(_Attempt) onAttempt}) async {
+    final allowDial = canDispatchDial;
     if (_activeRead || _dialPending) throw const RemoteFailure('connection_busy');
     if (!_budget.acquire()) throw const RemoteFailure('connection_capacity');
     _activeRead = true;
@@ -1025,7 +1031,14 @@ class RemoteReadOnlyAdapter {
     _attempt = a; final e = a.evidence; evidence = e; e.generation = generation; e.connectionCount = ++_connectionCount;
     RemoteSnapshot? completed;
     Future<SSHSocket>? ownedDial;
+    Future<bool>? lateSocketRetirement;
     var lateDestroyFailed = false;
+    void disposeLateSocket(SSHSocket socket) {
+      try {
+        socket.destroy();
+        if (socket is RetiringSSHSocket) lateSocketRetirement = (socket as RetiringSSHSocket).retired;
+      } catch (_) { lateDestroyFailed = true; }
+    }
     void phase(String name) { _check(a); onProgress?.call(a.generation,name); _check(a); }
     try {
       phase('connecting');
@@ -1043,13 +1056,13 @@ class RemoteReadOnlyAdapter {
           })] : SSHKeyPair.fromPem(config.privateKeyPem);
         if (identities.length != 1 || identities.single.type != 'ssh-ed25519') throw const RemoteFailure('invalid_private_key');
       } catch (_) { throw const RemoteFailure('invalid_private_key'); }
+      if (allowDial?.call() == false) throw const RemoteFailure('catalog_unavailable');
       _dialPending = true;
       final pending = Future<SSHSocket>.sync(() => _connector(config.host,config.port))
         .whenComplete(() { _dialPending = false; });
       ownedDial = pending;
-      final socket = await _wait(a,pending,disposeLate:(s) {
-        try { s.destroy(); } catch (_) { lateDestroyFailed = true; }
-      });
+      final socket = await _wait(a,pending,disposeLate:disposeLateSocket);
+      if (!_valid(a)) { disposeLateSocket(socket); _check(a); }
       a.socket = socket;
       final tracker = ChannelRetirementTracker(socket.toString(),onOverflow:() => _fail(a,const RemoteFailure('channel_capacity')));
       a.channels = tracker;
@@ -1457,6 +1470,7 @@ class RemoteReadOnlyAdapter {
         final pending = ownedDial;
         if (!closed) {
           // Failed teardown does not prove that this slot is reusable.
+          a.retired.complete(false);
         } else {
           // Wait for every underlying channel open and its late disposer, as
           // well as the dial, even though cancellation already returned.
@@ -1464,8 +1478,12 @@ class RemoteReadOnlyAdapter {
             pending.then<void>((_) {},onError:(Object _,StackTrace __) {});
           final channels = a.channels?.waitPending() ?? Future<void>.value();
           final closing = a.clientClosing?.then<void>((_) {},onError:(Object _,StackTrace __) {}) ?? Future<void>.value();
-          unawaited(Future.wait<void>([dial,channels,closing]).then<void>((_) {
-            if (!lateDestroyFailed && !a.lateChannelDestroyFailed) _budget.release();
+          unawaited(Future.wait<void>([dial,channels,closing]).then<void>((_) async {
+            var socketRetired = false;
+            try { socketRetired = await lateSocketRetirement ?? true; } catch (_) { /* unconfirmed */ }
+            final released = socketRetired && !lateDestroyFailed && !a.lateChannelDestroyFailed;
+            if (released) _budget.release();
+            a.retired.complete(released && a.gracefulPeerClosed);
           }));
         }
       }

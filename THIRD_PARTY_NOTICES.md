@@ -137,6 +137,7 @@
 | 组件名 | 锁定版本 | 来源与管理方式 | 许可证标识 | 涉及产物 | 用途说明 |
 | --- | --- | --- | --- | --- | --- |
 | **russh** | 0.65.0 | path 依赖 (`validation/vendor/russh-0.65.0`)，源自 crates.io 归档 | Apache-2.0 | Tauri 壳、传输层、Flutter 网络运行时、SSH 探针 | 纯 Rust SSH 客户端核心协议实现（含本地 Close 修复补丁） |
+| **secret-service** | 5.1.0 | 本地 vendored path，`herdr-linux-secure-identity` 的直接依赖 | MIT OR Apache-2.0 | Flutter Linux 桌面包、Tauri Linux Debian 包 | 经静态链接的设备身份桥访问 Secret Service |
 | **ring** | 0.17.14 | crates.io 锁定 | Apache-2.0 AND ISC | 共享传输层、Tauri 壳、Flutter 运行时 | 密码学基础设施（BoringSSL 衍生与纯 Rust 实现） |
 | **tokio** | 1.54.1 | crates.io 锁定 | MIT | 全 Rust 模块 | 异步 I/O 驱动与多线程调度执行器 |
 | **serde / serde_json** | 1.0.229 / 1.0.154 | crates.io 锁定 | MIT OR Apache-2.0 | 全 Rust 模块 | 数据结构序列化与反序列化框架 |
@@ -147,6 +148,10 @@
 | **libc** | 0.2.191 | crates.io 锁定 | MIT OR Apache-2.0 | 全系统平台桥接 | 原生操作系统系统调用抽象 |
 | **tauri / tauri-build** | 2.12.5 / 2.7.4 | crates.io 锁定 | Apache-2.0 OR MIT | Tauri 壳 | Tauri 应用运行时、IPC 桥与构建时代码生成 |
 | **tauri-utils** | 2.10.2 | crates.io 锁定 | Apache-2.0 OR MIT | Tauri 壳 (macOS build) | Tauri 架构通用工具与配置处理 |
+
+2026-11-20 Linux 配对补记。两个 Linux 壳静态链接同一设备身份桥。vendored 源来自 crates.io 的 `secret-service 5.1.0`，原档案 SHA-256 为 `9a62d7f86047af0077255a29494136b9aaaf697c76ff70b8e49cded4e2623c14`。本地修改使阻塞式提示执行器直接返回 `Error::Prompt`，调用方只使用已解锁的集合。[上游项目](https://github.com/hwchen/secret-service-rs) · [修改声明](validation/linux-secure-identity/vendor/secret-service/UPSTREAM)
+
+两个软件包均随附原版 MIT、Apache-2.0 许可证和 `UPSTREAM`。Flutter 的位置是 `bundle/data/third-party/secret-service-5.1.0/`，Tauri Debian 安装后位于 `/usr/share/doc/herdr-pocket-tauri-probe/secret-service-5.1.0/`。打包器从成品载荷校验文件字节，记录 `linuxPackagedNotices` 中的成员 SHA-256。[MIT 全文](validation/linux-secure-identity/vendor/secret-service/LICENSE-MIT) · [Apache-2.0 全文](validation/linux-secure-identity/vendor/secret-service/LICENSE-APACHE)
 
 ### 4.2 需特别关注的传递依赖分类审查 (Notable Transitive Crates)
 

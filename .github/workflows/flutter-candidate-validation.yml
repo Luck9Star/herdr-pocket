@@ -9,10 +9,15 @@ on:
         type: boolean
         default: false
   workflow_dispatch:
+    inputs:
+      linux_only:
+        description: Build only the Linux candidate package after the Ubuntu candidate tests
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
-  group: flutter-candidate-${{ github.ref }}
+  group: flutter-candidate-${{ github.ref }}${{ inputs.linux_only && '-linux-only' || '' }}
   cancel-in-progress: true
 jobs:
   patch-and-test:
@@ -78,7 +83,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   macos-render-check:
-    if: startsWith(github.ref, 'refs/heads/codex/') && !inputs.android_only
+    if: startsWith(github.ref, 'refs/heads/codex/') && !inputs.android_only && !inputs.linux_only
     needs: patch-and-test
     runs-on: macos-15
     timeout-minutes: 20
@@ -123,7 +128,7 @@ jobs:
       fail-fast: false
       matrix:
         include: >-
-          ${{ fromJSON(inputs.include_ios &&
+          ${{ fromJSON(inputs.linux_only && '[{"platform":"linux","os":"ubuntu-24.04"}]' || inputs.include_ios &&
           '[{"platform":"android","os":"ubuntu-24.04"},{"platform":"ios","os":"macos-15"}]' || inputs.android_only &&
           '[{"platform":"android","os":"ubuntu-24.04"}]' ||
           '[{"platform":"android","os":"ubuntu-24.04"},{"platform":"ios","os":"macos-15"},{"platform":"macos","os":"macos-15"},{"platform":"linux","os":"ubuntu-24.04"},{"platform":"windows","os":"windows-2022"}]') }}

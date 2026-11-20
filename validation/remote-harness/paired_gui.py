@@ -549,6 +549,8 @@ def run_gui(args, root, env, config):
         raise GuiFailure('unsafe_fixture')
     guarded_mobile = args.paired_gui in ANDROID_ROUTES and bool(args.input_fixture)
     case = 'reviewed-device-key-to-direct-and-draft' if guarded_mobile else 'reviewed-device-key-to-observe'
+    if getattr(args, 'flutter_stock_app', None):
+        case = 'reviewed-device-key-across-stock-linux-restart'
     result = {'adapter': args.paired_gui, 'testId': case, 'status':'failed'}
     keyring = getattr(args, 'linux_keyring', None)
     try:
@@ -567,6 +569,8 @@ def run_gui(args, root, env, config):
                     from android_gui import run_android as exercise
                 elif args.paired_gui == 'flutter-android':
                     from flutter_android_gui import run_flutter_android as exercise
+                elif args.paired_gui == 'flutter' and getattr(args, 'flutter_stock_app', None):
+                    from flutter_linux_stock_pairing import run_stock as exercise
                 else:
                     exercise = run_tauri if args.paired_gui == 'tauri' else run_flutter
                 terminal = fixture_terminal_id(config) if guarded_mobile else None

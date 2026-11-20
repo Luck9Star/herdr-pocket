@@ -154,7 +154,7 @@ def snapshot_diagnostics(result):
             'nestedKnownFields': protocol_diagnostics(snapshot) if isinstance(snapshot, dict) else None}
 
 
-def gui_report_fields(route, result, input_fixture=False, *, import_replace=False, linux_keyring=False):
+def gui_report_fields(route, result, input_fixture=False, *, import_replace=False, linux_keyring=False, flutter_stock=False):
     """Keep test route, required frame evidence and runtime limits distinct."""
     scopes = {
         'tauri-android': 'API35 emulator WebView and AndroidKeyStore-wrapped identity',
@@ -184,11 +184,19 @@ def gui_report_fields(route, result, input_fixture=False, *, import_replace=Fals
                          if route == 'flutter' else 'stock Linux GTK WebView with private Secret Service')
         proof = result.get('linuxKeyring', {})
         native_store = (proof.get('publicKeysMatched') in (1, 2) and proof.get('sameKeyAuthenticated') is True)
-        if not (route == 'tauri' and passed and result.get('restart', {}).get('sameDeviceKeyReauthenticated') is True):
+        if not ((route == 'tauri' or flutter_stock) and passed and
+                result.get('restart', {}).get('sameDeviceKeyReauthenticated') is True):
             unverified.append('stock second-process identity restore')
         unverified.append('other Linux keyring implementations')
         if route == 'flutter':
-            unverified.append('unmodified Flutter release app with external user input')
+            if flutter_stock:
+                scopes[route] = 'Stock Flutter GTK debug application driven by AT-SPI and X11 input'
+                frames[route] = 'Original X11 window captures of advancing synthetic remote ticks in both app processes'
+                if passed and result.get('restart', {}).get('observedIncreasingTicksInBothWindows') is True:
+                    unverified.remove('pixel rendering')
+                unverified.append('Flutter release package installation')
+            else:
+                unverified.append('unmodified Flutter release app with external user input')
     if not passed or not native_store:
         unverified.append('protected system-store runtime')
     fields = {'scope': scopes[route], 'frameEvidence': frames[route], 'unverified': unverified}
@@ -306,6 +314,7 @@ def final_pty_evidence(root):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--flutter-app', type=Path)
+    parser.add_argument('--flutter-stock-app', type=Path, help='drive the normal Linux GTK build externally')
     parser.add_argument('--paired-gui', choices=('flutter', 'tauri', 'tauri-android', 'flutter-android'))
     parser.add_argument('--tauri-app', type=Path)
     parser.add_argument('--input-fixture', type=Path)
@@ -320,6 +329,9 @@ def main():
     args = parser.parse_args()
     require_runner(os.environ)
     import_replace = os.environ.get('HERDR_S06_IMPORT_REPLACE') == '1'
+    if args.flutter_stock_app and (args.paired_gui != 'flutter' or args.s06_split or args.input_fixture or
+                                   not args.linux_keyring_probe):
+        parser.error('--flutter-stock-app requires the single-host Flutter Linux private keyring route')
     if args.linux_keyring_probe and (args.paired_gui not in ('flutter', 'tauri') or args.input_fixture):
         parser.error('--linux-keyring-probe requires a stock desktop paired route')
     if import_replace and (not args.s06_split or args.paired_gui != 'tauri' or args.input_fixture):
@@ -536,9 +548,12 @@ LogLevel VERBOSE
             milestone = 'M1d-mobile-guarded-input' if args.android_guarded_input else 'M1c-pairing-dashboard-observe'
             if args.android_tui:
                 milestone = 'android-paired-interactive-tui'
+            if args.flutter_stock_app:
+                milestone = 'linux-flutter-stock-pairing-restart'
             report.update(milestone=milestone,
                           **gui_report_fields(args.paired_gui, {'status': 'failed'}, bool(args.input_fixture),
-                                              import_replace=import_replace, linux_keyring=bool(args.linux_keyring)))
+                                              import_replace=import_replace, linux_keyring=bool(args.linux_keyring),
+                                              flutter_stock=bool(args.flutter_stock_app)))
             report.pop('cancelScope', None)
             if args.s06_split:
                 report['milestone'] = split_test_id
@@ -547,7 +562,8 @@ LogLevel VERBOSE
             else:
                 result = run_gui(args, root, env, config)
             report.update(gui_report_fields(args.paired_gui, result, bool(args.input_fixture),
-                                            import_replace=import_replace, linux_keyring=bool(args.linux_keyring)))
+                                            import_replace=import_replace, linux_keyring=bool(args.linux_keyring),
+                                            flutter_stock=bool(args.flutter_stock_app)))
             report['checks'].append(result)
             publish()
         else:

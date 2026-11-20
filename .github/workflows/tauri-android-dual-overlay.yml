@@ -7,7 +7,7 @@ on:
       scenario:
         type: choice
         description: Controlled Android scenario
-        options: [dual-providers, shared-easytier]
+        options: [dual-providers, shared-easytier, shared-easytier-input]
         default: dual-providers
 permissions:
   contents: read
@@ -18,10 +18,11 @@ concurrency:
 jobs:
   tauri-build:
     if: >-
-      (inputs.scenario != 'shared-easytier' &&
+      (inputs.scenario != 'shared-easytier' && inputs.scenario != 'shared-easytier-input' &&
        (startsWith(github.ref, 'refs/heads/codex/acceptance/tauri-android-dual-overlay-build-') ||
         startsWith(github.ref, 'refs/heads/codex/acceptance/tauri-android-dual-overlay-paired-'))) ||
-      (github.event_name == 'workflow_dispatch' && inputs.scenario == 'shared-easytier' &&
+      (github.event_name == 'workflow_dispatch' &&
+       (inputs.scenario == 'shared-easytier' || inputs.scenario == 'shared-easytier-input') &&
        startsWith(github.ref, 'refs/heads/codex/acceptance/tauri-android-shared-easytier-'))
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -193,7 +194,7 @@ jobs:
   # Driver-only replay reuses fixed repaired APKs; paired-* never enters this job.
   tauri-device:
     name: Fixed repaired APK driver-only replay
-    if: inputs.scenario != 'shared-easytier' && startsWith(github.ref, 'refs/heads/codex/acceptance/tauri-android-dual-overlay-device-')
+    if: inputs.scenario != 'shared-easytier' && inputs.scenario != 'shared-easytier-input' && startsWith(github.ref, 'refs/heads/codex/acceptance/tauri-android-dual-overlay-device-')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -389,8 +390,9 @@ jobs:
 
   tauri-paired-device:
     if: >-
-      (inputs.scenario != 'shared-easytier' && startsWith(github.ref, 'refs/heads/codex/acceptance/tauri-android-dual-overlay-paired-')) ||
-      (github.event_name == 'workflow_dispatch' && inputs.scenario == 'shared-easytier' &&
+      (inputs.scenario != 'shared-easytier' && inputs.scenario != 'shared-easytier-input' && startsWith(github.ref, 'refs/heads/codex/acceptance/tauri-android-dual-overlay-paired-')) ||
+      (github.event_name == 'workflow_dispatch' &&
+       (inputs.scenario == 'shared-easytier' || inputs.scenario == 'shared-easytier-input') &&
        startsWith(github.ref, 'refs/heads/codex/acceptance/tauri-android-shared-easytier-'))
     needs: tauri-build
     runs-on: ubuntu-24.04
@@ -470,7 +472,9 @@ jobs:
       - name: Exercise same-run Tauri UI on owned API35 AVD
         run: |
           apk=tauri-dual-qa.apk
-          if [[ "$OVERLAY_SCENARIO" == shared-easytier ]]; then apk=tauri-dual-normal.apk; fi
+          case "$OVERLAY_SCENARIO" in
+            shared-easytier|shared-easytier-input) apk=tauri-dual-normal.apk ;;
+          esac
           AVD_EVIDENCE_DIR="$RUNNER_TEMP/tauri-dual-avd" bash validation/remote-harness/with-android-emulator.sh \
             "$RUNNER_TEMP/dual-venv/bin/python" validation/remote-harness/tauri_android_dual_overlay.py \
               --apk "$RUNNER_TEMP/dual-apks/$apk" --auth-apk "$RUNNER_TEMP/dual-apks/dual-auth-receiver.apk" \
@@ -490,15 +494,15 @@ jobs:
                       'nativeSourceSHA':os.environ['NATIVE_SOURCE'],'apkSourceSHA':os.environ['APK_SOURCE'],
                       'hostSourceSHA':os.environ['HOST_SOURCE'],'errorCode':'tauri_device_preparation_failed',
                       'scope':'device preparation incomplete; no device acceptance claim','directions':{}}
-              if os.environ['OVERLAY_SCENARIO']=='shared-easytier':
-                  report['scenario']='shared-easytier'
+              if os.environ['OVERLAY_SCENARIO'] in ('shared-easytier','shared-easytier-input'):
+                  report['scenario']=os.environ['OVERLAY_SCENARIO']
               target.write_text(json.dumps(report,indent=2)+'\n')
               raise SystemExit(1)
           PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: ${{ inputs.scenario == 'shared-easytier' && 'tauri-android-shared-easytier-result' || 'tauri-android-dual-overlay-paired-result' }}-${{ github.sha }}
+          name: ${{ inputs.scenario == 'shared-easytier-input' && 'tauri-android-shared-easytier-input-result' || inputs.scenario == 'shared-easytier' && 'tauri-android-shared-easytier-result' || 'tauri-android-dual-overlay-paired-result' }}-${{ github.sha }}
           path: |
             ${{ runner.temp }}/tauri-dual-result/result.json
             ${{ runner.temp }}/tauri-dual-avd/lifecycle.txt

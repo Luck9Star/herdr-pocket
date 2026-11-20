@@ -2,11 +2,14 @@
 import base64
 from contextlib import contextmanager, nullcontext
 import ctypes
+import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import time
+
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from paired_gui import WebDriver, GuiFailure, bounded_wire, fixture_terminal_id, owned_process, wait_for
 
@@ -1305,16 +1308,46 @@ def exercise_peer_close(ui, panels, approvals):
             (ui.output / 's06-tauri-peer-close.json').write_text(json.dumps(report, sort_keys=True))
 
 
+def write_import_fixture(root):
+    fixture = json.loads((Path(__file__).resolve().parents[1] / 'shared/config-transfer-v1.json').read_text())
+    # WebKit's WebDriver key entry drops the supplementary character in the
+    # shared vector. Exercise replacement with the same payload and an ASCII password.
+    password = os.urandom(16).hex()
+    header = b'HPKT\x01\x01' + os.urandom(28)
+    key = hashlib.pbkdf2_hmac('sha256', password.encode('ascii'), header[6:22], 600_000)
+    encrypted = AESGCM(key).encrypt(header[22:34], fixture['plaintext'].encode('utf-8'), header)
+    archive = root / 's06-import-fixture.hpkt'
+    archive.write_bytes(header + encrypted)
+    return archive, password
+
+
+def wait_import_survivor_tick(ui, tab_id, *, after=None):
+    def observe():
+        if after is not None and ui.read('''const panel = document.querySelector("#view-content");
+            return panel?.dataset.tabId === arguments[0] &&
+                panel.querySelector(".tab-frame-status")?.textContent.startsWith("当前观察画面。");''',
+                                        tab_id) is not True:
+            return None
+        try:
+            tick = ui.rendered_tick('#view-content', 1)
+        except GuiFailure as error:
+            if str(error) != 's06_tauri_visible_peer_marker_missing':
+                raise
+            return None  # The visible row can briefly be blank while xterm paints the new frame.
+        return tick + 1 if tick is not None and (after is None or tick > after) else None
+
+    code = 's06_import_survivor_frame_not_visible' if after is None else 's06_import_survivor_not_advancing'
+    return wait_for(observe, code, timeout=12) - 1
+
+
 def exercise_import_replace(ui, driver, root, approvals, tab_ids, check_bytes, expected):
-    """Opt-in real SSH import path; the HPKT and target name are public fixtures."""
+    """Opt-in real SSH import path using the public configuration fixture."""
     def sample():
         return [{key: row[key] for key in ('authenticationCount','recognizedCloseCount','resetCount')}
                 for row in peer_close_sample(approvals)]
     open_peer = {'authenticationCount':1,'recognizedCloseCount':0,'resetCount':0}
     closed_peer = {'authenticationCount':1,'recognizedCloseCount':1,'resetCount':0}
-    fixture = json.loads((Path(__file__).resolve().parents[1] / 'shared/config-transfer-v1.json').read_text())
-    archive = root / 's06-import-fixture.hpkt'
-    archive.write_bytes(bytes.fromhex(fixture['archiveHex']))
+    archive, password = write_import_fixture(root)
     driver.click('#workbench-split')
     if ui.read('return document.querySelector("#remote-setup").open;'):
         ui.named('配对与连接资料', '#remote-page #remote-setup', '> summary')
@@ -1325,7 +1358,7 @@ def exercise_import_replace(ui, driver, root, approvals, tab_ids, check_bytes, e
     wait_for(lambda: ui.read('return !!document.querySelector(arguments[0]);', field), 's06_import_file_missing')
     path = driver.element(field)
     driver.call('POST', path + '/value', {'text':str(archive), 'value':list(str(archive))})
-    driver.fill('#config-transfer > fieldset:nth-of-type(2) input[type="password"]', fixture['password'])
+    driver.fill('#config-transfer > fieldset:nth-of-type(2) input[type="password"]', password)
     ui.named('解密并预览', '#config-transfer')
     wait_for(lambda: ui.read('return !!document.querySelector(".config-preview");'), 's06_import_preview_missing')
     driver.click('input[name="config-choice-0"][value="replace"]')
@@ -1360,13 +1393,9 @@ def exercise_import_replace(ui, driver, root, approvals, tab_ids, check_bytes, e
     driver.click('#view-tabs button:nth-child(1)')
     wait_for(lambda: ui.read('return document.querySelector("#view-content")?.dataset.tabId;') == tab_ids[1],
              's06_import_survivor_missing')
-    before = wait_for(lambda: (value + 1) if (value := ui.rendered_tick('#view-content', 1)) is not None else None,
-                      's06_import_survivor_frame_not_visible', timeout=12) - 1
+    before = wait_import_survivor_tick(ui, tab_ids[1])
     ui.named('恢复观察', '#view-content')
-    def advanced():
-        value = ui.rendered_tick('#view-content', 1)
-        return value if value is not None and value > before else None
-    after = wait_for(advanced, 's06_import_survivor_not_advancing', timeout=12)
+    after = wait_import_survivor_tick(ui, tab_ids[1], after=before)
     if sample() != [closed_peer, open_peer]:
         raise GuiFailure('s06_import_survivor_reconnected')
     ui.screenshot('import-survivor-advanced');check_bytes(expected)

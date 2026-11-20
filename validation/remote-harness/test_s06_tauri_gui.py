@@ -1,3 +1,4 @@
+import hashlib
 import json
 import tempfile
 from pathlib import Path
@@ -9,7 +10,7 @@ try:
     from s06_tauri_gui import (SplitDriver, exercise_window_resize, layout_matches, observed_tick,
                                peer_connection_evidence, require_same_positions, require_side_by_side,
                                window_dimensions, exercise_direct_resize, exercise_peer_close, peer_close_sample,
-                               owned_xvfb, park_xvfb_pointer, GuiFailure)
+                               owned_xvfb, park_xvfb_pointer, wait_import_survivor_tick, write_import_fixture, GuiFailure)
 except ModuleNotFoundError as missing:
     if missing.name != 'cryptography':
         raise
@@ -18,6 +19,38 @@ except ModuleNotFoundError as missing:
 
 @unittest.skipIf(observed_tick is None, 'pairing requirements are installed in the native GUI workflow')
 class TauriSplitEvidenceTests(unittest.TestCase):
+    def test_import_fixture_preserves_the_public_payload_with_a_keyboard_safe_password(self):
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        with tempfile.TemporaryDirectory() as directory:
+            archive, password = write_import_fixture(Path(directory))
+            self.assertEqual(archive.parent, Path(directory))
+            self.assertRegex(password, '^[0-9a-f]{32}$')
+            raw = archive.read_bytes()
+            self.assertEqual(raw[:6], b'HPKT\x01\x01')
+            key = hashlib.pbkdf2_hmac('sha256', password.encode('ascii'), raw[6:22], 600_000)
+            payload = AESGCM(key).decrypt(raw[22:34], raw[34:], raw[:34])
+            shared = Path(__file__).resolve().parents[1] / 'shared/config-transfer-v1.json'
+            self.assertEqual(payload.decode('utf-8'), json.loads(shared.read_text())['plaintext'])
+
+    @patch('paired_gui.time.sleep')
+    def test_import_survivor_requires_a_current_advancing_frame(self, _sleep):
+        ui = MagicMock()
+        ui.read.side_effect = [False, True, True, True]
+        ui.rendered_tick.side_effect = [GuiFailure('s06_tauri_visible_peer_marker_missing'), 7, 8]
+        self.assertEqual(wait_import_survivor_tick(ui, 'original-B', after=7), 8)
+        self.assertEqual(ui.read.call_count, 4)
+        self.assertTrue(all(call.args[-1] == 'original-B' for call in ui.read.call_args_list))
+        self.assertEqual(ui.rendered_tick.call_count, 3)
+        ui.named.assert_not_called()
+        ui.driver.click.assert_not_called()
+
+        ui.read.side_effect = None
+        ui.read.return_value = True
+        ui.rendered_tick.side_effect = GuiFailure('s06_tauri_tick_scroll_changed_focus')
+        with self.assertRaisesRegex(GuiFailure, '^s06_tauri_tick_scroll_changed_focus$'):
+            wait_import_survivor_tick(ui, 'original-B', after=8)
+
     def test_pairing_opens_once_from_the_visible_empty_or_saved_board_entry(self):
         board = '#host-home:not([hidden]) #home-dashboard:not([hidden])'
         choice = '#host-home:not([hidden]) #home-add:not([hidden]) #add-herdr'

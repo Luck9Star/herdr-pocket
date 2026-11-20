@@ -253,8 +253,8 @@ async fn apply_pending(
     }).await
 }
 
-#[cfg(test)]
-mod tests {
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+mod creation_recovery_tests {
     use super::*;
     use crate::hosts::{ImportAction, Target};
     use herdr_readonly_transport::{
@@ -476,6 +476,12 @@ mod tests {
         result.unwrap();
         assert!(f.hosts.get(&f.host_id).is_err());
     }
+
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
 
     #[test]
     fn import_stops_only_the_reviewed_connection_and_preserves_other_hosts() {

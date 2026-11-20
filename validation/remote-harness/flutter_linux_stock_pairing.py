@@ -1,11 +1,12 @@
 """Exercise Linux GTK recovery through two normal application processes."""
+from collections import Counter
 import hashlib
 import io
 import json
 import re
 import subprocess
 
-from PIL import Image, ImageGrab, ImageOps
+from PIL import Image, ImageChops, ImageGrab, ImageOps
 
 from flutter_linux_stock_ui import StockWindow, accessibility, unique_match
 from linux_pairing_keyring import KeyringFailure
@@ -19,6 +20,10 @@ PAIR_CONNECT = '主动审查连接并读取看板'
 OBSERVE_MODE = '观察模式 · 不发送远端按键'
 # Frozen terminal background from validation/shared/design-tokens-v2.json.
 TERM_BG = (11, 15, 23)
+# Stock GTK's default 80 columns in ProbeNerd at 14px and its desktop viewport.
+CANVAS_WIDTH, CANVAS_HEIGHT = 672, 360
+CANVAS_CORNER = 12
+DARK_RUN = re.compile(rb'\xff+')
 FIXTURE_MARKER = re.compile(r'(?i)isolated\s+ssh\s+fixture\.\s+remote\s+input\s+must\s+remain\s+empty\.')
 FIXTURE_TICK = re.compile(r'(?i)synthetic\s+observe\s+tick\s+([0-9]{6})\b')
 DENIAL_NOTICES = {
@@ -66,26 +71,34 @@ def capture_window(ui):
     return pixels, png.getvalue()
 
 
-def terminal_region(pixels):
+def terminal_region(pixels, *, allow_bottom_clip=False):
     width, height = pixels.size
-    if pixels.mode != 'RGB':
-        pixels = pixels.convert('RGB')
-    data = pixels.load()
-    columns = [width * fraction // 8 for fraction in (3, 4, 5)]
-    top = 0
-    bands = []
-    for y in range(height + 1):
-        if y < height and sum(data[x, y] == TERM_BG for x in columns) >= 2:
+    red, green, blue = (channel.point([255 if i == value else 0 for i in range(256)])
+                        for channel, value in zip(pixels.convert('RGB').split(), TERM_BG))
+    mask = ImageChops.multiply(ImageChops.multiply(red, green), blue).tobytes()
+    rows = [mask[start:start + width] for start in range(0, len(mask), width)]
+    # Blank terminal rows expose both sides. Longer spans belong to the header,
+    # which uses the same paint and extends beyond the terminal on both sides.
+    spans = Counter((run.start(), run.end()) for row in rows for run in DARK_RUN.finditer(row)
+                    if run.end() - run.start() == CANVAS_WIDTH and 0 < run.start() < run.end() < width)
+    regions = []
+    for (left, right), blank_rows in spans.items():
+        if blank_rows < CANVAS_CORNER:
             continue
-        if y - top >= 120:
-            bands.append((top, y))
-        top = y + 1
-    if len(bands) != 1:
-        return None
-    top, bottom = bands[0]
-    middle = (top + bottom) // 2
-    dark = [x for x in range(width) if data[x, middle] == TERM_BG]
-    return (dark[0], top, dark[-1] + 1, bottom) if dark and dark[-1] - dark[0] >= 240 else None
+        top = 0
+        for y, row in enumerate([*rows, b'']):
+            # Interior glyphs can occupy arbitrary columns. Keep the geometric
+            # edges, including the antialiased 12px corner inset, as the anchor.
+            if (row and not row[left - 1] and not row[right] and
+                    b'\xff' in row[left:left + CANVAS_CORNER] and b'\xff' in row[right - CANVAS_CORNER:right] and
+                    row.count(b'\xff', left, right) >= CANVAS_WIDTH // 2):
+                continue
+            length = y - top
+            if top > 0 and (length == CANVAS_HEIGHT or
+                            (allow_bottom_clip and y == height and 120 <= length < CANVAS_HEIGHT)):
+                regions.append((left, top, right, y))
+            top = y + 1
+    return regions[0] if len(regions) == 1 else None
 
 
 def terminal_ocr(pixels, region):
@@ -106,7 +119,7 @@ def observe_pixels(ui, config, count, output):
     diagnostic = {'schemaVersion': 1, 'peer': count, 'samples': 0, 'selectedPaneVisible': False,
                   'sessionTitleVisible': False, 'terminalHeaderVisible': False, 'readOnlyModeVisible': False,
                   'terminalRegion': None, 'windowSize': [window.width, window.height],
-                  'exactMarkerSeen': False, 'exactTickSeen': False}
+                  'terminalRegionClipped': False, 'exactMarkerSeen': False, 'exactTickSeen': False}
     last_canvas = None
     bottom_clipped = False
 
@@ -128,12 +141,15 @@ def observe_pixels(ui, config, count, output):
             return None
         image, original = capture_window(ui)
         diagnostic['windowSize'] = image.size
-        region = terminal_region(image)
+        region = terminal_region(image, allow_bottom_clip=True)
         if region is None:
             return None
-        bottom_clipped = region[3] >= image.height - 1
+        bottom_clipped = region[3] - region[1] < CANVAS_HEIGHT
         diagnostic['terminalRegion'] = region
+        diagnostic['terminalRegionClipped'] = bottom_clipped
         last_canvas = image.crop(region)
+        if bottom_clipped:
+            return None
         try:
             text = terminal_ocr(image, region)
         except (OSError, subprocess.SubprocessError):

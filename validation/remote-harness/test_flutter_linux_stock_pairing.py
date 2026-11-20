@@ -13,8 +13,8 @@ from paired_gui import GuiFailure
 if os.name != 'nt':
     from PIL import Image, ImageDraw
     from flutter_linux_stock_pairing import (
-        DENIAL_NOTICES, OBSERVE_MODE, PAIR_CONNECT, TERM_BG, catalog_reference, connection_profile, denial_screens,
-        observe_pixels, observed_tick, reopen, terminal_region,
+        CANVAS_HEIGHT, CANVAS_WIDTH, DENIAL_NOTICES, OBSERVE_MODE, PAIR_CONNECT, TERM_BG, catalog_reference,
+        connection_profile, denial_screens, observe_pixels, observed_tick, reopen, terminal_region,
     )
 
 
@@ -150,21 +150,64 @@ class StockPairingTests(unittest.TestCase):
         self.assertIsNone(observed_tick(marker+'\n'+tick+'0'))
         self.assertIsNone(observed_tick(marker+'\n'+tick.replace('000047','000O47')))
 
-    def test_terminal_region_requires_one_continuous_rendered_canvas(self):
-        image = Image.new('RGB', (1000, 720), 'white')
+    def test_shifted_terminal_excludes_the_wider_header_and_survives_glyphs(self):
+        for left, top in ((304, 335), (416, 235), (192, 270)):
+            with self.subTest(left=left, top=top):
+                image = Image.new('RGB', (1280, 720), 'white')
+                draw = ImageDraw.Draw(image)
+                draw.rectangle((left - 144, top - 39, left + CANVAS_WIDTH + 143, top - 1), fill=TERM_BG)
+                self.assertIsNone(terminal_region(image))
+                draw.rounded_rectangle((left, top, left + CANVAS_WIDTH - 1, top + CANVAS_HEIGHT - 1), 12, fill=TERM_BG)
+                # Cover all three old sample columns with foreground at two rows.
+                for y in (top + 95, top + 230):
+                    for x in (480, 640, 800):
+                        draw.rectangle((x - 3, y, x + 3, y + 5), fill='white')
+                self.assertEqual(terminal_region(image), (left, top, left + CANVAS_WIDTH, top + CANVAS_HEIGHT))
+
+    def test_terminal_region_rejects_the_broken_crop_and_more_than_one_canvas(self):
+        for size, boxes in [((1280, 720), [(416, 429, 1088, 553)]),
+                            ((672, 124), [(0, 0, 672, 124)]),
+                            ((1280, 820), [(304, 40, 976, 400), (304, 420, 976, 780)]),
+                            ((1500, 720), [(50, 240, 722, 600), (760, 240, 1432, 600)])]:
+            with self.subTest(size=size, boxes=boxes):
+                image = Image.new('RGB', size, 'white')
+                draw = ImageDraw.Draw(image)
+                for left, top, right, bottom in boxes:
+                    draw.rectangle((left, top, right - 1, bottom - 1), fill=TERM_BG)
+                self.assertIsNone(terminal_region(image, allow_bottom_clip=True))
+
+    def test_bottom_crop_requests_outer_scroll_before_any_ocr(self):
+        config = dict(self.config, paneId='w1:p1')
+        ui = Mock()
+        ui.visible.return_value = [(1,'pocket-probe · 远端终端'),(2,'pocket-probe / w1:p1'),(3,OBSERVE_MODE)]
+        ui.window.return_value = SimpleNamespace(width=1280, height=650)
+        image = Image.new('RGB', (1280, 650), 'white')
+        ImageDraw.Draw(image).rectangle((304, 335, 975, 649), fill=TERM_BG)
         self.assertIsNone(terminal_region(image))
-        dark = ImageDraw.Draw(image)
-        dark.rectangle((185, 280, 805, 632), fill=TERM_BG)
-        self.assertEqual(terminal_region(image), (185, 280, 806, 633))
-        dark.rectangle((185, 100, 805, 249), fill=TERM_BG)
-        self.assertIsNone(terminal_region(image))
+        self.assertEqual(terminal_region(image, allow_bottom_clip=True), (304, 335, 976, 650))
+
+        def one_sample(probe, code, *, timeout):
+            self.assertIsNone(probe())
+            raise GuiFailure(code)
+
+        with (tempfile.TemporaryDirectory() as path,
+              patch('flutter_linux_stock_pairing.wait_for', side_effect=one_sample),
+              patch('flutter_linux_stock_pairing.capture_window', return_value=(image,b'window')),
+              patch('flutter_linux_stock_pairing.terminal_ocr') as ocr):
+            with self.assertRaisesRegex(GuiFailure, 'stock_flutter_observation_pixels_missing'):
+                observe_pixels(ui, config, 1, Path(path))
+            ocr.assert_not_called()
+            ui.scroll.assert_called_once_with('down', outer=True, steps=1)
+            diagnostic = json.loads((Path(path)/'stock-peer-1-observation.json').read_text())
+            self.assertTrue(diagnostic['terminalRegionClipped'])
 
     def test_capture_requires_owned_terminal_and_advancing_exact_tick(self):
         config = dict(self.config, paneId='w1:p1')
         ui = Mock()
         visible = [(1,'pocket-probe · 远端终端'),(2,'pocket-probe / w1:p1'),(3,OBSERVE_MODE)]
         ui.visible.side_effect = [[], visible, visible, visible]
-        image = Image.new('RGB',(1000,720),TERM_BG)
+        image = Image.new('RGB',(1000,720),'white')
+        ImageDraw.Draw(image).rectangle((185, 280, 856, 639), fill=TERM_BG)
         marker = 'Isolated SSH fixture. Remote input must remain empty.'
         with (tempfile.TemporaryDirectory() as path,
               patch('flutter_linux_stock_pairing.capture_window', side_effect=[(image,b'one'),(image,b'same'),(image,b'two')]),
@@ -179,7 +222,7 @@ class StockPairingTests(unittest.TestCase):
         ui = Mock()
         ui.window.return_value = SimpleNamespace(width=1000, height=720)
         image = Image.new('RGB', (1000, 720), 'white')
-        ImageDraw.Draw(image).rectangle((185, 280, 805, 632), fill=TERM_BG)
+        ImageDraw.Draw(image).rectangle((185, 280, 856, 639), fill=TERM_BG)
 
         def one_sample(probe, code, *, timeout):
             self.assertIsNone(probe())
@@ -201,7 +244,7 @@ class StockPairingTests(unittest.TestCase):
                 crop = output/'stock-peer-1-terminal-crop.png'
                 if bound:
                     with Image.open(crop) as captured:
-                        self.assertEqual(captured.size, (621,353))
+                        self.assertEqual(captured.size, (CANVAS_WIDTH,CANVAS_HEIGHT))
                 else:
                     capture.assert_not_called()
                     self.assertFalse(crop.exists())

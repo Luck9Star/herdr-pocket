@@ -48,6 +48,21 @@ class WindowProof(unittest.TestCase):
         self.gui.GetAncestor=lambda *_: 10
         with self.assertRaises(GuiFailure): runner.framebuffer('job',10,17,[1024,700],[[1000,1,30,30]])
 
+    def test_caption_candidate_requires_hit_owner_and_caption_semantics(self):
+        self.gui.GetWindowRect=lambda _: (0,0,1024,730)
+        self.gui.ClientToScreen=lambda _, point:(point[0],point[1]+30)
+        with patch.object(runner,'caption_hit',return_value=True):
+            self.assertEqual(runner.caption_point('job',10,17),(512,15))
+        with patch.object(runner,'caption_hit',return_value=False):
+            with self.assertRaises(GuiFailure):runner.caption_point('job',10,17)
+        self.gui.GetAncestor=lambda *_:20
+        with patch.object(runner,'caption_hit',return_value=True):
+            with self.assertRaises(GuiFailure):runner.caption_point('job',10,17)
+        self.gui.GetAncestor=lambda *_:10
+        self.process.GetWindowThreadProcessId=lambda hwnd:(1,17 if hwnd==10 else 18)
+        with patch.object(runner,'caption_hit',return_value=True):
+            with self.assertRaises(GuiFailure):runner.caption_point('job',10,17)
+
     def test_ambiguous_window_is_not_accepted(self):
         self.gui.EnumWindows=lambda callback, arg: (callback(10,arg),callback(12,arg))
         with self.assertRaises(GuiFailure): runner.owned_window('job')
@@ -79,6 +94,55 @@ class DriverBoundary(unittest.TestCase):
         self.assertEqual(len(calls),1)
         actions=calls[0][2]['actions'][0]['actions']
         self.assertEqual(''.join(row['value'] for row in actions if row['type']=='keyDown'),'hp-check\ue007')
+
+class ActivationTests(unittest.TestCase):
+    def setUp(self):
+        self.current = False; self.cursor = (0,0); self.clicks = 0; self.request = 0
+        self.gui=SimpleNamespace(ShowWindow=lambda *_:None,GetForegroundWindow=lambda:10 if self.current else 20,
+                                 IsIconic=lambda _:False)
+        self.api=SimpleNamespace(SetCursorPos=self.move,GetCursorPos=lambda:self.cursor)
+        self.con=SimpleNamespace(SW_MAXIMIZE=3)
+        for name,value in [('win32gui',self.gui),('win32api',self.api),('win32con',self.con),
+            ('check_desktop',lambda:None),('owned_window',lambda _: (10,17)),
+            ('caption_point',lambda *_:(300,10)),('mouse_capture_free',lambda:True),
+            ('request_foreground',self.foreground_request),('click_once',self.click)]:
+            patcher=patch.object(runner,name,value,create=True);patcher.start();self.addCleanup(patcher.stop)
+        self.clock=0.0
+        def now(): self.clock+=.6;return self.clock
+        for patcher in (patch.object(runner.time,'monotonic',side_effect=now),patch.object(runner.time,'sleep')):
+            patcher.start();self.addCleanup(patcher.stop)
+    def move(self,point): self.cursor=point
+    def foreground_request(self,_): self.request+=1;return False
+    def click(self): self.clicks+=1;self.current=True;return True
+
+    def test_standard_foreground_then_verified_caption_click_once(self):
+        report={};runner.activate_owned_window('job',10,17,report)
+        self.assertEqual(report['windowActivation'],'caption_click')
+        self.assertEqual(self.request,1);self.assertEqual(self.clicks,1)
+
+    def test_normal_activation_does_not_send_mouse(self):
+        def request(_): self.current=True;return True
+        with patch.object(runner,'request_foreground',request):
+            report={};runner.activate_owned_window('job',10,17,report)
+        self.assertEqual(report['windowActivation'],'set_foreground');self.assertEqual(self.clicks,0)
+
+    def test_unowned_or_unverified_caption_never_clicked(self):
+        with patch.object(runner,'caption_point',side_effect=GuiFailure('windows_tauri_caption_unavailable')):
+            with self.assertRaises(GuiFailure):runner.activate_owned_window('job',10,17,{})
+        self.assertEqual(self.clicks,0)
+        with patch.object(runner,'mouse_capture_free',return_value=False):
+            with self.assertRaises(GuiFailure):runner.activate_owned_window('job',10,17,{})
+        self.assertEqual(self.clicks,0)
+
+    def test_focus_guard_blocks_all_webdriver_user_input(self):
+        driver=runner.WindowsDriver()
+        driver.focus_guard=lambda: (_ for _ in ()).throw(GuiFailure('windows_tauri_window_not_foreground'))
+        with patch.object(runner.WebDriver,'call',return_value={}) as transport:
+            for suffix in ('/click','/clear','/value','/actions'):
+                with self.assertRaises(GuiFailure):driver.call('POST','/session/a'+suffix,{})
+            self.assertEqual(transport.call_count,0)
+            driver.call('GET','/status');self.assertEqual(transport.call_count,1)
+
 
 class CleanupDiagnostics(unittest.TestCase):
     @staticmethod
@@ -126,7 +190,7 @@ class ReceiptGate(unittest.TestCase):
     def fixture(self):
         import hashlib
         images={name:name.encode() for name in ('ordinary-terminal.png','ordinary-disconnect.png','ordinary-home.png')}
-        report={'fingerprintReviewed':True,'returnedHome':True,'credentialFieldsCleared':True,'peer':{},
+        report={'windowActivation':'set_foreground','fingerprintReviewed':True,'returnedHome':True,'credentialFieldsCleared':True,'peer':{},
           'listener':{'ownedBeforeLaunch':True,'fixtureResourcesClosed':True,'absentFromWin32Table':True,'connectProbe':'refused'},
           'cleanup':{'ownedProcessJobEmpty':True,'peerListenerReleased':True,'fixturePasswordCleared':True,
                      'driverPortsReleased':True,'privateDirectoryRemoved':True}}

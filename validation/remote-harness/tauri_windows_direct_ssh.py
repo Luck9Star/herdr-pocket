@@ -32,6 +32,15 @@ if sys.platform == 'win32':
 CAPTURE = 'Win32 foreground desktop framebuffer, native Tauri client pixels'
 
 class WindowsDriver(linux.DesktopDriver):
+    def __init__(self):
+        super().__init__()
+        self.focus_guard = None
+
+    def call(self, method, path, data=None):
+        if self.focus_guard is not None and method == 'POST' and path.endswith(('/click','/clear','/value','/actions')):
+            self.focus_guard()
+        return super().call(method, path, data)
+
     def start(self, binary):
         def ready():
             try:
@@ -64,6 +73,111 @@ def owned_window(job):
     win32gui.EnumWindows(visit, None)
     require(len(windows) <= 1, 'windows_tauri_window_ambiguous')
     return windows[0] if windows else None
+
+
+def foreground_is_owned(job, hwnd, pid):
+    check_desktop()
+    require(owned_window(job) == (hwnd, pid), 'windows_tauri_window_owner_changed')
+    return win32gui.GetForegroundWindow() == hwnd and not win32gui.IsIconic(hwnd)
+
+
+def request_foreground(hwnd):
+    user32 = ctypes.windll.user32
+    user32.SetForegroundWindow.argtypes = [ctypes.c_void_p]
+    user32.SetForegroundWindow.restype = ctypes.c_int
+    return bool(user32.SetForegroundWindow(ctypes.c_void_p(hwnd)))
+
+
+def caption_hit(hwnd, x, y):
+    # WM_NCHITTEST is read-only. Bound both the wait and the signed screen coordinates.
+    if not (-32768 <= x <= 32767 and -32768 <= y <= 32767): return False
+    user32 = ctypes.windll.user32
+    fn = user32.SendMessageTimeoutW
+    fn.argtypes = [ctypes.c_void_p,ctypes.c_uint,ctypes.c_size_t,ctypes.c_ssize_t,
+                   ctypes.c_uint,ctypes.c_uint,ctypes.POINTER(ctypes.c_size_t)]
+    fn.restype = ctypes.c_ssize_t
+    result = ctypes.c_size_t()
+    packed = (x & 0xffff) | ((y & 0xffff) << 16)
+    return bool(fn(ctypes.c_void_p(hwnd), 0x84, 0, packed, 0x2, 1000, ctypes.byref(result))) and result.value == 2
+
+
+def mouse_capture_free():
+    # Check the foreground thread's mouse capture before any user click.
+    class Rect(ctypes.Structure):
+        _fields_ = [('left',ctypes.c_long),('top',ctypes.c_long),('right',ctypes.c_long),('bottom',ctypes.c_long)]
+    class GuiThreadInfo(ctypes.Structure):
+        _fields_ = [('cbSize',ctypes.c_uint32),('flags',ctypes.c_uint32),
+                    *[(field,ctypes.c_void_p) for field in ('active','focus','capture','menu','move','caret')],
+                    ('rect',Rect)]
+    info = GuiThreadInfo(); info.cbSize = ctypes.sizeof(info)
+    fn = ctypes.windll.user32.GetGUIThreadInfo
+    fn.argtypes = [ctypes.c_uint32,ctypes.POINTER(GuiThreadInfo)]; fn.restype = ctypes.c_int
+    return bool(fn(0,ctypes.byref(info))) and not info.capture
+
+
+def click_once():
+    # One standard mouse down/up pair, never replayed on an unknown result.
+    class MouseInput(ctypes.Structure):
+        _fields_ = [('dx',ctypes.c_long),('dy',ctypes.c_long),('mouseData',ctypes.c_uint32),
+                    ('flags',ctypes.c_uint32),('time',ctypes.c_uint32),('extra',ctypes.c_size_t)]
+    class KeyboardInput(ctypes.Structure):
+        _fields_ = [('vk',ctypes.c_uint16),('scan',ctypes.c_uint16),('flags',ctypes.c_uint32),
+                    ('time',ctypes.c_uint32),('extra',ctypes.c_size_t)]
+    class HardwareInput(ctypes.Structure):
+        _fields_ = [('message',ctypes.c_uint32),('low',ctypes.c_uint16),('high',ctypes.c_uint16)]
+    class InputData(ctypes.Union):
+        _fields_ = [('mouse',MouseInput),('keyboard',KeyboardInput),('hardware',HardwareInput)]
+    class Input(ctypes.Structure):
+        _fields_ = [('kind',ctypes.c_uint32),('data',InputData)]
+    events = (Input * 2)()
+    events[0].data.mouse.flags = 0x2; events[1].data.mouse.flags = 0x4
+    fn = ctypes.windll.user32.SendInput
+    fn.argtypes = [ctypes.c_uint,ctypes.POINTER(Input),ctypes.c_int]; fn.restype = ctypes.c_uint
+    return fn(2,events,ctypes.sizeof(Input)) == 2
+
+
+def caption_point(job, hwnd, pid):
+    require(owned_window(job) == (hwnd,pid) and win32gui.IsWindowVisible(hwnd) and not win32gui.IsIconic(hwnd),
+            'windows_tauri_window_owner_changed')
+    left,top,right,bottom = win32gui.GetWindowRect(hwnd)
+    _,client_top = win32gui.ClientToScreen(hwnd,(0,0))
+    monitor = win32api.MonitorFromWindow(hwnd,win32con.MONITOR_DEFAULTTONULL)
+    require(monitor, 'windows_tauri_caption_unavailable')
+    x0,y0,x1,y1 = win32api.GetMonitorInfo(monitor)['Monitor']
+    caption_top = max(top,y0); caption_bottom = min(client_top,y1,bottom)
+    require(right > left and caption_bottom-caption_top >= 4, 'windows_tauri_caption_unavailable')
+    x = (max(left,x0)+min(right,x1))//2; y = (caption_top+caption_bottom)//2
+    require(x0 <= x < x1 and y0 <= y < y1, 'windows_tauri_caption_unavailable')
+    hit = win32gui.WindowFromPoint((x,y))
+    require(hit and win32gui.GetAncestor(hit,win32con.GA_ROOT) == hwnd and
+            win32process.GetWindowThreadProcessId(hit)[1] == pid and caption_hit(hwnd,x,y),
+            'windows_tauri_caption_unavailable')
+    return (x,y)
+
+
+def activate_owned_window(job, hwnd, pid, report):
+    check_desktop()
+    require(owned_window(job) == (hwnd,pid), 'windows_tauri_window_owner_changed')
+    win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+    def wait_foreground(seconds):
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            if foreground_is_owned(job,hwnd,pid): return True
+            time.sleep(.05)
+        return foreground_is_owned(job,hwnd,pid)
+    if foreground_is_owned(job,hwnd,pid):
+        report['windowActivation'] = 'already_foreground'; return
+    request_foreground(hwnd)
+    if wait_foreground(1):
+        report['windowActivation'] = 'set_foreground'; return
+    point = caption_point(job,hwnd,pid)
+    require(mouse_capture_free(), 'windows_tauri_mouse_capture_unavailable')
+    win32api.SetCursorPos(point)
+    require(win32api.GetCursorPos() == point and caption_point(job,hwnd,pid) == point and mouse_capture_free(),
+            'windows_tauri_caption_unavailable')
+    require(click_once(), 'windows_tauri_activation_click_unconfirmed')
+    require(wait_foreground(2), 'windows_tauri_window_not_foreground')
+    report['windowActivation'] = 'caption_click'
 
 
 def framebuffer(job, hwnd, pid, viewport, rectangles):
@@ -130,6 +244,9 @@ def capture_outcome(driver, job, hwnd, pid, selector):
 SAFE_FAILURE_CODES = frozenset({
     'webdriver_unavailable', 'windows_tauri_driver_listener_unowned',
     'windows_tauri_session_invalid', 'windows_tauri_visible_window_missing',
+    'windows_tauri_window_owner_changed', 'windows_tauri_caption_unavailable',
+    'windows_tauri_activation_unconfirmed',
+    'windows_tauri_mouse_capture_unavailable', 'windows_tauri_activation_click_unconfirmed',
     'windows_tauri_window_ambiguous', 'windows_tauri_window_not_foreground',
     'windows_tauri_viewport_mismatch', 'windows_tauri_window_offscreen',
     'windows_tauri_geometry_invalid', 'windows_tauri_window_occluded',
@@ -241,8 +358,10 @@ def run(app, report, base):
                         set_phase(report, 'native_window')
                         hwnd, pid = wait_for(lambda: owned_window(job), 'windows_tauri_visible_window_missing')
                         set_phase(report, 'window_activation')
-                        win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
-                        require(win32gui.GetForegroundWindow() == hwnd, 'windows_tauri_window_not_foreground')
+                        activate_owned_window(job,hwnd,pid,report)
+                        def ensure_foreground():
+                            require(foreground_is_owned(job,hwnd,pid), 'windows_tauri_window_not_foreground')
+                        driver.focus_guard = ensure_foreground
                         original_terminal, original_outcome = linux.capture_terminal, linux.capture_outcome
                         linux.capture_terminal = lambda d,e,t: capture_terminal(d,job,hwnd,pid,e,t)
                         linux.capture_outcome = lambda d,s: capture_outcome(d,job,hwnd,pid,s)
@@ -276,6 +395,8 @@ def run(app, report, base):
 
 
 def validate_success(report, images):
+    require(report.get('windowActivation') in ('already_foreground','set_foreground','caption_click'),
+            'windows_tauri_activation_unconfirmed')
     require(report.get('fingerprintReviewed') is True and report.get('returnedHome') is True and
             report.get('credentialFieldsCleared') is True, 'windows_tauri_receipt_incomplete')
     linux.session_evidence(report.get('peer', {}), sent=True, closed=True)

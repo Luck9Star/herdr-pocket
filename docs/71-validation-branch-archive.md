@@ -1,5 +1,84 @@
 # 验证分支归档
 
+## 2026-11-20 分支整理
+
+整理前盘点了 234 个本地分支、90 个 GitHub 分支和 29 个工作树。保留 `main`、正在使用的工作树、在审分支及仍有独有工作需要继续的分支，包括 [草稿 PR #59](https://github.com/Luck9Star/herdr-pocket/pull/59)。以整理前的 `main` 提交 `b10d8acc` 和各引用原头部为核对依据。
+
+按整理前的原分支统计，本地移除 156 个、保留 78 个，GitHub 移除 79 个、保留 11 个。GitHub 分支一次原子删除后，通过 Git 和 GitHub API 分别复核数量。本地删除前再次核对原提交和工作树占用。
+
+[79 个 GitHub 分支的恢复映射](evidence/branch-archive-20261120/remote-recovery.tsv)记录原分支名、完整提交、根目录树和供 GitHub 拉取的引用。映射使用 12 个公开恢复引用，含 `main`、此前的归档标签和本轮新建的 8 个附注标签。已经从 GitHub 将这些引用取到独立空仓库，以每行所列引用验证旧提交可达、根目录树相同，并运行 `git fsck --full`。
+
+原本的本地、GitHub 引用已分别创建完整的 Git bundle。两份归档均校验 SHA-256、通过 `git bundle verify`，并各自在空仓库恢复，核对全部引用与对象并执行 `git fsck --full`。现有发布标签保留。Git bundle 和归档标签保存 Git 历史，Actions 工件仍按各自的保留期到期。
+
+### 从 GitHub 恢复
+
+从当前仓库根目录运行以下命令。把 `branch` 换成映射表中的任一原分支名。脚本拉取该行的 `fetch_ref`，并在独立的临时目录恢复该行的 `commit` 和 `tree`。`refs/heads/main` 指向持续更新的主线，所以恢复时仍以记录的旧提交为准。
+
+```sh
+(
+  set -eu
+  branch='codex/acceptance-flutter-dual-overlay/ordinary-identity-r3'
+  index='docs/evidence/branch-archive-20261120/remote-recovery.tsv'
+  row=$(awk -F '\t' -v branch="$branch" '
+    NR > 1 && $1 == branch { print $2, $3, $4; found = 1; exit }
+    END { if (!found) exit 1 }
+  ' "$index")
+  read -r commit tree fetch_ref <<EOF
+$row
+EOF
+  case "$fetch_ref" in
+    refs/heads/main|refs/tags/archive/*) ;;
+    *) echo '恢复引用不在映射范围内' >&2; exit 1 ;;
+  esac
+
+  recovery=$(mktemp -d "${TMPDIR:-/tmp}/herdr-pocket-github.XXXXXX")
+  git -C "$recovery" init --quiet
+  git -C "$recovery" fetch --no-tags https://github.com/Luck9Star/herdr-pocket.git "$fetch_ref"
+  git -C "$recovery" merge-base --is-ancestor "$commit" 'FETCH_HEAD^{commit}'
+  test "$(git -C "$recovery" rev-parse --verify "$commit^{commit}")" = "$commit"
+  test "$(git -C "$recovery" rev-parse --verify "$commit^{tree}")" = "$tree"
+  git -C "$recovery" switch -c "$branch" "$commit"
+  git -C "$recovery" fsck --full --no-dangling
+  printf '恢复目录 %s\n' "$recovery"
+)
+```
+
+### 从本机 Git 归档恢复
+
+本机专用归档位于仓库共用 Git 目录下的 `branch-archives/20261120-docs-consolidation-_ytf9mw6/`。其中 `local-before.bundle` 和 `remote-before.bundle` 分别保存本地和 GitHub 的整理前引用，`SHA256SUMS` 提供两份归档的摘要。`disposition.tsv` 记录完整盘点和处置，`allowlist.tsv` 记录允许清理的原引用。仅在本地存在的源码与分支清单保存在本机归档中。
+
+在持有这份归档的工作区运行以下命令，把 `branch` 换成要恢复的本地分支。示例从本地 bundle 抽取一条引用，核对旧提交和根目录树后在新目录检出。
+
+```sh
+(
+  set -eu
+  branch='main'
+  common_dir=$(git rev-parse --path-format=absolute --git-common-dir)
+  archive="$common_dir/branch-archives/20261120-docs-consolidation-_ytf9mw6"
+  bundle="$archive/local-before.bundle"
+  (cd "$archive" && shasum -a 256 -c SHA256SUMS)
+  row=$(awk -F '\t' -v branch="$branch" '
+    NR > 1 && $1 == "local" && $2 == branch { print $3, $4; found = 1; exit }
+    END { if (!found) exit 1 }
+  ' "$archive/disposition.tsv")
+  read -r commit tree <<EOF
+$row
+EOF
+
+  recovery=$(mktemp -d "${TMPDIR:-/tmp}/herdr-pocket-local.XXXXXX")
+  git -C "$recovery" init --quiet
+  git -C "$recovery" bundle verify --quiet "$bundle"
+  git -C "$recovery" fetch --no-tags "$bundle" "refs/heads/$branch"
+  test "$(git -C "$recovery" rev-parse --verify 'FETCH_HEAD^{commit}')" = "$commit"
+  test "$(git -C "$recovery" rev-parse --verify "$commit^{tree}")" = "$tree"
+  git -C "$recovery" switch -c "$branch" "$commit"
+  git -C "$recovery" fsck --full --no-dangling
+  printf '恢复目录 %s\n' "$recovery"
+)
+```
+
+## 2026-11-18 首批验收分支归档
+
 2026-11-18 归档了九个 Android、macOS 与普通 SSH 验证分支的源码快照。每个 GitHub 附注标签名均为 `archive/20261118/<完整旧分支名>`。已从 GitHub 向全新仓库仅取这九个标签，逐一核对标签指向的提交、根目录树和原分支一致，`git fsck --full` 通过。历史报告保留实际使用的源码、工件和结果。标签可恢复源码，GitHub Actions 工件仍按各自的保留期到期。
 
 | 原分支 | 原提交 | 主线覆盖与归档用途 |
@@ -21,7 +100,7 @@
 - Android API 35 模拟器上的 normal 和 QA 变体均从 `needs-login` 到 `stopped`。清理通过，SSH 认证、新增授权和注册均为零。[真实启动验收 44290964257](https://github.com/Luck9Star/herdr-pocket/actions/runs/44290964257)
 - Flutter 独立构建产出 normal 和 private-ca-qa 两份 x86_64 debug APK。本次验收范围为打包及清单校验，Flutter UI 设备测试另有独立记录。[Flutter APK 验收 44290964970](https://github.com/Luck9Star/herdr-pocket/actions/runs/44290964970)
 
-## 恢复一个历史分支
+### 恢复一个历史分支
 
 在有 GitHub 仓库访问权限的终端运行以下命令，将 `b086299` 恢复到新的本地分支。
 

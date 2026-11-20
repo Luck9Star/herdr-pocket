@@ -8,7 +8,7 @@
 
 | 入口 | 对应内容 |
 | --- | --- |
-| [公开首页](https://github.com/Luck9Star/herdr-pocket) · [原型分支](https://github.com/Luck9Star/herdr-pocket/tree/codex/core-prototype-validation) | 默认分支为 `main`，首页列有原型、测试包和验证入口。本次收尾的功能与测试源码快照为 [`22d53e2`](https://github.com/Luck9Star/herdr-pocket/commit/22d53e272a9acbeb2345bbcd0a1201fd7449af52)。 |
+| [项目首页](../README.md) · [当批原型源码 `22d53e2`](https://github.com/Luck9Star/herdr-pocket/tree/22d53e272a9acbeb2345bbcd0a1201fd7449af52) | 当时的原型分支是 `codex/core-prototype-validation`。链接打开本次收尾时核对的功能与测试源码快照。 |
 | [Flutter APK](https://github.com/Luck9Star/herdr-pocket/actions/runs/42415286185/artifacts/13591233797) · [Tauri APK](https://github.com/Luck9Star/herdr-pocket/actions/runs/42415286185/artifacts/13591323156) | 两份 arm64-v8a debug 包来自同一提交 [`dd02595`](https://github.com/Luck9Star/herdr-pocket/commit/dd025952321fb944465a48ec762ae76adc74f830)。登录 GitHub 下载、解压，按[步骤与 SHA-256](53-mobile-connection-diagnostics.md)核验。11 月 8 日查询时均可下载，分别于北京时间 11 月 22 日 05:32、05:33 到期。 |
 | [Penpot 手机配对](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8e75ef79937) · [看板与任务检索](54-mobile-host-search-and-observer-retirement.md) · [共享设备审查](55-mobile-shared-network-device.md) | 原型保存在同一 Penpot v2 文件，沿用靛蓝／Slate 配色。状态页可点击刷新、恢复和返回。各页的实际点击、重载与适用范围随记录保存。 |
 | [Flutter 验证壳](../validation/flutter/README.md) · [Tauri 验证壳](../validation/tauri/README.md) · [共享 fixture](../validation/shared/README.md) | 两条路线共用终端输入、字体、负载和目标身份样例。可按各壳的说明重跑，再对照同一场景。 |

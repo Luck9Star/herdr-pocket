@@ -5,6 +5,7 @@ root = Path(__file__).resolve().parents[1]
 repo = root.parents[1]
 sys.path.insert(0, str(repo / 'validation/shared'))
 from android_notices import verify as verify_packaged_notices
+from linux_pairing_notices import verify_deb as verify_linux_notices
 sys.path.insert(0, str(repo / 'validation/network-profiles'))
 from android_sources import production_java_hashes
 sys.path.insert(0, str(root / 'scripts'))
@@ -58,7 +59,7 @@ manifest = {
     'transportSourceSHA256':sha(repo/'validation/transport-rust/src/lib.rs'),
     'pairingContractSHA256':sha(repo/'validation/pairing/protocol-v2.schema.json'),
     'pairingDependenciesSHA256':sha(repo/'validation/pairing/sources.json'),
-    'remoteBehavior':{'mode':'explicit-pane-continuous-readonly','remoteInput':'stock server read-only; explicit guarded capability required','ptyResize':False,'credentialStorage':{'android':'API35 wrapped Ed25519', 'linux':'volatile test signer', 'macos':'volatile test signer'}.get(os.getenv('PROBE_PLATFORM'),'device pairing unavailable'),'browserTransport':'unavailable','deviceResult':'unverified'},
+    'remoteBehavior':{'mode':'explicit-pane-continuous-readonly','remoteInput':'stock server read-only; explicit guarded capability required','ptyResize':False,'credentialStorage':{'android':'API35 wrapped Ed25519', 'linux':'statically linked Secret Service identity bridge; runtime unverified', 'macos':'volatile test signer'}.get(os.getenv('PROBE_PLATFORM'),'device pairing unavailable'),'browserTransport':'unavailable','deviceResult':'unverified'},
     'fixtureSHA256':sha(repo/'validation/shared/fixture.json'),
     **fixture_provenance,
     'fontSHA256':sha(repo/'validation/shared/fonts/JetBrainsMonoNerdFontMono-Regular.ttf'),
@@ -81,8 +82,15 @@ for filename, record in js_notices.items():
 if (root/'dist').exists(): zip_tree(root/'dist',out/'browser-preview.zip')
 if (out/'browser-preview.zip').exists():
     verify_js_notices(out/'browser-preview.zip',js_notices,'dist/js-notices/')
+if manifest['platform']=='linux' and manifest['buildOutcome']=='success':
+    manifest['linuxPackagedNotices'] = {}
 for pattern in ['src-tauri/target/release/bundle/deb/*.deb','src-tauri/target/release/bundle/nsis/*.exe']:
-    for f in root.glob(pattern): shutil.copy2(f,out/f.name)
+    for f in root.glob(pattern):
+        if f.suffix == '.deb' and 'linuxPackagedNotices' in manifest:
+            manifest['linuxPackagedNotices'][f.name] = verify_linux_notices(f)
+        shutil.copy2(f,out/f.name)
+if manifest.get('linuxPackagedNotices') == {}:
+    raise SystemExit('Linux build reported success but no Debian package was verified')
 for f in android_apks(): shutil.copy2(f,out/f.name)
 for base in [root/'src-tauri/target/release/bundle/macos',root/'src-tauri/gen/apple/build']:
     if base.exists():

@@ -60,6 +60,47 @@ class AndroidNoticeTests(unittest.TestCase):
             self.assertEqual(len(entry['sha256']), 64)
 
 
+class LinuxNoticeTests(unittest.TestCase):
+    notice_names = ('LICENSE-APACHE', 'LICENSE-MIT', 'UPSTREAM')
+    source = ci.ROOT / 'validation/linux-secure-identity/vendor/secret-service'
+
+    def test_linux_package_requires_exact_secret_service_notices(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            app, output = root / 'app', root / 'output'
+            destination = app / 'build/linux/x64/debug/bundle/data/third-party/secret-service-5.1.0'
+            destination.mkdir(parents=True)
+            (app / 'pubspec.lock').write_text('fixture')
+            with patch.dict(os.environ, {'GITHUB_SHA': 'a' * 40}), \
+                    patch.object(ci.host_platform, 'platform', return_value='Linux fixture'), \
+                    patch.object(ci.subprocess, 'check_output', return_value='fixture'):
+                with self.assertRaisesRegex(ValueError, 'Linux pairing notices missing'):
+                    ci.package(app, 'linux', output)
+                archive = output / 'flutter-linux-debug.tar.gz'
+                self.assertFalse(archive.exists())
+                for filename in self.notice_names:
+                    shutil.copy2(self.source / filename, destination / filename)
+                ci.package(app, 'linux', output)
+                manifest = json.loads((output / 'manifest.json').read_text())
+                self.assertEqual(manifest['linuxPackagedNotices'], {
+                    f'bundle/data/third-party/secret-service-5.1.0/{name}':
+                        hashlib.sha256((self.source / name).read_bytes()).hexdigest() for name in self.notice_names})
+                original = archive.read_bytes()
+                (destination / 'UPSTREAM').write_text('tampered')
+                with self.assertRaisesRegex(ValueError, 'Linux pairing notice mismatch'):
+                    ci.package(app, 'linux', output)
+                self.assertEqual(archive.read_bytes(), original)
+
+    def test_tauri_deb_notice_mapping_uses_only_vendored_licenses_and_provenance(self):
+        config = ci.ROOT / 'validation/tauri/src-tauri/tauri.conf.json'
+        bundle = json.loads(config.read_text())['bundle']
+        files = bundle['linux']['deb']['files']
+        prefix = '/usr/share/doc/herdr-pocket-tauri-probe/secret-service-5.1.0'
+        expected = {f'{prefix}/{name}': self.source / name for name in self.notice_names}
+        self.assertEqual({target: (config.parent / source).resolve() for target, source in files.items()}, expected)
+        self.assertNotIn('resources', bundle)
+
+
 class SharedDiagnosticAssetsTests(unittest.TestCase):
     diagnostic = 'terminal-font-diagnostics-v1.json'
     theme_prompts = 'theme-prompt-samples-v1.json'
@@ -72,6 +113,10 @@ class SharedDiagnosticAssetsTests(unittest.TestCase):
         self.assertIn('fl_engine_get_binary_messenger(fl_view_get_engine(view))', registration)
         self.assertIn('herdr_pairing.cmake', (runner / 'CMakeLists.txt').read_text())
         self.assertIn('+1.96.0 build --locked', (runner / 'herdr_pairing.cmake').read_text())
+        install = (app / 'linux/CMakeLists.txt').read_text()
+        self.assertLess(install.index('file(REMOVE_RECURSE'), install.index('install(FILES'))
+        for name in LinuxNoticeTests.notice_names:
+            self.assertIn('/herdr-secure-identity/vendor/secret-service/' + name, install)
         self.assertEqual(ci.pairing_provenance('macos', None)['linuxSources'], [])
 
     def test_secure_appkit_factory_is_included_only_in_generated_macos_runner(self):
@@ -110,6 +155,7 @@ class SharedDiagnosticAssetsTests(unittest.TestCase):
                 'android/app/build.gradle.kts': 'namespace = "dev.herdr.herdr_flutter_probe"\napplicationId = "dev.herdr.herdr_flutter_probe"\n',
                 'linux/runner/my_application.cc': '#include "my_application.h"\n  fl_register_plugins(FL_PLUGIN_REGISTRY(view));\n',
                 'linux/runner/CMakeLists.txt': 'target_link_libraries(herdr_flutter_probe PRIVATE flutter)\n',
+                'linux/CMakeLists.txt': 'install(CODE "file(REMOVE_RECURSE fixture)" COMPONENT Runtime)\n',
             }
             for name, text in files.items():
                 target = app / name

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Cloud-only SDK setup and isolated scaffold; never writes platform files in repo."""
 import argparse
+from contextlib import nullcontext
 import hashlib
 import json
 import os
@@ -11,11 +12,13 @@ import shutil
 import subprocess
 import sys
 import tarfile
+from tempfile import TemporaryDirectory
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / 'validation/shared'))
 from android_notices import verify as verify_packaged_notices
+from linux_pairing_notices import FLUTTER_NOTICE_DIR, NOTICE_FILES, verify_tar as verify_linux_notices
 VERSION = '3.47.9'
 COMMIT = 'c197ca5199e9ee5661e865596c9c07294dfab51c'
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -55,6 +58,13 @@ def prepare_linux_pairing(destination):
         + plugin_marker), encoding='utf-8')
     with (runner / 'CMakeLists.txt').open('a', encoding='utf-8') as cmake:
         cmake.write('\ninclude("${CMAKE_CURRENT_LIST_DIR}/herdr_pairing.cmake")\n')
+    # The generated top-level install clears the bundle after runner install
+    # rules; append these files after that cleanup.
+    with (destination / 'linux/CMakeLists.txt').open('a', encoding='utf-8') as cmake:
+        cmake.write('\ninstall(FILES\n' + ''.join(
+            '  "${CMAKE_CURRENT_SOURCE_DIR}/herdr-secure-identity/vendor/secret-service/' + name + '"\n'
+            for name in NOTICE_FILES
+        ) + '  DESTINATION "' + FLUTTER_NOTICE_DIR.removeprefix('bundle/') + '" COMPONENT Runtime)\n')
 
 
 def prepare(destination):
@@ -299,10 +309,17 @@ def package(destination, platform, output):
     unix_bundle = platform in ['ios', 'macos', 'linux']
     archive = output / ('flutter-' + platform + '-debug' + ('.tar.gz' if unix_bundle else '.zip'))
     if unix_bundle:
-        with tarfile.open(archive, 'w:gz', dereference=False) as bundle:
-            for path in paths:
-                bundle.add(path, arcname=path.name)
-            bundle.add(destination / 'pubspec.lock', arcname='pubspec.lock')
+        # Validate the Linux payload before making the archive available.
+        with (TemporaryDirectory(dir=output) if platform == 'linux' else nullcontext(output)) as staging:
+            staged = Path(staging) / archive.name
+            with tarfile.open(staged, 'w:gz', dereference=False) as bundle:
+                for path in paths:
+                    bundle.add(path, arcname=path.name)
+                bundle.add(destination / 'pubspec.lock', arcname='pubspec.lock')
+            if platform == 'linux':
+                with tarfile.open(staged, 'r:gz') as bundle:
+                    linux_notices = verify_linux_notices(bundle, FLUTTER_NOTICE_DIR)
+                staged.replace(archive)
     else:
         with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as bundle:
             for path in paths:
@@ -351,6 +368,8 @@ def package(destination, platform, output):
         'pairingDeviceKeys': pairing_provenance(platform, android_notice),
         'signing': 'iOS unsigned, not installable on device' if platform == 'ios' else 'development test build; no production signing/notarization',
     }
+    if platform == 'linux':
+        manifest['linuxPackagedNotices'] = linux_notices
     if platform == 'android':
         manifest['androidApkSha256'] = hashlib.sha256(paths[0].read_bytes()).hexdigest()
         shutil.copy2(paths[0], output / 'flutter-android-debug.apk')

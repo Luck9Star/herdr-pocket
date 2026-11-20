@@ -47,7 +47,12 @@
       "deb": {
         "depends": [
           "fonts-noto-cjk | fonts-wqy-microhei"
-        ]
+        ],
+        "files": {
+          "/usr/share/doc/herdr-pocket-tauri-probe/secret-service-5.1.0/LICENSE-APACHE": "../../linux-secure-identity/vendor/secret-service/LICENSE-APACHE",
+          "/usr/share/doc/herdr-pocket-tauri-probe/secret-service-5.1.0/LICENSE-MIT": "../../linux-secure-identity/vendor/secret-service/LICENSE-MIT",
+          "/usr/share/doc/herdr-pocket-tauri-probe/secret-service-5.1.0/UPSTREAM": "../../linux-secure-identity/vendor/secret-service/UPSTREAM"
+        }
       }
     }
   }

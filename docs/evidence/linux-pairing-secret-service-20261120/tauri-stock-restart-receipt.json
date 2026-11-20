@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "architecture": "aarch64",
+  "productSourceCommit": "59892bace3a07803c9e00628a8b234c3efe5c5fd",
+  "harnessCommit": "4b15cb630b3706fc983169ad2460ba94bc8b9f87",
+  "stockDevBuildSha256": "e546c8384c6023ad27ea17ea7ea149baeaf8ab80217b1f4771f1ae0ddec87711",
+  "herdrFixtureVersion": "0.9.5",
+  "herdrFixtureSha256": "17d7536f2da50859523680ef279dffcac8e4a235f4e46fe8da6c2ec44141897c",
+  "openSshVersion": "OpenSSH_9.6p1 Ubuntu-3ubuntu13.20, OpenSSL 3.0.13 30 Jan 2024",
+  "restart": {
+    "independentAppProcesses": true,
+    "firstOwnerLockReleased": true,
+    "samePrivateSession": true,
+    "sameSavedHostAndTarget": true,
+    "sameDeviceKeyReauthenticated": true,
+    "exactPeerAuthentications": 2,
+    "bothPeersClosed": true,
+    "secondObservedFrames": {
+      "full": 1,
+      "delta": 1
+    },
+    "originalKeyAndAuthorizationUnchanged": true,
+    "noKeyringWrites": true
+  },
+  "fixtureRevoked": true,
+  "peerInputBytes": 0,
+  "lockedRetainedOriginalWithNoSecondSshAuthentication": true,
+  "unavailableRetainedOriginalWithNoSecondSshAuthentication": true,
+  "rawPositiveManifestSha256": "0f74045052ff2787f452ba3f5350184c804ea5da884c075b2003ca7bb0a2b8fa",
+  "rawLockedManifestSha256": "5c8562c68902791b285b49a4834568eb7743010e1f33f465254b00cd8b79fa09",
+  "rawUnavailableManifestSha256": "22a32ac9f94186feccbd52a91c9ff6409f54264adb9f812343f69d67e5ad7f14",
+  "cleanup": {
+    "ownedProcessesStopped": true,
+    "ephemeralKeysRemoved": true,
+    "userAuthorizationFilesTouched": false,
+    "rawLogsUploaded": false
+  }
+}

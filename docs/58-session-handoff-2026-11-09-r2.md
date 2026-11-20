@@ -1,6 +1,6 @@
 # 2026-11-09 会话交接·第二棒（自包含）
 
-> 本文档是**当前最新交接入口**，取代 [57-session-handoff-2026-11-09.md](57-session-handoff-2026-11-09.md) 成为第一入口（57 保留为上一棒历史，事实修正版）。历史全量交接见 [56-project-status-and-handoff.md](56-project-status-and-handoff.md)（主体不改）。
+> 本页保存 2026-11-09 第二轮交接与后续复验。当时的推送方案和授权条件只适用于这批记录。[第一轮交接](57-session-handoff-2026-11-09.md) · [早期阶段记录](56-project-status-and-handoff.md) · [现行路线图](04-roadmap.md)
 >
 > 仓库：`/Users/yangyitian/Documents/dev/Agents/herdr-pocket` · remote `Luck9Star/herdr-pocket` · 主干 `main`
 > 交接时工作分支：`codex/network-batch/with-emulators-zerotier-0008-c3d3036`（HEAD = `32a77c7`，本地领先远端 **10 个提交，全部未 push**）

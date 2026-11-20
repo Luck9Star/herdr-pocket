@@ -7,7 +7,7 @@
 
 > **重要说明**：
 > 1. 本文件为本项目构建与分发准备所需的第三方声明汇总，不构成对本项目整体许可证的单方替代。
-> 2. 原创客户端代码的具体许可证选定方案详见 [`docs/59-license-decision-proposal.md`](docs/59-license-decision-proposal.md) 提案，目前待维护者正式拍板。
+> 2. 项目采用 GPL-3.0-or-later。许可证正文及 2026-11-11 决定见[项目许可证](LICENSE)和[许可决定](docs/59-license-decision-proposal.md)；各产物的依赖与分发渠道另有[审查记录](docs/17-license-and-distribution-review.md)。
 > 3. 第三方组件继续保留其各自的原始许可与版权归属，任何第三方代码不得被重新标示为项目自身的专有许可或统一替代许可。
 
 ---

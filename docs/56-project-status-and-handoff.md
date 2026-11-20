@@ -1,10 +1,10 @@
 # herdr-pocket 阶段交接
 
-> **本轮最新交接入口：[58-session-handoff-2026-11-09-r2.md](58-session-handoff-2026-11-09-r2.md)**（自包含，含状态、事实、待办与下一步操作参数）。上一棒入口：[57-session-handoff-2026-11-09.md](57-session-handoff-2026-11-09.md)。本文档保留为历史全量交接，主体内容不变。
+> 本页记录 2026-11-08 的阶段交接及后续回填。[早期交接原稿](https://github.com/Luck9Star/herdr-pocket/blob/85c150b24dca14412cf01075b832c1014547a3aa/docs/56-project-status-and-handoff.md)保留最初版本。续作请从[路线图与逐项验收](04-roadmap.md)和[文档导航](README.md)进入。下一轮的历史记录见[11 月 9 日第一轮](57-session-handoff-2026-11-09.md)和[第二轮](58-session-handoff-2026-11-09-r2.md)。
 
 截至 2026-11-08，手机端可演示的主线是 **配对审查 → 手机专属密钥 SSH 认证 → 主机／会话看板 → 选中终端持续观察 → 主动停止**。Flutter 和 Tauri 均已在 Android API 35 的 x86_64 云模拟器上走通这条主线。当前仍是原型验证阶段。公开源码比可下载 APK 更新，框架与终端引擎的最终选择仍待真机输入、显示与性能数据。[两条路线的设备记录](53-mobile-connection-diagnostics.md) · [技术选型门槛](06-technology-evaluation.md)
 
-## 现在可以从哪里开始
+## 当时的源码、安装包与设计入口
 
 | 入口 | 对应内容 |
 | --- | --- |
@@ -13,7 +13,7 @@
 | [Penpot 手机配对](https://design.penpot.app/?screen=viewer&file-id=b55064db-d93d-80f9-8008-ddd22e6d398f&page-id=7a22df08-251d-8016-8008-de03541c11da&section=interactions&frame-id=ff7bd149-6597-80a5-8008-e8e75ef79937) · [看板与任务检索](54-mobile-host-search-and-observer-retirement.md) · [共享设备审查](55-mobile-shared-network-device.md) | 原型保存在同一 Penpot v2 文件，沿用靛蓝／Slate 配色。状态页可点击刷新、恢复和返回。各页的实际点击、重载与适用范围随记录保存。 |
 | [Flutter 验证壳](../validation/flutter/README.md) · [Tauri 验证壳](../validation/tauri/README.md) · [共享 fixture](../validation/shared/README.md) | 两条路线共用终端输入、字体、负载和目标身份样例。可按各壳的说明重跑，再对照同一场景。 |
 
-## 已完成到哪一层
+## 当时已完成到哪一层
 
 | 功能 | 已有证据 | 尚缺证据或实现 |
 | --- | --- | --- |
@@ -22,10 +22,10 @@
 | 手机终端与输入 | 两壳已有观察、逐键、辅助键、草稿、选择及粘贴审查。Tauri 在受保护的测试宿主完成十个 TUI 操作。发送结果未知时需人工核对，布局变化不隐式调整远端共享 PTY。[输入规则](24-target-input-recovery.md) · [TUI 实测](53-mobile-connection-diagnostics.md) | 原版 herdr 在本项目中走只读路径。Flutter 在 Android 的最近一次受保护输入测试中，前两笔共 10 字节已送达，隐藏恢复后遇到 `channel_cleanup_timeout`，没有新首帧，输入保持关闭。十个 TUI 操作仍待 Android 复测。 |
 | 终端显示 | `terminal_view 0.5.0` 漏绘组合重音已有固定候选补丁及绘制回归。两壳有相同的 Nerd Font、CJK、emoji 和 ANSI 样例。Powerlevel10k 与 Oh My Posh 的固定提示符在 Mac 的两条终端核心得到预期光标列。[组合重音修复](10-blocker-repair.md) · [真实主题样例](52-mobile-theme-prompts.md) | 真机中文 IME 预编辑／提交、复杂字符列宽、系统字体回退、触控选择及长时间重绘性能。 |
 | 配置与设备身份 | 主机、公开网络参数和可选字号支持本地加密导入导出、旧版读取和冲突审查。导入后的网络默认停用，新主机需在本机配对。设备 SSH 私钥与组网身份留在原设备。[迁移实现](18-mobile-network-profiles.md) · [格式与事务](../validation/config-transfer/README.md) | Mac 系统文件选择器的导出和导入已通过。Android／iOS 文件提供方、跨手机实际迁移和耗时待验。 |
-| 三种组网 | 两份 APK 包内的 EasyTier、Tailscale 原生库已核对。EasyTier 的 Linux、Windows 移植编译错误已有修复，三桌面候选完成编译、链接、加载及离线测试。ZeroTier 共享设备审查已接入两壳源码，Mac 已用固定原生身份算法通过 JNI 验证加密保存、重新读取、拒绝损坏密文及显式删除；KeyStore 线程自 onCreate 启动修复（commit 5959b0d）。ZeroTier 原生候选补丁 0008 经三轮独立评审定稿入档（`patches/0008-streams-and-hp-boundary.patch` 终版 911 行，sha256 `ba4654f9…`，`zerotier-candidate.json` 哈希闭环）：首轮评审发现 B1（run() 拆除后无条件 reopen，致分离线程帧回调 UAF），修复复评发现兜底关闭层引入 B2（`_nets_m` 与 join 路径 `_networks_m` 反序持锁成 ABBA 环），删除兜底层后聚焦复核 APPROVE；终态修复为 `_shuttingDown` 条件化 reopen + HpFrameGate 单调 seal（set-flag → seal → drain）；缺口 1 修复（IPv6 DAD PREFERRED 即刻生效消灭黑洞、IPv4 单链表防自环）与阶段 C Android 链接加固（`-Wl,--no-undefined`）与 BOUND_SYMBOLS 六元组符号校验不变，本地全量验证通过。[双网络 Android 证据](27-mobile-tailscale-cloud.md) · [桌面移植](10-blocker-repair.md) · [ZeroTier 最新记录](55-mobile-shared-network-device.md) | ZeroTier 阶段 2 门控：S1–S4 已完成并经 CI 定案（run `42632587131` 全绿，产物含 `libhp_zerotier.so`）；仅 S5 真机验收未做。系统 KeyStore 硬件隔离结论与指定网络真实拨号／SSH 链路。网络分支多机配对真机验证。五端的 15 个单网格及 20 个并发组合仍须逐格验收。[平台矩阵](../validation/shared/platform-matrix.json) |
+| 三种组网 | 两份 APK 包内的 EasyTier、Tailscale 原生库已核对。EasyTier 的 Linux、Windows 移植编译错误已有修复，三桌面候选完成编译、链接、加载及离线测试。ZeroTier 共享设备审查已接入两壳源码，Mac 已用固定原生身份算法通过 JNI 验证加密保存、重新读取、拒绝损坏密文及显式删除；KeyStore 线程自 onCreate 启动修复（commit 5959b0d）。ZeroTier 候选补丁 0008 完成三轮评审并在本地复验通过，修复和证据见[下方补丁记录](#当时的源码与公开包差别)。[双网络 Android 证据](27-mobile-tailscale-cloud.md) · [桌面移植](10-blocker-repair.md) · [ZeroTier 最新记录](55-mobile-shared-network-device.md) | ZeroTier 阶段 2 门控：S1–S4 已完成并经 CI 定案（run `42632587131` 全绿，产物含 `libhp_zerotier.so`）；仅 S5 真机验收未做。系统 KeyStore 硬件隔离结论与指定网络真实拨号／SSH 链路。网络分支多机配对真机验证。五端的 15 个单网格及 20 个并发组合仍须逐格验收。[平台矩阵](../validation/shared/platform-matrix.json) |
 | 设计、桌面与分发 | Penpot 有扫码双端、看板、终端输入、桌面分屏、窄窗和关键失败恢复的交互原型，也有初步组件与语义 tokens。已建立分层测试构建和来源记录。Mac 桌面与各平台构建的既有证据按版本保留。[设计覆盖](../design/v2-coverage.md) · [分层构建](07-build-and-release.md) | 要根据设备实测收敛高保真和组件状态，再验收桌面真实分屏、焦点与恢复。iOS 签名安装、五端产品运行及辅助技术待验。许可证已定为 GPL-3.0-or-later（2026-11-11 拍板，根 LICENSE 已写入）；逐产物依赖清单见 `THIRD_PARTY_NOTICES.md`，正式分发审查收口中。[分发审查](17-license-and-distribution-review.md) |
 
-## 最新代码与公开包的差别
+## 当时的源码与公开包差别
 
 在 `dd02595` 的[集中构建](https://github.com/Luck9Star/herdr-pocket/actions/runs/42415286185)中，两份分发 APK 构建成功，工作流总体失败。之后的 [Flutter 定向复测](https://github.com/Luck9Star/herdr-pocket/actions/runs/42417473474)通过了只读闭环与同名目标 B 的检查，仍因受保护 TUI 恢复失败。该次复测没有重建 APK。
 
@@ -48,9 +48,9 @@
 - `with-emulators-input-recheck-flutter-tui-*` 前缀单独激活 Flutter TUI 模拟器复测；
 - 普通分支或不符合前缀规范的推送将自动跳过耗时的 Android 模拟器矩阵任务。
 
-## 恢复工作时的顺序
+## 当时的恢复顺序与后续结果
 
-1. **[已完成] 复测 Flutter 在 Android 上的观察恢复与 TUI 全量回执。** 在 API 35 模拟器作业中完成两壳配对、看板、观察及受保护 TUI 输入验收。Flutter 隐藏标签恢复后成功收到原目标新完整帧、同一观察代增量，十个 TUI 操作远端回执全量核验通过（run `42659301059`，`actionCount: 10`，`applicationStateMatched: true`，全部 checks 绿）。Tauri 端观察与配对全绿，TUI 首键布局漂移经单循环居中静止门修复（`9466e70`）。两份同源 arm64 APK 的哈希、ABI 与来源清单均已校验。[最新交接台账](docs/58-session-handoff-2026-11-09-r2.md) · [云端工作流](../.github/workflows/android-network-experiment.yml)
+1. **[已完成] 复测 Flutter 在 Android 上的观察恢复与 TUI 全量回执。** 在 API 35 模拟器作业中完成两壳配对、看板、观察及受保护 TUI 输入验收。Flutter 隐藏标签恢复后成功收到原目标新完整帧、同一观察代增量，十个 TUI 操作远端回执全量核验通过（run `42659301059`，`actionCount: 10`，`applicationStateMatched: true`，全部 checks 绿）。Tauri 端观察与配对全绿，TUI 首键布局漂移经单循环居中静止门修复（`9466e70`）。两份同源 arm64 APK 的哈希、ABI 与来源清单均已校验。[第二轮交接台账](58-session-handoff-2026-11-09-r2.md) · [云端工作流](../.github/workflows/android-network-experiment.yml)
 2. **[S1–S4 已完成] 补手机原生网络链路与阶段 2 门控解锁。** 阶段 2 门控已遵用户指令解除并完成开发：S1 声明与 JNI 导出、S2 生产切片倒置（`AndroidZeroTierNative` 纳入正式源）、S3 库构建、S4 双壳宿主接线（`System.loadLibrary` + `bindNative`、Cargo feature 与打包链接）均在 CI 全矩阵（run `42632587131`，9 成功 0 失败）通过验证，产物完整包含 `libhp_zerotier.so`。仅余 S5 实体真机在物理网络环境下的入网与多机并发待取得硬件后验收。[设备存储与拨号的边界](55-mobile-shared-network-device.md)
 3. **用真机结果决定选型。** 目前可用环境为云端和 Mac。取得实体 Android／iOS 后，使用相同字体、fixture、视口和负载检查扫码、输入法、滚动选择、锁屏、恢复及性能。以正确性作首要门槛，再比较维护成本、收敛高保真和组件库，接续桌面三平台。[技术栈复评](06-technology-evaluation.md) · [设计计划](08-ui-design-plan.md)
 

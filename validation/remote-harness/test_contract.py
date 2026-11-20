@@ -65,6 +65,24 @@ class HarnessGuards(unittest.TestCase):
                 if item != 'remote input from this GUI':
                     self.assertNotIn(item, normal['unverified'])
 
+    def test_tauri_private_session_scope_never_claims_independent_keyring_proof(self):
+        for guarded in (False, True):
+            for status in ('failed', 'passed'):
+                report = harness.gui_report_fields('tauri', {'status': status}, input_fixture=guarded,
+                                                   private_keyring_session=True)
+                self.assertIn('isolated Secret Service', report['scope'])
+                self.assertIn('not independently verified', report['scope'])
+                self.assertIn('protected system-store runtime', report['unverified'])
+                self.assertEqual('remote input from this GUI' in report['unverified'], not (status == 'passed' and guarded))
+        stock = harness.gui_report_fields('tauri', {'status':'passed'}, private_keyring_session=True, import_replace=True)
+        self.assertIn('config replacement', stock['scope'])
+        self.assertIn('not independently verified', stock['scope'])
+        self.assertIn('protected system-store runtime', stock['unverified'])
+        strong = harness.gui_report_fields('tauri', {'status':'passed', 'linuxKeyring': {
+            'publicKeysMatched':1, 'sameKeyAuthenticated':True}}, linux_keyring=True, private_keyring_session=True)
+        self.assertEqual(strong['scope'], 'stock Linux GTK WebView with private Secret Service')
+        self.assertNotIn('protected system-store runtime', strong['unverified'])
+
     def test_report_allowlist_drops_config_and_remote_output(self):
         raw = result(privateKeyPem='PRIVATE FIXTURE', stdout='REMOTE DATA', config={'password': 'never-copy'})
         safe = harness.safe_report(raw, 'positive')

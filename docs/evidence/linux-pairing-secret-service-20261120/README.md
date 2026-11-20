@@ -103,7 +103,7 @@ Flutter 的两张提示与 [连接禁用原图](flutter-r3-connect-disabled.png)
 
 ## 官方运行 R4
 
-Flutter 解锁对照在 `9079914bfd0fb1d9cd575703190abb05eef3ac89` 的首次尝试通过。AT-SPI/X11 驱动两个独立的正常 GTK 调试应用进程。第一进程主动断开并正常退出。第二进程重新打开同一已存主机和目标，用密钥环里的原公钥认证并观察。sshd 恰好接受两次同钥认证，两条连接均正常关闭，终端输入 0 字节。期间密钥环无写入，原身份与授权保持一致。随后撤销临时授权并清理专用进程与密钥。 [R4 job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44681801987/job/136106712430) · [原始工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44681801987/artifacts/14606401067)
+Flutter 解锁对照在 `9079914bfd0fb1d9cd575703190abb05eef3ac89` 的首次尝试通过。AT-SPI/X11 驱动两个独立的正常 GTK 调试应用进程。第一进程主动断开并正常退出。第二进程重新打开同一已存主机和目标，使用密钥环中原设备身份签名，服务端用原公钥验证。sshd 恰好接受两次同钥认证，两条连接均正常关闭，终端输入 0 字节。期间密钥环无写入，原身份与授权保持一致。随后撤销临时授权并清理专用进程与密钥。 [R4 job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44681801987/job/136106712430) · [原始工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44681801987/artifacts/14606401067)
 
 四张 1280 × 720 的 X11 窗口截图均取自同一次作业并保留原字节。独立 OCR 从两个完整的 672 × 360 终端区域读回夹具标记和推进计数。画面各含隔离终端样本及临时回环目标。ZIP 的 GitHub SHA-256、CRC、8 项内表及四张原图摘要均已复核。 [R4 脱敏回执](official-r4-receipt.json) · [归档校验和](SHA256SUMS)
 

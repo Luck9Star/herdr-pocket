@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 try:
     from s06_tauri_gui import (SplitDriver, exercise_window_resize, layout_matches, observed_tick,
                                peer_connection_evidence, require_same_positions, require_side_by_side,
-                               window_dimensions, exercise_direct_resize, exercise_peer_close, peer_close_sample,
+                               window_dimensions, exercise_direct_resize, exercise_import_replace, exercise_peer_close, peer_close_sample,
                                owned_xvfb, park_xvfb_pointer, wait_import_survivor_tick, write_import_fixture, GuiFailure)
 except ModuleNotFoundError as missing:
     if missing.name != 'cryptography':
@@ -32,6 +32,20 @@ class TauriSplitEvidenceTests(unittest.TestCase):
             payload = AESGCM(key).decrypt(raw[22:34], raw[34:], raw[:34])
             shared = Path(__file__).resolve().parents[1] / 'shared/config-transfer-v1.json'
             self.assertEqual(payload.decode('utf-8'), json.loads(shared.read_text())['plaintext'])
+
+    def test_import_requires_original_peers_and_zero_bytes_before_leaving_workspace(self):
+        open_peer = {'authenticationCount': 1, 'recognizedCloseCount': 0, 'resetCount': 0}
+        for peer, code in ((dict(open_peer, authenticationCount=2), 's06_import_initial_peers_not_open'),
+                           (open_peer, 's06_tauri_remote_bytes_changed')):
+            ui, driver = MagicMock(), MagicMock()
+            check_bytes = MagicMock(side_effect=GuiFailure('s06_tauri_remote_bytes_changed'))
+            with patch('s06_tauri_gui.peer_close_sample', return_value=[open_peer, peer]), \
+                 patch('s06_tauri_gui.write_import_fixture') as archive:
+                with self.assertRaisesRegex(GuiFailure, '^' + code + '$'):
+                    exercise_import_replace(ui, driver, None, [], ['A', 'B'], [[1, 2], [1, 2]], check_bytes)
+            archive.assert_not_called()
+            driver.click.assert_not_called()
+            ui.named.assert_not_called()
 
     @patch('paired_gui.time.sleep')
     def test_import_survivor_requires_a_current_advancing_frame(self, _sleep):

@@ -1340,15 +1340,21 @@ def wait_import_survivor_tick(ui, tab_id, *, after=None):
     return wait_for(observe, code, timeout=12) - 1
 
 
-def exercise_import_replace(ui, driver, root, approvals, tab_ids, check_bytes, expected):
+def exercise_import_replace(ui, driver, root, approvals, tab_ids, ticks, check_bytes):
     """Opt-in real SSH import path using the public configuration fixture."""
     def sample():
         return [{key: row[key] for key in ('authenticationCount','recognizedCloseCount','resetCount')}
                 for row in peer_close_sample(approvals)]
     open_peer = {'authenticationCount':1,'recognizedCloseCount':0,'resetCount':0}
     closed_peer = {'authenticationCount':1,'recognizedCloseCount':1,'resetCount':0}
+    baseline_peers = sample()
+    if baseline_peers != [open_peer] * 2:
+        raise GuiFailure('s06_import_initial_peers_not_open')
+    check_bytes((b'', b''))
     archive, password = write_import_fixture(root)
     driver.click('#workbench-split')
+    wait_for(lambda: ui.read('return document.querySelector("#view-content")?.dataset.split;') == '1',
+             's06_import_single_workspace_missing')
     if ui.read('return document.querySelector("#remote-setup").open;'):
         ui.named('配对与连接资料', '#remote-page #remote-setup', '> summary')
     driver.click('#host-return-home')
@@ -1358,6 +1364,9 @@ def exercise_import_replace(ui, driver, root, approvals, tab_ids, check_bytes, e
     wait_for(lambda: ui.read('return !!document.querySelector(arguments[0]);', field), 's06_import_file_missing')
     path = driver.element(field)
     driver.call('POST', path + '/value', {'text':str(archive), 'value':list(str(archive))})
+    wait_for(lambda: ui.read('''const files = document.querySelector(arguments[0])?.files;
+        return files?.length === 1 && files[0].name === arguments[1] && files[0].size === arguments[2];''',
+                            field, archive.name, archive.stat().st_size) is True, 's06_import_file_not_selected')
     driver.fill('#config-transfer > fieldset:nth-of-type(2) input[type="password"]', password)
     ui.named('解密并预览', '#config-transfer')
     wait_for(lambda: ui.read('return !!document.querySelector(".config-preview");'), 's06_import_preview_missing')
@@ -1366,6 +1375,7 @@ def exercise_import_replace(ui, driver, root, approvals, tab_ids, check_bytes, e
     peer_before = sample()
     if peer_before != [open_peer] * 2:
         raise GuiFailure('s06_import_peers_not_open_before_apply')
+    check_bytes((b'', b''))
     ui.named('确认应用所选操作', '.config-preview')
     wait_for(lambda: '导入完成' in driver.read('#config-transfer [role="status"]'), 's06_import_apply_unconfirmed', timeout=20)
     wait_for(lambda: sample()[0] == closed_peer,
@@ -1381,6 +1391,8 @@ def exercise_import_replace(ui, driver, root, approvals, tab_ids, check_bytes, e
              's06_import_old_tab_missing')
     old_tick = wait_for(lambda: (value + 1) if (value := ui.rendered_tick('#view-content', 0)) is not None else None,
                         's06_import_old_frame_not_visible', timeout=12) - 1
+    if old_tick < ticks[0][-1]:
+        raise GuiFailure('s06_import_old_frame_rolled_back')
     if not ui.read('return [...document.querySelectorAll("#view-content button")].find(b=>b.textContent==="连接")?.disabled === true;'):
         raise GuiFailure('s06_import_old_connect_enabled')
     ui.screenshot('import-old-retained')
@@ -1394,11 +1406,14 @@ def exercise_import_replace(ui, driver, root, approvals, tab_ids, check_bytes, e
     wait_for(lambda: ui.read('return document.querySelector("#view-content")?.dataset.tabId;') == tab_ids[1],
              's06_import_survivor_missing')
     before = wait_import_survivor_tick(ui, tab_ids[1])
+    if before < ticks[1][-1]:
+        raise GuiFailure('s06_import_survivor_frame_rolled_back')
     ui.named('恢复观察', '#view-content')
     after = wait_import_survivor_tick(ui, tab_ids[1], after=before)
     if sample() != [closed_peer, open_peer]:
         raise GuiFailure('s06_import_survivor_reconnected')
-    ui.screenshot('import-survivor-advanced');check_bytes(expected)
+    ui.screenshot('import-survivor-advanced')
+    check_bytes((b'', b''))
     before_survivor_close = sample()
     if before_survivor_close != [closed_peer, open_peer]:
         raise GuiFailure('s06_import_survivor_changed_before_close')
@@ -1407,22 +1422,23 @@ def exercise_import_replace(ui, driver, root, approvals, tab_ids, check_bytes, e
         final = sample()
         return final if final == [closed_peer] * 2 else None
     final = wait_for(final_sample, 's06_import_peers_not_closed', timeout=12)
+    check_bytes((b'', b''))
     evidence = {'realFileImport':True,'oldFrameRetained':True,'oldConnectDisabled':True,
             'oldTabManuallyClosed':True,'survivorAdvancedOnOriginalConnection':True,
-            'peersClosedBeforeDriverExit':True, 'oldVisibleTick':old_tick,
+            'peersClosedBeforeDriverExit':True, 'zeroPeerInputBytes':True,
+            'baselineVisibleTicks':ticks, 'oldVisibleTick':old_tick,
             'survivorVisibleTicks':{'beforeResume':before,'afterResume':after},
-            'peerSamples':{'beforeApply':peer_before,'afterApply':after_apply,
+            'peerSamples':{'beforeLeavingWorkspace':baseline_peers,'beforeApply':peer_before,'afterApply':after_apply,
                            'afterOldTabClose':after_old_close,'beforeSurvivorClose':before_survivor_close,
                            'afterSurvivorClose':final}}
     (ui.output / 's06-tauri-import-replace.json').write_text(json.dumps(evidence, sort_keys=True))
     return evidence
 
 
-def exercise(args, root, env, configs, approvals, expected):
+def exercise(args, root, env, configs, approvals, expected, *, import_replace=False):
     driver, stage = WebDriver(), 'prepare_display'
     ui = SplitDriver(driver, args.output)
     guarded = bool(args.input_fixture)
-    import_replace = os.environ.get('HERDR_S06_IMPORT_REPLACE') == '1'
     if import_replace and guarded: raise GuiFailure('s06_import_requires_stock')
     other = root / 's06-peer-b'
 
@@ -1519,7 +1535,8 @@ def exercise(args, root, env, configs, approvals, expected):
                         return second if second > first else None
                     second = wait_for(advanced, 's06_tauri_peer_frame_not_advancing', timeout=12)
                     ticks.append([first, second])
-                ui.focus(panels[1])
+                if not import_replace:
+                    ui.focus(panels[1])
                 check_bytes((b'', b''))
                 if not guarded and any(ui.read('return !!document.querySelector(arguments[0]+" .tab-mobile-controls");', panel)
                                        for panel in panels):
@@ -1529,6 +1546,17 @@ def exercise(args, root, env, configs, approvals, expected):
                     ui.failure_screenshot('both')
                     raise GuiFailure('s06_tauri_both_frames_not_visible')
                 ui.screenshot('connected')
+                common_evidence = {key: True for key in ('normalHomepage', 'twoReviewedIdentities',
+                    'samePaneDifferentTerminal', 'bothVisible', 'independentFrames', 'bothAdvanced', 'stoppedBoth')}
+                frame_evidence = 'public visible-terminal-text UI snapshots; native WebDriver actions'
+                if import_replace:
+                    stage = 'import_replace'
+                    evidence = exercise_import_replace(ui, driver, root, approvals, tab_ids, ticks, check_bytes)
+                    return {**common_evidence, 'frameEvidence': frame_evidence,
+                            'peersClosedBeforeDriverExit': evidence['peersClosedBeforeDriverExit'],
+                            'peerAuthenticationCounts': [peer['authenticationCount']
+                                for peer in evidence['peerSamples']['afterSurvivorClose']],
+                            'importReplace': evidence}
                 stage = 'input_focus'
                 direct_resize_evidence = None
                 if guarded:
@@ -1573,19 +1601,15 @@ def exercise(args, root, env, configs, approvals, expected):
                     stage = 'window_resize'
                     targets = [(config['paneId'], fixture_terminal_id(config)) for config in configs]
                     resize_evidence = exercise_window_resize(ui, panels, targets, approvals, check_bytes)
-                stage = 'import_replace' if import_replace else 'close'
-                import_evidence = exercise_import_replace(ui, driver, root, approvals, tab_ids, check_bytes, expected) if import_replace else None
-                peer_authentication_counts = ([peer['authenticationCount'] for peer in import_evidence['peerSamples']['afterSurvivorClose']]
-                                              if import_replace else exercise_peer_close(ui, panels, approvals))
+                stage = 'close'
+                peer_authentication_counts = exercise_peer_close(ui, panels, approvals)
                 check_bytes(expected)
-                return {**{key: True for key in ('normalHomepage', 'twoReviewedIdentities', 'samePaneDifferentTerminal',
-                    'bothVisible', 'independentFrames', 'bothAdvanced', 'singleInputFocus', 'focusDoesNotRestoreInput',
-                    'lateInputRejected', 'stoppedBoth')},
+                return {**common_evidence, 'singleInputFocus': True, 'focusDoesNotRestoreInput': True,
+                    'lateInputRejected': True,
                     'sides': [{'visibleFrameSnapshots': 2, 'tickAdvanced': second > first, 'inputAccepted': guarded}
                               for first, second in ticks],
                     'peerAuthenticationCounts': peer_authentication_counts,
-                    'peersClosedBeforeDriverExit': True, 'frameEvidence': 'public visible-terminal-text UI snapshots; native WebDriver actions',
-                    **({'importReplace': import_evidence} if import_evidence is not None else {}),
+                    'peersClosedBeforeDriverExit': True, 'frameEvidence': frame_evidence,
                     **({'guardedDirectEscape': {'trustedChordConsumed': True, 'domFocusMovedToA': True,
                         'selectedTargetStayedB': True, 'originalTargetsAndPeersPreserved': True,
                         'readOnlyAfterEscape': True, 'noExtraInputBytes': True}} if guarded else {}),

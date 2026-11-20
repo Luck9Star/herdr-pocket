@@ -18,6 +18,8 @@ REQUIRED = ('normalHomepage', 'twoReviewedIdentities', 'samePaneDifferentTermina
             'focusDoesNotRestoreInput', 'lateInputRejected', 'stoppedBoth')
 STOCK_CLOSE_CHECK = 'focusedTabClosedPeerAdvanced'
 STOCK_FINAL_CLOSE_CHECK = 'stockPeersClosedBeforeDriverExit'
+S06_TEST_ID = 'S06-two-real-ssh-herdr-targets'
+IMPORT_REPLACE_TEST_ID = 'M1-05-tauri-real-ssh-config-replacement'
 
 
 def widget_failure(exchange, fallback):
@@ -137,7 +139,7 @@ def acknowledge_stock_close(exchange, approvals, proc, deadline, result, *, fina
         result[STOCK_FINAL_CLOSE_CHECK] = True
 
 
-def run_gui(args, root, env, config, command, final_pty_evidence):
+def run_gui(args, root, env, config, command, final_pty_evidence, *, import_replace=False):
     # run-ci.py owns this host, empty authorization file, server processes and
     # exact two sessions. This module never touches an operator's SSH state.
     if (args.paired_gui not in ('flutter', 'tauri') or root.parent != Path('/tmp') or
@@ -145,12 +147,15 @@ def run_gui(args, root, env, config, command, final_pty_evidence):
             config['host'] != '127.0.0.1' or (root / 'authorized_keys').stat().st_size):
         raise GuiFailure('s06_unsafe_fixture')
     guarded = bool(args.input_fixture)
+    if import_replace and (args.paired_gui != 'tauri' or guarded):
+        raise GuiFailure('s06_import_requires_stock_tauri')
     other = root / 's06-peer-b'
     other.mkdir(mode=0o700)
     exchange = root / 's06-exchange'
     exchange.mkdir(mode=0o700)
     approvals = []
-    result = {'adapter': args.paired_gui, 'testId': 'S06-two-real-ssh-herdr-targets', 'status': 'failed'}
+    result = {'adapter': args.paired_gui, 'testId': IMPORT_REPLACE_TEST_ID if import_replace else S06_TEST_ID,
+              'status': 'failed'}
     expected = (DRAFT if guarded else b'', b'b' if guarded else b'')
     try:
         shutil.copy2(root / 'capture_input.py', other / 'capture_input.py')
@@ -183,7 +188,8 @@ def run_gui(args, root, env, config, command, final_pty_evidence):
                 Host(scratch, target['username'], target['expectedHostKey'])))
         if args.paired_gui == 'tauri':
             from s06_tauri_gui import exercise
-            result.update(exercise(args, root, env, (config, second), approvals, expected))
+            result.update(exercise(args, root, env, (config, second), approvals, expected,
+                                   import_replace=import_replace))
         else:
             argv = ['flutter', 'test', '--no-pub', '--reporter', 'expanded', 'test/s06_real_ssh_test.dart']
             with owned_process(argv, cwd=args.flutter_app, env=widget_env, log=root / 's06-widget.log') as proc:
@@ -229,7 +235,9 @@ def run_gui(args, root, env, config, command, final_pty_evidence):
                       receivedInputBytes=len(expected[0]), peerInputBytes=[len(data) for data in expected],
                       exactRemoteBytes=True, distinctAuthenticatedDeviceKeys=True,
                       targetBindingsPreserved=True, physicalImeVerified=False,
-                      scope=('native Linux GTK WebView and two real SSH/herdr sessions; process-memory test identities'
+                      scope=('native Linux GTK WebView config replacement with two real SSH/herdr sessions; process-memory test identities'
+                             if import_replace else
+                             'native Linux GTK WebView and two real SSH/herdr sessions; process-memory test identities'
                              if args.paired_gui == 'tauri' else
                              'real Flutter widget, two real SSH/herdr sessions; explicit test signers and memory journals'))
     except GuiFailure as error:

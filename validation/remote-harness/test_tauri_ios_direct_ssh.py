@@ -1297,6 +1297,13 @@ class HomeDiagnosticsTests(unittest.TestCase):
             shot['geometry']['hittable'] = False
             self.assertIs(unclickable.accept(shot), False)
 
+        for height, ready in ((46, True), (47, True), (47.99, True), (45, False), (51, False)):
+            with self.subTest(height=height), tempfile.TemporaryDirectory() as directory:
+                sample = new_state(directory)
+                bounds = [*frame[:3], height]
+                painted = [*frame[:3], round(height)]
+                self.assertIs(sample.accept(capture(navigation('sshForm', bounds), painted=painted)), ready)
+
         with tempfile.TemporaryDirectory() as directory:
             never_painted = new_state(directory)
             invalid = capture(navigation('sshForm'), painted=ax_label)

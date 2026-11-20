@@ -574,15 +574,12 @@ def shortcut_visual_ready(frames, scale, add, geometry):
         return False
 
     def matches_ax(painted, frame):
-        def edges(rect):
-            x, y, w, h = rect
-            return (x, y, x + w, y + h)
-        return min(frame[2:]) >= 48 and all(
-            abs(pixel - point * scale) <= 2 * scale for pixel, point in zip(edges(painted), edges(frame)))
+        return min(frame[2:]) >= 44 and all(
+            abs(pixel - point * scale) <= 2 * scale for pixel, point in zip(painted, frame))
 
     gap = secondary[1] - (primary[1] + primary[3])
-    return (primary[3] >= 48 * scale and secondary[3] >= 48 * scale
-            and primary[2] >= 48 * scale and secondary[2] >= 48 * scale
+    return (all(abs(frame[3] - 48 * scale) <= 2 * scale and frame[2] >= 44 * scale
+                for frame in (primary, secondary))
             and abs(primary[0] - secondary[0]) <= scale and abs(primary[2] - secondary[2]) <= scale
             and 0 < gap <= 24 * scale
             and matches_ax(primary, add) and matches_ax(secondary, geometry['frame']))

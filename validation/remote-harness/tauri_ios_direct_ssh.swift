@@ -358,9 +358,10 @@ enum NativeHomeReadiness {
         return .shell
     }
     static func compactEntryReady(_ geometry: [String: Any], witnessed: CGRect) -> Bool {
-        // The compact card sets a 48 CSS px minimum with initial-scale=1.
-        guard NativeFramePolicy.valid(witnessed), min(witnessed.width, witnessed.height) >= 48,
-              let frame = geometry["frame"] as? [Double], frame.count == 4, min(frame[2], frame[3]) >= 48 else { return false }
+        // The design's independent touch minimum is 44pt. The collector
+        // checks the painted 48pt button height with the rendering tolerance.
+        guard NativeFramePolicy.valid(witnessed), min(witnessed.width, witnessed.height) >= 44,
+              let frame = geometry["frame"] as? [Double], frame.count == 4, min(frame[2], frame[3]) >= 44 else { return false }
         return geometry["role"] as? String == "button" &&
             ["enabled", "hittable", "ownerResolved", "fullyVisible"].allSatisfy { geometry[$0] as? Bool == true }
     }

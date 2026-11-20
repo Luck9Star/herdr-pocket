@@ -206,11 +206,21 @@ for (flag, issue) in [("enabled", Issue.disabled), ("hittable", .hit), ("ownerRe
     blocked[flag] = false
     precondition(NativeControlPolicy.ShortcutEvidence.actionIssue(blocked, witnessed: frames[3]) == issue)
 }
-var undersized = geometry
-undersized["frame"] = [40.0, 322.0, 360.0, 47.0]
-precondition(!NativeHomeReadiness.compactEntryReady(undersized, witnessed: frames[3]))
-precondition(NativeControlPolicy.ShortcutEvidence.actionIssue(undersized, witnessed: frames[3]) == .small)
-precondition(!NativeHomeReadiness.compactEntryReady(geometry, witnessed: frames[3].insetBy(dx: 0, dy: 1)))
+for height in [44.0, 46.0, 47.0, 47.99] {
+    var withinTouchMinimum = geometry
+    withinTouchMinimum["frame"] = [40.0, 322.0, 360.0, height]
+    let frame = CGRect(x: 40, y: 322, width: 360, height: height)
+    precondition(NativeHomeReadiness.compactEntryReady(withinTouchMinimum, witnessed: frame))
+    precondition(NativeControlPolicy.ShortcutEvidence.actionIssue(withinTouchMinimum, witnessed: frame) == nil)
+}
+for height in [22.0, 43.99] {
+    var undersized = geometry
+    undersized["frame"] = [40.0, 322.0, 360.0, height]
+    let frame = CGRect(x: 40, y: 322, width: 360, height: height)
+    precondition(!NativeHomeReadiness.compactEntryReady(undersized, witnessed: frames[3]))
+    precondition(!NativeHomeReadiness.compactEntryReady(geometry, witnessed: frame))
+    precondition(NativeControlPolicy.ShortcutEvidence.actionIssue(undersized, witnessed: frame) == .small)
+}
 ''')
 
     def test_production_home_wait_separates_slow_initialization_from_unsafe_navigation(self):

@@ -1118,11 +1118,9 @@ Future<void> runEncryptedDirectSshUi(
     'fingerprintMatched': true,
     'explicitTrustRequired': true,
     'privateKeyPasted': true,
-    if (android) ...{
-      'pemCollapsedBeforeReopen': true,
-      'pemReopenedFocusedAndExact': true,
-      'pemRecollapsedAfterBlur': true,
-    },
+    'pemCollapsedBeforeReopen': true,
+    'pemReopenedFocusedAndExact': true,
+    'pemRecollapsedAfterBlur': true,
     'passphraseObscured': true,
     if (rotating)
       ..._rotationTrustEvidence

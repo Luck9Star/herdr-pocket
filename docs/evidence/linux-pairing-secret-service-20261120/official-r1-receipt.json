@@ -1,0 +1,354 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "75df6463c7784899f5661cc4e43cc72eab89596d",
+  "runAttempt": 1,
+  "pairedGuiEnvironment": {
+    "platform": "Ubuntu 24.04 x86_64 loopback OpenSSH",
+    "openssh": "9.6p1 Ubuntu-3ubuntu13.20",
+    "herdr": "0.9.5",
+    "herdrSourceSHA": "2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01",
+    "keyring": "private Linux Secret Service"
+  },
+  "runs": {
+    "44672493040": {
+      "conclusion": "success",
+      "jobs": {
+        "paired-observe (tauri)": {
+          "id": 136076474081,
+          "conclusion": "success"
+        },
+        "paired-observe (flutter)": {
+          "id": 136076474580,
+          "conclusion": "success"
+        },
+        "s06-input-fixture": {
+          "id": 136076475455,
+          "conclusion": "skipped"
+        }
+      }
+    },
+    "44672498778": {
+      "conclusion": "failure",
+      "jobs": {
+        "paired-observe (tauri)": {
+          "id": 136076490769,
+          "conclusion": "failure"
+        },
+        "paired-observe (flutter)": {
+          "id": 136076491061,
+          "conclusion": "failure"
+        },
+        "s06-input-fixture": {
+          "id": 136076492114,
+          "conclusion": "skipped"
+        }
+      }
+    },
+    "44672504764": {
+      "conclusion": "failure",
+      "jobs": {
+        "lock-and-test": {
+          "id": 136076510460,
+          "conclusion": "success"
+        },
+        "build (linux, ubuntu-24.04)": {
+          "id": 136078278147,
+          "conclusion": "success"
+        },
+        "render-characterization": {
+          "id": 136078278165,
+          "conclusion": "failure"
+        }
+      }
+    },
+    "44672510155": {
+      "conclusion": "success",
+      "jobs": {
+        "build (android, ubuntu-24.04)": {
+          "id": 136076534852,
+          "conclusion": "success"
+        },
+        "build (ios-simulator, macos-15)": {
+          "id": 136076535085,
+          "conclusion": "success"
+        },
+        "build (linux, ubuntu-24.04)": {
+          "id": 136076535159,
+          "conclusion": "success"
+        },
+        "build (windows, windows-2025)": {
+          "id": 136076535161,
+          "conclusion": "success"
+        },
+        "build (macos, macos-15)": {
+          "id": 136076535168,
+          "conclusion": "success"
+        },
+        "build (ios-device, macos-15)": {
+          "id": 136076535234,
+          "conclusion": "success"
+        }
+      }
+    },
+    "44673360914": {
+      "conclusion": "success",
+      "jobs": {
+        "patch-and-test": {
+          "id": 136079289128,
+          "conclusion": "success"
+        },
+        "build (macos, macos-15)": {
+          "id": 136081274492,
+          "conclusion": "success"
+        },
+        "macos-render-check": {
+          "id": 136081274521,
+          "conclusion": "success"
+        },
+        "build (android, ubuntu-24.04)": {
+          "id": 136081274530,
+          "conclusion": "success"
+        },
+        "build (ios, macos-15)": {
+          "id": 136081274534,
+          "conclusion": "success"
+        },
+        "build (linux, ubuntu-24.04)": {
+          "id": 136081274539,
+          "conclusion": "success"
+        },
+        "build (windows, windows-2022)": {
+          "id": 136081274545,
+          "conclusion": "success"
+        }
+      }
+    }
+  },
+  "singleHost": {
+    "flutter": {
+      "artifact": {
+        "id": 14600219414,
+        "zipSha256": "432cfd11e55a27f8c85c247c3e4b08ba0cadba4b23ba64a65ec0d56a11024930",
+        "checkedInnerSHA256SUMSEntries": 4
+      },
+      "receivedInputBytes": 0,
+      "cleanup": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false,
+        "rawLogsUploaded": false
+      },
+      "linuxKeyring": {
+        "publicKeysMatched": 1,
+        "sameKeyAuthenticated": true
+      },
+      "frameEvidence": "widget state after Terminal.write",
+      "proof": {
+        "temporaryHostApprovedRequest": true,
+        "matchedDeviceKeyInSshd": true,
+        "revokedFixtureKey": true,
+        "paired": true,
+        "paneChosen": true,
+        "fullRendered": true,
+        "deltaRendered": true,
+        "stoppedStale": true
+      },
+      "nativeCatalogReadback": true,
+      "pauseResumeSameConnection": true,
+      "frameCount": 8,
+      "deltaFrames": 6
+    },
+    "tauri": {
+      "artifact": {
+        "id": 14601125773,
+        "zipSha256": "e8247c71e0ec172e6c329334d3d44838a4b77a6066a13eebf97ad1d9684f91e8",
+        "checkedInnerSHA256SUMSEntries": 3
+      },
+      "receivedInputBytes": 0,
+      "cleanup": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false,
+        "rawLogsUploaded": false
+      },
+      "linuxKeyring": {
+        "publicKeysMatched": 1,
+        "sameKeyAuthenticated": true
+      },
+      "frameEvidence": "xterm parser callback after consuming a frame",
+      "proof": {
+        "temporaryHostApprovedRequest": true,
+        "matchedDeviceKeyInSshd": true,
+        "revokedFixtureKey": true,
+        "paired": true,
+        "paneChosen": true,
+        "fullRendered": true,
+        "deltaRendered": true,
+        "stoppedStale": true
+      },
+      "restart": {
+        "independentAppProcesses": true,
+        "firstOwnerLockReleased": true,
+        "samePrivateSession": true,
+        "sameSavedHostAndTarget": true,
+        "sameDeviceKeyReauthenticated": true,
+        "exactPeerAuthentications": 2,
+        "bothPeersClosed": true,
+        "secondObservedFrames": {
+          "full": 1,
+          "delta": 2
+        },
+        "originalKeyAndAuthorizationUnchanged": true,
+        "noKeyringWrites": true
+      }
+    }
+  },
+  "s06R1": {
+    "flutter": {
+      "artifact": {
+        "id": 14601471624,
+        "zipSha256": "4833ccde325025e88540ecd1a2d269d7d3b319ebaae8f138d19701fce27ecc01",
+        "checkedInnerSHA256SUMSEntries": 4
+      },
+      "receivedInputBytes": 0,
+      "cleanup": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false,
+        "rawLogsUploaded": false
+      },
+      "errorCode": "s06_widget_exited_before_focused_close_s06_split_resume",
+      "revokedFixtureKeys": true,
+      "widgetFailure": {
+        "locations": [
+          "s06_real_ssh_test.dart:101:42",
+          "s06_real_ssh_test.dart:109:7",
+          "s06_real_ssh_test.dart:202:5"
+        ],
+        "splitActive": false,
+        "visibleTabs": 1,
+        "resumeOnstage": 0,
+        "resumeAnywhere": 0,
+        "peers": [
+          {
+            "connectionCount": 1,
+            "frameCount": 3,
+            "deltaFrames": 2,
+            "phase": "failed",
+            "error": "cancelled",
+            "observationCloseFailed": false
+          },
+          {
+            "connectionCount": 1,
+            "frameCount": 177,
+            "deltaFrames": 176,
+            "phase": "streaming",
+            "error": "none",
+            "observationCloseFailed": false
+          }
+        ]
+      }
+    },
+    "tauri": {
+      "artifact": {
+        "id": 14601071341,
+        "zipSha256": "eb8b7155086f941d80af85e32ae5dd2017fa37d2bc475d7091e5466752a58f5c",
+        "checkedInnerSHA256SUMSEntries": 7
+      },
+      "receivedInputBytes": 0,
+      "cleanup": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false,
+        "rawLogsUploaded": false
+      },
+      "errorCode": "s06_tauri_input_focus_webdriver_click_stale_element_reference",
+      "revokedFixtureKeys": true,
+      "beforePanelGeometry": [
+        {
+          "height": 1191,
+          "left": 839,
+          "width": 560,
+          "right": 1399,
+          "top": 694
+        },
+        {
+          "height": 1191,
+          "left": 265,
+          "width": 560,
+          "right": 825,
+          "top": 694
+        }
+      ],
+      "connectedScreenshotMember": "s06-tauri-connected.png"
+    }
+  },
+  "terminalRendering": {
+    "reference": {
+      "artifact": {
+        "id": 14601310031,
+        "zipSha256": "30ae8bb14a89ffd8b87cb6f0ecebf7f31ca65cba978f5121ce7824069070907f",
+        "checkedInnerSHA256SUMSEntries": 0
+      },
+      "terminalVersion": "0.5.0",
+      "baseNontransparentPixels": 138,
+      "markedNontransparentPixels": 138,
+      "bufferPreservesMarks": true,
+      "combiningVisibleCriterion": "failed"
+    },
+    "candidate": {
+      "artifact": {
+        "id": 14601425873,
+        "zipSha256": "ee7f9381769f1ba2e0900ed85dc28bf89eeeaff1e530e3f73cea2b74af77b109",
+        "checkedInnerSHA256SUMSEntries": 0
+      },
+      "terminalVersion": "0.5.0",
+      "baseNontransparentPixels": 138,
+      "markedNontransparentPixels": 169,
+      "bufferPreservesMarks": true,
+      "combiningVisibleCriterion": "passed",
+      "candidate": {
+        "variant": "experimental-patched",
+        "candidateRevision": 2,
+        "patchSha256": "17f7be40e51ffb43df48d67d111376e958a67edf71051fbb660a39b3c5ab6f29"
+      }
+    }
+  },
+  "linuxPackages": {
+    "flutterReference": {
+      "artifact": {
+        "id": 14601051507,
+        "zipSha256": "77f49e506794ff98fff9f6502d8915e05798840f68e82653d2b68ecfe6969596",
+        "checkedInnerSHA256SUMSEntries": 1
+      },
+      "packageName": "flutter-linux-debug.tar.gz",
+      "packageSha256": "0b4e81ad53c0ec5d4647673181e431aeedeb279facdb2af007bd7d59bdd2fabc",
+      "noticeDirectory": "bundle/data/third-party/secret-service-5.1.0"
+    },
+    "flutterCandidate": {
+      "artifact": {
+        "id": 14602300869,
+        "zipSha256": "1f186f11bc61796c0c5ddb2d9eb22421783da5e660843c5d8459970eecd4e453",
+        "checkedInnerSHA256SUMSEntries": 1
+      },
+      "packageName": "flutter-linux-debug.tar.gz",
+      "packageSha256": "c7b9ea6153197c304038c8b7d81f61763fab33f73f871f6bdadacd19edd2313b",
+      "noticeDirectory": "bundle/data/third-party/secret-service-5.1.0"
+    },
+    "tauri": {
+      "artifact": {
+        "id": 14601223613,
+        "zipSha256": "6605cfb00648434f72ac6e90022ec8e1ad756845cb0142b7aee7e0948b095346",
+        "checkedInnerSHA256SUMSEntries": 71
+      },
+      "packageName": "herdr-pocket-tauri-probe_0.1.0_amd64.deb",
+      "packageSha256": "eb1c6c5d29b45f4a90344737c8d6c154e59ada8bf9e682cb735ef155beeb10fc",
+      "noticeDirectory": "usr/share/doc/herdr-pocket-tauri-probe/secret-service-5.1.0"
+    }
+  },
+  "packagedNoticeSHA256": {
+    "LICENSE-APACHE": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "LICENSE-MIT": "074585dbaf488db540c26f7b20f36053a157d7580bb1c390dc9f6afdb017c83a",
+    "UPSTREAM": "bb87a220fbab51115ae5b36e920fe01dfd48de7ea207a18245be0e6355d480b5"
+  }
+}

@@ -2004,10 +2004,11 @@ async fn explicit_stop_retires_transport(paused: bool) {
         assert!(!first.control.graceful_peer_eof());
     }
     first.control.stop_gracefully();
-    assert!(!first.cancel.is_cancelled(), "graceful request must permit SSH disconnect and FIN");
     assert_eq!(timeout(Duration::from_secs(8),first.task).await.unwrap().unwrap(),Err("cancelled"));
     until(||a.stats.retired.load(Ordering::SeqCst)==1).await;
     assert!(first.control.graceful_peer_eof(),"stop must finish the SSH stream, including from pause");
+    // Both forced teardown and a finished graceful close retire this token.
+    assert!(first.cancel.is_cancelled());
     assert_eq!(first.dials.dials.load(Ordering::SeqCst),1);
     assert_eq!(a.stats.auths.load(Ordering::SeqCst),1);
     assert_eq!(other.control.snapshot().phase,ObservationPhase::Active);

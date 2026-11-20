@@ -1,0 +1,515 @@
+{
+  "sourceSHA": "ad0d70e384be5877b191840530cc179271ec210c",
+  "engine": "webkit",
+  "browser": "26.5",
+  "scope": "Production Tauri frontend in a Playwright browser against simulated native IPC; synthetic file and saved hosts; no SSH or native picker.",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "pageErrors": [],
+  "clicks": [
+    {
+      "entry": 0,
+      "choice": "replace",
+      "scrollBefore": 700,
+      "x": 55,
+      "y": 422,
+      "hitOwnRadio": true,
+      "hitOwnLabel": true,
+      "hitTag": "INPUT",
+      "scrollY": 1274,
+      "viewport": 390,
+      "viewportHeight": 844,
+      "left": 44,
+      "right": 346,
+      "top": 400.03125,
+      "bottom": 444.03125,
+      "horizontalOverflow": 0,
+      "checked": true
+    },
+    {
+      "entry": 1,
+      "choice": "keep",
+      "scrollBefore": 1274,
+      "x": 55,
+      "y": 421,
+      "hitOwnRadio": true,
+      "hitOwnLabel": true,
+      "hitTag": "INPUT",
+      "scrollY": 1574,
+      "viewport": 390,
+      "viewportHeight": 844,
+      "left": 44,
+      "right": 346,
+      "top": 399.5,
+      "bottom": 443.5,
+      "horizontalOverflow": 0,
+      "checked": true
+    },
+    {
+      "entry": 2,
+      "choice": "keep",
+      "scrollBefore": 1574,
+      "x": 55,
+      "y": 421,
+      "hitOwnRadio": true,
+      "hitOwnLabel": true,
+      "hitTag": "INPUT",
+      "scrollY": 1917,
+      "viewport": 390,
+      "viewportHeight": 844,
+      "left": 44,
+      "right": 346,
+      "top": 399.96875,
+      "bottom": 443.96875,
+      "horizontalOverflow": 0,
+      "checked": true
+    }
+  ],
+  "impactGeometry": {
+    "preview": {
+      "visualWidth": 390,
+      "visualHeight": 844,
+      "scale": 1,
+      "scrollY": 2156,
+      "documentWidth": 390,
+      "rootClientWidth": 390,
+      "previewScrollWidth": 332,
+      "previewClientWidth": 332,
+      "left": 29,
+      "right": 361,
+      "top": 279.96875,
+      "bottom": 563.34375,
+      "width": 332,
+      "height": 283.375,
+      "clientWidth": 332,
+      "scrollWidth": 332,
+      "lines": [
+        {
+          "left": 41,
+          "right": 337.67315673828125,
+          "top": 308.3603515625,
+          "bottom": 323.6708984375,
+          "visible": true
+        },
+        {
+          "left": 41,
+          "right": 92.59532928466797,
+          "top": 330.4541015625,
+          "bottom": 345.7646484375,
+          "visible": true
+        },
+        {
+          "left": 81,
+          "right": 173.6484375,
+          "top": 364.734375,
+          "bottom": 383.578125,
+          "visible": true
+        },
+        {
+          "left": 41,
+          "right": 337.67315673828125,
+          "top": 402.5478515625,
+          "bottom": 417.8583984375,
+          "visible": true
+        },
+        {
+          "left": 41,
+          "right": 311.87548828125,
+          "top": 424.6416015625,
+          "bottom": 439.9521484375,
+          "visible": true
+        },
+        {
+          "left": 81,
+          "right": 336.3668212890625,
+          "top": 459.06201171875,
+          "bottom": 477.90576171875,
+          "visible": true
+        },
+        {
+          "left": 81,
+          "right": 239.9202880859375,
+          "top": 478.06201171875,
+          "bottom": 496.90576171875,
+          "visible": true
+        },
+        {
+          "left": 81,
+          "right": 346.4307861328125,
+          "top": 497.06201171875,
+          "bottom": 515.90576171875,
+          "visible": true
+        },
+        {
+          "left": 81,
+          "right": 224.0447998046875,
+          "top": 516.06201171875,
+          "bottom": 534.90576171875,
+          "visible": true
+        }
+      ]
+    }
+  },
+  "noSelection": "当前选择没有受影响的工作台标签。",
+  "preview": "预览时检测到以下主机有连接活动，确认后将停止这些连接。\n\nfixture-alpha\n\n确认后将停止以下标签的连接；旧标签会保留最后画面供查看，可手动关闭，不能重新连接或发送。\n\n标签 1 · fixture-alpha · w1:p1 · 观察已暂停 · 输入已关闭。\n标签 2 · fixture-alpha · 选择终端 · 未连接 · 输入已关闭。",
+  "afterApplyCommands": [
+    {
+      "cmd": "config_document_platform"
+    },
+    {
+      "cmd": "host_init"
+    },
+    {
+      "cmd": "host_list"
+    },
+    {
+      "cmd": "network_list"
+    },
+    {
+      "cmd": "remote_tab_reserve",
+      "tabId": "653b1b8f-3a78-4a85-9a7a-4b148ccb7263",
+      "hostId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "cmd": "remote_tab_visible",
+      "tabId": "653b1b8f-3a78-4a85-9a7a-4b148ccb7263",
+      "generation": 1
+    },
+    {
+      "cmd": "remote_tab_observe",
+      "tabId": "653b1b8f-3a78-4a85-9a7a-4b148ccb7263",
+      "canvas": {
+        "cols": 80,
+        "rows": 24
+      },
+      "paneId": "",
+      "terminalId": "",
+      "generation": 1
+    },
+    {
+      "cmd": "remote_tab_select",
+      "tabId": "653b1b8f-3a78-4a85-9a7a-4b148ccb7263",
+      "paneId": "w1:p1",
+      "terminalId": "term_a001",
+      "generation": 1,
+      "epoch": 1
+    },
+    {
+      "cmd": "remote_tab_ack",
+      "tabId": "653b1b8f-3a78-4a85-9a7a-4b148ccb7263",
+      "generation": 1,
+      "epoch": 1,
+      "seq": 1
+    },
+    {
+      "cmd": "remote_tab_input_mode",
+      "tabId": "653b1b8f-3a78-4a85-9a7a-4b148ccb7263",
+      "mode": "draft",
+      "generation": 1,
+      "epoch": 1
+    },
+    {
+      "cmd": "remote_tab_control",
+      "tabId": "653b1b8f-3a78-4a85-9a7a-4b148ccb7263",
+      "action": "pause",
+      "generation": 1
+    },
+    {
+      "cmd": "host_list"
+    },
+    {
+      "cmd": "network_list"
+    },
+    {
+      "cmd": "host_list"
+    },
+    {
+      "cmd": "network_list"
+    },
+    {
+      "cmd": "remote_tab_reserve",
+      "tabId": "d05aba94-7c22-4a06-84a3-8ad264ec826a",
+      "hostId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "cmd": "remote_tab_visible",
+      "tabId": "d05aba94-7c22-4a06-84a3-8ad264ec826a",
+      "generation": 2
+    },
+    {
+      "cmd": "remote_tab_observe",
+      "tabId": "d05aba94-7c22-4a06-84a3-8ad264ec826a",
+      "canvas": {
+        "cols": 80,
+        "rows": 24
+      },
+      "paneId": "",
+      "terminalId": "",
+      "generation": 2
+    },
+    {
+      "cmd": "remote_tab_select",
+      "tabId": "d05aba94-7c22-4a06-84a3-8ad264ec826a",
+      "paneId": "w1:p2",
+      "terminalId": "term_b002",
+      "generation": 2,
+      "epoch": 1
+    },
+    {
+      "cmd": "remote_tab_ack",
+      "tabId": "d05aba94-7c22-4a06-84a3-8ad264ec826a",
+      "generation": 2,
+      "epoch": 1,
+      "seq": 1
+    },
+    {
+      "cmd": "remote_tab_input_mode",
+      "tabId": "d05aba94-7c22-4a06-84a3-8ad264ec826a",
+      "mode": "draft",
+      "generation": 2,
+      "epoch": 1
+    },
+    {
+      "cmd": "remote_tab_control",
+      "tabId": "d05aba94-7c22-4a06-84a3-8ad264ec826a",
+      "action": "pause",
+      "generation": 2
+    },
+    {
+      "cmd": "host_list"
+    },
+    {
+      "cmd": "network_list"
+    },
+    {
+      "cmd": "config_document_platform"
+    },
+    {
+      "cmd": "network_list"
+    },
+    {
+      "cmd": "config_document_open"
+    },
+    {
+      "cmd": "config_preview"
+    },
+    {
+      "cmd": "config_apply"
+    },
+    {
+      "cmd": "host_list"
+    },
+    {
+      "cmd": "network_list"
+    },
+    {
+      "cmd": "network_list"
+    }
+  ],
+  "tabsAfterApply": [
+    "fixture-alpha · w1:p1",
+    "fixture-alpha · 选择终端",
+    "fixture-beta · w1:p2"
+  ],
+  "oldConnectDisabled": true,
+  "oldText": "fixture-alpha · w1:p1 · term_a001\n\n我已核对当前主机、设备与连接路径。\n连接资料与诊断\n\nfixture@203.0.113.17:22 · 主机公钥 SHA256:CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC · 设备 SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA · 系统连接\n\n此标签下次连接的观察画布\n\n仅影响此标签的下次连接；这是观察画布，不代表远端 PTY 原始尺寸。\n\n最近一次连接诊断\n\n目标或网络配置已变更，请关闭此标签并新建。\n\n观察未运行；输入已关闭。\n\n连接\n恢复观察\n关闭此标签\n会话窗格\n\n观察未运行。上次画面 07:50:30。\n\nALPHA-D2-START\n$  ",
+  "oldTerminalCount": 1,
+  "oldFrame": "ALPHA-D2-START\n$  ",
+  "retainedAccess": {
+    "tabindex": "0",
+    "role": "region",
+    "editable": 0,
+    "hiddenRows": null,
+    "inert": false
+  },
+  "retainedScroll": {
+    "clientHeight": 260,
+    "scrollHeight": 408,
+    "before": 12,
+    "after": 52
+  },
+  "tabsAfterClose": [
+    "fixture-alpha · 选择终端",
+    "fixture-beta · w1:p2"
+  ],
+  "survivorText": "fixture-beta · w1:p2 · term_b002\n\n连接资料与诊断\n\n观察已暂停，SSH 保留；需主动恢复。\n\n观察未运行；输入已关闭。\n\n连接\n恢复观察\n关闭此标签\n会话窗格\n\n观察已暂停。上次画面 07:50:31。远端任务可能继续运行；暂停期间的历史不保证完整。\n\nBETA-D2-START\n$  ",
+  "survivorTerminalCount": 1,
+  "survivorFrame": "BETA-D2-START\n$  ",
+  "survivorResumedFrame": "BETA-D2-RESUME-1\n$  ",
+  "commands": [
+    {
+      "cmd": "config_document_platform"
+    },
+    {
+      "cmd": "host_init"
+    },
+    {
+      "cmd": "host_list"
+    },
+    {
+      "cmd": "network_list"
+    },
+    {
+      "cmd": "remote_tab_reserve",
+      "tabId": "653b1b8f-3a78-4a85-9a7a-4b148ccb7263",
+      "hostId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "cmd": "remote_tab_visible",
+      "tabId": "653b1b8f-3a78-4a85-9a7a-4b148ccb7263",
+      "generation": 1
+    },
+    {
+      "cmd": "remote_tab_observe",
+      "tabId": "653b1b8f-3a78-4a85-9a7a-4b148ccb7263",
+      "canvas": {
+        "cols": 80,
+        "rows": 24
+      },
+      "paneId": "",
+      "terminalId": "",
+      "generation": 1
+    },
+    {
+      "cmd": "remote_tab_select",
+      "tabId": "653b1b8f-3a78-4a85-9a7a-4b148ccb7263",
+      "paneId": "w1:p1",
+      "terminalId": "term_a001",
+      "generation": 1,
+      "epoch": 1
+    },
+    {
+      "cmd": "remote_tab_ack",
+      "tabId": "653b1b8f-3a78-4a85-9a7a-4b148ccb7263",
+      "generation": 1,
+      "epoch": 1,
+      "seq": 1
+    },
+    {
+      "cmd": "remote_tab_input_mode",
+      "tabId": "653b1b8f-3a78-4a85-9a7a-4b148ccb7263",
+      "mode": "draft",
+      "generation": 1,
+      "epoch": 1
+    },
+    {
+      "cmd": "remote_tab_control",
+      "tabId": "653b1b8f-3a78-4a85-9a7a-4b148ccb7263",
+      "action": "pause",
+      "generation": 1
+    },
+    {
+      "cmd": "host_list"
+    },
+    {
+      "cmd": "network_list"
+    },
+    {
+      "cmd": "host_list"
+    },
+    {
+      "cmd": "network_list"
+    },
+    {
+      "cmd": "remote_tab_reserve",
+      "tabId": "d05aba94-7c22-4a06-84a3-8ad264ec826a",
+      "hostId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "cmd": "remote_tab_visible",
+      "tabId": "d05aba94-7c22-4a06-84a3-8ad264ec826a",
+      "generation": 2
+    },
+    {
+      "cmd": "remote_tab_observe",
+      "tabId": "d05aba94-7c22-4a06-84a3-8ad264ec826a",
+      "canvas": {
+        "cols": 80,
+        "rows": 24
+      },
+      "paneId": "",
+      "terminalId": "",
+      "generation": 2
+    },
+    {
+      "cmd": "remote_tab_select",
+      "tabId": "d05aba94-7c22-4a06-84a3-8ad264ec826a",
+      "paneId": "w1:p2",
+      "terminalId": "term_b002",
+      "generation": 2,
+      "epoch": 1
+    },
+    {
+      "cmd": "remote_tab_ack",
+      "tabId": "d05aba94-7c22-4a06-84a3-8ad264ec826a",
+      "generation": 2,
+      "epoch": 1,
+      "seq": 1
+    },
+    {
+      "cmd": "remote_tab_input_mode",
+      "tabId": "d05aba94-7c22-4a06-84a3-8ad264ec826a",
+      "mode": "draft",
+      "generation": 2,
+      "epoch": 1
+    },
+    {
+      "cmd": "remote_tab_control",
+      "tabId": "d05aba94-7c22-4a06-84a3-8ad264ec826a",
+      "action": "pause",
+      "generation": 2
+    },
+    {
+      "cmd": "host_list"
+    },
+    {
+      "cmd": "network_list"
+    },
+    {
+      "cmd": "config_document_platform"
+    },
+    {
+      "cmd": "network_list"
+    },
+    {
+      "cmd": "config_document_open"
+    },
+    {
+      "cmd": "config_preview"
+    },
+    {
+      "cmd": "config_apply"
+    },
+    {
+      "cmd": "host_list"
+    },
+    {
+      "cmd": "network_list"
+    },
+    {
+      "cmd": "network_list"
+    },
+    {
+      "cmd": "remote_tab_visible",
+      "tabId": "d05aba94-7c22-4a06-84a3-8ad264ec826a",
+      "generation": 2
+    },
+    {
+      "cmd": "remote_tab_control",
+      "tabId": "d05aba94-7c22-4a06-84a3-8ad264ec826a",
+      "action": "resume",
+      "generation": 2
+    },
+    {
+      "cmd": "remote_tab_ack",
+      "tabId": "d05aba94-7c22-4a06-84a3-8ad264ec826a",
+      "generation": 2,
+      "epoch": 3,
+      "seq": 2
+    }
+  ],
+  "survivorOriginalGeneration": 2,
+  "passed": true
+}

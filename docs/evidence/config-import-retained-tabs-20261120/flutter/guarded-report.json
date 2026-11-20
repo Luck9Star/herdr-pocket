@@ -1,0 +1,69 @@
+{
+  "status": "passed",
+  "sourceSHA": "e74c7ec1346ef0abd6f8111dad662f0d0f8b0810",
+  "preparedSourceMatched": true,
+  "widget": {
+    "normalHomepage": true,
+    "twoReviewedIdentities": true,
+    "samePaneDifferentTerminal": true,
+    "bothVisible": true,
+    "independentFrames": true,
+    "bothAdvanced": true,
+    "singleInputFocus": true,
+    "focusDoesNotRestoreInput": true,
+    "lateInputRejected": true,
+    "stoppedBoth": true,
+    "replacedTabRetainedAndPeerAdvanced": true,
+    "sides": [
+      {
+        "connectionCount": 1,
+        "frameCount": 79,
+        "deltaFrames": 77,
+        "inputAccepted": true
+      },
+      {
+        "connectionCount": 1,
+        "frameCount": 96,
+        "deltaFrames": 95,
+        "inputAccepted": true
+      }
+    ]
+  },
+  "separatePeerListeners": true,
+  "peerObservations": {
+    "afterImportBeforeSurvivorInput": [
+      {
+        "authentications": 1,
+        "closed": true
+      },
+      {
+        "authentications": 1,
+        "closed": false
+      }
+    ],
+    "final": [
+      {
+        "authentications": 1,
+        "closed": true
+      },
+      {
+        "authentications": 1,
+        "closed": true
+      }
+    ]
+  },
+  "receiptByteCounts": {
+    "afterImportBeforeSurvivorInput": [
+      9,
+      1
+    ],
+    "final": [
+      9,
+      2
+    ]
+  },
+  "exactExpectedReceipts": true,
+  "herdrSha256": "8cb39663b4e466006ffb0d68b5efe5be61701446b6c9877bf84cce2c0f762dbc",
+  "guarded": true,
+  "herdrVersion": "herdr 0.9.5"
+}

@@ -47,14 +47,24 @@ impl Store {
         }
         Ok(())
     }
+    fn absent_is_confirmed(ss: &SecretService<'_>) -> Result<()> {
+        // An inaccessible collection cannot establish absence of an old handle.
+        let collections = ss.get_all_collections().map_err(|_| "key_unavailable")?;
+        if collections.is_empty() { return Err("key_unavailable"); }
+        for col in collections {
+            if col.is_locked().map_err(|_| "key_unavailable")? { return Err("key_locked"); }
+        }
+        Ok(())
+    }
     fn read(&self, handle: &str) -> Result<Zeroizing<Vec<u8>>> {
         Self::validate(handle)?;
         let ss = Self::service()?;
-        let col = Self::unlocked_default(&ss)?;
-        let items = col.search_items(self.attributes(handle)).map_err(|_| "key_unavailable")?;
-        if items.is_empty() { return Err("key_missing"); }
-        if items.len() != 1 { return Err("key_unavailable"); }
-        let item = &items[0];
+        let matches = ss.search_items(self.attributes(handle)).map_err(|_| "key_unavailable")?;
+        if matches.locked.len() + matches.unlocked.len() > 1 { return Err("key_unavailable"); }
+        if !matches.locked.is_empty() { return Err("key_locked"); }
+        let Some(item) = matches.unlocked.first() else {
+            Self::absent_is_confirmed(&ss)?; return Err("key_missing");
+        };
         self.exact_attributes(item, handle)?;
         if item.is_locked().map_err(|_| "key_unavailable")? { return Err("key_locked"); }
         let seed = Zeroizing::new(item.get_secret().map_err(|_| "key_unavailable")?);
@@ -79,18 +89,17 @@ impl Store {
     pub fn create_reserved(&self, handle: &str) -> Result<String> {
         Self::validate(handle)?;
         let ss = Self::service()?; let col = Self::unlocked_default(&ss)?;
-        if !col.search_items(self.attributes(handle)).map_err(|_| "key_unavailable")?.is_empty() {
-            return Err("key_exists");
-        }
+        let existing = ss.search_items(self.attributes(handle)).map_err(|_| "key_unavailable")?;
+        if !existing.locked.is_empty() || !existing.unlocked.is_empty() { return Err("key_exists"); }
         let mut seed = Zeroizing::new([0u8; 32]);
         SystemRandom::new().fill(&mut *seed).map_err(|_| "key_unavailable")?;
         let public = Self::public_for(&*seed)?;
         let item = col.create_item("herdr-pocket SSH pairing", self.attributes(handle), &*seed, false, CONTENT)
             .map_err(|_| "key_write_unknown")?;
         self.exact_attributes(&item, handle).map_err(|_| "key_write_unknown")?;
-        let items = col.search_items(self.attributes(handle)).map_err(|_| "key_write_unknown")?;
-        if items.len() != 1 { return Err("key_write_unknown"); }
-        let persisted = Zeroizing::new(items[0].get_secret().map_err(|_| "key_write_unknown")?);
+        let matches = ss.search_items(self.attributes(handle)).map_err(|_| "key_write_unknown")?;
+        if !matches.locked.is_empty() || matches.unlocked.len() != 1 { return Err("key_write_unknown"); }
+        let persisted = Zeroizing::new(matches.unlocked[0].get_secret().map_err(|_| "key_write_unknown")?);
         if persisted.as_slice() != seed.as_slice() { return Err("key_write_unknown"); }
         Ok(public)
     }
@@ -103,14 +112,18 @@ impl Store {
     }
     pub fn delete(&self, handle: &str) -> Result<()> {
         Self::validate(handle)?;
-        let ss = Self::service()?; let col = Self::unlocked_default(&ss)?;
-        let items = col.search_items(self.attributes(handle)).map_err(|_| "key_unavailable")?;
-        if items.is_empty() { return Ok(()); }
-        if items.len() != 1 { return Err("key_unavailable"); }
-        let item = &items[0]; self.exact_attributes(item, handle)?;
+        let ss = Self::service()?;
+        let matches = ss.search_items(self.attributes(handle)).map_err(|_| "key_unavailable")?;
+        if matches.locked.len() + matches.unlocked.len() > 1 { return Err("key_unavailable"); }
+        if !matches.locked.is_empty() { return Err("key_locked"); }
+        let Some(item) = matches.unlocked.first() else {
+            Self::absent_is_confirmed(&ss)?; return Ok(());
+        };
+        self.exact_attributes(item, handle)?;
         if item.is_locked().map_err(|_| "key_unavailable")? { return Err("key_locked"); }
         item.delete().map_err(|_| "key_write_unknown")
     }
+
 }
 
 mod ffi {

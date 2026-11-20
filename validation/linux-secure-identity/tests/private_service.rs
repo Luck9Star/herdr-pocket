@@ -31,15 +31,23 @@ fn actual_service_restarts_and_preserves_namespace_isolation() {
     fs::write(&path, format!("{first}\n{public}\n")).unwrap();
     assert!(Command::new(std::env::current_exe().unwrap()).args(["--exact", "worker_process"])
         .env("HP_SECRET_TEST_WORKER", &path).status().unwrap().success());
+    // Switch only the private test bus's default alias to its session collection.
+    let service = SecretService::connect(EncryptionType::Dh).unwrap();
+    let original = service.get_default_collection().unwrap();
+    let session = service.get_collection_by_alias("session").unwrap();
+    assert_ne!(original.collection_path, session.collection_path);
+    assert!(Command::new("gdbus").args(["call", "--session", "--dest", "org.freedesktop.secrets",
+        "--object-path", "/org/freedesktop/secrets", "--method", "org.freedesktop.Secret.Service.SetAlias",
+        "default", session.collection_path.as_str()]).output().unwrap().status.success());
+    assert_eq!(a.public(&first).unwrap(), public);
     a.delete(&first).unwrap();
     assert_eq!(a.public(&first), Err("key_missing"));
     assert_eq!(a.public(&second).unwrap(), other);
-    a.delete(&second).unwrap();
-    let service = SecretService::connect(EncryptionType::Dh).unwrap();
-    let collection = service.get_default_collection().unwrap();
-    collection.lock().unwrap();
-    assert!(collection.is_locked().unwrap());
-    assert_eq!(a.public(&first), Err("key_locked"));
-    assert_eq!(a.create_reserved(&Store::reserve().unwrap()), Err("key_locked"));
-    assert_eq!(a.delete(&first), Err("key_locked"));
+    original.lock().unwrap();
+    assert!(original.is_locked().unwrap());
+    assert_eq!(a.public(&second), Err("key_locked"));
+    assert_eq!(a.delete(&second), Err("key_locked"));
+    assert_eq!(a.public(&Store::reserve().unwrap()), Err("key_locked"));
+    assert_eq!(a.delete(&Store::reserve().unwrap()), Err("key_locked"));
+
 }

@@ -76,6 +76,33 @@ precondition(NativeHostObservation.pixelCrop(region, screen: screen, pixels: CGS
 precondition(NativeHostObservation.pixelCrop(region, screen: screen.offsetBy(dx: 1, dy: 0), pixels: pixelSize) == nil)
 ''')
 
+    def test_collapsed_pem_summary_requires_exact_unique_button_and_no_editor(self):
+        self.compile_and_run(r'''
+import Foundation
+let summary = "已填写私钥 · 重新编辑"
+typealias Row = (identifier: String, label: String, role: String, enabled: Bool, visible: Bool)
+let good: Row = ("ssh-key-summary", summary, "button", true, true)
+let textChild: Row = ("", summary, "staticText", true, true)
+let hiddenEditor: Row = ("ssh-key", "", "textView", false, false)
+let visibleEditor: Row = ("", "私钥 PEM（仅本次使用）", "textView", false, true)
+let labelOnly: Row = ("", summary, "button", true, true)
+let badLabel: Row = ("ssh-key-summary", "unexpected", "button", true, true)
+let badRole: Row = ("ssh-key-summary", summary, "other", true, true)
+let disabled: Row = ("ssh-key-summary", summary, "button", false, true)
+typealias Policy = NativeControlPolicy.CollapsedPEM
+precondition(try! Policy.candidate([textChild, good, hiddenEditor]).get() == 1)
+func rejected(_ rows: [Row], _ expected: Policy.Issue) {
+    guard case .failure(let issue) = Policy.candidate(rows), issue == expected else { fatalError("wrong classification") }
+}
+rejected([textChild], .missing)
+rejected([good, labelOnly], .ambiguous)
+rejected([labelOnly], .identifier)
+rejected([badLabel], .label)
+rejected([badRole], .role)
+rejected([disabled], .disabled)
+rejected([visibleEditor, good], .editorPresent)
+''')
+
     def test_headerless_fixture_pem_body_outside_editor_is_detected(self):
         self.compile_and_run(r'''
 import Foundation
@@ -621,6 +648,7 @@ protocol XCUIElementSnapshot {
     var frame: CGRect { get }
     var isEnabled: Bool { get }
     var value: String? { get }
+    var placeholderValue: String? { get }
     var hasFocus: Bool { get }
     var children: [any XCUIElementSnapshot] { get }
 }
@@ -673,12 +701,15 @@ struct Query {
     }
 }
 struct App {
+    enum State { case runningForeground }
     let frame: CGRect
+    let state = State.runningForeground
     var keyboardFrame: CGRect? = nil
     let input = Element()
     let keyboard = Element()
     var webViews: Query { Query() }
     var keyboards: Query { Query(allElementsBoundByIndex: keyboard.exists ? [keyboard] : []) }
+    var alerts: Query { Query() }
     func typeText(_ text: String) { input.typeText(text) }
 }
 struct ScreenShot { let pngRepresentation = Data([1]) }
@@ -774,7 +805,7 @@ final class Adapter {
     }
     func statusBarFrames() -> [CGRect] { blockers.filter { $0.minY == app.frame.minY } }
     func phase(_ step: String) throws { nativePhase = "ordinary_" + step }
-    func post(_ topic: String, _ payload: [String: Any]) throws { observations?.checkpoints.append((topic, payload)) }
+    func post(_ topic: String, _ payload: [String: Any] = [:]) throws { observations?.checkpoints.append((topic, payload)) }
     func role(_ type: XCUIElement.ElementType) -> String {
         if type == .secureTextField { return "secureTextField" }
         if type == .staticText { return "staticText" }
@@ -862,6 +893,9 @@ final class Adapter {
             passwords: [], representation: representation)
         return (hits.header.contains(true) || hits.body.contains(true), representation.rejection)
     }
+    func checkCollapsedPEM(previous: RevealedControl, pem: String) throws {
+        try assertEncryptedCredentialsHidden(rows, pem: pem, previousEditor: previous)
+    }
     func auth(_ previous: RevealedControl, ready: Bool = false) throws -> (password: RevealedControl, submit: RevealedControl) {
         try mobileAuth(port: 2222, ready: ready, previous: previous)
     }
@@ -898,6 +932,9 @@ final class Adapter {
             "func mobileLiveControl(_ owner:", "func authMethodFact(_ node:", "func sameControlScope(_ lhs:",
             "func sameControlScope(_ scope:", "func mobileControl(_ anchor:", "func mobileBinding(_ anchor:",
             "func encryptedFieldAnchor(_ field:", "func confirmedPEMEditor(_ rows:", "func pemRepresentation(_ row:",
+            "func encryptedField(_ field:", "func collapsedPEMControl(_ rows:", "func encryptedForm(port:",
+            "func credentialEmpty(_ field:", "func typeEncryptedCredential(_ control:", "func encryptedDraft(port:",
+            "func assertEncryptedCredentialsHidden(_ observed:",
             "func tapMobileButton(_ control:", "enum MobileWitnessObservation<Proof>", "func mobileWitness(_ targets:",
             "func visibleWitness(_ rows:", "func waitForMobileWitness<Proof>", "func mobileAuth(port:", "func mobilePassword(in rows:",
             "func mobilePasswordObservation(in rows:",
@@ -1066,6 +1103,18 @@ func checkPEMLeaf(_ leaf: Snapshot, expected: Bool, reason: String? = nil, liveL
     if !expected {
         check(!candidate.checkPEM(editorRow, previous: previous, pem: syntheticKey).exposed,
               "exact value in a proven editor can be exempted independently")
+        do {
+            try candidate.checkCollapsedPEM(previous: previous, pem: syntheticKey)
+            failures.append("an exact editor value after blur must be rejected")
+        } catch {
+            check((error as? Rejected)?.reason == "native_secret_exposed", "the post-blur scan must fail on the secret")
+        }
+        let detail = observations.checkpoints.last?.1["secretDiagnostic"] as? [String: Any]
+        let matches = detail?["candidates"] as? [[String: Any]]
+        check(matches?.count == 2 && matches?.allSatisfy { ($0["pemReason"] as? String) == "editor_after_blur" } == true,
+              "the full tree scan must report both owned representations, with fixed classifications")
+        let serialized = try! JSONSerialization.data(withJSONObject: detail ?? [:])
+        check(!String(decoding: serialized, as: UTF8.self).contains("AX TEST ONLY"), "no PEM content may enter the diagnostic")
     }
 }
 checkPEMLeaf(pemLeaf(), expected: false)

@@ -702,6 +702,12 @@ class GeometryReasonTests(unittest.TestCase):
             classified = {'count': 1, 'candidates': [candidate | {'pemReason': reason}]}
             state.accept(payload | {'secretDiagnostic': classified})
             self.assertEqual(state.result['secretDiagnostic'], classified)
+        for phase in ('encrypted_key_pem_collapse', 'encrypted_key_pem_recollapse'):
+            classified = {'count': 1, 'candidates': [candidate | {'pemReason': 'editor_after_blur'}]}
+            state.accept(payload | {'nativeCheckpoint': phase, 'secretDiagnostic': classified})
+            self.assertEqual(state.result['secretDiagnostic'], classified)
+        with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+            state.accept(payload | {'nativeCheckpoint': 'encrypted_key_pem_reopen'})
         password_only = candidate | {'privateKeyHeader': False, 'passphrase': True, 'pemReason': 'none'}
         state.accept(payload | {'secretDiagnostic': {'count': 1, 'candidates': [password_only]}})
         body_only = candidate | {'privateKeyHeader': False, 'privateKeyBody': True, 'pemReason': 'outside_editor'}
@@ -1007,18 +1013,32 @@ class CaptureDiagnosticsTests(unittest.TestCase):
 
     def test_collapsed_pem_witness_keeps_secret_gate(self):
         source = (ios.HERE / 'tauri_ios_direct_ssh.swift').read_text()
-        self.assertIn('private func collapsedPEMControl', source)
-        self.assertIn('$0.snapshot.identifier == "ssh-key-summary"', source)
-        self.assertIn('$0.snapshot.label == "已填写私钥 · 重新编辑"', source)
-        self.assertIn('guard summaries.count == 1, editors.isEmpty', source)
-        self.assertIn('requireCollapsedPEM: true', source)
-        self.assertGreaterEqual(source.count('requireCollapsedPEM: true'), 2)
-        self.assertIn('try require(collapsedPEM &&', source)
-        self.assertIn('native_encrypted_key_reopen_keyboard_missing', source)
-        strict_gate = source.index('try require(collapsedPEM, failure)')
-        secret_gate = source.index('try require(suspicious.isEmpty, "native_secret_exposed")')
-        self.assertLess(secret_gate, strict_gate)
-        self.assertNotIn('try require(editor != nil || collapsedPEM, failure)', source)
+        form = source.split('private func encryptedForm', 1)[1].split('private func credentialEmpty', 1)[0]
+        self.assertLess(form.index('assertEncryptedCredentialsHidden(rows'), form.index('collapsedPEMControl(rows'))
+        draft = source.split('private func encryptedDraft', 1)[1].split('private func authMethodFact', 1)[0]
+        for start, end in (('phase("pem_collapse")', 'phase("pem_reopen")'),
+                           ('phase("pem_recollapse")', '"_ready"')):
+            sample = draft.split(start, 1)[1].split(end, 1)[0]
+            self.assertIn('collapsedPEM: (pem,', sample)
+        self.assertEqual(draft.count('summary.live.element.tap()'), 1)
+        self.assertLess(draft.index('reveal(filled.pem.live.element'), draft.index('summary.live.element.tap()'))
+        self.assertGreater(draft.index('encryptedField(.passphrase, rows: reopenedRows'), draft.index('summary.live.element.tap()'))
+        self.assertIn('native_encrypted_key_reopen_keyboard_missing', draft)
+        self.assertNotIn('coordinate(withNormalizedOffset:', draft)
+
+    def test_encrypted_key_summary_failure_codes_are_fixed(self):
+        for reason in ('missing', 'ambiguous', 'identifier_unproven', 'label_unproven', 'role_invalid',
+                       'disabled', 'editor_present', 'owner_unproven'):
+            state = ios.Checkpoints(None, None, '/tmp', {}, encrypted=object())
+            payload = {'stage': 'native_failure', 'nativeCheckpoint': 'encrypted_key_pem_collapse',
+                       'nativeFailureCode': 'native_encrypted_key_summary_' + reason}
+            with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                state.accept(payload | {'label': 'fixture-secret'})
+            state.accept(payload)
+            self.assertEqual(state.result['nativeFailureCode'], payload['nativeFailureCode'])
+        state = ios.Checkpoints(None, None, '/tmp', {}, encrypted=object())
+        with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+            state.accept(payload | {'nativeFailureCode': 'native_encrypted_key_summary_fixture_secret'})
 
     def test_fixed_capture_diagnostics_export_and_bound(self):
         detail = {'anchor': 'terminal', 'matchCount': 2, 'reason': 'geometry_ambiguous',

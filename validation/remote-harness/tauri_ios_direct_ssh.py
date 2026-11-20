@@ -54,6 +54,10 @@ SHORTCUT_HOME_PNG = 'tauri-manual-key-empty-home.png'
 ENCRYPTED_AUTH_FAILURES = frozenset('native_encrypted_auth_' + code for code in (
     'method_missing', 'method_ambiguous', 'method_role_invalid', 'method_identity_invalid',
     'method_owner_unproven', 'method_live_unproven', 'page_unproven'))
+ENCRYPTED_SUMMARY_FAILURES = frozenset('native_encrypted_key_summary_' + code for code in (
+    'missing', 'ambiguous', 'identifier_unproven', 'label_unproven', 'role_invalid',
+    'disabled', 'editor_present', 'owner_unproven'))
+ENCRYPTED_COLLAPSE_PHASES = frozenset(('encrypted_key_pem_collapse', 'encrypted_key_pem_recollapse'))
 ORDINARY_ACTIVE_STEPS = ('keyboard_opened', 'keyboard_closed', 'board', 'terminal_from_board',
                          'network', 'terminal_from_network', 'settings', 'terminal_from_settings')
 NATIVE_PHASES = frozenset(prefix + '_' + phase for prefix in ('ordinary', 'key_change', 'encrypted_key') for phase in (
@@ -61,9 +65,9 @@ NATIVE_PHASES = frozenset(prefix + '_' + phase for prefix in ('ordinary', 'key_c
     'password', 'connect', 'terminal_focus', 'terminal_input', 'terminal_capture', 'disconnect',
     'review_capture', 'cancel', 'cancel_check', 'reprobe', 'new_fingerprint')) | {
         'ordinary_return_home', 'ordinary_active_flow', 'encrypted_key_return_home', 'encrypted_key_pem',
-        'encrypted_key_passphrase', 'encrypted_key_select_key', 'encrypted_key_key_form',
+        'encrypted_key_passphrase', 'encrypted_key_pem_reopen', 'encrypted_key_select_key', 'encrypted_key_key_form',
         'encrypted_key_wrong_submit',
-    }
+    } | ENCRYPTED_COLLAPSE_PHASES
 GEOMETRY_PHASES = frozenset(
     prefix + '_' + phase for prefix in ('ordinary', 'key_change', 'encrypted_key')
     for phase in ('host', 'port', 'username', 'probe', 'password')
@@ -107,10 +111,14 @@ NATIVE_FAILURES = frozenset((
     'native_mobile_confirmation_owner_unproven', 'native_mobile_password_owner_unproven',
     'native_mobile_submit_owner_unproven', 'native_mobile_return_owner_unproven',
     'native_encrypted_key_owner_unproven', 'native_encrypted_key_method_unproven',
+    'native_encrypted_key_submit_owner_unproven', 'native_encrypted_key_editor_owner_unproven',
+    'native_encrypted_key_passphrase_owner_unproven', 'native_encrypted_key_passphrase_mask_unproven',
+    'native_encrypted_key_reopen_readback_unproven',
     'native_encrypted_key_entry_unproven', 'native_encrypted_key_reopen_keyboard_missing',
     'native_encrypted_key_rejection_unproven',
     'native_encrypted_key_credentials_retained', 'native_encrypted_key_empty_add_unproven',
-    'native_encrypted_key_home_shortcut_unproven', 'native_encrypted_key_home_shortcut_no_progress')) | MOBILE_PASSWORD_FAILURES | ENCRYPTED_AUTH_FAILURES
+    'native_encrypted_key_home_shortcut_unproven', 'native_encrypted_key_home_shortcut_no_progress')) | (
+        MOBILE_PASSWORD_FAILURES | ENCRYPTED_AUTH_FAILURES | ENCRYPTED_SUMMARY_FAILURES)
 HOME_MEMBERS = frozenset(('brand', 'headerAdd', 'emptyAdd', 'homeHeading', 'emptyHeading',
                          'zeroHosts', 'ordinaryShortcut', 'addHeading', 'sshOption'))
 COMPACT_HOME_MEMBERS = {'emptyDescription', 'compactShortcut'}
@@ -1602,7 +1610,9 @@ class Checkpoints:
                                     candidate_keys | {'pemReason', 'privateKeyBody'})
                 pem_reasons = ('content_not_exact', 'editor_unproven', 'outside_editor',
                                'geometry_mismatch', 'subtree_unproven', 'unsupported_node')
-                require(stage == 'native_progress' and phase == 'encrypted_key_passphrase'
+                if phase in ENCRYPTED_COLLAPSE_PHASES:
+                    pem_reasons += ('editor_after_blur',)
+                require(stage == 'native_progress' and (phase == 'encrypted_key_passphrase' or phase in ENCRYPTED_COLLAPSE_PHASES)
                         and set(payload) == {'stage', 'nativeCheckpoint', 'secretDiagnostic'}
                         and type(diagnostic) is dict and set(diagnostic) == {'count', 'candidates'}
                         and type(diagnostic['count']) is int and 1 <= diagnostic['count'] <= 10000

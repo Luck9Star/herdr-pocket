@@ -89,12 +89,80 @@ def ensure_running(process, report):
         raise GuiFailure('flutter_process_exited')
 
 
-def installed_digest(expected):
+def checked_cleanup(report, name, action):
+    try:
+        action()
+        report['cleanup'][name] = True
+        report['cleanupDiagnostics'][name] = {'outcome': 'confirmed'}
+    except AdbFailure as error:
+        report['cleanupDiagnostics'][name] = {'outcome': 'adb_failed'}
+        diagnostic = adb_failure_report(error).get('commandDiagnostic')
+        if diagnostic:
+            report['cleanupDiagnostics'][name]['commandDiagnostic'] = diagnostic
+    except Exception:
+        report['cleanupDiagnostics'][name] = {'outcome': 'unconfirmed'}
+
+
+def verify_tool_stopped(process):
+    if process is None or process.poll() is None:
+        raise GuiFailure('flutter_tool_unconfirmed')
+    try:
+        os.killpg(process.pid, 0)
+    except ProcessLookupError:
+        return
+    raise GuiFailure('flutter_tool_unconfirmed')
+
+
+def installed_digest(expected, expected_size, report):
     entries = adb('shell', 'pm', 'path', PACKAGE).decode().splitlines()
     need(len(entries) == 1 and re.fullmatch(r'package:/data/app/[A-Za-z0-9_./=+~\-]+/base\.apk', entries[0]),
          'installed_path_invalid')
-    raw = adb('exec-out', 'cat', entries[0][8:], timeout=90)
-    need(hashlib.sha256(raw).hexdigest() == expected, 'installed_hash_mismatch')
+    path = entries[0][8:]
+    proof = {'hostBytes': expected_size, 'hostSha256': expected, 'attempts': []}
+    report['apkVerification'] = proof
+
+    def read(prefix, operation):
+        args = (['/system/bin/stat', '-c', '%s', path] if operation == 'size' else
+                ['/system/bin/sha256sum', path])
+        try:
+            result = subprocess.run(['adb', '-s', SERIAL, 'shell', '-T', *prefix, *args],
+                                    capture_output=True, timeout=90, check=False)
+        except subprocess.TimeoutExpired:
+            return None, 'timeout'
+        except OSError:
+            return None, 'unavailable'
+        if result.returncode != 0:
+            return None, 'nonzero'
+        if result.stderr or len(result.stdout) > 1024:
+            return None, 'invalid_output'
+        value = result.stdout.rstrip(b'\r\n')
+        if operation == 'size':
+            if not re.fullmatch(rb'[1-9][0-9]{0,8}', value):
+                return None, 'invalid_output'
+            return int(value), 'ok'
+        expected_suffix = b'  ' + path.encode('ascii')
+        if not value.endswith(expected_suffix) or not re.fullmatch(rb'[0-9a-f]{64}', value[:-len(expected_suffix)]):
+            return None, 'invalid_output'
+        return value[:64].decode('ascii'), 'ok'
+
+    # Android shell v2 preserves the remote exit status. If shell lacks access,
+    # the owned debug app's run-as identity gets one read-only attempt.
+    for owner, prefix in (('shell', []), ('run_as', ['run-as', PACKAGE])):
+        attempt = {'reader': owner}
+        proof['attempts'].append(attempt)
+        size, attempt['size'] = read(prefix, 'size')
+        if size is None:
+            continue
+        attempt['bytes'] = size
+        digest, attempt['sha256'] = read(prefix, 'sha256')
+        if digest is None:
+            continue
+        attempt['digest'] = digest
+        # A valid mismatch is final; do not select a more convenient reader.
+        need(size == expected_size and digest == expected, 'installed_hash_mismatch')
+        proof['matched'] = True
+        return
+    raise GuiFailure('installed_hash_unavailable')
 
 
 def check_environment(app, output):
@@ -139,11 +207,14 @@ def drive(app, output):
     folder = 'hp-config-' + secrets.token_hex(12)
     path = DOWNLOADS + '/' + folder
     folder_owned = False
+    folder_attempted = False
     app_attempted = False
+    process = None
     try:
         adb('shell', 'settings', 'put', 'secure', 'show_ime_with_hard_keyboard', '1')
         need(adb('shell', 'settings', 'get', 'secure', 'show_ime_with_hard_keyboard').strip() == b'1', 'ime_fixture_unconfirmed')
         wait_download_storage(report)
+        folder_attempted = True
         adb('shell', 'mkdir', path)
         folder_owned = True
         cmd = ['flutter', 'test', '--no-pub', '--no-uninstall', '--reporter', 'expanded', '-d', SERIAL,
@@ -166,9 +237,10 @@ def drive(app, output):
                 if stage == 'app_ready':
                     # flutter test uses a generated listener entrypoint and can rebuild the
                     # APK. Bind the actual test binary, not the separate prebuild.
-                    apk_hash = hashlib.sha256(apk.read_bytes()).hexdigest()
-                    installed_digest(apk_hash)
+                    apk_bytes = apk.read_bytes()
+                    apk_hash = hashlib.sha256(apk_bytes).hexdigest()
                     report['apkSha256'] = apk_hash
+                    installed_digest(apk_hash, len(apk_bytes), report)
                     picker.launcher = foreground()
                     need(picker.launcher and picker.launcher.split('/')[0] == PACKAGE, 'foreground_unconfirmed')
                     report['installedHashMatched'] = True
@@ -233,7 +305,6 @@ def drive(app, output):
             need(apk_hash is not None and hashlib.sha256(apk.read_bytes()).hexdigest() == apk_hash,
                  'built_apk_changed')
             report['status'] = 'passed'
-        report['cleanup']['flutterTool'] = True
     except AdbFailure as error:
         report.update(adb_failure_report(error))
     except SystemImeFailure as error:
@@ -244,27 +315,37 @@ def drive(app, output):
     except Exception as error:
         report['error'] = str(error) if isinstance(error, GuiFailure) and re.fullmatch(r'[a-z_]+', str(error)) else 'driver_failed'
     finally:
-        try:
+        cleanup_facts = report['cleanupDiagnostics'] = {}
+
+        def hierarchy_absent():
             adb('shell', 'test', '!', '-e', picker.scratch)
             adb('shell', 'test', '!', '-L', picker.scratch)
-            report['cleanup']['hierarchy'] = not picker.scratch_cleanup_failed
-        except Exception:
-            pass
+
+        def package_absent():
+            if adb('shell', 'pm', 'list', 'packages', PACKAGE).strip():
+                adb('uninstall', PACKAGE, timeout=60)
+            need(not adb('shell', 'pm', 'list', 'packages', PACKAGE).strip(), 'package_cleanup_unconfirmed')
+
+        def folder_absent():
+            adb('shell', 'rm', '-f', path + '/' + ARCHIVE, path + '/' + CORRUPT)
+            adb('shell', 'rmdir', path)
+            adb('shell', 'test', '!', '-e', path)
+
+        if process is not None:
+            checked_cleanup(report, 'flutterTool', lambda: verify_tool_stopped(process))
+        else:
+            cleanup_facts['flutterTool'] = {'outcome': 'not_started' if not app_attempted else 'unconfirmed'}
+        checked_cleanup(report, 'hierarchy', hierarchy_absent)
+        if picker.scratch_cleanup_failed:
+            cleanup_facts['hierarchy']['earlierFailure'] = True
         if app_attempted:
-            try:
-                if adb('shell', 'pm', 'list', 'packages', PACKAGE).strip():
-                    adb('uninstall', PACKAGE, timeout=60)
-                report['cleanup']['package'] = not adb('shell', 'pm', 'list', 'packages', PACKAGE).strip()
-            except Exception:
-                pass
+            checked_cleanup(report, 'package', package_absent)
+        else:
+            cleanup_facts['package'] = {'outcome': 'not_attempted'}
         if folder_owned:
-            try:
-                adb('shell', 'rm', '-f', path + '/' + ARCHIVE, path + '/' + CORRUPT)
-                adb('shell', 'rmdir', path)
-                adb('shell', 'test', '!', '-e', path)
-                report['cleanup']['folder'] = True
-            except Exception:
-                pass
+            checked_cleanup(report, 'folder', folder_absent)
+        else:
+            cleanup_facts['folder'] = {'outcome': 'unconfirmed' if folder_attempted else 'not_attempted'}
         if not all(report['cleanup'].values()):
             report['status'] = 'failed'
         (output / 'flutter-documents-roundtrip.json').write_text(json.dumps(report, indent=2) + '\n')

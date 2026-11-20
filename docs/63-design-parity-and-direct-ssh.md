@@ -2,7 +2,7 @@
 
 # 普通 SSH 使用与平台验收
 
-截至 2026-11-20，以合入 Windows Tauri 密码验收的 `b10d8acc` 为文档基线。查某个平台、客户端或认证方式时，以本页[验收矩阵](#普通-ssh-验收矩阵2026-11-20-更新)和各格的运行源码为准。每条结果只对应所链接的运行。[2026-11-15 界面对照与执行记录](evidence/design-parity-20261115/verification-history.md)
+截至 2026-11-20，以合入 Windows Tauri 密码验收的 `b10d8acc` 为文档基线。查某个平台、客户端或认证方式时，以本页[验收矩阵](#普通-ssh-验收矩阵2026-11-20-更新)和各格的运行源码为准。每条结果只对应所链接的运行。[界面对照与历史验证批次（11-15 至 11-20）](evidence/design-parity-20261115/verification-history.md)
 
 ## 从首页选择接入方式
 
@@ -11,10 +11,12 @@
 | 普通 SSH | 标准 SSH 服务，账号密码或已有私钥 | 一条独立的交互式 SSH 终端（PTY） |
 | 配对添加 | 已有远端 herdr 命名会话，设备身份经主机授权并独立核验 SSH 指纹 | herdr 工作台。默认观察，逐键或草稿输入另需满足能力与目标绑定检查 |
 
-1. 在首页打开「添加主机 → 普通 SSH」，填写地址、端口和用户名，再选「探测并核对主机密钥」。
+1. 在首页直接点「普通 SSH」或「普通 SSH 终端」。填写地址、端口和用户名，再选「探测并核对主机密钥」。
 2. 通过服务器控制台或管理员独立核对算法及完整 SHA256 指纹，再明确确认。管理员可对服务端的公开密钥运行 `ssh-keygen -l -E sha256 -f /etc/ssh/ssh_host_ed25519_key.pub`。RSA 服务查对应的 `ssh_host_rsa_key.pub`。探测阶段没有发送账号认证信息。
 3. 填写账号密码，或切换到「使用私钥认证」填入已有私钥 PEM。私钥加密时，再填私钥口令。连接完成后可在终端输入命令。
 4. 主机密钥变化时，客户端锁定连接。先独立核实变更，再重新探测并确认。取消保留旧信任，确认新指纹后仍需主动连接。
+
+也可从「添加主机 → 普通 SSH 终端」进入表单。Windows Tauri R3 的验收驱动走这条入口，首页原图可见独立的「普通 SSH」按钮。[Windows Tauri R3 入口与首页原图](evidence/windows-tauri-ordinary-ssh-password-20261120/README.md)
 
 普通 SSH 使用系统 TCP/DNS，可取消正在建立的连接，认证凭据仅用于本次连接。取消或断开后须重新填写凭据。keyboard-interactive、OTP/MFA 和自动发现本机 SSH agent 尚未覆盖。实际收到远端退出状态或信号时才显示「远端已报告结束」。主动断开根据本机关闭结果显示回执，失败后返回看板仍保留失败提示，未知结果的终端输入不自动重发。[Rust SSH](../validation/transport-rust/src/direct_shell.rs) · [Tauri 命令](../validation/tauri/src-tauri/src/direct_shell.rs) · [Tauri 页面](../validation/tauri/src/direct-ssh.js) · [Flutter 页面](../validation/flutter/lib/direct_ssh_page.dart)
 
@@ -51,6 +53,8 @@ Flutter 切到看板、网络或设置时保留原连接和终端滚动位置。
 | 实体 Android / iPhone | 两壳 / 密码及私钥 | 待验 | 待验 | 待验 | 待验 | — |
 
 <a id="尚待独立补证"></a>
+
+Windows Tauri 的原生作业只运行密码认证，私钥路径尚无该平台的原生作业结果。[Windows 工作流](../.github/workflows/windows-ordinary-ssh.yml)
 
 实体手机、系统输入法组字、生产 SSH 主机、真实跨网、长期运行和发布安装包仍须独立验证。Linux 系统密钥环在 [PR #59](https://github.com/Luck9Star/herdr-pocket/pull/59) 的 Linux herdr 配对草稿中，普通 SSH 使用本次输入的凭据。配对双连接及真实网络隔离见[桌面 S06](74-desktop-split-resize.md#已有-s06-运行范围)、[Linux 双网](65-dual-overlay-validation.md)和[Android 双网与共享节点](67-android-dual-network-startup.md)。
 

@@ -1,6 +1,6 @@
-# 2026-11-15 界面对照与普通 SSH 验证记录
+# 界面对照与普通 SSH 历史验证（2026-11-15 至 2026-11-20）
 
-按当时的源码和运行批次保留。原始 PNG、JSON、调试工件及其作用域见下文。当前普通 SSH 的平台和认证覆盖见[验收矩阵](../../63-design-parity-and-direct-ssh.md#普通-ssh-验收矩阵2026-11-20-更新)。配对双终端的后续结果见[桌面分屏](../../74-desktop-split-resize.md)，双网络的后续结果见[Linux 双网](../../65-dual-overlay-validation.md)与[Android 双网及共享节点](../../67-android-dual-network-startup.md)。
+覆盖 11 月 15 日的原型验收及截至 11 月 20 日的后续复验和工件回读。原始 PNG、JSON、调试工件及其作用域见下文。当前普通 SSH 的平台和认证覆盖见[验收矩阵](../../63-design-parity-and-direct-ssh.md#普通-ssh-验收矩阵2026-11-20-更新)。配对双终端的后续结果见[桌面分屏](../../74-desktop-split-resize.md)，双网络的后续结果见[Linux 双网](../../65-dual-overlay-validation.md)与[Android 双网及共享节点](../../67-android-dual-network-startup.md)。
 
 ## 可下载的同源调试快照
 

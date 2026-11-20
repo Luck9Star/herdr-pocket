@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "ab82c3d0cb8d1ce647871a2c22b178e2aeba363d",
+  "executableSHA256": "861f3189fddb5e1933efb79029185bae6082dfe45b159add003e0889e7d6bd56",
+  "platform": "Windows Tauri WebView2",
+  "authentication": "password",
+  "scope": "native window, WebDriver input, desktop pixels and isolated SSH",
+  "status": "failed",
+  "stage": "fixture",
+  "listener": {
+    "ownedBeforeLaunch": true
+  },
+  "failurePhase": "window_activation",
+  "checkpoint": "window_activation",
+  "primaryFailure": {
+    "phase": "window_activation",
+    "code": "windows_tauri_window_not_foreground"
+  },
+  "peer": {
+    "authAccepted": false,
+    "ptyRequested": false,
+    "shellRequested": false,
+    "markerReceived": false,
+    "sessionClosed": false,
+    "connections": 0,
+    "connectionsClosed": true,
+    "ptySizes": [],
+    "connectionEvents": []
+  },
+  "errorCode": "windows_tauri_window_not_foreground"
+}

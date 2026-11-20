@@ -140,7 +140,7 @@ Flutter 平台流与节点 GUI 随后在 `d6c4285` 接入，两套当前源码�
 - [ ] **M1-11** 重连后重新同步状态与全量画面；目标退出或身份变化时关闭发送。
   **待验证。** Android 两壳受保护路径分批有隐藏后取新 full 的证据。服务重启、代际变化、实际切网和五端恢复仍须验证。[0011 / 0014](58-session-handoff-2026-11-09-r2.md) · [目标替换与旧帧](23-mobile-session-watch.md)
 - [ ] **M1-12** 本地凭据安全保存与删除入口，诊断日志脱敏。
-  **待验证。** Android API 35 模拟器有软件 KeyMint 签名与删除证据，macOS 有普通 SSH 安全输入专项。Linux 两壳在私有 GNOME Secret Service 完成官方单主机与 S06 回环认证，Tauri 另验原密钥双进程复用。两壳真实桌面均通过密钥环锁定、服务停止后的第二进程拒绝，原目录、句柄及授权保留。Flutter 解锁对照停在第二进程像素检查。Linux 定向测试包的许可、修改来源及外层诊断资产均已比对。不同密钥环、硬件密钥、五端存储删除与诊断脱敏仍按平台验收。 [设备身份](55-mobile-shared-network-device.md) · [诊断](53-mobile-connection-diagnostics.md) · [Mac 安全输入](63-design-parity-and-direct-ssh.md) · [Linux 密钥环证据](evidence/linux-pairing-secret-service-20261120/README.md)
+  **待验证。** Android API 35 模拟器有软件 KeyMint 签名与删除证据，macOS 有普通 SSH 安全输入专项。Linux 两壳在私有 GNOME Secret Service 完成官方单主机、S06 回环与原密钥双进程复用。锁定和服务停止后的第二进程均拒绝连接，保留原目录、句柄与授权。Flutter 解锁对照 R4 已复验两进程正常退出、同钥认证及各自窗口中的观察推进。Linux 定向测试包的许可、修改来源及外层诊断资产均已比对。不同密钥环、硬件密钥、五端存储删除与诊断脱敏仍按平台验收。 [设备身份](55-mobile-shared-network-device.md) · [诊断](53-mobile-connection-diagnostics.md) · [Mac 安全输入](63-design-parity-and-direct-ssh.md) · [Linux 密钥环证据](evidence/linux-pairing-secret-service-20261120/README.md)
 
 验收：手机新用户无需桌面 GUI 也能扫码接入，畸形资料与错配/过期/已完成响应被拒，手动兜底可用；扫码后所需入网/授权步骤明确，实际 SSH 认证成功才计配对完成。五端加密迁移在错误口令/篡改/冲突下不部分导入或自动信任。再通过首连、逐键/TUI、草稿/粘贴、多标签、模式切换、目标变化和恢复；手机辅助与桌面分屏不串目标。保存实际输入及反馈，证明主机、session、目标和内容一致。逐键中断不积压，未知不重放；未通过的平台记录实验或未支持。
 

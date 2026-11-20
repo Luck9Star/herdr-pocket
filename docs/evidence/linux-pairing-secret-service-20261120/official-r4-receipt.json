@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "9079914bfd0fb1d9cd575703190abb05eef3ac89",
+  "attempt": 1,
+  "run": 44681801987,
+  "job": 136106712430,
+  "artifact": 14606401067,
+  "zipSha256": "cd10b071ac704c9d639705161349ceaa2b25167be97bb1c3a4b6d3b6cbca6f13",
+  "conclusion": "success",
+  "checkedInnerSHA256SUMSEntries": 8,
+  "cleanup": {
+    "ownedProcessesStopped": true,
+    "ephemeralKeysRemoved": true,
+    "userAuthorizationFilesTouched": false,
+    "rawLogsUploaded": false
+  },
+  "platform": "Ubuntu 24.04 x86_64 loopback OpenSSH",
+  "receivedInputBytes": 0,
+  "restart": {
+    "independentAppProcesses": true,
+    "naturalWindowClose": true,
+    "sameSavedHostAndTarget": true,
+    "sameDeviceKeyReauthenticated": true,
+    "exactPeerAuthentications": 2,
+    "bothPeersClosed": true,
+    "originalKeyAndAuthorizationUnchanged": true,
+    "noKeyringWrites": true,
+    "observedIncreasingTicksInBothWindows": true
+  },
+  "linuxKeyring": {
+    "publicKeysMatched": 1,
+    "sameKeyAuthenticated": true
+  },
+  "nativeBundleExecutableSha256": "239e5f4aabf0509953c2ebb777c8ef850408ad28945b29b4e3cd03ef2c517f46",
+  "temporaryAuthorizationAppliedAndRevoked": true,
+  "originalX11WindowPngs": {
+    "stock-first-before.png": {
+      "sha256": "0ee24b14daa77dc7cbdb6af5d30497b79f4b47311cc32131ae32c3b12252190e",
+      "pixels": [
+        1280,
+        720
+      ],
+      "terminalRegion": [
+        304,
+        335,
+        976,
+        695
+      ],
+      "readbackTick": 84,
+      "archivedFile": "flutter-r4-first-before.png"
+    },
+    "stock-first-after.png": {
+      "sha256": "c83f017ab751b38384a052ca8764188ba7675e9c7bad600c19be2c65811ed5c9",
+      "pixels": [
+        1280,
+        720
+      ],
+      "terminalRegion": [
+        304,
+        335,
+        976,
+        695
+      ],
+      "readbackTick": 86,
+      "archivedFile": "flutter-r4-first-after.png"
+    },
+    "stock-second-before.png": {
+      "sha256": "1b3d18f2bdd46650544e4f4049ffc10a7578fd81dbf8e76dbfddb9213542b6f4",
+      "pixels": [
+        1280,
+        720
+      ],
+      "terminalRegion": [
+        416,
+        235,
+        1088,
+        595
+      ],
+      "readbackTick": 138,
+      "archivedFile": "flutter-r4-second-before.png"
+    },
+    "stock-second-after.png": {
+      "sha256": "4362c106fd358857c372aff4af3c72c660b8d8256ef3f7c9c09a60f31101b813",
+      "pixels": [
+        1280,
+        720
+      ],
+      "terminalRegion": [
+        416,
+        235,
+        1088,
+        595
+      ],
+      "readbackTick": 140,
+      "archivedFile": "flutter-r4-second-after.png"
+    }
+  },
+  "pixelReadbackTool": "Independent Tesseract 5.3.4 with the source-pinned terminal_region and terminal_ocr"
+}

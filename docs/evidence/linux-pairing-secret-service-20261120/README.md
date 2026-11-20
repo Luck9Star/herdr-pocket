@@ -97,9 +97,22 @@ Flutter 的两张提示与 [连接禁用原图](flutter-r3-connect-disabled.png)
 
 ### Flutter 解锁对照的取像断点
 
-解锁对照停在第二进程的 `stock_flutter_observation_pixels_missing`。作业已报告同钥 SSH 认证及清理。第二进程诊断共采样 62 次，选定窗格、会话标题、终端标题及观察模式均可见，但 OCR 未取得精确标记和计数。工件只保留原始 672 × 124 裁片 [第二进程裁片](flutter-r3-peer-2-terminal-crop.png)，未留第二进程完整窗口，也未完成重启验收。 [解锁作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44679366114/job/136098811743) · [原始工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44679366114/artifacts/14603289040)
+解锁对照停在第二进程的 `stock_flutter_observation_pixels_missing`。作业已报告同钥 SSH 认证及清理。第二进程诊断共采样 62 次，选定窗格、会话标题、终端标题及观察模式均可见，但 OCR 未取得精确标记和计数。工件只保留原始 672 × 124 裁片，未留第二进程完整窗口。本轮未完成重启验收，正式通过见 R4。 [第二进程裁片](flutter-r3-peer-2-terminal-crop.png) · [解锁作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44679366114/job/136098811743) · [原始工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44679366114/artifacts/14603289040)
 
 用两种拒绝工件的第一进程原图构造独立对照。将图像转换成 RGB 后放入同尺寸白底，右移 112 像素、上移 100 像素。旧算法在无服务场景的第二张图上返回与 R3 失败报告一致的裁剪框 `[416,429,1088,553]`。`5ca40f88` 的算法在四张平移样本均得到完整 672 × 360 区域 `[416,235,1088,595]`。独立 Ubuntu OCR 读回锁定样本推进 95→99、无服务样本推进 96→101。此处的源图来自第一进程，平移用于复现裁剪缺陷。 [裁剪修正](https://github.com/Luck9Star/herdr-pocket/commit/5ca40f88cf48bfc02001250c8e29d7cb79619a3d) · [对照图源、位移与范围](official-r3-receipt.json)
+
+## 官方运行 R4
+
+Flutter 解锁对照在 `9079914bfd0fb1d9cd575703190abb05eef3ac89` 的首次尝试通过。AT-SPI/X11 驱动两个独立的正常 GTK 调试应用进程。第一进程主动断开并正常退出。第二进程重新打开同一已存主机和目标，用密钥环里的原公钥认证并观察。sshd 恰好接受两次同钥认证，两条连接均正常关闭，终端输入 0 字节。期间密钥环无写入，原身份与授权保持一致。随后撤销临时授权并清理专用进程与密钥。 [R4 job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44681801987/job/136106712430) · [原始工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44681801987/artifacts/14606401067)
+
+四张 1280 × 720 的 X11 窗口截图均取自同一次作业并保留原字节。独立 OCR 从两个完整的 672 × 360 终端区域读回夹具标记和推进计数。画面各含隔离终端样本及临时回环目标。ZIP 的 GitHub SHA-256、CRC、8 项内表及四张原图摘要均已复核。 [R4 脱敏回执](official-r4-receipt.json) · [归档校验和](SHA256SUMS)
+
+| 进程 | 两张完整窗口原图 | 读回计数 |
+| --- | --- | --- |
+| 首次配对 | [观察起始](flutter-r4-first-before.png) · [观察推进](flutter-r4-first-after.png) | 84→86 |
+| 原身份恢复 | [恢复后起始](flutter-r4-second-before.png) · [恢复后推进](flutter-r4-second-after.png) | 138→140 |
+
+R4 覆盖隔离密钥环、正常应用重启及回环只读观察。当前版本的 guarded S06 仍受夹具构建超时阻塞。用户现有密钥环、实际跨网、物理输入法和已签名发行包的安装运行各自待验。 [guarded S06 夹具断点](#tauri-guarded-s06-夹具)
 
 ## 复跑与回滚依据
 

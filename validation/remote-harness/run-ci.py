@@ -154,7 +154,7 @@ def snapshot_diagnostics(result):
             'nestedKnownFields': protocol_diagnostics(snapshot) if isinstance(snapshot, dict) else None}
 
 
-def gui_report_fields(route, result, input_fixture=False):
+def gui_report_fields(route, result, input_fixture=False, *, import_replace=False):
     """Keep test route, required frame evidence and runtime limits distinct."""
     scopes = {
         'tauri-android': 'API35 emulator WebView and AndroidKeyStore-wrapped identity',
@@ -182,6 +182,11 @@ def gui_report_fields(route, result, input_fixture=False):
     if not passed or not native_store:
         unverified.append('protected system-store runtime')
     fields = {'scope': scopes[route], 'frameEvidence': frames[route], 'unverified': unverified}
+    if import_replace:
+        fields.update(scope='Linux GTK WebView config replacement with native process-memory test identities',
+                      frameEvidence='public visible-terminal-text UI snapshots; native WebDriver actions')
+        unverified.extend(['desktop window resize', 'desktop keyboard focus and routing',
+                           'non-BMP import password entry'])
     if route == 'flutter-android':
         fields['platform'] = 'Android API35 x86_64 AVD on Ubuntu 24.04 loopback OpenSSH; Flutter debug'
     return fields
@@ -294,13 +299,16 @@ def main():
     parser.add_argument('--tauri-app', type=Path)
     parser.add_argument('--input-fixture', type=Path)
     parser.add_argument('--s06-split', action='store_true',
-                        help='opt-in two real SSH/herdr targets through the Flutter desktop split UI')
+                        help='opt-in two real SSH/herdr targets through the desktop split UI')
     parser.add_argument('--android-guarded-input', action='store_true')
     parser.add_argument('--android-tui', action='store_true',
                         help='also exercise curses on the same paired and guarded Android target')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     require_runner(os.environ)
+    import_replace = os.environ.get('HERDR_S06_IMPORT_REPLACE') == '1'
+    if import_replace and (not args.s06_split or args.paired_gui != 'tauri' or args.input_fixture):
+        parser.error('S06 import replacement requires stock Tauri --s06-split')
     if args.s06_split and args.paired_gui not in ('flutter', 'tauri'):
         parser.error('--s06-split requires a desktop --paired-gui route')
     try:
@@ -310,6 +318,9 @@ def main():
     if ((args.paired_gui in ('tauri','tauri-android') and not args.tauri_app) or
             (args.paired_gui not in ('tauri','tauri-android') and not args.flutter_app)):
         parser.error('provide the application built for this route')
+    if args.s06_split:
+        from s06_split_gui import IMPORT_REPLACE_TEST_ID, S06_TEST_ID, run_gui as run_split
+        split_test_id = IMPORT_REPLACE_TEST_ID if import_replace else S06_TEST_ID
     # Import only on the supported Linux CI route; unit tests remain portable.
     import pwd
 
@@ -339,6 +350,10 @@ def main():
         'unverified': ['mobile touch', 'real mobile IME', 'camera pairing', 'protected key storage',
                        'overlays', 'remote input', 'GUI continuous observe and lifecycle', 'production credentials'],
     }
+    if import_replace:
+        report.update(milestone=split_test_id,
+                      **gui_report_fields('tauri', {}, import_replace=True))
+        report.pop('cancelScope', None)
 
     def command(argv, timeout=60, cwd=None):
         # Keep all output inside this process. Commands may print ephemeral
@@ -500,15 +515,17 @@ LogLevel VERBOSE
             if args.android_tui:
                 milestone = 'android-paired-interactive-tui'
             report.update(milestone=milestone,
-                          **gui_report_fields(args.paired_gui, {'status': 'failed'}, bool(args.input_fixture)))
+                          **gui_report_fields(args.paired_gui, {'status': 'failed'}, bool(args.input_fixture),
+                                              import_replace=import_replace))
             report.pop('cancelScope', None)
             if args.s06_split:
-                from s06_split_gui import run_gui as run_split
-                report['milestone'] = 'S06-two-real-ssh-herdr-targets'
-                result = run_split(args, root, env, config, command, final_pty_evidence)
+                report['milestone'] = split_test_id
+                result = run_split(args, root, env, config, command, final_pty_evidence,
+                                   import_replace=import_replace)
             else:
                 result = run_gui(args, root, env, config)
-            report.update(gui_report_fields(args.paired_gui, result, bool(args.input_fixture)))
+            report.update(gui_report_fields(args.paired_gui, result, bool(args.input_fixture),
+                                            import_replace=import_replace))
             report['checks'].append(result)
             publish()
         else:

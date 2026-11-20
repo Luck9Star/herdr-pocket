@@ -1983,6 +1983,15 @@ async fn target_recovery_real_ssh_same_identity_alias_cannot_write_or_resolve_ac
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn explicit_node_stop_retires_real_ssh_without_redial_or_other_connection_cancel() {
+    explicit_stop_retires_transport(false).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn explicit_paused_tab_close_retires_real_ssh_without_affecting_the_other_tab() {
+    explicit_stop_retires_transport(true).await;
+}
+
+async fn explicit_stop_retires_transport(paused: bool) {
     let a=Harness::new().await;
     let b=Harness::new().await;
     let mut first=View::launch(a.config.clone(),Some(a.recovery("stop-a")));
@@ -1990,10 +1999,16 @@ async fn explicit_node_stop_retires_real_ssh_without_redial_or_other_connection_
     first.accept().await;other.accept().await;
     let (_,old)=first.input().await;let old_mode=old.set_mode("direct",true).unwrap();
     let (_,live)=other.input().await;let mode=live.set_mode("direct",true).unwrap();
+    if paused {
+        assert_eq!(first.control.pause().unwrap().await.unwrap().phase,ObservationPhase::Paused);
+        assert!(!first.control.graceful_peer_eof());
+    }
     first.control.stop_gracefully();
-    assert!(!first.cancel.is_cancelled(), "graceful request must permit SSH disconnect and FIN");
     assert_eq!(timeout(Duration::from_secs(8),first.task).await.unwrap().unwrap(),Err("cancelled"));
     until(||a.stats.retired.load(Ordering::SeqCst)==1).await;
+    assert!(first.control.graceful_peer_eof(),"stop must finish the SSH stream, including from pause");
+    // Both forced teardown and a finished graceful close retire this token.
+    assert!(first.cancel.is_cancelled());
     assert_eq!(first.dials.dials.load(Ordering::SeqCst),1);
     assert_eq!(a.stats.auths.load(Ordering::SeqCst),1);
     assert_eq!(other.control.snapshot().phase,ObservationPhase::Active);
@@ -2018,14 +2033,15 @@ async fn explicit_shutdown_waits_for_peer_eof_but_stalled_peer_is_bounded() {
     for (explicit,stalled) in [(false,true),(true,false),(true,true)] {
         let (client,mut peer)=tokio::io::duplex(64);
         let io=Arc::new(OwnedIo::default());
-        let mut stream=OwnedStream {inner:Some(Box::new(Pipe(client))),_reservation:io.reserve(),shutdown:None,write_closed:false,graceful:Arc::new(AtomicBool::new(explicit))};
+        let mut stream=OwnedStream {inner:Some(Box::new(Pipe(client))),_reservation:io.reserve(),shutdown:None,write_closed:false,graceful:Arc::new(AtomicBool::new(explicit)),peer_eof:Arc::new(AtomicBool::new(false))};
         let received=Arc::new(AtomicBool::new(false));let receipt=received.clone();
         let task=tokio::spawn(async move {let mut data=Vec::new();peer.read_to_end(&mut data).await.unwrap();assert_eq!(data,b"exact");receipt.store(true,Ordering::SeqCst);if stalled {std::future::pending::<()>().await;}else {peer.shutdown().await.unwrap();}});
         stream.write_all(b"exact").await.unwrap();
         let start=Instant::now();let result=stream.shutdown().await;
-        if !explicit {result.unwrap();assert!(start.elapsed()<Duration::from_millis(100));drop(stream);task.abort();continue;}
+        if !explicit {result.unwrap();assert!(start.elapsed()<Duration::from_millis(100));assert!(!stream.peer_eof.load(Ordering::SeqCst));drop(stream);task.abort();continue;}
         assert!(received.load(Ordering::SeqCst));
         if stalled {assert_eq!(result.unwrap_err().kind(),io::ErrorKind::TimedOut);assert!(start.elapsed()<Duration::from_secs(6));}else {result.unwrap();}
+        assert_eq!(stream.peer_eof.load(Ordering::SeqCst),!stalled);
         assert_eq!(io.count.load(Ordering::SeqCst),1);
         drop(stream);io.settled().await;task.abort();
     }
@@ -2042,5 +2058,6 @@ async fn explicit_stop_with_submitted_unknown_input_keeps_hard_abort_and_no_repl
     view.control.stop_gracefully();assert!(view.cancel.is_cancelled());
     assert_eq!(sending.await.unwrap().unwrap(),SendOutcome::Unknown);
     assert!(view.task.await.unwrap().is_err());assert_eq!(recovery.status(),"pending");
+    assert!(!view.control.graceful_peer_eof());
     assert_eq!(locked(&h.stats.writes).len(),1);assert_eq!(view.dials.dials.load(Ordering::SeqCst),1);
 }

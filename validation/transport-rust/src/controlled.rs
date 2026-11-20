@@ -37,6 +37,7 @@ struct OwnedDialer<'a> {
     inner: &'a dyn transport::Dialer,
     io: Arc<OwnedIo>,
     graceful: Arc<AtomicBool>,
+    peer_eof: Arc<AtomicBool>,
 }
 impl transport::Dialer for OwnedDialer<'_> {
     fn dial(&self, host: String, port: u16, cancel: Cancellation) -> transport::DialFuture<'_> {
@@ -47,6 +48,7 @@ impl transport::Dialer for OwnedDialer<'_> {
                     inner: Some(stream),
                     _reservation: self.io.reserve(),
                     graceful: self.graceful.clone(),
+                    peer_eof: self.peer_eof.clone(),
                     shutdown: None,
                     write_closed: false,
                 }) as Box<dyn transport::ByteStream>
@@ -58,6 +60,7 @@ impl transport::Dialer for OwnedDialer<'_> {
 }
 struct OwnedStream {
     graceful: Arc<AtomicBool>,
+    peer_eof: Arc<AtomicBool>,
     shutdown: Option<Pin<Box<tokio::time::Sleep>>>,
     write_closed: bool,
     inner: Option<Box<dyn transport::ByteStream>>,
@@ -121,7 +124,10 @@ impl AsyncWrite for OwnedStream {
         let mut bytes = [0; 1024];
         let mut buf = ReadBuf::new(&mut bytes);
         match Pin::new(&mut **this.inner.as_mut().unwrap()).poll_read(cx, &mut buf) {
-            Poll::Ready(Ok(())) if buf.filled().is_empty() => Poll::Ready(Ok(())),
+            Poll::Ready(Ok(())) if buf.filled().is_empty() => {
+                this.peer_eof.store(true, Ordering::SeqCst);
+                Poll::Ready(Ok(()))
+            }
             Poll::Ready(Ok(())) => {cx.waker().wake_by_ref(); Poll::Pending}
             Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
             Poll::Pending => Poll::Pending,
@@ -176,6 +182,7 @@ struct Gate {
 }
 struct ControlInner {
     graceful_stop: Arc<AtomicBool>,
+    peer_eof: Arc<AtomicBool>,
     gate: Mutex<Gate>,
     changed: Notify,
 }
@@ -196,6 +203,7 @@ impl ObservationControl {
         Self {
             inner: Arc::new(ControlInner {
                 graceful_stop: Arc::new(AtomicBool::new(false)),
+                peer_eof: Arc::new(AtomicBool::new(false)),
                 gate: Mutex::new(Gate {
                     snapshot: ObservationSnapshot {
                         epoch: 1,
@@ -337,7 +345,7 @@ impl ObservationControl {
         }
         true
     }
-    /// Explicit node stop only; revocation and unknown input still abort.
+    /// Explicit close only; revocation and unknown input still abort.
     pub fn stop_gracefully(&self) {
         {
             let gate = locked(&self.inner.gate);
@@ -345,6 +353,11 @@ impl ObservationControl {
             self.inner.graceful_stop.store(gate.input.as_ref().is_none_or(|input| input.retire_for_stop()),Ordering::SeqCst);
         }
         self.close_if(None);
+    }
+    /// The owned transport observed EOF after write shutdown. This describes
+    /// the SSH byte stream, independently of any remote process exit status.
+    pub fn graceful_peer_eof(&self) -> bool {
+        self.inner.peer_eof.load(Ordering::SeqCst)
     }
     fn graceful_stop(&self) -> bool {self.inner.graceful_stop.load(Ordering::SeqCst)}
     fn close(&self) {
@@ -559,6 +572,7 @@ where
         inner: dialer,
         io: io.clone(),
         graceful: control.inner.graceful_stop.clone(),
+        peer_eof: control.inner.peer_eof.clone(),
     };
     let result = run_controlled(
         config,
@@ -687,7 +701,7 @@ where
         }
     }}.await;
     if control.graceful_stop() && !cancel.is_cancelled() {
-        let _ = tokio::time::timeout(Duration::from_secs(1), ssh.disconnect(russh::Disconnect::ByApplication, "node stopped", "")).await;
+        let _ = tokio::time::timeout(Duration::from_secs(1), ssh.disconnect(russh::Disconnect::ByApplication, "observation stopped", "")).await;
     }
     result
 }

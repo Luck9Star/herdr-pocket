@@ -124,7 +124,7 @@ Flutter 平台流与节点 GUI 随后在 `d6c4285` 接入，两套当前源码�
 - [ ] **M1-04** 区分可复用资料码与配对请求/响应，验证后者过期、错配与重复完成；保留“已授权、尚未验证”状态，码到期不当作主机撤权，静态码不冒充一次性授权。
   **待验证。** helper 和两壳已有资料码、请求/响应与撤销审查路径。实机须覆盖过期、错配和重复完成并核对保留状态。[配对交接与反例](45-mobile-pairing-handoff.md) · [helper 复跑](../helper/README.md)
 - [ ] **M1-05** 五端本地配置/偏好加密导出与审查导入；预览覆盖/冲突/缺失认证项及受影响连接/标签，替换在用配置时停止相关连接与自动重试；按秘密分类排除设备私钥和节点身份，不自动连接/信任/发送。
-  **待验证。** v2 加密互读、错误口令/篡改与原子写入已有隔离回归，Mac 系统选择器有导入导出。390×844 下已复核两壳按替换选项更新连接或标签影响预览。Flutter Widget 解密合成档案，Tauri 浏览器使用合成 IPC。Tauri Android API 35 的 R6 已通过仅字号偏好的系统选择器闭环，覆盖取消、导出及独立解密、错口令和篡改拒绝、预览不写入，以及一次确认后读回原字号。五端文件提供方、在用连接和自动重试停止及真机仍待逐端验证。 [Android R6 原生闭环](evidence/tauri-mobile-native-20261120/README.md#android-系统文件选择器) · [手机预览原图与复跑](evidence/config-import-impact-20261120/README.md) · [迁移与 Mac 实测](18-mobile-network-profiles.md) · [负向用例](16-mobile-input-and-config.md)
+  **待验证。** v2 加密互读、错误口令/篡改与原子写入已有隔离回归，Mac 系统选择器有导入导出。390×844 下已复核两壳按替换选项更新连接或标签影响预览。Tauri Android API 35 的 R6 已通过仅字号偏好的系统选择器闭环，覆盖取消、导出及独立解密、错口令和篡改拒绝、预览不写入，以及一次确认后读回原字号。2026-11-20 最终批：Flutter 真实回环（源 `e74c7ec`，双真实 SSH peer）与 Tauri WebKit 390×844（源 `ad0d70e`，真实 xterm + 合成迟到撤权 IPC）验证了"替换在用主机→关闭旧连接/停重连/保留停用标签最后画面，其他标签与连接不受影响，新目标须重核对显式连接"（源、拓扑与计数见[证据 README](evidence/config-import-retained-tabs-20261120/README.md)）。真机、跨网、系统读屏未验证；Tauri Linux 正式导入已有本地容器原生窗口验证（源 4541a80 与专项复放 5a85d58，官方 x86 R4 待验）；五端文件提供方、在用连接和自动重试停止仍待逐端验证。 [Android R6 原生闭环](evidence/tauri-mobile-native-20261120/README.md#android-系统文件选择器) · [手机预览原图与复跑](evidence/config-import-impact-20261120/README.md) · [迁移与 Mac 实测](18-mobile-network-profiles.md) · [负向用例](16-mobile-input-and-config.md)
 - [ ] **M1-06** 按主机分组的看板、待处理项、同步时间与失去连接状态。
   **待验证。** 看板、会话筛选、同步与陈旧状态已有源码及 Android 配对观察证据。待处理项、掉线和前台刷新需在真实设备组合复测。[同步模型](23-mobile-session-watch.md) · [Android 看板](40-android-paired-dashboard-validation.md) · [看板搜索复测](58-session-handoff-2026-11-09-r2.md)
 - [ ] **M1-07** 手机看板进入多个终端标签并切换；桌面主机侧栏、列表与多标签/分屏工作台，支持窗口调整和键盘导航，始终只有一个明确输入焦点。
@@ -151,7 +151,7 @@ Tailscale、EasyTier 和 ZeroTier 分别推进，共用 M1 的可信连接与输
 - [ ] **M2-01** 手工创建各类型网络配置、接入、身份保存、重启/退出与分层状态提示；敏感配置不进入普通诊断。
   **待验证。** Android 两壳已有 TS/ET 配置与授权后并发，TS normal／QA 启停另经复验。ZeroTier 已有身份托管和 Android ABI 链，实机拨号、重启/退出仍待各组合验证。[双网](67-android-dual-network-startup.md) · [启动层](71-validation-branch-archive.md) · [ZeroTier S1–S4](58-session-handoff-2026-11-09-r2.md)
 - [ ] **M2-02** Host 候选路径引用网络配置，同一配置供多主机复用；停止单个主机不停止共享节点。
-  **Flutter Android 隔离验收通过。** API 35 x86_64 模拟器通过测试转发，以同一 EasyTier 节点连接两个实际 SSH 对端。关闭 A 后，B 在原会话继续显示新帧。两端先后确认 EOF，随后主动停止原节点。Tauri 的八组对照覆盖浏览器界面与模拟 IPC；共享节点上的实际续输、实体设备和真实跨网仍待验证。[Flutter R5](evidence/flutter-android-shared-easytier-r5-20261120/README.md) · [主机绑定](18-mobile-network-profiles.md) · [共享设备审查](55-mobile-shared-network-device.md) · [Tauri 浏览器证据](evidence/tauri-shared-node-20261119/README.md)
+  **Flutter 与 Tauri 均通过 Android 隔离只读验收。** 两壳分别在 API 35 x86_64 模拟器上以同一 EasyTier 节点连接两个实际 SSH 对端。关闭 A 后，Flutter 的 B 继续显示新帧，Tauri 的 B 经显式恢复后在原会话显示新帧。两端依次确认正常断开，随后显式停止原节点并释放转发。共享节点上的实际输入、其他 provider、实体设备和真实跨网仍待分别验证。[Flutter R5](evidence/flutter-android-shared-easytier-r5-20261120/README.md) · [Tauri R2](evidence/tauri-android-shared-easytier-r2-20261120/README.md) · [主机绑定](18-mobile-network-profiles.md) · [共享设备审查](55-mobile-shared-network-device.md)
 - [ ] **M2-03** 仅用已配置/可用网络发起有界连接尝试，待认证配置显示需操作；验证可信主机选择、重叠地址隔离与落败连接清理。
   **待验证。** Linux 封闭配置有失败拨号和跨 provider 反例。同址路由、真实可信主机选择与落败连接清理待逐平台验证。[Linux 正负对照](65-dual-overlay-validation.md)
 - [ ] **M2-04** 验证显式切换、停用配置、节点退出与认证失效；展示受影响主机，恢复前关闭输入，退出后不静默重试。

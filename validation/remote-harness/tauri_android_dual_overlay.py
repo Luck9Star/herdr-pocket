@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tauri API35 dual overlay test; actual UI only, ephemeral host-side fixture."""
 import base64
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -18,6 +19,9 @@ from android_dual_overlay_reverse import assert_owned_avd
 from paired_gui import GuiFailure, wait_for
 
 AUTH_PACKAGE = 'dev.herdrpocket.dualtestauth'
+SHARED_SCENARIO = 'shared-easytier'
+SHARED_HOSTS = {'et': 'a', 'ts': 'b'}  # Controller role aliases; both use EasyTier.
+SHARED_PROFILE_TITLE = 'QA ET · EasyTier'
 
 
 class ConfirmingWebView(AndroidWebView):
@@ -989,12 +993,13 @@ def pairing_response_probe(request,response,account,device_fingerprint,host_fing
         productValid,previewVisible,fiveLinesMatched,productShowsInvalid,pairMode,sourceChecked,busy,waitingIdentity,targetMatched,ready};})()"""%(functions,json.dumps(spec))
 
 
-def pair_host(browser, host, role, profile, report=None):
+def pair_host(browser, host, role, profile, report=None, *, shared=False):
     from flutter_android_gui import public_host_fingerprint, DeviceFailure
     if role not in ('ts','et'):raise GuiFailure('dual_pair_role_mismatch')
-    diagnostic={'role':role,'step':'profile','action':'read','control':'public_profile','state':'waiting','completed':[]}
+    diagnostic={'role':SHARED_HOSTS[role] if shared else role,'step':'profile','action':'read',
+                'control':'public_profile','state':'waiting','completed':[]}
     if report is not None:report.setdefault('pairingAttempts',[]).append(diagnostic)
-    if profile.get('provider') != {'ts':'tailscale','et':'easytier'}[role]:
+    if profile.get('provider') != ('easytier' if shared or role=='et' else 'tailscale'):
         diagnostic['state']='mismatch';raise GuiFailure('dual_pair_role_mismatch')
     try:fingerprint=public_host_fingerprint(profile['expectedHostKey'])
     except (KeyError,DeviceFailure):
@@ -1181,8 +1186,8 @@ def pair_host(browser, host, role, profile, report=None):
         raise
 
 
-def bind_host(browser, role):
-    title='QA TS · Tailscale' if role=='ts' else 'QA ET · EasyTier'
+def bind_host(browser, role, *, shared=False):
+    title='QA TS · Tailscale' if role=='ts' and not shared else SHARED_PROFILE_TITLE
     profile=expand_profile(browser,title)
     browser.click_named(profile,'刷新节点状态')
     wait_for(lambda:browser.read('#network-panel > [role=status]')=='已请求读取当前节点状态。',
@@ -1192,7 +1197,7 @@ def bind_host(browser, role):
       const found=rows.map((e,i)=>({e,i})).filter(x=>x.e.querySelector('strong')?.textContent===%s);
       return found.length===1?'#network-panel .network-binding:nth-of-type('+(found[0].i+1)+')':null})()''' % json.dumps(name)
     scope = wait_for(lambda:browser.evaluate(expression), 'dual_binding_row_missing')
-    label = 'QA TS · tailscale' if role == 'ts' else 'QA ET · easytier'
+    label = 'QA TS · tailscale' if role == 'ts' and not shared else 'QA ET · easytier'
     option = wait_for(lambda:browser.evaluate('''(()=>{const s=document.querySelector(%s);if(!s)return null;
       const a=[...s.options].filter(o=>o.textContent===%s&&!o.disabled);return a.length===1?a[0].value:null})()''' % (json.dumps(scope+' select'),json.dumps(label))),
       'dual_binding_option_missing')
@@ -1236,7 +1241,7 @@ def guard_stale_target(browser, role):
     return 'retained_tab_disabled_keyboard_tested'
 
 
-def open_tab(browser, role):
+def open_tab(browser, role, *, shared=False):
     browser.click('#show-remote')
     scope = host_card(browser, role)
     browser.click(scope+' details.host-manage summary')
@@ -1252,7 +1257,8 @@ def open_tab(browser, role):
     browser.click('#view-content .session-dashboard button[data-pane-id]')
     wait_for(lambda:'当前观察画面' in (browser.read('#view-content .tab-frame-status') or ''),
              'dual_full_missing',timeout=90)
-    wait_named(browser, '#view-content', '启用草稿输入', timeout=60)
+    if not shared:
+        wait_named(browser, '#view-content', '启用草稿输入', timeout=60)
     return pane
 
 
@@ -1296,29 +1302,361 @@ def baseline(host, role, expected):
     return wait_for(sample,'dual_baseline_timeout',timeout=30)
 
 
+SHARED_NODE_OBSERVER = r"""(()=>{
+  const original=window.ipc, callbacks=window.__TAURI_INTERNALS__?.callbacks;
+  if(!original || typeof original.postMessage!=='function' || !(callbacks instanceof Map) || window.__sharedNode) return false;
+  const state={seq:0,latest:null,stopBinding:null};
+  const binding=b=>b && [b.profileId,b.profileRevision,b.identityRef,b.networkName,
+    Object.hasOwn(b,'provider'),b.provider??null];
+  const wrapped={postMessage(message){
+    let data;try{data=typeof message==='string'?JSON.parse(message):null}catch{}
+    const args=data?.payload?.args??data?.payload;
+    if(data?.cmd==='network_node_status'){
+      const callback=callbacks.get(data.callback);
+      if(typeof callback==='function')callbacks.set(data.callback,function(value){
+        state.latest={seq:++state.seq,id:args?.id,state:value?.state,binding:binding(value?.binding)};
+        return callback(value);
+      });
+    }
+    if(data?.cmd==='network_node_stop')state.stopBinding=binding(args?.binding);
+    return original.postMessage(message);
+  }};
+  window.ipc=wrapped;
+  if(window.ipc!==wrapped)return false;
+  window.__sharedNode={state,original,wrapped};
+  return true;
+})()"""
+
+
+def shared_node_state(browser, profile_id, *, after=0, stopped=False):
+    def sample():
+        value=browser.evaluate('window.__sharedNode?.state.latest')
+        if not isinstance(value,dict) or type(value.get('seq')) is not int or value['seq']<=after:
+            return None
+        if value.get('id')!=profile_id:
+            raise GuiFailure('dual_shared_native_profile_mismatch')
+        if value.get('state')!=('stopped' if stopped else 'engine-started'):
+            return None
+        binding=value.get('binding')
+        if (not isinstance(binding,list) or len(binding)!=6 or binding[0]!=profile_id
+                or type(binding[1]) is not int or binding[1]<1
+                or any(not isinstance(binding[i],str) or not 1<=len(binding[i])<=128 for i in (2,3))):
+            raise GuiFailure('dual_shared_native_binding_invalid')
+        # Rust Binding skips the EasyTier default on serialization. Retain
+        # whether the field was sent and corroborate with the real profile card.
+        if not (binding[4] is False and binding[5] is None or binding[4] is True and binding[5]=='easytier'):
+            raise GuiFailure('dual_shared_native_provider_mismatch')
+        return value
+    return wait_for(sample,'dual_shared_native_stop_unconfirmed' if stopped else
+                    'dual_shared_native_running_unconfirmed',timeout=30)
+
+
+PEER_CLOSE_KINDS = {'unconfirmed', 'peer_eof', 'client_disconnect', 'peer_reset'}
+SHARED_CLEAN_CLOSE = {'peer_eof', 'client_disconnect'}
+SHARED_STREAM_COUNTS = {'a': {'acceptedOverlayStreams': 1, 'loopbackTcpConnections': 1},
+                        'b': {'acceptedOverlayStreams': 1, 'loopbackTcpConnections': 1}}
+
+
+def shared_host_sample(host, report, checkpoint, *, initial=False):
+    sample={}
+    report.setdefault('peerCheckpoints',{})[checkpoint]=sample
+    for role, side in SHARED_HOSTS.items():
+        value=host_request(host,{'op':'audit','role':role,'expectedBase64':''},'host_audit')
+        counters=('acceptedSessions','newSessions','capturedBytes','newInputBytes')
+        flags=('exactBytes','authorizationActive','soleApprovedSession','inputAttributionAmbiguous')
+        sessions=value.get('sessions')
+        if (any(type(value.get(key)) is not int or not 0<=value[key]<=1000000 for key in counters)
+                or any(type(value.get(key)) is not bool for key in flags)
+                or not isinstance(sessions,list) or len(sessions)>16
+                or any(not isinstance(s,dict) or type(s.get('ordinal')) is not int or not 1<=s['ordinal']<=16
+                       or type(s.get('active')) is not bool or type(s.get('approvedDevice')) is not bool
+                       or not isinstance(s.get('peerClose'),str) or s['peerClose'] not in PEER_CLOSE_KINDS for s in sessions)):
+            quarantine_host_control(host)
+            raise GuiFailure('dual_shared_peer_evidence_invalid')
+        sample[side]={key:value[key] for key in (*counters,*flags)}
+        sample[side]['sessions']=[{key:s[key] for key in ('ordinal','approvedDevice','active','peerClose')} for s in sessions]
+    for peer in sample.values():
+        if peer['capturedBytes']!=0 or peer['newInputBytes']!=0 or not peer['exactBytes']:
+            raise GuiFailure('dual_shared_stock_writes_detected')
+        if (peer['acceptedSessions']!=1 or peer['newSessions']!=int(initial)
+                or not peer['authorizationActive'] or not peer['soleApprovedSession']
+                or peer['inputAttributionAmbiguous'] or len(peer['sessions'])!=1
+                or peer['sessions'][0]['ordinal']!=1 or not peer['sessions'][0]['approvedDevice']):
+            raise GuiFailure('dual_shared_original_ssh_changed')
+    return {side:peer['sessions'][0] for side,peer in sample.items()}
+
+
+def shared_peer_state(host, report, checkpoint, *, live=(), closing=None, initial=False, require_closed=(), timeout=10):
+    deadline=time.monotonic()+timeout
+    while True:
+        peers=shared_host_sample(host,report,checkpoint,initial=initial)
+        if any(not peers[side]['active'] or peers[side]['peerClose']!='unconfirmed' for side in live):
+            raise GuiFailure('dual_shared_live_peer_lost')
+        if any(peers[side]['active'] for side in require_closed):
+            raise GuiFailure('dual_shared_peer_still_active')
+        if closing is None:
+            return
+        peer=peers[closing]
+        if not peer['active'] and peer['peerClose']!='unconfirmed':
+            return peer['peerClose']
+        remaining=deadline-time.monotonic()
+        if remaining<=0:
+            return 'unconfirmed'
+        time.sleep(min(0.25,remaining))
+
+
+def shared_relays(session, ensure_app, report, checkpoint, *, active):
+    deadline=time.monotonic()+10
+    while True:
+        ensure_app()
+        counts=session.relay.active_connections()
+        if (set(counts)!={'easytier','easytierSecond'}
+                or any(type(n) is not int or not 0<=n<=16 for n in counts.values())):
+            raise GuiFailure('dual_shared_relay_evidence_invalid')
+        report.setdefault('relayCheckpoints',{})[checkpoint]={'a':counts['easytier'],'b':counts['easytierSecond']}
+        if all((count>0)==active for count in counts.values()):
+            ensure_app()
+            return
+        remaining=deadline-time.monotonic()
+        if remaining<=0:
+            raise GuiFailure('dual_shared_relay_live_missing' if active else 'dual_shared_relay_close_unconfirmed')
+        time.sleep(min(0.25,remaining))
+
+
+def shared_tab_id(browser, role, target):
+    title='QA host '+role.upper()+' · '+target['pane']+' · '+target['terminal']
+    return browser.evaluate("""(()=>{const view=document.querySelector('#view-content');
+      return !document.hidden && view?.getClientRects().length &&
+        view.querySelector(':scope > p:first-child')?.textContent===%s ? view.dataset.tabId : null;})()"""
+        % json.dumps(title))
+
+
+def shared_tick(browser, role, target, tab_id, *, after=0):
+    from s06_tauri_gui import observed_tick
+
+    def sample():
+        if shared_tab_id(browser,role,target)!=tab_id:
+            return None
+        text=browser.evaluate(r"""(()=>{const view=document.querySelector('#view-content');
+          const mode=view?.querySelector('.tab-mobile-controls')?.dataset.mode;
+          if(document.hidden || view?.dataset.tabId!==%s || (mode && mode!=='observe') ||
+             view.querySelector('.tab-connection-actions')?.dataset.state!=='active' ||
+             !view.querySelector('.tab-frame-status')?.textContent.includes('当前观察画面'))return null;
+          return [...view.querySelectorAll('.xterm-rows > div')]
+            .filter(e=>e.getClientRects().length).map(e=>e.textContent.replace(/\u00a0/g,' ')).join('\n');})()"""
+            % json.dumps(tab_id))
+        if not text:
+            return None
+        try:tick=observed_tick(text,0)  # Both fixture panes use capture_input's stock tick.
+        except GuiFailure:return None
+        return tick if tick>after else None
+    return wait_for(sample,'dual_shared_fresh_frame_missing',timeout=30)
+
+
+def close_shared_tab(browser, role):
+    scope='#view-content .tab-connection-actions'
+    browser.click_named(scope,'关闭此标签','dual_shared_close_action_missing')
+    def outcome():
+        if find_tab(browser,role) is None:
+            return 'removed'
+        if named_action_available(browser,scope,'移除此标签'):
+            return 'unconfirmed'
+        return None
+    return wait_for(outcome,'dual_shared_tab_close_unconfirmed',timeout=20)
+
+
+def shared_bound_hosts(browser, scope):
+    names=browser.evaluate("""(()=>{const prefix='绑定主机：';
+      if(document.querySelectorAll('#network-panel > article.network-profile-card').length!==1)return null;
+      const row=[...document.querySelectorAll(%s)].find(e=>e.textContent.startsWith(prefix));
+      return row?.textContent.slice(prefix.length).split('、')??null;})()""" % json.dumps(scope+' > p'))
+    if not isinstance(names,list) or len(names)!=2 or sorted(names)!=['QA host ET','QA host TS']:
+        raise GuiFailure('dual_shared_displayed_binding_mismatch')
+    return '、'.join(names)
+
+
+def shared_status_sequence(browser):
+    seq=browser.evaluate('window.__sharedNode?.state.seq')
+    if type(seq) is not int or seq<1:
+        raise GuiFailure('dual_shared_node_observer_missing')
+    return seq
+
+
+def run_shared_easytier(browser, session, report, ensure_app):
+    from flutter_android_gui import public_host_fingerprint
+
+    control=session.control
+    report['stage']='shared_profile_setup'
+    wait_for(lambda:named_action_available(browser,'#network-panel','管理网络与共享设备') or
+             named_action_available(browser,'#network-panel','新增网络配置'),'dual_shared_network_entry_missing')
+    if named_action_available(browser,'#network-panel','管理网络与共享设备'):
+        browser.click_named('#network-panel','管理网络与共享设备')
+    create_network(browser,'et',session.materials,report)
+
+    report['stage']='shared_pairing'
+    profiles={role:session.read_host_profile(role) for role in SHARED_HOSTS}
+    endpoint=lambda role:(profiles[role]['host'],profiles[role]['port'])
+    pin=lambda role:public_host_fingerprint(profiles[role]['expectedHostKey'])
+    if endpoint('et')==endpoint('ts') or pin('et')==pin('ts'):
+        raise GuiFailure('dual_shared_fixture_hosts_not_distinct')
+    report['distinctFixtureEndpointsAndHostKeys']=True
+    browser.click('#show-remote')
+    for role in SHARED_HOSTS:
+        pair_host(browser,control,role,profiles[role],report,shared=True)
+    report['pairingApprovedBoth']=True
+
+    report['stage']='shared_binding'
+    browser.click('#nav-network')
+    bindings={role:bind_host(browser,role,shared=True) for role in SHARED_HOSTS}
+    profile_id=bindings['et']
+    if not isinstance(profile_id,str) or not profile_id or bindings['ts']!=profile_id:
+        raise GuiFailure('dual_shared_binding_not_equal')
+    scope=expand_profile(browser,SHARED_PROFILE_TITLE)
+    shared_bound_hosts(browser,scope)
+    starting=shared_node_state(browser,profile_id)
+    report['singleReviewedProfileAndNativeBinding']=True
+    report['nativeBindingProviderFieldPresent']=starting['binding'][4]
+
+    report['stage']='shared_initial_frames'
+    targets={}; tabs={}; ticks={}
+    for role, side in SHARED_HOSTS.items():
+        targets[role]=open_tab(browser,role,shared=True)
+        tabs[role]=wait_for(lambda:shared_tab_id(browser,role,targets[role]),'dual_shared_tab_identity_missing')
+        ticks[side]=shared_tick(browser,role,targets[role],tabs[role])
+    if tabs['et']==tabs['ts']:
+        raise GuiFailure('dual_shared_tab_identity_not_distinct')
+    report['initialRenderedTicks']=ticks
+    shared_peer_state(control,report,'both_open',live=('a','b'),initial=True)
+    shared_relays(session,ensure_app,report,'both_open',active=True)
+
+    report['stage']='shared_close_a'
+    select_tab(browser,'et')
+    if shared_tab_id(browser,'et',targets['et'])!=tabs['et']:
+        raise GuiFailure('dual_shared_close_target_mismatch')
+    shared_peer_state(control,report,'before_a_close',live=('a','b'))
+    if close_shared_tab(browser,'et')!='removed':
+        shared_peer_state(control,report,'a_native_close_unconfirmed',live=('b',))
+        raise GuiFailure('dual_shared_a_native_close_unconfirmed')
+    report['aTabRemoved']=True
+    report['aCloseBeforeBTabClose']=shared_peer_state(control,report,'after_a_close',live=('b',),closing='a')
+
+    report['stage']='shared_resume_b'
+    select_tab(browser,'ts')
+    if shared_tab_id(browser,'ts',targets['ts'])!=tabs['ts']:
+        raise GuiFailure('dual_shared_survivor_tab_changed')
+    wait_named(browser,'#view-content .tab-connection-actions','恢复观察')
+    browser.click_named('#view-content .tab-connection-actions','恢复观察')
+    first=shared_tick(browser,'ts',targets['ts'],tabs['ts'],after=ticks['b'])
+    second=shared_tick(browser,'ts',targets['ts'],tabs['ts'],after=first)
+    report['bExplicitlyResumedSameTab']={'firstTick':first,'nextTick':second}
+    shared_peer_state(control,report,'b_resumed',live=('b',))
+    shared_relays(session,ensure_app,report,'after_a_close',active=True)
+    prior_status=shared_status_sequence(browser)
+    browser.click('#nav-network')
+    scope=expand_profile(browser,SHARED_PROFILE_TITLE)
+    if shared_node_state(browser,profile_id,after=prior_status)['binding']!=starting['binding']:
+        raise GuiFailure('dual_shared_native_binding_changed')
+    report['sameNativeBindingAfterATabClosed']=True
+
+    report['stage']='shared_close_b'
+    browser.click('#nav-terminal')
+    select_tab(browser,'ts')
+    if shared_tab_id(browser,'ts',targets['ts'])!=tabs['ts']:
+        raise GuiFailure('dual_shared_close_target_mismatch')
+    shared_peer_state(control,report,'before_b_close',live=('b',))
+    if close_shared_tab(browser,'ts')!='removed':
+        shared_peer_state(control,report,'b_native_close_unconfirmed')
+        raise GuiFailure('dual_shared_b_native_close_unconfirmed')
+    if find_tab(browser,'et') is not None:
+        raise GuiFailure('dual_shared_closed_tab_returned')
+    report['bothTabsRemoved']=True
+    report['bCloseBeforeNodeStop']=shared_peer_state(control,report,'after_b_close',closing='b')
+    shared_relays(session,ensure_app,report,'after_b_close',active=True)
+
+    report['stage']='shared_stop_node'
+    prior_status=shared_status_sequence(browser)
+    browser.click('#nav-network')
+    scope=expand_profile(browser,SHARED_PROFILE_TITLE)
+    names=shared_bound_hosts(browser,scope)
+    after_b=shared_node_state(browser,profile_id,after=prior_status)
+    if after_b['binding']!=starting['binding']:
+        raise GuiFailure('dual_shared_native_binding_changed')
+    report['sameNativeBindingAfterBothTabsClosed']=True
+    install_stop_observer(browser)
+    try:
+        stop_node_once(browser,scope,'et',SHARED_PROFILE_TITLE,names,profile_id,
+                       stage='shared_stop_node',attempts=report.setdefault('stopAttempts',[]))
+    finally:
+        uninstall_stop_observer(browser)
+    if browser.evaluate('window.__sharedNode?.state.stopBinding')!=starting['binding']:
+        raise GuiFailure('dual_shared_stop_binding_mismatch')
+    wait_named(browser,scope,'启动节点',timeout=90)
+    # The native registry preserves history while releasing the stopped node.
+    stopped=shared_node_state(browser,profile_id,after=after_b['seq'],stopped=True)
+    if stopped['binding']!=starting['binding']:
+        raise GuiFailure('dual_shared_stopped_binding_changed')
+    report['nativeStoppedOnOriginalBinding']=True
+    shared_relays(session,ensure_app,report,'after_node_stop',active=False)
+    shared_peer_state(control,report,'after_node_stop',require_closed=('a','b'))
+    start=start_observer_snapshot(browser)
+    if start['sent']!=1 or start['resolved']!=1 or start['rejected']!=0:
+        raise GuiFailure('dual_shared_node_start_count_mismatch')
+    report['exactlyOneNativeStartAndStop']=True
+    report['bothStockWriteBytes']=0
+    failed_closes=[side for side, key in (('a','aCloseBeforeBTabClose'),('b','bCloseBeforeNodeStop'))
+                   if report[key] not in SHARED_CLEAN_CLOSE]
+    if failed_closes:
+        report['closeFailures']=failed_closes
+        raise GuiFailure('dual_shared_peer_reset' if any(report[key]=='peer_reset' for key in
+            ('aCloseBeforeBTabClose','bCloseBeforeNodeStop')) else 'dual_shared_peer_close_unconfirmed')
+    report['stage']='complete'
+
+
+def verify_installed_shared_apk(apk, report):
+    import tempfile
+
+    paths=adb('shell','pm','path',PACKAGE).splitlines()
+    if len(paths)!=1 or not re.fullmatch(r'package:/data/app/[A-Za-z0-9_./=~+-]+/base\.apk',paths[0]):
+        raise GuiFailure('dual_shared_installed_apk_path_unconfirmed')
+    with tempfile.TemporaryDirectory(prefix='hp-tauri-installed-apk-',dir=apk.parent) as work:
+        installed=Path(work)/'base.apk'
+        adb('pull',paths[0].removeprefix('package:'),installed,timeout=60)
+        with installed.open('rb') as actual, apk.open('rb') as expected:
+            if hashlib.file_digest(actual,'sha256').digest()!=hashlib.file_digest(expected,'sha256').digest():
+                raise GuiFailure('dual_shared_installed_apk_mismatch')
+    report['installedApkMatchesInput']=True
+
+
 def run_direction(apk, auth_apk, session, stopped, report):
     control, material = session.control, session.materials
     from android_dual_overlay_reverse import _adb
-    from urllib.parse import urlsplit
+    shared=stopped==SHARED_SCENARIO
+    packages=(PACKAGE,) if shared else (PACKAGE,AUTH_PACKAGE)
     assert_owned_avd()
     for package in (PACKAGE, AUTH_PACKAGE):
         if 'package:'+package in adb('shell','pm','list','packages',package).splitlines():
             raise GuiFailure('dual_package_already_installed')
-    parsed = urlsplit(material['controlUrl'])
-    if parsed.scheme!='https' or parsed.hostname!='127.0.0.1' or parsed.port is None:
-        raise GuiFailure('dual_control_origin_invalid')
+    control_port=None
+    if not shared:
+        parsed=urlsplit(material['controlUrl'])
+        if parsed.scheme!='https' or parsed.hostname!='127.0.0.1' or parsed.port is None:
+            raise GuiFailure('dual_control_origin_invalid')
+        control_port=parsed.port
     installed=[];forward=None;browser=None;stop_context=None
     try:
         report['stage']='device_setup'
-        for path,package in ((apk,PACKAGE),(auth_apk,AUTH_PACKAGE)):
+        for path,package in zip((apk,auth_apk),packages):
             adb('install','-t',str(path),timeout=120);installed.append(package)
-        adb('shell','run-as',PACKAGE,'mkdir','-p','files/empty-dual-overlay-ca')
-        adb('shell','run-as',PACKAGE,'touch','files/enable-dual-overlay-private-ca')
-        _adb('shell','-T','run-as',PACKAGE,'tee','files/dual-overlay-ca.pem',input_data=session.read_ca())
-        adb('shell','run-as',AUTH_PACKAGE,'mkdir','-p','files')
-        _adb('shell','-T','run-as',AUTH_PACKAGE,'tee','files/port',input_data=str(parsed.port).encode())
-        report['stage']='device_auth_handler'
-        prepare_auth_receiver(parsed.port,report)
+        if shared:
+            verify_installed_shared_apk(apk,report)
+        else:
+            adb('shell','run-as',PACKAGE,'mkdir','-p','files/empty-dual-overlay-ca')
+            adb('shell','run-as',PACKAGE,'touch','files/enable-dual-overlay-private-ca')
+            _adb('shell','-T','run-as',PACKAGE,'tee','files/dual-overlay-ca.pem',input_data=session.read_ca())
+            adb('shell','run-as',AUTH_PACKAGE,'mkdir','-p','files')
+            _adb('shell','-T','run-as',AUTH_PACKAGE,'tee','files/port',input_data=str(control_port).encode())
+            report['stage']='device_auth_handler'
+            prepare_auth_receiver(control_port,report)
         report['stage']='device_setup'
         adb('shell','monkey','-p',PACKAGE,'-c','android.intent.category.LAUNCHER','1')
         pid=wait_for(lambda:adb('shell','pidof',PACKAGE,check=False), 'dual_app_missing',timeout=60)
@@ -1344,15 +1682,24 @@ def run_direction(apk, auth_apk, session, stopped, report):
         report['stage']='device_native_tree'
         report['ordinaryNativeTree']=wait_for_ordinary_tree(report)
         report['stage']='network_setup'
-        install_start_observer(browser,parsed.port)
+        install_start_observer(browser,control_port)
         report['startObserverInstalled']=True
-        report['transportBeforeNetwork']=public_transport_sample(session)
+        if not shared:
+            report['transportBeforeNetwork']=public_transport_sample(session)
         browser.click('#nav-network')
         wait_for(lambda:browser.evaluate("!document.querySelector('#network-panel').hidden"),'dual_network_page_missing')
+        if shared:
+            if browser.evaluate(SHARED_NODE_OBSERVER) is not True:
+                raise GuiFailure('dual_shared_node_observer_install_failed')
+            def ensure_app():
+                if adb('shell','pidof',PACKAGE,check=False)!=pid:
+                    raise GuiFailure('dual_shared_android_process_changed')
+            run_shared_easytier(browser,session,report,ensure_app)
+            return
         ts_scope=create_network(browser,'ts',material,report)
         create_network(browser,'et',material,report)
         report['stage']='network_ts_authorize'
-        authorize_ts(browser,control,ts_scope,parsed.port,report)
+        authorize_ts(browser,control,ts_scope,control_port,report)
         wait_for(lambda:'Tailscale 报告 Running' in (browser.read(ts_scope) or ''), 'dual_ts_running_missing',timeout=120)
         report['tsExplicitAuthorization']=True
         report['stage']='pairing'
@@ -1441,17 +1788,20 @@ def run_direction(apk, auth_apk, session, stopped, report):
         if stop_context is not None and not host_control_quarantined(control):
             try:checkpoint('failure')
             except Exception:pass  # Preserve the already captured original failure.
-        try:
-            from tauri_auth_failure_diagnostic import capture
-            report['androidFailureDiagnostic']=capture(adb,native_ui_nodes,foreground_component,{PACKAGE,AUTH_PACKAGE},parsed.port)
-        except Exception:report['androidFailureDiagnostic']={'scope':'read-only-failure-facts','readUnavailable':True}
+        if not shared:
+            try:
+                from tauri_auth_failure_diagnostic import capture
+                report['androidFailureDiagnostic']=capture(adb,native_ui_nodes,foreground_component,{PACKAGE,AUTH_PACKAGE},control_port)
+            except Exception:report['androidFailureDiagnostic']={'scope':'read-only-failure-facts','readUnavailable':True}
         try:report['foregroundAtFailure']=component_kind(foreground_component())
         except Exception:report['foregroundAtFailure']='unavailable'
-        if report.get('stage') in {'pairing','connect_and_input','stop_first','post_stop','stop_survivor','complete'}:
-            report['hostCountsAtFailure']=public_host_failure_counts(control)
+        if shared or report.get('stage') in {'pairing','connect_and_input','stop_first','post_stop','stop_survivor','complete'}:
+            counts=public_host_failure_counts(control)
+            report['hostCountsAtFailure']={side:counts[role] for role,side in SHARED_HOSTS.items()} if shared else counts
         if host_control_quarantined(control):report['hostControlChannelQuarantined']=True
-        try:report['transportAtFailure']=public_transport_sample(session)
-        except Exception:report['transportAtFailureUnavailable']=True
+        if not shared:
+            try:report['transportAtFailure']=public_transport_sample(session)
+            except Exception:report['transportAtFailureUnavailable']=True
         if browser:
             try:report['controlCountsAtFailure']=browser.evaluate("""(()=>{const enabled=id=>{const e=document.getElementById(id);return !!e&&!e.matches(':disabled');};
               const tabs=[...document.querySelectorAll('#view-tabs > button')];return {
@@ -1490,6 +1840,12 @@ def run_direction(apk, auth_apk, session, stopped, report):
         raise
     finally:
         if browser:
+            if shared:
+                try:
+                    report['sharedNodeObserverRestored']=browser.evaluate("""(()=>{const x=window.__sharedNode;
+                      if(!x || window.ipc!==x.wrapped)return false;
+                      window.ipc=x.original;delete window.__sharedNode;return window.ipc===x.original;})()""") is True
+                except Exception:report['sharedNodeObserverRestored']=False
             try:report['startResultObservation']=start_observer_snapshot(browser)
             except Exception:report['startResultObservationUnavailable']=True
             try:
@@ -1531,9 +1887,25 @@ def direction_cleanup_proven(current):
             current.get('browserClosed',True) is True and current.get('forwardRemoved',True) is True)
 
 
+def shared_device_passed(current):
+    required=('deviceApi35Verified','hostReady','installedApkMatchesInput',
+              'ordinaryWebViewHomeVerified','pairingApprovedBoth',
+              'distinctFixtureEndpointsAndHostKeys','singleReviewedProfileAndNativeBinding',
+              'aTabRemoved','sameNativeBindingAfterATabClosed','bothTabsRemoved',
+              'sameNativeBindingAfterBothTabsClosed','nativeStoppedOnOriginalBinding','exactlyOneNativeStartAndStop',
+              'startObserverInstalled','startObserverRestored','sharedNodeObserverRestored',
+              'browserClosed','forwardRemoved','packagesRemoved','privateDirectoryRemoved')
+    return (current.get('stage')=='complete' and all(current.get(key) is True for key in required)
+            and current.get('aCloseBeforeBTabClose') in SHARED_CLEAN_CLOSE
+            and current.get('bCloseBeforeNodeStop') in SHARED_CLEAN_CLOSE
+            and current.get('bothStockWriteBytes')==0
+            and current.get('sharedPeerStreams')==SHARED_STREAM_COUNTS
+            and current.get('relayRoles')==2 and current.get('reverseMappings')==2
+            and direction_cleanup_proven(current))
+
+
 def main():
     import argparse
-    import hashlib
     import shutil
     import tempfile
     parser=argparse.ArgumentParser()
@@ -1545,7 +1917,9 @@ def main():
     parser.add_argument('--host-source-sha', required=True)
     parser.add_argument('--native-source-sha', required=True)
     parser.add_argument('--apk-source-sha', required=True)
+    parser.add_argument('--scenario', choices=('dual-providers',SHARED_SCENARIO),default='dual-providers')
     args=parser.parse_args()
+    shared=args.scenario==SHARED_SCENARIO
     for name,value in (('native-source-sha',args.native_source_sha),('apk-source-sha',args.apk_source_sha),
                        ('host-source-sha',args.host_source_sha)):
         if not re.fullmatch(r'[0-9a-f]{40}',value or ''):raise SystemExit('dual_'+name.replace('-','_')+'_invalid')
@@ -1560,15 +1934,21 @@ def main():
             'apkFrontendDifference':'none from checked application source',
             'scope':'owned API35 x86_64; real UI, synthetic peers, QA-only TS private trust; no physical IME',
             'apkSha256':hashlib.sha256(paths[0].read_bytes()).hexdigest(),'directions':{}}
+    if shared:
+        same_source=result['sourceSHA']==args.apk_source_sha
+        result.update(scenario=SHARED_SCENARIO,apkSourceMatchesDriverCommit=same_source,
+            apkFrontendDifference='same commit' if same_source else 'unverified historical APK comparison',
+            scope='owned API35 x86_64 emulator; Tauri Android UI and native EasyTier; two real OpenSSH peers through controlled local relays',
+            physicalDevice=False,crossNetworkVerified=False,tsAuthorizationUsed=False)
     from android_dual_overlay_session import AndroidDualOverlaySession
     result['hostSourceSHA']=args.host_source_sha
     try:
-        for role in ('ts','et'):
+        for role in (SHARED_SCENARIO,) if shared else ('ts','et'):
             current={'stage':'setup'};result['directions'][role]=current
             try:
                 private=Path(tempfile.mkdtemp(prefix='hp-dual-host-',dir=root));private.chmod(0o700)
                 session=AndroidDualOverlaySession(paths[2], private, host_source=args.host_source_sha,
-                    source_checkout=args.host_source_checkout, device=SERIAL, lifetime=1800)
+                    source_checkout=args.host_source_checkout, device=SERIAL, lifetime=1800, shared_easytier=shared)
                 try:
                     with session:
                         run_direction(paths[0],paths[1],session,role,current)
@@ -1581,10 +1961,18 @@ def main():
                         if type(state.get(key)) is bool:current[key]=state[key]
                     for key in ('relayRoles','reverseMappings'):
                         if type(state.get(key)) is int and 0<=state[key]<=3:current[key]=state[key]
+                    if shared and 'sharedPeerStreams' in state:
+                        current['sharedPeerStreams']=state['sharedPeerStreams']
                     current['environmentCleanup']=state.get('cleanup', {})
                     shutil.rmtree(private)
                     current['privateDirectoryRemoved']=not private.exists()
                     (output/'result.json').write_text(json.dumps(result,indent=2)+'\n')
+                if shared:
+                    if current.get('sharedPeerStreams')!=SHARED_STREAM_COUNTS:
+                        raise GuiFailure('dual_shared_fixture_peer_dial_count_mismatch')
+                    if not shared_device_passed(current):
+                        raise GuiFailure('dual_shared_evidence_incomplete')
+                    continue
                 required=('tsExplicitAuthorization','pairingApprovedBoth','bindingBoth','bothInputAndDistinctTargets',
                           'survivorSameAuthenticatedSession','stoppedInputUnavailableAndUnchanged','survivorExplicitlyStoppedAndClosed',
                           'browserClosed','forwardRemoved','packagesRemoved','privateDirectoryRemoved','startObserverInstalled','startObserverRestored')

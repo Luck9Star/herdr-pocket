@@ -1,0 +1,290 @@
+{
+  "variant": "baseline",
+  "appSourceRef": "65319ae6c750ce5b60c6cd19ef37557c95f4dd28",
+  "engine": "playwright-webkit",
+  "engineVersion": "26.5",
+  "mode": "CSS/DOM simulation in WebKit; safe-area insets substituted in CSS; no native iOS keyboard or simulator",
+  "designSource": {
+    "commit": "6fac813",
+    "boards": [
+      "private-key-collapsed-390",
+      "private-key-collapsed-980"
+    ],
+    "tolerance": 2
+  },
+  "syntheticMaterial": "PUBLIC-SYNTHETIC-DRAFT-R12 / PUBLIC-SYNTHETIC-CLIPBOARD-R12 / PUBLIC-SYNTHETIC-PASSPHRASE-R12; screenshots contain no real PEM body",
+  "results": [
+    {
+      "kind": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "safeArea": {
+        "top": 47,
+        "bottom": 34
+      },
+      "states": {
+        "afterBlur": {
+          "activeElement": "ssh-passphrase",
+          "editorVisible": true,
+          "editorValue": "PUBLIC-SYNTHETIC-DRAFT-R12",
+          "summaryVisible": false,
+          "summaryText": null,
+          "pasteVisible": true,
+          "passphraseVisible": true,
+          "connectDisabled": true,
+          "bodyContainsDraft": false,
+          "bodyContainsClipboard": false
+        },
+        "afterReopen": {
+          "activeElement": "ssh-key",
+          "editorVisible": true,
+          "editorValue": "PUBLIC-SYNTHETIC-DRAFT-R12",
+          "summaryVisible": false,
+          "summaryText": null,
+          "pasteVisible": true,
+          "passphraseVisible": true,
+          "connectDisabled": true,
+          "bodyContainsDraft": false,
+          "bodyContainsClipboard": false
+        },
+        "afterPaste": {
+          "activeElement": "",
+          "editorVisible": true,
+          "editorValue": "PUBLIC-SYNTHETIC-CLIPBOARD-R12",
+          "summaryVisible": false,
+          "summaryText": null,
+          "pasteVisible": true,
+          "passphraseVisible": true,
+          "connectDisabled": true,
+          "bodyContainsDraft": false,
+          "bodyContainsClipboard": false
+        }
+      },
+      "anchors": {
+        "target": {
+          "x": 24,
+          "y": 351,
+          "width": 342,
+          "height": 84,
+          "expected": {
+            "x": 24,
+            "y": 351,
+            "width": 342,
+            "height": 84
+          },
+          "delta": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "withinTolerance": true,
+          "clickable": true
+        },
+        "paste": {
+          "x": 24,
+          "y": 445,
+          "width": 342,
+          "height": 48,
+          "expected": {
+            "x": 24,
+            "y": 445,
+            "width": 342,
+            "height": 48
+          },
+          "delta": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "withinTolerance": true,
+          "clickable": true
+        },
+        "passphrase": {
+          "x": 24,
+          "y": 527,
+          "width": 342,
+          "height": 48,
+          "expected": {
+            "x": 24,
+            "y": 527,
+            "width": 342,
+            "height": 48
+          },
+          "delta": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "withinTolerance": true,
+          "clickable": true
+        },
+        "connect": {
+          "x": 24,
+          "y": 589,
+          "width": 342,
+          "height": 48,
+          "expected": {
+            "x": 24,
+            "y": 589,
+            "width": 342,
+            "height": 48
+          },
+          "delta": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "withinTolerance": true,
+          "disabled": true
+        }
+      },
+      "screenshots": {
+        "afterBlur": "pem-baseline-editor-visible-390.png",
+        "afterReopen": "pem-baseline-reopen-390.png",
+        "final": "pem-baseline-paste-390.png"
+      }
+    },
+    {
+      "kind": "desktop",
+      "viewport": {
+        "width": 980,
+        "height": 780
+      },
+      "safeArea": {
+        "top": 0,
+        "bottom": 0
+      },
+      "states": {
+        "afterBlur": {
+          "activeElement": "ssh-passphrase",
+          "editorVisible": true,
+          "editorValue": "PUBLIC-SYNTHETIC-DRAFT-R12",
+          "summaryVisible": false,
+          "summaryText": null,
+          "pasteVisible": true,
+          "passphraseVisible": true,
+          "connectDisabled": true,
+          "bodyContainsDraft": false,
+          "bodyContainsClipboard": false
+        },
+        "afterReopen": {
+          "activeElement": "ssh-key",
+          "editorVisible": true,
+          "editorValue": "PUBLIC-SYNTHETIC-DRAFT-R12",
+          "summaryVisible": false,
+          "summaryText": null,
+          "pasteVisible": true,
+          "passphraseVisible": true,
+          "connectDisabled": true,
+          "bodyContainsDraft": false,
+          "bodyContainsClipboard": false
+        },
+        "afterPaste": {
+          "activeElement": "",
+          "editorVisible": true,
+          "editorValue": "PUBLIC-SYNTHETIC-CLIPBOARD-R12",
+          "summaryVisible": false,
+          "summaryText": null,
+          "pasteVisible": true,
+          "passphraseVisible": true,
+          "connectDisabled": true,
+          "bodyContainsDraft": false,
+          "bodyContainsClipboard": false
+        }
+      },
+      "anchors": {
+        "target": {
+          "x": 264,
+          "y": 304,
+          "width": 560,
+          "height": 84,
+          "expected": {
+            "x": 264,
+            "y": 304,
+            "width": 560,
+            "height": 84
+          },
+          "delta": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "withinTolerance": true,
+          "clickable": true
+        },
+        "paste": {
+          "x": 264,
+          "y": 398,
+          "width": 560,
+          "height": 48,
+          "expected": {
+            "x": 264,
+            "y": 398,
+            "width": 560,
+            "height": 48
+          },
+          "delta": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "withinTolerance": true,
+          "clickable": true
+        },
+        "passphrase": {
+          "x": 264,
+          "y": 480,
+          "width": 560,
+          "height": 48,
+          "expected": {
+            "x": 264,
+            "y": 480,
+            "width": 560,
+            "height": 48
+          },
+          "delta": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "withinTolerance": true,
+          "clickable": true
+        },
+        "connect": {
+          "x": 264,
+          "y": 542,
+          "width": 560,
+          "height": 48,
+          "expected": {
+            "x": 264,
+            "y": 542,
+            "width": 560,
+            "height": 48
+          },
+          "delta": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "withinTolerance": true,
+          "disabled": true
+        }
+      },
+      "screenshots": {
+        "afterBlur": "pem-baseline-editor-visible-980.png",
+        "afterReopen": "pem-baseline-reopen-980.png",
+        "final": "pem-baseline-paste-980.png"
+      }
+    }
+  ]
+}

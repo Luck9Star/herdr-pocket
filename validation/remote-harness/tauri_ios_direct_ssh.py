@@ -42,10 +42,10 @@ STAGES = ('ordinary_form', 'ordinary_probe', 'ordinary_password', 'ordinary_inpu
           'key_change_disconnect_attempt', 'key_change_disconnected', 'complete')
 ENCRYPTED_KEY_STAGES = (
     'encrypted_key_form', 'encrypted_key_probe', 'encrypted_key_reviewed',
-    'encrypted_key_wrong_pem_entry', 'encrypted_key_wrong_pem_verified', 'encrypted_key_wrong_ready',
-    'encrypted_key_wrong_submit', 'encrypted_key_wrong_rejected',
-    'encrypted_key_correct_pem_entry', 'encrypted_key_correct_pem_verified', 'encrypted_key_correct_ready',
-    'encrypted_key_correct_submit', 'encrypted_key_connected', 'encrypted_key_input',
+    'encrypted_key_wrong_pem_entry', 'encrypted_key_wrong_pem_verified', 'encrypted_key_wrong_pem_reopened',
+    'encrypted_key_wrong_ready', 'encrypted_key_wrong_submit', 'encrypted_key_wrong_rejected',
+    'encrypted_key_correct_pem_entry', 'encrypted_key_correct_pem_verified', 'encrypted_key_correct_pem_reopened',
+    'encrypted_key_correct_ready', 'encrypted_key_correct_submit', 'encrypted_key_connected', 'encrypted_key_input',
     'encrypted_key_terminal', 'encrypted_key_disconnect_attempt', 'encrypted_key_disconnected',
     'encrypted_key_returned_home',
 )
@@ -1242,7 +1242,8 @@ class Checkpoints:
         if stage == 'encrypted_key_form':
             self.started_cases.add('encryptedKey')
         elif stage in ('encrypted_key_probe', 'encrypted_key_reviewed', 'encrypted_key_wrong_pem_entry',
-                       'encrypted_key_wrong_pem_verified', 'encrypted_key_wrong_ready', 'encrypted_key_wrong_submit'):
+                       'encrypted_key_wrong_pem_verified', 'encrypted_key_wrong_pem_reopened',
+                       'encrypted_key_wrong_ready', 'encrypted_key_wrong_submit'):
             probe = encrypted_key_prefix(fixture, empty_connections=1, connection_count=1)['connectionEvents'][0]
             if stage == 'encrypted_key_probe':
                 case['initialProbe'] = public_encrypted_event(probe)
@@ -1250,16 +1251,21 @@ class Checkpoints:
                 case['fingerprintReviewed'] = True
             elif stage == 'encrypted_key_wrong_pem_verified':
                 case['wrongPemExact'] = True
+            elif stage == 'encrypted_key_wrong_pem_reopened':
+                case['wrongPemReopened'] = True
             elif stage == 'encrypted_key_wrong_ready':
                 case['wrongPassphraseObscured'] = True
         elif stage in ('encrypted_key_wrong_rejected', 'encrypted_key_correct_pem_entry',
-                       'encrypted_key_correct_pem_verified', 'encrypted_key_correct_ready', 'encrypted_key_correct_submit'):
+                       'encrypted_key_correct_pem_verified', 'encrypted_key_correct_pem_reopened',
+                       'encrypted_key_correct_ready', 'encrypted_key_correct_submit'):
             facts = encrypted_key_prefix(fixture, empty_connections=2, connection_count=2)
             if stage == 'encrypted_key_wrong_rejected':
                 case['wrongPassphrase'] = {'rejected': True, 'credentialsCleared': True,
                                            'peer': public_encrypted_event(facts['connectionEvents'][1])}
             elif stage == 'encrypted_key_correct_pem_verified':
                 case['correctPemExact'] = True
+            elif stage == 'encrypted_key_correct_pem_reopened':
+                case['correctPemReopened'] = True
             elif stage == 'encrypted_key_correct_ready':
                 case['correctPassphraseObscured'] = True
         elif stage == 'encrypted_key_connected':

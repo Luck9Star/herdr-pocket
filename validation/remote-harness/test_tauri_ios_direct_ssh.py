@@ -60,7 +60,8 @@ class ManualEncryptedKeyTests(unittest.TestCase):
     def through_wrong_submission(self):
         self.post('form')
         self.peer.events.append(self.peer.empty_event(1))
-        for step in ('probe', 'reviewed', 'wrong_pem_entry', 'wrong_pem_verified', 'wrong_ready', 'wrong_submit'):
+        for step in ('probe', 'reviewed', 'wrong_pem_entry', 'wrong_pem_verified', 'wrong_pem_reopened',
+                     'wrong_ready', 'wrong_submit'):
             self.post(step)
 
     def test_manual_flow_checks_distinct_wrong_and_correct_stages_and_live_close(self):
@@ -71,7 +72,8 @@ class ManualEncryptedKeyTests(unittest.TestCase):
         with self.assertRaisesRegex(ios.Failure, 'pre_auth_not_empty'):
             self.post('wrong_rejected')
         wrong['authAttempts'] = 0
-        for step in ('wrong_rejected', 'correct_pem_entry', 'correct_pem_verified', 'correct_ready', 'correct_submit'):
+        for step in ('wrong_rejected', 'correct_pem_entry', 'correct_pem_verified', 'correct_pem_reopened',
+                     'correct_ready', 'correct_submit'):
             self.post(step)
         session = self.peer.empty_event(3) | dict(closed=False, authAccepted=True, authAttempts=2, authSuccesses=1,
                                                    ptyRequests=1, shellRequests=1, outputBytes=25)
@@ -92,6 +94,28 @@ class ManualEncryptedKeyTests(unittest.TestCase):
                           case['acceptedSession']['authSuccesses']], [0, 0, 1])
         self.assertTrue(case['peerClosedBeforeDriverExit'])
         self.assertEqual(self.state.index, len(self.state.stages))
+
+    def test_pem_reopened_checkpoints_are_ordered_before_each_ready_stage(self):
+        self.post('form')
+        self.peer.events.append(self.peer.empty_event(1))
+        for step in ('probe', 'reviewed', 'wrong_pem_entry', 'wrong_pem_verified'):
+            self.post(step)
+        with self.assertRaisesRegex(ios.Failure, 'checkpoint_order_invalid'):
+            self.post('wrong_ready')
+        self.post('wrong_pem_reopened')
+        self.post('wrong_ready')
+        self.post('wrong_submit')
+        self.peer.events.append(self.peer.empty_event(2))
+        self.post('wrong_rejected')
+        for step in ('correct_pem_entry', 'correct_pem_verified'):
+            self.post(step)
+        with self.assertRaisesRegex(ios.Failure, 'checkpoint_order_invalid'):
+            self.post('correct_ready')
+        self.post('correct_pem_reopened')
+        self.post('correct_ready')
+        case = self.result['cases']['encryptedKey']
+        self.assertTrue(case['wrongPemReopened'])
+        self.assertTrue(case['correctPemReopened'])
 
     def test_native_event_disallows_replay_cross_case_and_secret_payload(self):
         self.post('form')

@@ -147,7 +147,8 @@ class PublicEvidenceTests(unittest.TestCase):
         case = self.encrypted_key_case()
         del case['modeSwitch']
         case.update(credentialEntry='nativeTypeText', wrongPemExact=True, correctPemExact=True,
-                    wrongPassphraseObscured=True, correctPassphraseObscured=True, credentialsCleared=True)
+                    wrongPemReopened=True, correctPemReopened=True, wrongPassphraseObscured=True,
+                    correctPassphraseObscured=True, credentialsCleared=True)
         probe = {**case['wrongPassphrase']['peer'], 'markerReceived': False, 'authAccepted': False,
                  'sessionClosed': False, 'handshakeCompleted': False}
         case['initialProbe'] = probe
@@ -177,6 +178,7 @@ class PublicEvidenceTests(unittest.TestCase):
             lambda report, case: case['acceptedSession'].update(authSuccesses=2),
             lambda report, case: case.update(peerClosedBeforeDriverExit=False),
             lambda report, case: case.update(wrongPemExact=False),
+            lambda report, case: case.update(correctPemReopened=False),
             lambda report, case: report['cases']['ordinary'].update(status='passed'),
             lambda report, case: report['cleanup'].update(encryptedSecretsCleared=False),
             lambda report, case: case['terminalScreenshot'].update(noCredentialsVisible=False),

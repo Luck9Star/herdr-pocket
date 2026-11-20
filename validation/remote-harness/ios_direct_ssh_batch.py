@@ -158,7 +158,8 @@ def tauri_manual_key_valid(report):
     if (not isinstance(case, dict) or case.get('credentialEntry') != 'nativeTypeText'
             or case.get('status') != 'passed' or case.get('authenticationMethod') != 'publickey'
             or any(case.get(name) is not True for name in ('fingerprintReviewed', 'wrongPemExact', 'correctPemExact',
-                   'wrongPassphraseObscured', 'correctPassphraseObscured', 'terminalInputReceived', 'disconnected',
+                   'wrongPemReopened', 'correctPemReopened', 'wrongPassphraseObscured', 'correctPassphraseObscured',
+                   'terminalInputReceived', 'disconnected',
                    'credentialsCleared', 'peerClosedBeforeDriverExit', 'returnedHome'))):
         return False
     wrong = case.get('wrongPassphrase')

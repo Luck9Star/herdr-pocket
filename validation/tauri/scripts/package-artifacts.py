@@ -5,6 +5,7 @@ root = Path(__file__).resolve().parents[1]
 repo = root.parents[1]
 sys.path.insert(0, str(repo / 'validation/shared'))
 from android_notices import verify as verify_packaged_notices
+sys.path.insert(0, str(repo / 'validation/pairing'))
 from linux_pairing_notices import verify_deb as verify_linux_notices
 sys.path.insert(0, str(repo / 'validation/network-profiles'))
 from android_sources import production_java_hashes

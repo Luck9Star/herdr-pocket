@@ -18,6 +18,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / 'validation/shared'))
 from android_notices import verify as verify_packaged_notices
+sys.path.insert(0, str(ROOT / 'validation/pairing'))
 from linux_pairing_notices import FLUTTER_NOTICE_DIR, NOTICE_FILES, verify_tar as verify_linux_notices
 VERSION = '3.47.9'
 COMMIT = 'c197ca5199e9ee5661e865596c9c07294dfab51c'

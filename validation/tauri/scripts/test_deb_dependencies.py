@@ -8,7 +8,7 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'shared'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'pairing'))
 from linux_pairing_notices import NOTICE_FILES, SOURCE, TAURI_DEB_NOTICE_DIR, verify_deb
 
 spec=importlib.util.spec_from_file_location('deb_dependencies',Path(__file__).with_name('check-deb-dependencies.py'))

@@ -82,6 +82,7 @@ class LinuxNoticeTests(unittest.TestCase):
                     shutil.copy2(self.source / filename, destination / filename)
                 ci.package(app, 'linux', output)
                 manifest = json.loads((output / 'manifest.json').read_text())
+                self.assertEqual(list((output / 'shared').rglob('linux_pairing_notices.*')), [])
                 self.assertEqual(manifest['linuxPackagedNotices'], {
                     f'bundle/data/third-party/secret-service-5.1.0/{name}':
                         hashlib.sha256((self.source / name).read_bytes()).hexdigest() for name in self.notice_names})
@@ -227,6 +228,10 @@ class SharedDiagnosticAssetsTests(unittest.TestCase):
         root = self.tauri_source()
         subprocess.run([shutil.which('node'), root / 'scripts/prepare-fixtures.mjs'], cwd=root,
                        check=True, capture_output=True, text=True)
+        for assets in (app / 'assets/shared', root / 'public/shared'):
+            self.assertEqual(list(assets.glob('linux_pairing_notices.*')), [])
+            self.assertEqual((assets / 'android_notices.py').read_bytes(),
+                             (self.shared / 'android_notices.py').read_bytes())
         for name in (self.diagnostic, self.theme_prompts):
             with self.subTest(asset=name):
                 source = (self.shared / name).read_bytes()

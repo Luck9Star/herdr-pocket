@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <unistd.h>
 
 namespace {
 
@@ -156,9 +157,26 @@ void DeviceKeyCall(FlMethodChannel*, FlMethodCall* call, gpointer) {
   Dispatch(std::move(request));
 }
 
+int pairing_lease = -1;
+std::string pairing_token;
 void CatalogCall(FlMethodChannel*, FlMethodCall* call, gpointer) {
   const std::string_view method(fl_method_call_get_name(call));
-  if (method == "load") {
+  if (method == "acquirePairingLease") {
+    if (pairing_lease >= 0 || (pairing_lease = herdr::AcquirePairingLease(g_get_user_data_dir())) < 0) {
+      fl_method_call_respond_error(call, "pairing_operation_busy", nullptr, nullptr, nullptr); return;
+    }
+    g_autofree gchar* token = g_uuid_string_random(); pairing_token = token;
+    g_autoptr(FlValue) value = fl_value_new_string(pairing_token.c_str());
+    fl_method_call_respond_success(call, value, nullptr);
+  } else if (method == "releasePairingLease") {
+    FlValue* args = fl_method_call_get_args(call);
+    const char* token = MapOfSize(args, 1) ? StringArgument(args, "token") : nullptr;
+    if (!token || pairing_lease < 0 || pairing_token != token) {
+      fl_method_call_respond_error(call, "pairing_operation_busy", nullptr, nullptr, nullptr); return;
+    }
+    close(pairing_lease); pairing_lease = -1; pairing_token.clear();
+    fl_method_call_respond_success(call, nullptr, nullptr);
+  } else if (method == "load") {
     Dispatch(std::make_unique<Request>(call, Action::Load));
   } else if (method == "save") {
     FlValue* args = fl_method_call_get_args(call);

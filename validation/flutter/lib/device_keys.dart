@@ -55,7 +55,25 @@ class NativeDeviceKeys implements DeviceKeys {
   }
 }
 
+/// Serializes Linux pairing transactions across app processes sharing XDG data.
+class LinuxPairingOperationLease {
+  LinuxPairingOperationLease._(this.token);
+  static const _channel = MethodChannel('dev.herdr/host-catalog');
+  final String token;
+  static Future<LinuxPairingOperationLease> acquire() async {
+    try {
+      final token = await _channel.invokeMethod<String>('acquirePairingLease');
+      if (token == null || token.isEmpty) throw const RemoteFailure('pairing_operation_busy');
+      return LinuxPairingOperationLease._(token);
+    } catch (_) { throw const RemoteFailure('pairing_operation_busy'); }
+  }
+  Future<void> release() async {
+    await _channel.invokeMethod<void>('releasePairingLease',{'token':token});
+  }
+}
+
 String? linuxDeviceKeyNotice(Object error) => switch (error is RemoteFailure ? error.code : '') {
+  'pairing_operation_busy' => '另一进程正在处理设备身份 · 请稍后重新读取核验',
   'device_key_locked' => '系统密钥环已锁定 · 请解锁后核验原设备身份',
   'device_key_missing' => '系统密钥环中未找到原设备密钥 · 请检查原密钥环和身份引用',
   'device_key_store_unavailable' => '系统密钥环服务不可用 · 请配置 Secret Service 后核验原设备身份',

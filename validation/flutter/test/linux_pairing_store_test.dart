@@ -6,6 +6,7 @@ import 'package:herdr_flutter_probe/device_keys.dart';
 import 'package:herdr_flutter_probe/host_catalog.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
 import 'package:herdr_flutter_probe/pairing_page.dart';
+import 'package:herdr_flutter_probe/pairing.dart';
 import 'package:herdr_flutter_probe/remote_adapter.dart' show RemoteFailure;
 
 import 'host_catalog_test.dart' show MemoryCatalogStorage, saveCatalogProfile;
@@ -21,9 +22,15 @@ void main() {
     PairingPage.resetMemorySession();
     messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(const MethodChannel('dev.herdr/host-catalog'), (call) async {
+      if (call.method == 'acquirePairingLease') return 'fixture-lease';
+      if (call.method == 'releasePairingLease') return null;
+      fail('unexpected catalog operation ${call.method}');
+    });
   });
   tearDown(() {
     messenger.setMockMethodCallHandler(NativeDeviceKeys.channel, null);
+    messenger.setMockMethodCallHandler(const MethodChannel('dev.herdr/host-catalog'), null);
     PairingPage.resetMemorySession();
   });
 
@@ -213,6 +220,47 @@ void main() {
     },
     variant: linux,
   );
+
+  testWidgets('busy process lease prevents reservation and native creation',(tester) async {
+    final storage=MemoryCatalogStorage();final catalog=HostCatalog(storage:storage,clock:()=>1000);
+    addTearDown(catalog.dispose);await catalog.load();
+    var nativeCalls=0;
+    messenger.setMockMethodCallHandler(NativeDeviceKeys.channel,(call) async {nativeCalls++;return null;});
+    messenger.setMockMethodCallHandler(const MethodChannel('dev.herdr/host-catalog'),(call) async {
+      if(call.method=='acquirePairingLease')throw PlatformException(code:'pairing_operation_busy');
+      fail('unexpected ${call.method}');
+    });
+    final tokens=(await tester.runAsync(DesignTokens.load))!;
+    await tester.pumpWidget(MaterialApp(home:PairingPage(tokens:tokens,catalog:catalog)));
+    await fillPairTarget(tester,fixtureConfig());await tapVisible(tester,'pair-target-review');
+    await tapVisible(tester,'pair-create');await tester.pumpAndSettle();
+    expect(nativeCalls,0);expect(catalog.pendingCreation,isNull);
+    expect(find.textContaining('另一进程正在处理设备身份'),findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  },variant:linux);
+
+  testWidgets('stale pending delete reloads and keeps an already committed identity',(tester) async {
+    final storage=MemoryCatalogStorage();
+    final creator=HostCatalog(storage:storage,clock:()=>1000);
+    final viewer=HostCatalog(storage:storage,clock:()=>1000);
+    addTearDown(creator.dispose);addTearDown(viewer.dispose);
+    await creator.load();await creator.beginCreation(fixtureConfig(),'pending',reservedHandle:handle);
+    final tokens=(await tester.runAsync(DesignTokens.load))!;
+    await tester.pumpWidget(MaterialApp(home:HostCatalogPage(tokens:tokens,catalog:viewer,offlineBuilder:(_)=>const SizedBox())));
+    await tester.pumpAndSettle();
+    var deletes=0;
+    messenger.setMockMethodCallHandler(NativeDeviceKeys.channel,(call) async {if(call.method=='delete')deletes++;return null;});
+    final p=PendingDevicePairing(handle:handle,publicKey:expectedPublic,account:fixtureConfig()['username'] as String,
+      hostKey:pairingFingerprint(expectedPublic),device:'Test phone',now:1000);
+    final profile=HostProfile.create('pending',fixtureConfig(),p,1000);
+    await creator.completeCreation(profile);
+    await tapVisible(tester,'hosts-delete-pending');await tester.pumpAndSettle();
+    expect(deletes,0);
+    final readback=HostCatalog(storage:storage,clock:()=>1000);addTearDown(readback.dispose);await readback.load();
+    expect(readback.profiles.single.pairingRecord['handle'],handle);
+    expect(readback.pendingCreation,isNull);
+    await tester.pumpWidget(const SizedBox());
+  },variant:linux);
 
   testWidgets(
     'signer preserves the reason when the keyring changes after public lookup',

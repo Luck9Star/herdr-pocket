@@ -14,6 +14,8 @@
 
 第二批 Flutter iOS 与 Android 均拒绝错口令且保持零认证，随后在正确口令字段处失败。Tauri iOS R13 在首页仅见 `163×22pt` AX 候选，采样原图的应用区域全白，尚未进入私钥流程。Flutter macOS R3 已通过系统遮罩，私钥收起和重开仍待原生复验。 [第二批官方工件索引](evidence/ordinary-ssh-pem-reopen-20261120/official-followup-index.json)
 
+第三批 Flutter Android 与 iOS 均通过独立加密和加密换钥。新回执直接记录失焦收起、摘要点击后完整草稿获焦，以及再次收起。换钥同源 `9865dafa`，两端均为 A → B → B → B，前三条零认证，末条一次公钥认证。macOS R4 已跑通两次重开与再次收起，第二次原生口令点击后的键入未读回。修复在本机 AppKit 两种辅助功能模式均复现转绿，完整系统验收另记。 [第三批原生作业、截图与本机对照](evidence/ordinary-ssh-pem-reopen-20261120/README.md#第三批手机回执与-macos-交接)
+
 ## 合并前原生复验
 
 ### R2 联合复验

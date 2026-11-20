@@ -44,6 +44,30 @@ Tauri Android API 35 和 Linux 两壳完成加密私钥与主机换钥组合。�
 
 八份 ZIP 的 CRC 均有效，大小和 SHA-256 与官方工件记录一致，清单源码与 Actions 的工件关联 `head_sha` 一致。新增七张图经过 Vision OCR 与目视检查，检测到的长编码串位于公开主机指纹栏。Android 和 Linux 六张新增图保留原 PNG 字节。iOS R13 白屏图只移除 `eXIf` 和 `iTXt`，解码像素逐字节一致。两张 Linux 首页图与首批副本逐字节一致。其余图像在索引保留原成员哈希，可在工件保留期内下载原件。校验步骤见下文。 [第二批工件索引](official-followup-index.json) · [归档文件校验](SHA256SUMS)
 
+## 第三批手机回执与 macOS 交接
+
+Flutter 在 Android API 35 与 iPhone 11／iOS 26.2 模拟器的加密案直接提交三项私钥回执：失焦后收起、点击摘要后获焦且草稿逐字一致、再次失焦后收起。回执来自同源码的自动化交互。终端截图用于核对界面回显，私钥编辑和重开以回执为准。
+
+| 场景与源码 | 原生运行和协议结果 | 官方来源 |
+| --- | --- | --- |
+| Flutter Android 独立加密，`2720e2f5`，第 2 次尝试 | 错口令本地拒绝。当时仅 A 探测，认证、PTY、shell 和收发均为零。第二条 A 连接一次公钥认证、一次 PTY 和 shell，输入 9 字节、累计输出 144 字节。Flutter 画面与 ADB 系统原屏均通过终端 OCR。两条连接均在驱动退出前关闭，凭据、剪贴板与测试资源已清理。 | [作业 136053359719](https://github.com/Luck9Star/herdr-pocket/actions/runs/44664325627/job/136053359719) · [工件 14597538810](https://github.com/Luck9Star/herdr-pocket/actions/runs/44664325627/artifacts/14597538810) |
+| Flutter iOS 独立加密 R4，`9865dafa` | 本作业的普通密码、密码换钥和独立加密三案均通过终端 OCR。独立加密案错口令在本地被拒，第一条 A 探测零认证。第二条 A 连接一次公钥认证、一次 PTY 和 shell，精确输入 9 字节、累计输出 102 字节。主动断开、返回首页并清理，连接均在驱动退出前关闭。 | [作业 136061669086](https://github.com/Luck9Star/herdr-pocket/actions/runs/44667921130/job/136061669086) · [工件 14598134983](https://github.com/Luck9Star/herdr-pocket/actions/runs/44667921130/artifacts/14598134983) |
+| Flutter Android 与 iOS 加密换钥，同源码 `9865dafa` | 两端均观察 A → B → B → B。拒绝 B，取消保留旧信任，重探并显式确认 B 后才认证。前三条零认证、PTY、shell 与收发。两端末条各一次公钥认证、一次 PTY 和 shell，输入 9 字节、累计输出 102 字节。系统原屏通过终端 OCR，主动断开、对端均提前关闭，凭据、剪贴板与测试资源已清理。 | Android [作业 136061803542](https://github.com/Luck9Star/herdr-pocket/actions/runs/44667958941/job/136061803542) · [工件 14599262098](https://github.com/Luck9Star/herdr-pocket/actions/runs/44667958941/artifacts/14599262098)；iOS [作业 136061804279](https://github.com/Luck9Star/herdr-pocket/actions/runs/44667959004/job/136061804279) · [工件 14599441889](https://github.com/Luck9Star/herdr-pocket/actions/runs/44667959004/artifacts/14599441889) |
+| Flutter macOS R4，`55edd094` | 系统遮罩、密码 SSH、返回后重开通过。加密案完成四次收起状态核验与两次摘要重开；各阶段均有可命中摘要，未见私钥标头或正文。第二次点击原生口令后，Swift 第 883 行的单次键入读回失败，未完成加密认证。整项 3/4，无截图。 | [作业 136054326156](https://github.com/Luck9Star/herdr-pocket/actions/runs/44665701940/job/136054326156) · [工件 14597913708](https://github.com/Luck9Star/herdr-pocket/actions/runs/44665701940/artifacts/14597913708) |
+
+Android 两次通过作业使用 Emulator 37.2.13（build 16740729）与 API 35 x86_64 rev 9。两次均记录验收正常结束、独占模拟器序列已移除。手机作业使用模拟器、受控回环和自动化输入。实体手机、物理输入法组字和真实外网未验证。 [作业版本、计数与清理索引](official-device-index.json)
+
+macOS 本机用 Flutter 3.47.9 与可见 AppKit 窗口复现焦点被渲染视图取回。源 `572e0a6d` 修复后，在默认和启用辅助功能两种模式各两次实点摘要、完整重开并再次收起，再单次派发 AppKit 键入。原生和 Flutter 均读回，AppKit 本地辅助功能值仍为遮罩；过程使用隔离宿主与合成草稿。完整系统 XCUITest 与加密 SSH 复验见独立作业。 [前后布尔回执](device-receipts/macos-local-handoff.json)
+
+### 第三批可恢复图像
+
+| 场景 | 图像 |
+| --- | --- |
+| Flutter Android 独立加密／加密换钥 | [独立加密回显](device-receipts/android-ordinary-terminal.png) · [换钥后回显](device-receipts/android-rotation-terminal.png)，均为 1080 × 2340 ADB 系统原屏。 |
+| Flutter iOS 独立加密／加密换钥 | [独立加密回显](device-receipts/ios-ordinary-terminal.png) · [换钥审查](device-receipts/ios-rotation-review.png) · [换钥后回显](device-receipts/ios-rotation-terminal.png)，均为 828 × 1792 模拟器系统原屏。 |
+
+五张归档图经 Vision OCR 与目检，未发现私钥正文或可读口令。iOS 换钥审查图可见公开主机指纹。Android 两张 PNG 保留原字节，三张 iOS 图只移除 EXIF，解码像素与原件逐字节一致。其余图像保留原成员摘要，可按官方工件取回。 [第三批工件索引](official-device-index.json) · [归档文件校验](SHA256SUMS)
+
 ## 截图和源码
 
 | 场景 | 截图 | 实测驱动 |
@@ -81,7 +105,7 @@ shasum -a 256 "$zip"
 unzip -p "$zip" result.json | shasum -a 256
 ```
 
-将下载的 ZIP 和报告哈希与对应批次的索引比较。清单成员路径以 `manifestFile` 为准，第二批 Tauri Android 使用 `tauri-direct-evidence/manifest.json`，Flutter Android 使用 `direct-ssh-public/result.json`。 [首批工件索引](official-index.json) · [第二批工件索引](official-followup-index.json)
+将下载的 ZIP 和报告哈希与对应批次的索引比较。清单成员路径以 `manifestFile` 为准，第二批 Tauri Android 使用 `tauri-direct-evidence/manifest.json`，Flutter Android 使用 `direct-ssh-public/result.json`。 [首批工件索引](official-index.json) · [第二批工件索引](official-followup-index.json) · [第三批工件索引](official-device-index.json)
 
 本地 Flutter 回归从目标提交导出到临时目录，使用 Flutter 3.47.9 和 Paramiko 4.0.0。几何测试使用本机临时 SSH 夹具，工作树无需切换。
 
@@ -111,9 +135,10 @@ gh workflow run paired-gui-validation.yml --ref "$ref" -f linux_direct_ssh=flutt
 gh workflow run paired-gui-validation.yml --ref "$ref" -f linux_direct_ssh=tauri-key
 gh workflow run flutter-macos-secure-xcui.yml --ref "$ref"
 gh workflow run direct-ssh-android.yml --ref "$ref" -f auth_case=encrypted-key
+gh workflow run direct-ssh-android.yml --ref "$ref" -f auth_case=encrypted-key-rotation
 ```
 
-iOS 通过分支前缀选择必需路径。Flutter 使用 `codex/acceptance/direct-ssh-ios-flutter-only-encrypted-key-`，Tauri 使用 `codex/acceptance/direct-ssh-ios-tauri-only-encrypted-manual-`，后缀标识独立复跑。前者还能因匹配 push 条件启动，检查已有 run 后再决定是否调度。
+iOS 通过分支前缀选择必需路径。Flutter 使用 `codex/acceptance/direct-ssh-ios-flutter-only-encrypted-key-`，Tauri 使用 `codex/acceptance/direct-ssh-ios-tauri-only-encrypted-manual-`，后缀标识独立复跑。Flutter 独立加密还能因匹配 push 条件启动。加密换钥单案用 `codex/acceptance/direct-ssh-ios-flutter-only-encrypted-rotation-` 前缀，只接受手动调度。检查已有 run 后再决定是否调度。
 
 ```sh
 gh workflow run direct-ssh-ios.yml --ref "$ios_ref"

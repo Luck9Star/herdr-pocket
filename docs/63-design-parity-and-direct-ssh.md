@@ -242,7 +242,7 @@ Flutter Android 普通 SSH 的 d925 [首轮 43715213819](evidence/design-parity-
 
 ### 普通 SSH 验收矩阵（2026-11-20 更新）
 
-[PR #56 私钥收起与重开验收](evidence/ordinary-ssh-pem-reopen-20261120/README.md)记录本批各作业的真实运行、凭据交互证据、截图和复跑入口。
+PR #56 的第三批 Flutter Android 与 iOS 模拟器已分别通过独立加密与加密换钥，并记录摘要实点、逐字读回和再次收起。macOS 的本机 AppKit 焦点修复与正式 XCUITest 按各自来源记录。 [私钥复验与复跑](evidence/ordinary-ssh-pem-reopen-20261120/README.md#第三批手机回执与-macos-交接)
 
 下表汇总本页及 [66](66-iteration-handoff-2026-11-16.md)、[68](68-android-ssh-host-key-rotation.md)、[69](69-mobile-ssh-active-terminal.md)、[70](70-ios-ssh-host-key-rotation.md) 各专项截至基线 `f378e9a` 的普通 SSH 验收记录和后续复验，逐项注明对应源码和证据。矩阵只覆盖普通 SSH（密码或既有 SSH 私钥认证）；herdr 配对设备密钥是独立通道，不计入本表。检查列说明：普通认证/首次指纹＝首次探测、明确确认后才认证；换钥 ABBB＝B 被拒、取消保留旧 A、重新探测、明确确认 B 后才认证（仅当原始证据可数出四次传输时标通过）；PTY 回显＝终端提交用户输入且界面呈现远端输出（像素/OCR、驱动级 UI 断言或目检分别注明，服务端写入不单独作为 UI 回显证据）；断开与清理＝主动断开与连接关闭、凭据/临时资源清理，分别注明。全部通过项均为受控 loopback、模拟器或桌面自动化/CDP 注入输入（`physicalImeVerified=false`），不等同真机、物理 IME/中文组字或生产主机。
 

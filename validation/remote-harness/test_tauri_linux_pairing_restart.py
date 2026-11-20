@@ -3,13 +3,15 @@ from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
+from unittest.mock import MagicMock, patch
 
-from paired_gui import GuiFailure, run_tauri
+from paired_gui import GuiFailure, checked_keyring_denial, run_tauri
 
 if os.name != 'nt':
     import fcntl
     from tauri_linux_pairing_restart import (
-        AppProcess, one_saved_host, owned_stock_app, owner_lock_state, process_exited, require_peers,
+        AppProcess, DENIAL_NOTICE, RestartReceipt, one_saved_host, owned_stock_app, owner_lock_state,
+        process_exited, require_peers,
     )
 
 
@@ -22,6 +24,48 @@ class RestartReceiptTests(unittest.TestCase):
     def test_restart_is_not_a_guarded_input_route(self):
         with self.assertRaisesRegex(GuiFailure, 'restart_requires_stock_read_only'):
             run_tauri(SimpleNamespace(input_fixture=True), None, {}, {}, SimpleNamespace(keyring=object()))
+
+    def test_denial_proof_fails_closed_on_wrong_mode_types_and_extra_or_missing_fields(self):
+        for mode in ('locked', 'unavailable'):
+            proof = {'mode': mode, 'independentAppProcesses': True, 'noticeVisible': True, 'connectDisabled': True,
+                     'originalHostAndIdentityRetained': True, 'authorizationUnchanged': True,
+                     'exactPeerAuthentications': 1, 'firstPeerClosed': True, 'noKeyringWrites': True,
+                     'receivedInputBytes': 0}
+            self.assertEqual(checked_keyring_denial(proof, mode), proof)
+            for invalid in (None, dict(proof, mode='off'), dict(proof, exactPeerAuthentications=True),
+                            dict(proof, receivedInputBytes=False), dict(proof, receivedInputBytes=1),
+                            dict(proof, raw='unapproved log'), dict(proof, noticeVisible=False),
+                            {key: value for key, value in proof.items() if key != 'noKeyringWrites'}):
+                with self.subTest(invalid=invalid), self.assertRaisesRegex(GuiFailure, 'keyring_denial_proof_incomplete'):
+                    checked_keyring_denial(invalid, mode)
+
+    def test_denied_ui_requires_expected_notice_and_never_retries_the_original_restore(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            receipt = RestartReceipt(None, root, {'XDG_DATA_HOME': str(root/'data')}, {}, None)
+        receipt.denial_catalog = b'original'
+        for changes, expected in (({}, None), ({'#host-restore-status': DENIAL_NOTICE['unavailable']}, 'notice_missing'),
+                                  ({'#remote-connect': False}, 'controls_changed'),
+                                  ({'#pair-create': False}, 'controls_changed'),
+                                  ({'#pair-request': 'new key'}, 'controls_changed')):
+            replies = {'#host-restore-status': DENIAL_NOTICE['locked'], '#host-restore-review': True,
+                       '#remote-review': False, '#remote-connect': True, '#pair-create': True, '#pair-request': ''}
+            driver = MagicMock()
+            driver.read.side_effect = lambda selector, prop=None: (replies | changes)[selector]
+            def one_sample(sample, error):
+                if not sample():
+                    raise GuiFailure(error)
+            with patch.object(receipt, 'open_original', return_value='second') as original, \
+                    patch.object(receipt, 'saved_catalog', return_value=b'original'), \
+                    patch('tauri_linux_pairing_restart.wait_for', side_effect=one_sample):
+                if expected:
+                    with self.assertRaisesRegex(GuiFailure, expected):
+                        receipt.second_denied(driver, 7, 'locked')
+                else:
+                    self.assertEqual(receipt.second_denied(driver, 7, 'locked'), 'second')
+                    driver.wait_control.assert_called_once_with('#host-restore-status')
+                original.assert_called_once_with(driver, 7)
+                driver.click.assert_not_called()
 
     def test_binary_ancestry_lifetime_and_private_env_must_match(self):
         with tempfile.TemporaryDirectory() as raw:

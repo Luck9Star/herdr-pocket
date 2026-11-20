@@ -3,12 +3,13 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 import errno
 import fcntl
+import json
 import os
 from pathlib import Path
 import re
 import stat
 
-from linux_pairing_keyring import KeyringFailure
+from linux_pairing_keyring import DBUS, DBUS_PATH, KeyringFailure, bus_call
 from paired_gui import GuiFailure, bounded_wire, fixture_terminal_id, owned_process, stop_tauri_observation, wait_for
 from pairing import fingerprint
 from s06_tauri_gui import peer_log_evidence
@@ -16,6 +17,10 @@ from s06_tauri_gui import peer_log_evidence
 
 PRIVATE_ENV = ('HOME', 'DBUS_SESSION_BUS_ADDRESS', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME',
                'XDG_STATE_HOME', 'XDG_CACHE_HOME', 'XDG_RUNTIME_DIR')
+DENIAL_NOTICE = {
+    'locked': '系统密钥环已锁定，请先解锁后重新核查原身份。',
+    'unavailable': '系统密钥服务不可用，请配置或启动后重新核查；不会使用明文或替代身份。',
+}
 
 
 @dataclass(frozen=True)
@@ -137,10 +142,11 @@ def rendered_frames(driver):
 
 
 @contextmanager
-def no_keyring_writes(approval, root, env):
+def no_keyring_writes(approval, root, env, *, service_available=True):
     # --profile prints only D-Bus headers. Never retain an argument or secret.
     watched = {
-        'org.freedesktop.Secret.Service': ('SearchItems', 'CreateCollection', 'SetAlias'),
+        DBUS: ('GetId',),
+        'org.freedesktop.Secret.Service': ('SearchItems', 'CreateCollection', 'SetAlias', 'Lock', 'Unlock'),
         'org.freedesktop.Secret.Collection': ('CreateItem', 'Delete'),
         'org.freedesktop.Secret.Item': ('Delete', 'SetSecret'),
     }
@@ -151,18 +157,25 @@ def no_keyring_writes(approval, root, env):
                 "path_namespace='/org/freedesktop/secrets'")
     log = root / 'restart-keyring-profile.log'
     with owned_process(args, cwd=root, env=env, log=log) as monitor:
-        def searches():
+        marker = b'SearchItems' if service_available else b'GetId'
+
+        def markers():
             if monitor.poll() is not None:
                 raise GuiFailure('restart_keyring_monitor_exited')
             profile = bounded_wire(log, 131072)
-            if re.search(rb'(?m)^mc\t[^\n]*\t(?:CreateCollection|SetAlias|CreateItem|Delete|SetSecret|Set)\s*$', profile):
+            if re.search(rb'(?m)^mc\t[^\n]*\t(?:CreateCollection|SetAlias|Lock|Unlock|CreateItem|Delete|SetSecret|Set)\s*$', profile):
                 raise GuiFailure('restart_keyring_write_observed')
-            return len(re.findall(rb'(?m)^mc\t[^\n]*\tSearchItems\s*$', profile))
+            return len(re.findall(rb'(?m)^mc\t[^\n]*\t' + marker + rb'\s*$', profile))
 
         def live_marker():
-            before = searches()
-            approval.keyring.items(approval.keyring.namespace)
-            return searches() > before
+            before = markers()
+            if service_available:
+                approval.keyring.items(approval.keyring.namespace)
+            else:
+                reply = bus_call(DBUS, DBUS_PATH, DBUS + '.GetId')
+                if not re.fullmatch(r"\('[a-f0-9]{32}',\)", reply):
+                    raise GuiFailure('restart_private_bus_identity_unproven')
+            return markers() > before
 
         wait_for(live_marker, 'restart_keyring_monitor_unproven', timeout=8)
         yield
@@ -176,6 +189,7 @@ class RestartReceipt:
             raise GuiFailure('restart_catalog_not_private')
         self.app, self.root, self.env, self.config, self.approval = app, root, env, config, approval
         self.lock = data / 'dev.herdrpocket.tauriprobe' / 'host-records-v1' / 'owner.lock'
+        self.denial_catalog = None
         self.first = self.lock_id = self.host_id = self.authorized = self.approval_id = self.terminal = None
 
     def first_started(self, owner_pid):
@@ -211,7 +225,7 @@ class RestartReceipt:
             return process_exited(self.first) and owner_lock_state(self.lock, self.lock_id)[1]
         wait_for(released, 'restart_first_app_or_owner_lock_not_released', timeout=15)
 
-    def second(self, driver, owner_pid):
+    def open_original(self, driver, owner_pid):
         next_app = wait_for(lambda: owned_stock_app(owner_pid, self.app, self.env), 'restart_second_app_unproven')
         if next_app == self.first or not process_exited(self.first):
             raise GuiFailure('restart_app_process_reused')
@@ -236,6 +250,10 @@ class RestartReceipt:
                 raise GuiFailure('restart_saved_target_changed')
         driver.click(review)
         driver.click('#host-restore')
+        return next_app
+
+    def second(self, driver, owner_pid):
+        self.open_original(driver, owner_pid)
         wait_for(lambda: f'原设备公钥匹配 · {self.approval.fingerprint}' in driver.read('#pair-status'),
                  'restart_original_key_review_failed')
         if (driver.read('#remote-review', 'checked') is not False or
@@ -259,3 +277,53 @@ class RestartReceipt:
                 'sameDeviceKeyReauthenticated': True, 'exactPeerAuthentications': 2,
                 'bothPeersClosed': True, 'secondObservedFrames': frames,
                 'originalKeyAndAuthorizationUnchanged': True, 'noKeyringWrites': True}
+
+    def saved_catalog(self):
+        path = self.lock.with_name('hosts.json')
+        pending = self.lock.with_name('linux-pairing-pending.json')
+        if path.is_symlink() or not path.is_file() or pending.exists() or pending.is_symlink():
+            raise GuiFailure('denial_original_catalog_unproven')
+        raw = bounded_wire(path, 131072)
+        catalog = json.loads(raw)
+        hosts = catalog.get('hosts') if isinstance(catalog, dict) else None
+        if not isinstance(hosts, list) or len(hosts) != 1 or not isinstance(hosts[0], dict):
+            raise GuiFailure('denial_original_catalog_unproven')
+        original = hosts[0]
+        reference = original.get('pairing')
+        if (original.get('id') != self.host_id or original.get('enabled') is not True or
+                not isinstance(reference, dict) or reference.get('handle') not in self.approval.keyring.verified):
+            raise GuiFailure('denial_original_catalog_unproven')
+        return raw
+
+    def before_denial(self):
+        self.denial_catalog = self.saved_catalog()
+
+    def second_denied(self, driver, owner_pid, mode):
+        app = self.open_original(driver, owner_pid)
+        notice = '#host-restore-status'
+        wait_for(lambda: driver.read(notice) == DENIAL_NOTICE[mode], 'denial_original_identity_notice_missing')
+        driver.wait_control(notice)
+        if (driver.read(notice) != DENIAL_NOTICE[mode] or
+                driver.read('#host-restore-review', 'checked') is not True or
+                driver.read('#remote-review', 'checked') is not False or
+                driver.read('#remote-connect', 'disabled') is not True or
+                driver.read('#pair-create', 'disabled') is not True or
+                driver.read('#pair-request', 'value') != '' or
+                self.saved_catalog() != self.denial_catalog):
+            raise GuiFailure('denial_original_identity_controls_changed')
+        return app
+
+    def wait_second_exit(self, second):
+        wait_for(lambda: process_exited(second) and owner_lock_state(self.lock, self.lock_id)[1],
+                 'denial_second_app_or_owner_lock_not_released')
+
+    def after_denial(self, mode):
+        if self.saved_catalog() != self.denial_catalog or fixture_terminal_id(self.config) != self.terminal:
+            raise GuiFailure('denial_original_catalog_or_target_changed')
+        self.verify_original_key()
+        wait_for(lambda: require_peers(self.approval, 1, all_closed=True), 'denial_original_peer_close_unproven')
+        self.approval.verify_ssh(b'')
+        return {'mode': mode, 'independentAppProcesses': True, 'noticeVisible': True, 'connectDisabled': True,
+                'originalHostAndIdentityRetained': True, 'authorizationUnchanged': True,
+                'exactPeerAuthentications': 1, 'firstPeerClosed': True, 'noKeyringWrites': True,
+                'receivedInputBytes': 0}

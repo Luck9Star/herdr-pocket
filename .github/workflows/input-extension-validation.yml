@@ -17,6 +17,8 @@ jobs:
     env:
       BASE_SHA: 2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01
       PATCH_SHA256: 7f89a79677a456f024bd73555130861cd1b0b47e9d4d69f98d4e18ffc7f1ed8a
+      TRANSLATE_C_SOURCE: https://codeberg.org/vancluever/translate-c
+      TRANSLATE_C_REV: 4e879eb8aba615de112eabd1231ea6e01920cead
       CARGO_BUILD_JOBS: 2
       CARGO_PROFILE_DEV_DEBUG: 0
     steps:
@@ -60,13 +62,36 @@ jobs:
           key: pocket-input-fixture-${{ env.BASE_SHA }}-${{ env.PATCH_SHA256 }}-rust196-zig0160-zcache2
           restore-keys: |
             pocket-input-fixture-${{ env.BASE_SHA }}-${{ env.PATCH_SHA256 }}-rust196-zig0160-
+      - name: Cache the locked translate-c package via upstream Git
+        working-directory: fixture-source/vendor/libghostty-vt
+        env:
+          TRANSLATE_C_HASH: translate_c-0.0.0-Q_BUWhVNBwDOEcIqub4VFPJPB6D9dgwzUMHTX5KWr8Xr
+          GIT_CONFIG_NOSYSTEM: '1'
+          GIT_CONFIG_GLOBAL: /dev/null
+          GIT_TERMINAL_PROMPT: '0'
+        run: |
+          set -euo pipefail
+          grep -Fq -- ".url = \"$TRANSLATE_C_SOURCE/archive/$TRANSLATE_C_REV.tar.gz\"," build.zig.zon
+          grep -Fq -- ".hash = \"$TRANSLATE_C_HASH\"," build.zig.zon
+          # Codeberg's archive endpoint can stall. Seed Zig's cache from the
+          # same upstream commit and keep the vendored URL and hash intact.
+          scratch="$(mktemp -d "$RUNNER_TEMP/translate-c.XXXXXX")"
+          git init -q "$scratch/source"
+          timeout -k 5s 90s git -C "$scratch/source" -c http.followRedirects=false \
+            fetch --no-tags --depth=1 "$TRANSLATE_C_SOURCE.git" "$TRANSLATE_C_REV"
+          test "$(git -C "$scratch/source" rev-parse --verify 'FETCH_HEAD^{commit}')" = "$TRANSLATE_C_REV"
+          git -C "$scratch/source" archive --prefix=translate-c/ --output="$scratch/translate-c.tar.gz" FETCH_HEAD
+          package_hash="$("$ZIG" fetch "$scratch/translate-c.tar.gz")"
+          echo "translate-c package hash: $package_hash"
+          test "$package_hash" = "$TRANSLATE_C_HASH"
       - name: Prefetch the vendored zig dependencies with retries
         continue-on-error: true
         timeout-minutes: 8
         working-directory: fixture-source/vendor/libghostty-vt
         run: |
           set -euo pipefail
-          urls="$(grep -rhoE 'https://[^"[:space:]]+\.(tar\.gz|tar\.zst|tgz)' --include='*.zon' . | sort -u)"
+          urls="$(grep -rhoE 'https://[^"[:space:]]+\.(tar\.gz|tar\.zst|tgz)' --include='*.zon' . \
+            | grep -Fvx -- "$TRANSLATE_C_SOURCE/archive/$TRANSLATE_C_REV.tar.gz" | sort -u)"
           count="$(printf '%s\n' "$urls" | grep -c .)"
           echo "prefetching $count vendored zig dependencies"
           for round in 1 2 3 4 5 6; do

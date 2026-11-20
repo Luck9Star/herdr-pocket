@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/direct_ssh_page.dart';
 
 import '../integration_test/direct_ssh_ui_steps.dart' as steps;
+import '../integration_test/ios_direct_ssh_test.dart'
+    show checkIosCredentialSwitches;
 
 void main() {
   testWidgets('one home tap waits for the delayed SSH route and form', (
@@ -121,6 +125,49 @@ void main() {
     );
     expect(clicks, 0);
   });
+
+  testWidgets('iOS credential switches clear both drafts and keep host trust', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 2;
+    tester.view.physicalSize = const Size(828, 1792);
+    tester.view.padding = const FakeViewPadding(top: 96, bottom: 68);
+    tester.view.viewPadding = tester.view.padding;
+    addTearDown(tester.view.reset);
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: tokens.theme,
+        home: DirectSshPage(tokens: tokens),
+      ),
+    );
+    final dynamic state = tester.state(find.byType(DirectSshPage));
+    const fingerprint = 'fixture-fingerprint';
+    state.setState(() {
+      state.mobileAuth = true;
+      state.fingerprint = fingerprint;
+      state.checkedTarget = state.target;
+    });
+    await tester.pumpAndSettle();
+
+    // Mirror the test IME's visibility in the viewport.
+    final keyboard = Timer.periodic(const Duration(milliseconds: 50), (_) {
+      final inset = tester.testTextInput.isVisible ? 780.0 : 0.0;
+      if (tester.view.viewInsets.bottom != inset) {
+        tester.view.viewInsets = FakeViewPadding(bottom: inset);
+      }
+    });
+    try {
+      expect(await checkIosCredentialSwitches(tester, fingerprint), {
+        'passwordToKeyCleared': true,
+        'keyToPasswordCleared': true,
+        'sameTrust': true,
+      });
+      expect(tester.view.viewInsets.bottom, 0);
+    } finally {
+      keyboard.cancel();
+    }
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
   testWidgets(
     'finishes the iOS passphrase edit before one stable connect tap',

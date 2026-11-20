@@ -3265,6 +3265,29 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
+    private func collapsedPEMControl(_ rows: [Observed], owner: RevealedControl) throws -> RevealedControl {
+        let failure = "native_encrypted_key_owner_unproven"
+        let summaries = rows.filter {
+            $0.snapshot.identifier == "ssh-key-summary" && $0.snapshot.label == "已填写私钥 · 重新编辑" &&
+                $0.snapshot.elementType == .button && $0.snapshot.isEnabled
+        }
+        let editors = rows.filter { $0.snapshot.identifier == "ssh-key" && $0.snapshot.isEnabled }
+        guard summaries.count == 1, editors.isEmpty else {
+            try require(false, failure)
+            throw NSError(domain: failure, code: 1)
+        }
+        let control = try mobileControl(summaries[0], rows, failure)
+        try require(sameControlScope(control, owner) && control.live.snapshot.isEnabled, failure)
+        return control
+    }
+
+    private func isCollapsedPEM(_ control: RevealedControl) -> Bool {
+        control.owner.snapshot.identifier == "ssh-key-summary" &&
+            control.owner.snapshot.label == "已填写私钥 · 重新编辑" &&
+            control.live.snapshot.identifier == "ssh-key-summary"
+    }
+
+    @MainActor
     private func encryptedForm(port: Int, owner: RevealedControl, notice: String? = nil) throws ->
         (pem: RevealedControl, passphrase: RevealedControl, submit: RevealedControl) {
         var targets: [(String?, String, Bool)] = [("ssh-step-title", "SSH 账号认证", false),
@@ -3280,7 +3303,15 @@ final class TauriDirectSSHUITests: XCTestCase {
             [.textField, .secureTextField, .textView].contains($0.snapshot.elementType) }
         try require(passwords.allSatisfy { !NativeFramePolicy.valid($0.snapshot.frame) && credentialEmpty($0.snapshot) },
                     "native_encrypted_key_method_unproven")
-        return (try encryptedField(.pem, rows: rows, owner: submit), try encryptedField(.passphrase, rows: rows, owner: submit), submit)
+        let pem: RevealedControl
+        if let anchor = encryptedFieldAnchor(.pem, rows) {
+            let control = try mobileControl(anchor, rows, failure)
+            try require(sameControlScope(control, owner) && control.live.snapshot.isEnabled, failure)
+            pem = control
+        } else {
+            pem = try collapsedPEMControl(rows, owner: owner)
+        }
+        return (pem, try encryptedField(.passphrase, rows: rows, owner: submit), submit)
     }
 
     private func credentialEmpty(_ field: any XCUIElementSnapshot) -> Bool {
@@ -3331,7 +3362,8 @@ final class TauriDirectSSHUITests: XCTestCase {
             Thread.sleep(forTimeInterval: 0.2)
             filled = try encryptedForm(port: port, owner: entered.passphrase)
         }
-        try require(filled.pem.live.snapshot.value as? String == pem &&
+        let collapsedPEM = isCollapsedPEM(filled.pem)
+        try require((collapsedPEM || filled.pem.live.snapshot.value as? String == pem) &&
                     NativeControlPolicy.credentialMasked(filled.passphrase.live.snapshot.value) &&
                     filled.submit.owner.snapshot.isEnabled && filled.submit.live.snapshot.isEnabled, failure)
         let observed = try observedNodes()
@@ -3364,7 +3396,7 @@ final class TauriDirectSSHUITests: XCTestCase {
                 "secretDiagnostic": ["count": min(suspicious.count, 10000), "candidates": Array(suspicious.prefix(12))]])
         }
         try require(suspicious.isEmpty, "native_secret_exposed")
-        try require(editor != nil, failure)
+        try require(editor != nil || collapsedPEM, failure)
         try post(prefix + "_ready")
         return filled.submit
     }

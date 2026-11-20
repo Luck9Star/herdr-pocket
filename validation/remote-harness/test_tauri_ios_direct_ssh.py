@@ -981,6 +981,16 @@ class CaptureDiagnosticsTests(unittest.TestCase):
         self.assertEqual(state.result['nativeFailureCode'], 'native_terminal_header_unproven')
         self.assertEqual(state.failure, 'tauri_ios_native_check_failed')
 
+    def test_collapsed_pem_witness_keeps_secret_gate(self):
+        source = (ios.HERE / 'tauri_ios_direct_ssh.swift').read_text()
+        self.assertIn('private func collapsedPEMControl', source)
+        self.assertIn('$0.snapshot.identifier == "ssh-key-summary"', source)
+        self.assertIn('$0.snapshot.label == "已填写私钥 · 重新编辑"', source)
+        self.assertIn('(collapsedPEM || filled.pem.live.snapshot.value as? String == pem)', source)
+        secret_gate = source.index('try require(suspicious.isEmpty, "native_secret_exposed")')
+        collapsed_gate = source.index('try require(editor != nil || collapsedPEM, failure)')
+        self.assertLess(secret_gate, collapsed_gate)
+
     def test_fixed_capture_diagnostics_export_and_bound(self):
         detail = {'anchor': 'terminal', 'matchCount': 2, 'reason': 'geometry_ambiguous',
                   'candidates': [{'role': 'other', 'frame': [10, 200, 400, 500],

@@ -551,8 +551,8 @@ def mobile_setup(browser, fixture, step, *, fingerprint=None, prior=None, method
       const button=(id,label,on=true)=>{const e=one(id);return shown(e)&&e.tagName==='BUTTON'&&
         text(id)===label&&e.disabled===!on;};
       const route=one('home-ssh'), target=one('ssh-target-fields'), trust=one('ssh-trust-review'), auth=one('ssh-credentials');
-      const password=one('ssh-password'), key=one('ssh-key'), phrase=one('ssh-passphrase'), submit=one('ssh-connect');
-      const secrets=[password,key,phrase];
+      const password=one('ssh-password'), key=one('ssh-key'), phrase=one('ssh-passphrase'), summary=one('ssh-key-summary'), submit=one('ssh-connect');
+      const secrets=[password,key,phrase,summary];
       if (!shown(route) || !target || !trust || !auth || !submit || secrets.some(e=>!e) ||
           password.type!=='password' || key.tagName!=='TEXTAREA' || phrase.type!=='password') return false;
       const closedSecrets=()=>secrets.every(e=>!shown(e)&&e.disabled&&e.value==='')&&!shown(submit)&&submit.disabled;
@@ -576,12 +576,18 @@ def mobile_setup(browser, fixture, step, *, fingerprint=None, prior=None, method
       if (!shown(auth) || shown(trust) || text('ssh-step-title')!=='SSH 账号认证' ||
           text('ssh-approved-note')!=='本次主机密钥已确认' || !button('ssh-auth-password','密码') ||
           !button('ssh-auth-key','已有私钥') || !button('ssh-connect','连接 SSH',spec.input==='ready')) return false;
-      const active=spec.method==='password'?password:key, selected=spec.method==='password'?'ssh-auth-password':'ssh-auth-key';
+      const selected=spec.method==='password'?'ssh-auth-password':'ssh-auth-key';
       const inactive=spec.method==='password'?'ssh-auth-key':'ssh-auth-password';
-      if (one(selected).getAttribute('aria-pressed')!=='true'||one(inactive).getAttribute('aria-pressed')!=='false' ||
-          !shown(active)||active.disabled||Boolean(active.value)!==(spec.input!=='empty')) return false;
+      if (one(selected).getAttribute('aria-pressed')!=='true'||one(inactive).getAttribute('aria-pressed')!=='false') return false;
+      if (spec.method==='key'&&spec.input==='ready') {
+        if (shown(key)||key.value!==''||!shown(summary)||summary.tagName!=='BUTTON'||summary.disabled ||
+            text('ssh-key-summary')!=='已填写私钥 · 重新编辑') return false;
+      } else {
+        const active=spec.method==='password'?password:key;
+        if (!shown(active)||active.disabled||Boolean(active.value)!==(spec.input!=='empty')) return false;
+      }
       return spec.method==='password'
-        ? !shown(key)&&!shown(phrase)&&key.value===''&&phrase.value===''
+        ? !shown(key)&&!shown(phrase)&&key.value===''&&phrase.value===''&&!shown(summary)
         : !shown(password)&&password.value===''&&shown(phrase)&&!phrase.disabled&&Boolean(phrase.value)===(spec.input==='ready');
     })()""" % json.dumps(expectation)
     wait_for(lambda: browser.evaluate(expression) is True, 'direct_mobile_setup_unproven', timeout=60)
@@ -770,6 +776,8 @@ def exercise_active_navigation(browser, fixture, *, progress=None, ime_checks=No
 
 CREDENTIAL_VALUES_EXPR = ("!!document.querySelector('#ssh-password').value || "
                           "!!document.querySelector('#ssh-key').value || "
+                          "(!!document.querySelector('#ssh-key-summary') && "
+                          "!document.querySelector('#ssh-key-summary').hidden) || "
                           "!!document.querySelector('#ssh-passphrase').value")
 PUBLIC_KEY_EVIDENCE_FIELDS = frozenset({'stage','connections','publicKeyAccepted','authAttempts',
                                         'authSuccesses','ptyRequests','shellRequests','inputBytes','outputBytes'})

@@ -21,9 +21,13 @@ from PIL import Image
 from screen_proof_token import token_lines
 from tauri_linux_direct_ssh import (
     DesktopDriver,
+    KEY_FIELDS_WITNESS,
+    KEY_REJECTED_WITNESS,
     REVIEW_WITNESS,
     ROTATION_REPROBE_ACTION,
     ROTATION_REPROBE_CREDENTIALS,
+    ROTATION_REVIEW_WITNESS,
+    ROTATION_RETAINED_WITNESS,
     execute,
     DirectSshFixture,
     EncryptedKeyFixture,
@@ -315,6 +319,16 @@ class WebDriverTests(unittest.TestCase):
         driver.read.return_value = value.replace('\n', '')
         with self.assertRaisesRegex(GuiFailure, 'form_input_mismatch_ssh-key'):
             driver.fill('#ssh-key', value)
+
+    def test_credential_cleanup_witnesses_reject_a_retained_private_key_summary(self):
+        self.assertIn("!visible(summary)", KEY_FIELDS_WITNESS)
+        self.assertIn("summary.innerText === '已填写私钥 · 重新编辑'", KEY_FIELDS_WITNESS)
+        witnesses = (KEY_REJECTED_WITNESS, ROTATION_REVIEW_WITNESS,
+                     ROTATION_RETAINED_WITNESS, ROTATION_REPROBE_CREDENTIALS)
+        for witness in witnesses:
+            self.assertIn("!visible(node('#ssh-key-summary'))", witness)
+        source = (HERE / 'tauri_linux_direct_ssh.py').read_text(encoding='utf-8')
+        self.assertIn('!visible(node("#ssh-key-summary"))', source)
 
     def test_native_webkit_session_uses_production_binary_and_public_capabilities(self):
         driver = DesktopDriver()

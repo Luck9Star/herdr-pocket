@@ -253,7 +253,8 @@ const nodes={
  'ssh-connect':element('',{tagName:'BUTTON',hidden:true,disabled:true}),
  'ssh-password':element('',{type:'password',hidden:true,disabled:true}),
  'ssh-passphrase':element('',{type:'password',hidden:true,disabled:true}),
- 'ssh-key':element('',{tagName:'TEXTAREA',hidden:true,disabled:true})};
+ 'ssh-key':element('',{tagName:'TEXTAREA',hidden:true,disabled:true}),
+ 'ssh-key-summary':element('已填写私钥 · 重新编辑',{tagName:'BUTTON',hidden:true,disabled:true})};
 let duplicate;
 global.document={querySelectorAll(selector){const id=selector.slice(1); return !nodes[id]?[]:id===duplicate?[nodes[id],nodes[id]]:[nodes[id]];}};
 global.getComputedStyle=()=>({visibility:'visible'});
@@ -265,6 +266,7 @@ reject('ssh-reviewed-algorithm','innerText','ssh-ed25519');
 reject('ssh-password','disabled',false);
 reject('ssh-password','value','stale');
 reject('ssh-key','hidden',false);
+reject('ssh-key-summary','hidden',false);
 reject('ssh-trust-cancel','disabled',true);
 duplicate='ssh-trust-confirm';assert.ok(!check());
 duplicate=null;
@@ -298,6 +300,23 @@ delete route.dataset.sshStep;title.hidden=true;review.hidden=false;review.type='
 assert.equal(choose(),null);
 narrow=false;assert.equal(choose(),'legacy');
 ''' % (expression,refused,closed,layout)
+        result=subprocess.run(['node','-e',script],capture_output=True,text=True,timeout=10)
+        self.assertEqual(result.returncode,0,result.stderr)
+
+    @unittest.skipUnless(shutil.which('node'), 'requires Node.js to evaluate the cleanup expression')
+    def test_cleanup_counts_a_visible_private_key_summary_as_retained(self):
+        script=r'''const assert=require('node:assert/strict');
+const retained=()=>%s;
+const element=()=>({value:'',hidden:true});
+const nodes={'ssh-password':element(),'ssh-key':element(),'ssh-key-summary':element(),'ssh-passphrase':element()};
+global.document={querySelector(selector){return nodes[selector.slice(1)];}};
+assert.equal(retained(),false);
+nodes['ssh-key-summary'].hidden=false;
+assert.equal(retained(),true);
+nodes['ssh-key-summary'].hidden=true;
+nodes['ssh-key'].value='synthetic';
+assert.equal(retained(),true);
+''' % driver.CREDENTIAL_VALUES_EXPR
         result=subprocess.run(['node','-e',script],capture_output=True,text=True,timeout=10)
         self.assertEqual(result.returncode,0,result.stderr)
 

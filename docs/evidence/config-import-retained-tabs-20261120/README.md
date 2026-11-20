@@ -38,7 +38,7 @@
 - 关键事实：`realFileImport`、`oldFrameRetained`、`oldConnectDisabled`、`oldTabManuallyClosed`、`survivorAdvancedOnOriginalConnection`、`peersClosedBeforeDriverExit` 全为 true。A 侧 1 次认证后导入触发 1 次认可关闭、0 reset；B 侧保持原认证（185→211 推进），最终两侧各 1 次认可关闭、0 reset、0 输入字节。
 - 明确口径：以上为**本地容器桌面原生窗口验证**，非实体设备验证。
 
-## Tauri Linux M1-05 专项本地复放（源 `5a85d58`，待 PR54 引用）
+## Tauri Linux M1-05 专项本地复放（源 `5a85d58`）
 
 - 源码：`5a85d5853d2019538d22c99e5a9063866fd1a419`（与 `4541a80` 批同一本地 Ubuntu 24.04 arm64 容器、原生 GTK/WebKit 窗口 + WebKitWebDriver 直连拓扑）。专项 `testId` 为 `M1-05-tauri-real-ssh-config-replacement`，全程无 D2 字段（与早前 D2 系列探针无关）。默认 stock D2 回放同 SHA 独立通过（`native-stock-5a85d58`，本地目录不归档）。
 - 归档文件（`linux/r4-5a85d58/`）：
@@ -49,8 +49,15 @@
   - `s06-tauri-import-survivor-advanced.png`（B 在原连接上推进，tick 115→127）
 - 关键事实：`realFileImport`、`oldFrameRetained`、`oldConnectDisabled`、`oldTabManuallyClosed`、`survivorAdvancedOnOriginalConnection`、`peersClosedBeforeDriverExit`、`zeroPeerInputBytes` 全为 true。基线可见 tick `[[106,108],[110,112]]`；A 侧导入触发 1 次认可关闭/0 reset；B 侧保持原认证并在最终关闭时记 1 次认可关闭/0 reset；两侧输入字节为 0。
 - 截图与 `4541a80` 批内容等价（同为旧画面保留 + 幸存帧推进），该批已归档原图，本批仅归档账本/manifest/必要图并逐项 SHA 核验。
-## Tauri WebKit 390×844（补充证据，模拟 IPC，最终源）
 
+## Tauri Linux M1-05 官方云 R4（run `44649668455`，正式通过）
+
+- 源码：`5a85d5853d2019538d22c99e5a9063866fd1a419`；作业 `136001096650`；run 链接 `https://github.com/Luck9Star/herdr-pocket/actions/runs/44649668455`。平台：Ubuntu 24.04 x86_64 回环 OpenSSH；herdr 0.9.5（上游 commit `2ecf19a`，release 资产 SHA-256 `14d9e8bc…9929d`）。`status: passed`，`milestone: M1-05-tauri-real-ssh-config-replacement`。
+- 归档（`linux/official-r4-44649668455/`）：官方 ZIP 原件（`herdr-linux-r4-official.zip`，SHA-256 `1a28e14af686de77bc6fcce0ee180cc5a36c80911c7a52fdf02c83efbf885406`，内含 13 个文件、内部 SHA256SUMS 11 项全过）+ 从中提取的 `manifest.json`、`s06-tauri-import-replace.json` 及三张关键图（preview / old-retained / survivor-advanced），未重复归档全套解压。
+- 关键事实：`realFileImport`、`oldFrameRetained`、`oldConnectDisabled`、`oldTabManuallyClosed`、`survivorAdvancedOnOriginalConnection`、`peersClosedBeforeDriverExit`、`zeroPeerInputBytes` 全为 true。A 旧标签 tick 264 保留最后画面后手动关闭；B 在原连接 tick 264→290 推进；双端各 1 次认证、最终各 1 次认可关闭、0 reset、0 输入字节。
+- 与本地复放 `linux/r4-5a85d58/` 同源同 `milestone`、结论一致；官方云 x86 结果为正式判定。
+
+## Tauri WebKit 390×844（补充证据，模拟 IPC，最终源）
 - 源码：`ad0d70e384be5877b191840530cc179271ec210c`。
 - 范围：生产 Tauri 前端，Playwright WebKit 26.5，390×844，模拟 native IPC；真实 xterm 渲染 + `config_apply` 时的**模拟 native stop（合成迟到撤权 IPC，非真实 native 调用）**。无 SSH、无原生文件选择器、无连续活动会话。
 - 测试：JS `node --test` 731/731；Rust `cargo test` 89/89；配置专项 15/15。
@@ -78,6 +85,6 @@
 
 - 已验证：真实回环下的替换行为（旧连接关闭、停重连、旧标签保留最后画面且不可输入、其他标签/连接不受影响、新目标须显式连接）；Tauri 模拟链路的保留/可达/恢复与单次 native stop。
 - 未验证：真机、跨网、五端文件提供方、原生文件选择器、连续长时间活动 SSH、系统读屏；五端逐端覆盖未完成。
-- Tauri Linux 正式导入：本地容器原生 GTK/WebKit 本地原生窗口验证通过（见上文「Tauri Linux 原生正式导入」与 `linux/` 归档；源 `5a85d58` 专项复放见 `linux/r4-5a85d58/`）。官方云 Linux x86 路径：R1（run `44640288215`，工件 `14587227607`）首台设备空看板错误；R2（run `44644564603`，工件 `14589381339`）首台配对已过但输入焦点 stale；R3（run `44647186980`，工件 `14589018074`）停在 wide_before 缩放检查——R2/R3 均未执行导入，失败结论保留；独立 R4（run `44649668455`）正在运行，**待验**；PR54 草稿引用上述可发布归档。
+- Tauri Linux 正式导入：本地容器原生 GTK/WebKit 本地原生窗口验证通过（见上文「Tauri Linux 原生正式导入」与 `linux/` 归档；源 `5a85d58` 专项复放见 `linux/r4-5a85d58/`）。官方云 Linux x86：R1（run `44640288215`，工件 `14587227607`）首台设备空看板错误；R2（run `44644564603`，工件 `14589381339`）首台配对已过但输入焦点 stale；R3（run `44647186980`，工件 `14589018074`）停在 wide_before 缩放检查——R2/R3 均未执行导入，失败结论保留；独立 R4（run `44649668455`，作业 `136001096650`）**正式通过**（见 `linux/official-r4-44649668455/`）。
 
 哈希见 [SHA256SUMS](SHA256SUMS)。

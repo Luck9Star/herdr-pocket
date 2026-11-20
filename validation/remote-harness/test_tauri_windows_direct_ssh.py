@@ -54,6 +54,13 @@ class WindowProof(unittest.TestCase):
 
 
 class DriverBoundary(unittest.TestCase):
+    def test_both_driver_listeners_must_be_loopback_and_job_owned(self):
+        rows={10:[(True,21)],11:[(True,22)]}
+        self.assertTrue(runner.listeners_owned((10,11),{21,22},rows.get))
+        for bad in ([],[(False,22)],[(True,99)],[(True,22),(True,23)]):
+            rows[11]=bad
+            self.assertFalse(runner.listeners_owned((10,11),{21,22},rows.get))
+
     def test_w3c_session_uses_original_application(self):
         driver=runner.WindowsDriver(); calls=[]
         def call(method,path,data=None):
@@ -72,6 +79,48 @@ class DriverBoundary(unittest.TestCase):
         self.assertEqual(len(calls),1)
         actions=calls[0][2]['actions'][0]['actions']
         self.assertEqual(''.join(row['value'] for row in actions if row['type']=='keyDown'),'hp-check\ue007')
+
+class CleanupDiagnostics(unittest.TestCase):
+    @staticmethod
+    def sharing_violation():
+        error=PermissionError('secret path must never be emitted')
+        error.winerror=32
+        return error
+
+    def test_primary_failure_survives_temporary_cleanup_failure(self):
+        report={'failurePhase':'driver_listeners'}; original=GuiFailure('windows_tauri_driver_listener_unowned')
+        with patch.object(runner.tempfile,'mkdtemp',return_value='/tmp/fake-owned'), \
+             patch.object(runner.shutil,'rmtree',side_effect=self.sharing_violation()) as remove, \
+             patch.object(runner.time,'sleep'):
+            with self.assertRaises(GuiFailure) as failure:
+                with runner.private_temporary_directory('/tmp',report): raise original
+        self.assertIs(failure.exception,original);self.assertEqual(remove.call_count,5)
+        self.assertEqual(report['primaryFailure'],{'phase':'driver_listeners','code':'windows_tauri_driver_listener_unowned'})
+        self.assertEqual(report['temporaryCleanupFailure']['phase'],'temp_cleanup')
+        self.assertNotIn('secret path',str(report))
+
+    def test_sharing_violation_retries_only_cleanup_and_only_bounded(self):
+        report={}; error=self.sharing_violation()
+        with patch.object(runner.tempfile,'mkdtemp',return_value='/tmp/fake-owned'), \
+             patch.object(runner.shutil,'rmtree',side_effect=[error,None]) as remove, \
+             patch.object(runner.time,'sleep'):
+            with runner.private_temporary_directory('/tmp',report): pass
+        self.assertEqual(remove.call_count,2);self.assertEqual(report,{})
+        failure=PermissionError('not public');failure.winerror=5
+        with patch.object(runner.tempfile,'mkdtemp',return_value='/tmp/fake-owned'), \
+             patch.object(runner.shutil,'rmtree',side_effect=failure) as remove, \
+             patch.object(runner.time,'sleep'):
+            with self.assertRaisesRegex(GuiFailure,'windows_tauri_temp_cleanup_unconfirmed'):
+                with runner.private_temporary_directory('/tmp',report): pass
+        self.assertEqual(remove.call_count,1)
+        self.assertEqual(report['temporaryCleanupFailure']['phase'],'temp_cleanup')
+
+    def test_diagnostics_only_emit_allowlisted_codes(self):
+        report={};runner.record_failure(report,'driver_session',GuiFailure('secret password or path'))
+        self.assertEqual(report['primaryFailure'],{'phase':'driver_session','code':'windows_tauri_unclassified'})
+        report={};runner.record_failure(report,'driver_session',GuiFailure('secret_password'))
+        self.assertEqual(report['primaryFailure']['code'],'windows_tauri_unclassified')
+
 
 class ReceiptGate(unittest.TestCase):
     def fixture(self):

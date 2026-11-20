@@ -13,7 +13,7 @@ import sys
 import tempfile
 import time
 import urllib.request
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 
 from PIL import ImageGrab, ImageStat
 import tauri_linux_direct_ssh as linux
@@ -43,6 +43,14 @@ class WindowsDriver(linux.DesktopDriver):
             'tauri:options': {'application': str(binary.resolve())}}}})
         require(isinstance(reply, dict) and isinstance(reply.get('sessionId'), str), 'windows_tauri_session_invalid')
         self.session = '/session/' + reply['sessionId']
+
+
+def listeners_owned(ports, pids, lookup):
+    for port in ports:
+        owners = lookup(port)
+        if len(owners) != 1 or owners[0][0] is not True or owners[0][1] not in pids:
+            return False
+    return True
 
 
 def owned_window(job):
@@ -119,6 +127,86 @@ def capture_outcome(driver, job, hwnd, pid, selector):
                  'bounds':before['bounds'], 'capture':CAPTURE}
 
 
+SAFE_FAILURE_CODES = frozenset({
+    'webdriver_unavailable', 'windows_tauri_driver_listener_unowned',
+    'windows_tauri_session_invalid', 'windows_tauri_visible_window_missing',
+    'windows_tauri_window_ambiguous', 'windows_tauri_window_not_foreground',
+    'windows_tauri_viewport_mismatch', 'windows_tauri_window_offscreen',
+    'windows_tauri_geometry_invalid', 'windows_tauri_window_occluded',
+    'windows_tauri_capture_changed', 'windows_tauri_temp_cleanup_unconfirmed',
+    'windows_tauri_dpi_unavailable', 'windows_tauri_toolchain_missing',
+    'windows_tauri_driver_port_collision', 'windows_tauri_unowned_peer_listener',
+    'windows_tauri_password_cleanup_unconfirmed', 'windows_tauri_driver_ports_unreleased',
+    'windows_tauri_temporary_directory_remains', 'windows_tauri_receipt_incomplete',
+    'windows_tauri_listener_receipt_invalid', 'windows_tauri_cleanup_receipt_invalid',
+    'windows_tauri_images_missing', 'windows_tauri_image_receipt_invalid',
+    'terminal_screenshot_token_invalid', 'terminal_screenshot_bounds_invalid',
+    'terminal_screenshot_pillow_missing', 'terminal_screenshot_png_invalid',
+    'terminal_screenshot_ocr_missing', 'terminal_screenshot_ocr_failed',
+    'terminal_screenshot_echo_not_visible', 'terminal_screenshot_token_not_visible',
+    'terminal_screenshot_proof_not_adjacent',
+})
+
+def safe_failure_code(error):
+    code = str(error)
+    if code in SAFE_FAILURE_CODES: return code
+    if code.startswith('webdriver_'): return 'windows_tauri_webdriver_error'
+    if code.startswith('direct_ssh_'): return 'windows_tauri_gui_evidence_failed'
+    if code.startswith('windows_direct_'): return 'windows_tauri_native_evidence_failed'
+    return 'windows_tauri_unclassified'
+
+FAILURE_PHASES = frozenset({'desktop','fixture','launch','driver_listeners','driver_session',
+    'native_window','window_activation','interaction','driver_close','job_teardown','fixture_cleanup','temp_cleanup'})
+
+def set_phase(report, phase):
+    if phase not in FAILURE_PHASES: raise ValueError('invalid failure phase')
+    report['failurePhase'] = phase
+    report['checkpoint'] = phase
+
+def record_failure(report, phase, error, *, key='primaryFailure'):
+    # Never serialize exception messages, paths, raw driver logs or remote data.
+    if key in report:
+        return
+    failure = {'phase': phase if phase in FAILURE_PHASES else 'launch'}
+    if isinstance(error, (GuiFailure, ScreenshotGateError)):
+        failure['code'] = safe_failure_code(error)
+    else:
+        failure.update(runner_failure(error))
+    report[key] = failure
+
+@contextmanager
+def private_temporary_directory(base, report):
+    root = Path(tempfile.mkdtemp(prefix='hp-tauri-windows-direct-', dir=base))
+    failed = False
+    try:
+        yield root
+    except BaseException as error:
+        failed = True
+        record_failure(report, report.get('failurePhase','launch'), error)
+        raise
+    finally:
+        last = None
+        for attempt in range(5):
+            try:
+                shutil.rmtree(root)
+                last = None
+                break
+            except OSError as error:
+                if isinstance(error, FileNotFoundError) and not os.path.lexists(root):
+                    last = None
+                    break
+                last = error
+                # Antivirus or a just-exited child can briefly retain a handle.
+                # Retry only this owned directory and only the sharing violation.
+                if getattr(error,'winerror',None) != 32 or attempt == 4:
+                    break
+                time.sleep(.25 * (attempt + 1))
+        if last is not None:
+            record_failure(report, 'temp_cleanup', last, key='temporaryCleanupFailure')
+            if not failed:
+                raise GuiFailure('windows_tauri_temp_cleanup_unconfirmed') from None
+
+
 def run(app, report, base):
     report['stage'] = 'desktop'; check_desktop()
     ctypes.windll.user32.SetProcessDpiAwarenessContext.argtypes = [ctypes.c_void_p]
@@ -128,8 +216,7 @@ def run(app, report, base):
     driver = WindowsDriver(); port, native_port = linux.driver_port(), linux.driver_port()
     require(port != native_port, 'windows_tauri_driver_port_collision')
     driver.base = f'http://127.0.0.1:{port}'
-    with tempfile.TemporaryDirectory(prefix='hp-tauri-windows-direct-', dir=base) as temporary:
-        root = Path(temporary)
+    with private_temporary_directory(base, report) as root:
         env = {k:v for k,v in os.environ.items() if not k.startswith('HERDR_') and k not in ('SSH_AUTH_SOCK','SSH_AGENT_PID')}
         for name in ('APPDATA','LOCALAPPDATA','TEMP','TMP'):
             path = root / name; path.mkdir(); env[name] = str(path)
@@ -138,41 +225,47 @@ def run(app, report, base):
             credentials.clear()
             listener = report['listener'] = {'ownedBeforeLaunch': windows_loopback_listener_owners(fixture.port) == [(True, os.getpid())]}
             require(listener['ownedBeforeLaunch'], 'windows_tauri_unowned_peer_listener')
-            report['checkpoint'] = 'launch'
+            set_phase(report, 'launch')
             command = [driver_bin, '--port', str(port), '--native-port', str(native_port), '--native-driver', edge]
             try:
                 with owned_job(command, cwd=root, env=env, log=root/'driver.log', report=report) as (_,job):
                     close_attempted = False
+                    set_phase(report, 'driver_listeners')
                     try:
                         def owned_listeners():
                             pids = set(win32job.QueryInformationJobObject(job, win32job.JobObjectBasicProcessIdList))
-                            for candidate in (port, native_port):
-                                owners = windows_loopback_listener_owners(candidate)
-                                if len(owners) != 1 or owners[0][0] is not True or owners[0][1] not in pids: return False
-                            return True
+                            return listeners_owned((port, native_port), pids, windows_loopback_listener_owners)
                         wait_for(owned_listeners, 'windows_tauri_driver_listener_unowned')
+                        set_phase(report, 'driver_session')
                         driver.start(app)
+                        set_phase(report, 'native_window')
                         hwnd, pid = wait_for(lambda: owned_window(job), 'windows_tauri_visible_window_missing')
+                        set_phase(report, 'window_activation')
                         win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
                         require(win32gui.GetForegroundWindow() == hwnd, 'windows_tauri_window_not_foreground')
                         original_terminal, original_outcome = linux.capture_terminal, linux.capture_outcome
                         linux.capture_terminal = lambda d,e,t: capture_terminal(d,job,hwnd,pid,e,t)
                         linux.capture_outcome = lambda d,s: capture_outcome(d,job,hwnd,pid,s)
                         try:
+                            set_phase(report, 'interaction')
                             images = linux.execute(driver, fixture, report)
                         finally:
                             linux.capture_terminal, linux.capture_outcome = original_terminal, original_outcome
                         report['peer'] = fixture.snapshot()
                         close_attempted = True
+                        set_phase(report, 'driver_close')
                         driver.close()
-                    except BaseException:
+                        set_phase(report, 'job_teardown')
+                    except BaseException as error:
+                        record_failure(report, report.get('failurePhase','launch'), error)
                         report['peer'] = fixture.snapshot()
                         if driver.session and not close_attempted:
                             with suppress(GuiFailure, OSError, ValueError): driver.close()
                         raise
             finally:
                 if 'peer' not in report: report['peerAfterFailedLaunch'] = fixture.snapshot()
-        report['stage'] = 'cleanup'; verify_listener_release(fixture, listener)
+        report['stage'] = 'cleanup'; set_phase(report, 'fixture_cleanup')
+        verify_listener_release(fixture, listener)
         require(fixture.password == '', 'windows_tauri_password_cleanup_unconfirmed')
         wait_for(lambda: loopback_connect_outcome(port) == 'refused' and loopback_connect_outcome(native_port) == 'refused',
                  'windows_tauri_driver_ports_unreleased', timeout=10)
@@ -225,7 +318,7 @@ def main():
         validate_success(report,images)
         for name,png in images.items(): (output/name).write_bytes(png)
         report.update(status='passed',stage='complete')
-    except (GuiFailure,ScreenshotGateError) as error: report['errorCode']=str(error)
+    except (GuiFailure,ScreenshotGateError) as error: report['errorCode']=safe_failure_code(error)
     except Exception as error:
         report.update(errorCode='windows_tauri_runner_failed',runnerFailure=runner_failure(error))
     (output/'result.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')

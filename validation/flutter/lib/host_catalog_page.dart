@@ -7,6 +7,7 @@ import 'direct_ssh_page.dart';
 import 'device_keys.dart';
 import 'host_catalog.dart';
 import 'pairing_page.dart';
+import 'pairing_public_key.dart';
 import 'host_tabs.dart';
 import 'remote_adapter.dart';
 import 'config_transfer_page.dart';
@@ -95,7 +96,7 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   Future<void> action(Future<void> Function() work) async {
     if (busy) return;
     setState(() { busy = true; notice = null; });
-    try { await work(); } catch (_) { if (mounted) setState(() { notice = '本机操作未确认 · 已停止，请重新读取核验；不会重放'; }); }
+    try { await work(); } catch (error) { if (mounted) setState(() { notice = linuxDeviceKeyNotice(error) ?? '本机操作未确认 · 已停止，请重新读取核验；不会重放'; }); }
     if (mounted) setState(() { busy = false; });
   }
   Future<void> open([HostProfile? profile]) async {
@@ -795,6 +796,20 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
               '上次设备身份创建未完成或结果未知 · 已禁止再次创建，不会自动重放。已返回句柄可明确删除；无句柄时需人工核验本机身份，不能按空记录处理。',
             ),
           ),
+          if (NativeDeviceKeys.linuxStore && (catalog.pendingCreation!['handle'] as String).isNotEmpty)
+            TextButton(
+              key: const ValueKey('hosts-recheck-pending'),
+              onPressed: busy || !catalog.ready ? null : () => action(() async {
+                final pending = catalog.pendingCreation!;
+                final handle = pending['handle'] as String;
+                final publicKey = await (widget.keys ?? NativeDeviceKeys()).public(handle);
+                final fingerprint = pairingFingerprint(publicKey);
+                if (mounted && catalog.ready && identical(catalog.pendingCreation,pending)) {
+                  setState(() { notice = '已找到原设备密钥 · 公钥指纹 $fingerprint。待核验记录已保留。'; });
+                }
+              }),
+              child: const Text('核验待确认的原设备密钥'),
+            ),
           if ((catalog.pendingCreation!['handle'] as String).isNotEmpty)
             TextButton(
               key: const ValueKey('hosts-delete-pending'),

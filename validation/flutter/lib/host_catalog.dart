@@ -335,11 +335,11 @@ class HostCatalog extends ChangeNotifier {
     _tail = pending.then<void>((_) {},onError:(Object _,StackTrace __) {});
     return pending;
   }
-  Future<void> beginCreation(Map<String,dynamic> target,String label,{String? sourceProfileId}) {
+  Future<void> beginCreation(Map<String,dynamic> target,String label,{String? sourceProfileId,String reservedHandle = ''}) {
     if (pendingCreation != null || (profiles.length >= maxHostProfiles && sourceProfileId == null)) throw const RemoteFailure('catalog_creation_pending');
     final random = Random.secure();
     final pending = validatePendingCreation({'id':List.generate(16,(_) => random.nextInt(256).toRadixString(16).padLeft(2,'0')).join(),
-      'label':label,'target':{for (final k in HostProfile.targetFields) k:target[k]},'handle':'',if (sourceProfileId != null) 'sourceProfileId':sourceProfileId});
+      'label':label,'target':{for (final k in HostProfile.targetFields) k:target[k]},'handle':reservedHandle,if (sourceProfileId != null) 'sourceProfileId':sourceProfileId});
     return _mutate((list) {
       if (pendingCreation != null) throw const RemoteFailure('catalog_creation_pending');
       if (sourceProfileId != null) {
@@ -368,10 +368,10 @@ class HostCatalog extends ChangeNotifier {
       return [...list,profile];
     },pending:null,replacePending:true);
   }
-  Future<void> clearUnstartedCreation(String id) {
-    if (pendingCreation?['id'] != id || pendingCreation?['handle'] != '') throw const RemoteFailure('catalog_creation_pending');
-    return _mutate((list) => list,pending:null,replacePending:true);
-  }
+  Future<void> clearUnstartedCreation(String id,{String reservedHandle = ''}) => _mutate((list) {
+    if (pendingCreation?['id'] != id || pendingCreation?['handle'] != reservedHandle) throw const RemoteFailure('catalog_creation_pending');
+    return list;
+  },pending:null,replacePending:true);
   Future<void> clearDeletedCreation(String handle) {
     if (handle.isEmpty || pendingCreation?['handle'] != handle) throw const RemoteFailure('catalog_creation_pending');
     return _mutate((list) => list,pending:null,replacePending:true);

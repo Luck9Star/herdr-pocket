@@ -28,6 +28,30 @@ TYPED_LINE = 'hp-check\ue007'  # WebDriver Enter, sent to the focused xterm.
 RENDER_PENDING = {'terminal_screenshot_echo_not_visible', 'terminal_screenshot_token_not_visible',
                   'terminal_screenshot_proof_not_adjacent'}
 
+OBSERVE_HELPERS = '''const node = selector => document.querySelector(selector);
+            const visible = el => !!el && el.getClientRects().length > 0 &&
+                getComputedStyle(el).visibility === 'visible';
+            const actionableButton = (el, label) => {
+                if (!visible(el) || el.tagName !== 'BUTTON' || el.disabled || el.closest('[inert]') ||
+                    (label !== undefined && el.innerText !== label)) return false;
+                const r = el.getBoundingClientRect();
+                return r.width > 0 && r.height > 0 && r.left >= 0 && r.top >= 0 &&
+                    r.right <= innerWidth && r.bottom <= innerHeight &&
+                    el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+            };'''
+
+CLEARED_KEY_CONTROLS = "node('#ssh-key-summary').hidden === true && node('#ssh-key').hidden === false"
+KEY_COLLAPSED_WITNESS = '''const key = node('#ssh-key'), summary = node('#ssh-key-summary');
+  const passphrase = node('#ssh-passphrase'), label = '已填写私钥 · 重新编辑';
+  const summaries = [...document.querySelectorAll('button')].filter(el => visible(el) && !el.disabled && el.innerText === label);
+  return key.hidden === true && key.value === '' && !key.disabled && !key.readOnly &&
+    summaries.length === 1 && summaries[0] === summary && actionableButton(summary, label) && visible(passphrase) &&
+    !passphrase.disabled && !passphrase.readOnly && passphrase.value === '';'''
+KEY_REDRAFT_WITNESS = '''const key = node('#ssh-key'), summary = node('#ssh-key-summary');
+  return key.hidden === false && key.value === arguments[0] && !key.disabled && !key.readOnly &&
+    summary.hidden === true && document.activeElement === key;'''
+
+
 DASHBOARD_WITNESS = '''const home = node('#home-dashboard'), empty = node('#host-empty');
   const add = node('#host-empty-add');
   return visible(home) && visible(empty) && home.contains(empty) && empty.contains(add) &&
@@ -68,19 +92,21 @@ REVIEW_WITNESS = r'''const selectors = ['#ssh-step-title', '#ssh-reviewed-target
     fingerprint.contains(document.elementFromPoint((r.left+r.right)/2, (r.top+r.bottom)/2)));'''
 
 KEY_FIELDS_WITNESS = '''const endpoint = node('#ssh-reviewed-endpoint'), key = node('#ssh-key');
-  const passphrase = node('#ssh-passphrase'), choice = node('#ssh-auth-key');
+  const passphrase = node('#ssh-passphrase'), choice = node('#ssh-auth-key'), summary = node('#ssh-key-summary');
+  const editorVisible = visible(key), collapsed = !editorVisible && key.hidden === true && key.value === '' &&
+    summary.hidden === false && visible(summary) && summary.innerText === '已填写私钥 · 重新编辑';
   return visible(node('#ssh-credentials')) && visible(endpoint) && endpoint.innerText === arguments[0] &&
     node('#ssh-review').checked && node('#ssh-auth-method').value === 'key' &&
     visible(choice) && choice.getAttribute('aria-pressed') === 'true' &&
-    visible(key) && !key.disabled && !key.readOnly && visible(passphrase) &&
-    passphrase.type === 'password' && !passphrase.disabled && !passphrase.readOnly &&
+    (editorVisible ? !visible(summary) : collapsed) && !key.disabled && !key.readOnly &&
+    visible(passphrase) && passphrase.type === 'password' && !passphrase.disabled && !passphrase.readOnly &&
     !visible(node('#ssh-password')) && node('#ssh-password').value === '';'''
 
 KEY_REJECTED_WITNESS = '''const status = node('#ssh-status');
   return visible(status) && status.innerText === '连接失败或已中断，请核查连接资料。' &&
     !visible(node('#ssh-live')) && !visible(node('#ssh-key-change')) &&
     node('#ssh-live-endpoint').innerText === '' && node('#ssh-connect').disabled &&
-    arguments[0].every(s => node(s).value === '');'''
+    arguments[0].every(s => node(s).value === '') && ''' + CLEARED_KEY_CONTROLS + ';'
 
 ROTATION_REVIEW_WITNESS = r'''const panel = node('#ssh-key-change');
   const oldKey = node('#ssh-key-change-old'), newKey = node('#ssh-key-change-new');
@@ -93,7 +119,8 @@ ROTATION_REVIEW_WITNESS = r'''const panel = node('#ssh-key-change');
     actionableButton(recheck, '重新核对主机指纹') && actionableButton(cancel, '取消连接，保留旧信任') &&
     !visible(node('#ssh-setup')) && !visible(node('#ssh-live')) &&
     !visible(node('.app-header')) && !visible(node('.route-tabs')) &&
-    arguments[3].every(s => node(s).disabled && node(s).value === '') && node('#ssh-connect').disabled;'''
+    arguments[3].every(s => node(s).disabled && node(s).value === '') && node('#ssh-connect').disabled &&
+    ''' + CLEARED_KEY_CONTROLS + ';'
 
 ROTATION_RETAINED_WITNESS = '''const target = node('#ssh-target-fields'), prior = node('#ssh-prior-fingerprint');
   return !visible(node('#ssh-key-change')) && !visible(node('#ssh-live')) && visible(target) &&
@@ -101,7 +128,7 @@ ROTATION_RETAINED_WITNESS = '''const target = node('#ssh-target-fields'), prior 
     visible(prior) && prior.innerText === '保留的旧指纹：' + arguments[1] &&
     !visible(node('#ssh-credentials')) && !node('#ssh-review').checked && node('#ssh-review').disabled &&
     arguments[2].every(s => node(s).disabled && node(s).value === '') && node('#ssh-connect').disabled &&
-    actionableButton(node('#ssh-probe'), '探测并核对主机密钥');'''
+    ''' + CLEARED_KEY_CONTROLS + ''' && actionableButton(node('#ssh-probe'), '探测并核对主机密钥');'''
 
 ROTATION_REPROBE_ACTION = '''const review = node('#ssh-trust-review'), cancel = node('#ssh-trust-cancel');
   return visible(review) && review.contains(cancel) && actionableButton(cancel, '取消核对，保留旧信任');'''
@@ -109,7 +136,7 @@ ROTATION_REPROBE_ACTION = '''const review = node('#ssh-trust-review'), cancel = 
 ROTATION_REPROBE_CREDENTIALS = '''return arguments[0].every(selector => {
   const field = node(selector);
   return !!field && field.disabled && field.value === '';
-});'''
+}) && ''' + CLEARED_KEY_CONTROLS + ';'
 
 
 def require(condition, code):
@@ -132,18 +159,8 @@ class DesktopDriver(WebDriver):
         self.session = '/session/' + reply['sessionId']
 
     def observe(self, script, *args):
-        helpers = '''const node = selector => document.querySelector(selector);
-            const visible = el => !!el && el.getClientRects().length > 0 &&
-                getComputedStyle(el).visibility === 'visible';
-            const actionableButton = (el, label) => {
-                if (!visible(el) || el.tagName !== 'BUTTON' || el.disabled || el.closest('[inert]') ||
-                    (label !== undefined && el.innerText !== label)) return false;
-                const r = el.getBoundingClientRect();
-                return r.width > 0 && r.height > 0 && r.left >= 0 && r.top >= 0 &&
-                    r.right <= innerWidth && r.bottom <= innerHeight &&
-                    el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
-            };'''
-        return self.call('POST', self.session + '/execute/sync', {'script': helpers + script, 'args': args})
+        return self.call('POST', self.session + '/execute/sync',
+                         {'script': OBSERVE_HELPERS + script, 'args': args})
 
     def click(self, selector):
         # The native element command owns scrolling, hit testing and activation.
@@ -232,12 +249,19 @@ def rotation_session_evidence(facts, *, sent, closed):
 
 def fill_encrypted_credentials(driver, fixture, endpoint, *, passphrase):
     wait_for(lambda: driver.observe(KEY_FIELDS_WITNESS, endpoint), 'direct_ssh_key_fields_unproven')
-    require(driver.observe('return node("#ssh-connect").disabled && '
-                           'arguments[0].every(s => node(s).value === "");', SECRET_FIELDS),
+    require(driver.observe('return node("#ssh-connect").disabled && ' + CLEARED_KEY_CONTROLS +
+                           ' && arguments[0].every(s => node(s).value === "");', SECRET_FIELDS),
             'direct_ssh_key_fields_not_empty')
     driver.fill('#ssh-key', fixture.private_key)
     require(driver.observe('return node("#ssh-connect").disabled && node("#ssh-passphrase").value === "";'),
             'direct_ssh_encrypted_key_did_not_require_passphrase')
+    # Reopening and refocusing proves the collapsed draft survived without synthetic focus.
+    driver.click('#ssh-passphrase')
+    require(driver.observe(KEY_COLLAPSED_WITNESS), 'direct_ssh_pem_collapse_unproven')
+    driver.click('#ssh-key-summary')
+    wait_for(lambda: driver.observe(KEY_REDRAFT_WITNESS, fixture.private_key), 'direct_ssh_pem_redraft_mismatch')
+    driver.click('#ssh-passphrase')
+    require(driver.observe(KEY_COLLAPSED_WITNESS), 'direct_ssh_pem_recollapse_unproven')
     driver.fill('#ssh-passphrase', passphrase)
     require(driver.observe(KEY_FIELDS_WITNESS, endpoint), 'direct_ssh_key_review_changed')
     wait_for(lambda: driver.observe('return actionableButton(node("#ssh-connect"), "连接 SSH");'),
@@ -263,7 +287,7 @@ def terminal_geometry(driver, endpoint):
         const output = node('#ssh-terminal-output');
         const screen = node('#ssh-terminal .xterm-screen');
         if (!visible(screen) || !visible(endpoint) || endpoint.innerText !== arguments[0] ||
-            visible(node('#ssh-setup')) || arguments[1].some(selector => node(selector).value !== '') ||
+            visible(node('#ssh-setup')) || visible(node('#ssh-key-summary')) || arguments[1].some(selector => node(selector).value !== '') ||
             document.querySelectorAll('#ssh-terminal .xterm-helper-textarea').length !== 1 ||
             document.activeElement !== node('#ssh-terminal .xterm-helper-textarea') ||
             document.hidden || !document.hasFocus() || devicePixelRatio !== 1 || innerWidth < 960) return null;
@@ -472,8 +496,9 @@ def execute(driver, fixture, report, *, encrypted=False, rotating=False):
              'direct_ssh_ui_disconnect_unconfirmed')
     require(fixture.wait_for_connections_closed(connection_count), 'direct_ssh_peer_disconnect_unconfirmed')
     verify_session(fixture.snapshot(), sent=True, closed=True)
-    require(driver.observe('return arguments[0].every(s => node(s).value === "") && '
-                           'node("#ssh-connect").disabled;', SECRET_FIELDS), 'direct_ssh_credentials_not_cleared')
+    require(driver.observe('return ' + CLEARED_KEY_CONTROLS +
+                           ' && arguments[0].every(s => node(s).value === "") && node("#ssh-connect").disabled;',
+                           SECRET_FIELDS), 'direct_ssh_credentials_not_cleared')
     outcome_png, outcome = capture_outcome(driver, '#ssh-closed-feedback')
     verify_session(fixture.snapshot(), sent=True, closed=True)
     report['stage'] = 'return_home'

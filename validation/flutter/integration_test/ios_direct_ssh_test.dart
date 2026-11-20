@@ -79,31 +79,65 @@ Future<Map<String, bool>> checkIosCredentialSwitches(
   String fingerprint,
 ) async {
   final dynamic state = tester.state(find.byType(DirectSshPage));
-  Future<void> fill(String field) async {
+  Future<void> fill(String field, String draft) async {
     final finder = control(field);
-    await tester.ensureVisible(finder);
-    await tester.enterText(finder, 'mode-switch-only');
+    // Focus the actual control before typing. Switching from password to key
+    // also replaces the focus node even though the two inputs share a key.
+    await tap(tester, field);
+    await tester.enterText(finder, draft);
     await tester.pump();
+    expect(finder, findsOneWidget, reason: 'ios_mode_switch_editor_$field');
     expect(
-      tester.widget<TextField>(finder).controller!.text.isNotEmpty,
+      tester.widget<TextField>(finder).controller!.text == draft,
       isTrue,
+      reason: 'ios_mode_switch_readback_$field',
     );
   }
 
+  const pem = 'synthetic key draft\nfor the mode switch only';
+  final secret = control('direct-secret');
+  final summary = control('direct-edit-pem');
   bool empty() => state.secret.text.isEmpty && state.passphrase.text.isEmpty;
   bool trusted() =>
       state.fingerprint == fingerprint && state.checkedTarget == state.target;
   expect(state.keyAuth, isFalse);
   expect(trusted(), isTrue);
-  await fill('direct-secret');
+  await fill('direct-secret', 'mode-switch-password');
   await tap(tester, 'direct-auth-key');
   final passwordCleared = state.keyAuth == true && empty() && trusted();
   expect(passwordCleared, isTrue);
-  await fill('direct-secret');
-  await fill('direct-passphrase');
+  await fill('direct-secret', pem);
+  await fill('direct-passphrase', 'mode-switch-passphrase');
+  expect(secret, findsNothing);
+  expect(summary, findsOneWidget);
+  await tap(tester, 'direct-edit-pem');
+  expect(secret, findsOneWidget);
+  final reopened = tester.widget<TextField>(secret);
+  expect(reopened.focusNode!.hasPrimaryFocus, isTrue);
+  expect(reopened.controller!.text == pem, isTrue);
+  await tap(tester, 'direct-passphrase');
+  expect(secret, findsNothing);
+  expect(summary, findsOneWidget);
+  // Release the single-line editor before trying controls above the keyboard.
+  final passphraseEditor = find.descendant(
+    of: control('direct-passphrase'),
+    matching: find.byType(EditableText),
+  );
+  expect(passphraseEditor, findsOneWidget);
+  final passphraseFocus = tester
+      .widget<EditableText>(passphraseEditor)
+      .focusNode;
+  expect(passphraseFocus.hasPrimaryFocus, isTrue);
+  await tester.testTextInput.receiveAction(TextInputAction.done);
+  await until(
+    tester,
+    () => !passphraseFocus.hasFocus && tester.view.viewInsets.bottom == 0,
+    timeoutReason: 'direct_ssh_ios_ui_timeout_mode_switch_keyboard_closed',
+  );
   await tap(tester, 'direct-auth-password');
   final keyCleared = state.keyAuth == false && empty();
   expect(keyCleared, isTrue);
+  expect(summary, findsNothing);
   expect(trusted(), isTrue);
   return {
     'passwordToKeyCleared': passwordCleared,

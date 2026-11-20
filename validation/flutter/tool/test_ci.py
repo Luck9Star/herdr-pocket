@@ -80,6 +80,7 @@ class SharedDiagnosticAssetsTests(unittest.TestCase):
         ios = (app / 'ios/Runner/AppDelegate.swift').read_text()
         source = (ci.ROOT / 'validation/flutter/native/apple/SecureCredentialView.swift').read_text()
         self.assertIn(source, mac)
+        self.assertIn('class MainFlutterWindow: HerdrSecureCredentialWindow {', mac)
         self.assertIn('registerHerdrSecureCredentialFields(registrar:', mac)
         self.assertIn('registrar(forPlugin: "HerdrSecureCredentialFields")', mac)
         self.assertIn('registerHerdrSecureAccessibilityWindow(self)', mac)

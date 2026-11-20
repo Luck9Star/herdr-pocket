@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 
 if importlib.util.find_spec('paramiko') is None or importlib.util.find_spec('PIL') is None:
     raise unittest.SkipTest('ordinary SSH and screenshot test dependencies are missing')
+import flutter_linux_direct_ssh as driver
 from flutter_linux_direct_ssh import (
     SDK_ADDITIONS,
     GuiFailure,
@@ -15,6 +16,7 @@ from flutter_linux_direct_ssh import (
     capture,
     capture_geometry,
     key_rejection_evidence,
+    pem_reopen_evidence,
     locked_dependencies,
     read_exchange,
     read_ui_stage,
@@ -136,6 +138,57 @@ class PrivateExchangeTests(unittest.TestCase):
             fixture.snapshot.return_value = dict(facts, connections=2, connectionEvents=[probe, probe])
             with self.assertRaisesRegex(GuiFailure, 'connection_count_invalid'):
                 key_rejection_evidence(fixture, root, 'wrong-passphrase', rejected)
+
+    def test_pem_reopen_requires_complete_boolean_receipt_and_no_new_peer(self):
+        probe = {'id': 1, 'hostKey': 'A', 'closed': True, 'authAttempts': 0,
+                 'authSuccesses': 0, 'ptyRequests': 0, 'shellRequests': 0,
+                 'inputBytes': 0, 'outputBytes': 0}
+        facts = {'connections': 1, 'connectionsClosed': True, 'connectionEvents': [probe]}
+        fixture = Mock(snapshot=Mock(return_value=facts))
+        receipt = {'summaryBefore': True, 'draftExactFocused': True, 'summaryAfter': True,
+                   'editorAndSemanticsAbsent': True}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(pem_reopen_evidence(fixture, root, receipt), receipt)
+            for key in receipt:
+                for bad in ({k: v for k, v in receipt.items() if k != key}, receipt | {key: False},
+                            receipt | {key: 1}):
+                    with self.assertRaisesRegex(GuiFailure, 'pem_reopen_checkpoint_invalid'):
+                        pem_reopen_evidence(fixture, root, bad)
+            with self.assertRaisesRegex(GuiFailure, 'pem_reopen_checkpoint_invalid'):
+                pem_reopen_evidence(fixture, root, receipt | {'raw': 'secret'})
+            (root / 'target.json').touch()
+            with self.assertRaisesRegex(GuiFailure, 'key_material_not_consumed'):
+                pem_reopen_evidence(fixture, root, receipt)
+            (root / 'target.json').unlink()
+            fixture.snapshot.return_value = dict(facts, connections=2, connectionEvents=[probe, probe])
+            with self.assertRaisesRegex(GuiFailure, 'connection_count_invalid'):
+                pem_reopen_evidence(fixture, root, receipt)
+
+    def test_encrypted_exchange_blocks_before_connection_without_reopen_receipt(self):
+        probe = {'id': 1, 'hostKey': 'A', 'closed': True, 'authAttempts': 0,
+                 'authSuccesses': 0, 'ptyRequests': 0, 'shellRequests': 0,
+                 'inputBytes': 0, 'outputBytes': 0}
+        fixture = Mock(snapshot=Mock(return_value={'connections': 1, 'connectionsClosed': True,
+                                                   'connectionEvents': [probe]}),
+                       wait_for_connections_closed=Mock(return_value=True))
+        values = {'probe': {'algorithm': 'ssh-rsa'},
+                  'mode-switch': {'passwordToKeyCleared': True, 'keyToPasswordCleared': True, 'sameTrust': True},
+                  'wrong-passphrase': {'rejectedLocally': True}}
+        def wait_once(check, error, timeout=45):
+            value = check()
+            if value is None:
+                raise GuiFailure(error)
+            return value
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(driver, 'read_exchange', side_effect=lambda root, phase: values.get(phase)) as read, \
+             patch.object(driver, 'wait_for', side_effect=wait_once):
+            report = {}
+            with self.assertRaisesRegex(GuiFailure, 'checkpoint_timeout_pem-reopen'):
+                driver.exchange(Mock(poll=Mock(return_value=None)), Path(directory), fixture, report, encrypted=True)
+            self.assertEqual(report['checkpoint'], 'pem-reopen')
+            self.assertNotIn('connected', [call.args[1] for call in read.call_args_list])
+            self.assertFalse((Path(directory) / 'pem-reopen.ok').exists())
 
     def test_rotated_session_requires_b_exactly_once_and_closes_before_exit(self):
         session = {'id': 4, 'hostKey': 'B', 'authAttempts': 1, 'authSuccesses': 1,

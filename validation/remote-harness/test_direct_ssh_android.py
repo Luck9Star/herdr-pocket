@@ -765,6 +765,17 @@ class EncryptedKeyAcceptanceTests(unittest.TestCase):
         with self.assertRaises(runner.Failure):
             runner.safe_encrypted_result('{')
 
+    def test_encrypted_cases_require_each_pem_edit_observation(self):
+        for rotating in (False, True):
+            fields = runner.ENCRYPTED_ROTATION_PUBLIC_FIELDS if rotating else runner.ENCRYPTED_PUBLIC_FIELDS
+            value = dict.fromkeys(fields, True)
+            value.update(schemaVersion=1, platform='android-api35-emulator', physicalImeVerified=False)
+            for field in ('pemCollapsedBeforeReopen', 'pemReopenedFocusedAndExact', 'pemRecollapsedAfterBlur'):
+                for bad in ({key: item for key, item in value.items() if key != field},
+                            {**value, field: False}, {**value, field: 1}):
+                    with self.subTest(rotating=rotating, field=field), self.assertRaises(runner.Failure):
+                        runner.safe_encrypted_result(json.dumps(bad), rotating=rotating)
+
     def test_review_and_wrong_passphrase_require_one_closed_unauthenticated_probe(self):
         probe = dict(id=1, hostKey='A', authAttempts=0, authSuccesses=0,
             ptyRequests=0, shellRequests=0, inputBytes=0, outputBytes=0,

@@ -118,7 +118,8 @@
         <div id="ssh-password-fields"><label>密码<span class="ssh-mobile-only">（仅本次使用）</span><input id="ssh-password" type="password" autocomplete="new-password" disabled></label></div>
         <div id="ssh-key-fields" hidden>
           <label><span class="ssh-desktop-only">私钥</span><span class="ssh-mobile-only">私钥 PEM（仅本次使用）</span><textarea id="ssh-key" rows="4" placeholder="粘贴已有私钥的完整 PEM" autocomplete="off" spellcheck="false" autocapitalize="none" disabled></textarea></label>
-          <button id="ssh-paste-key" class="ssh-mobile-only" type="button">粘贴私钥</button>
+          <button id="ssh-key-summary" type="button" hidden>已填写私钥 · 重新编辑</button>
+          <button id="ssh-paste-key" type="button">粘贴私钥</button>
           <label>私钥口令<span class="ssh-desktop-only">（可选）</span><span class="ssh-mobile-only">（加密私钥需要）</span><input id="ssh-passphrase" type="password" placeholder="未填写" autocomplete="new-password" disabled></label>
         </div>
         <div class="ssh-options ssh-step-actions"><button id="ssh-connect" type="submit" class="primary" disabled>连接 / 重新连接</button><button id="ssh-cancel" class="ssh-desktop-only" type="button">取消连接</button></div>

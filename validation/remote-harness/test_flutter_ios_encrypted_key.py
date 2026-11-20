@@ -3,6 +3,7 @@ import io
 import hashlib
 import json
 from pathlib import Path
+import re
 import stat
 import struct
 import subprocess
@@ -14,6 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import paramiko
 
+import flutter_direct_ssh_android as android
 import flutter_direct_ssh_ios as ios
 from ios_direct_ssh_batch import encrypted_key_case_valid, publish_evidence
 from ios_encrypted_key_fixture import EncryptedKeyFixture
@@ -21,6 +23,33 @@ from terminal_screenshot_gate import ScreenshotGateError
 
 
 class FlutterIosEncryptedKeyTests(unittest.TestCase):
+    def test_shared_device_result_exports_pem_observations_to_both_hosts(self):
+        source = Path(ios.__file__).resolve().parents[1] / 'flutter/integration_test/direct_ssh_ui_steps.dart'
+        run = source.read_text().split('Future<void> runEncryptedDirectSshUi(', 1)[1]
+        report = run.split('  final report = {\n', 1)[1].split('\n  };', 1)[0]
+        pem_fields = {'pemCollapsedBeforeReopen', 'pemReopenedFocusedAndExact', 'pemRecollapsedAfterBlur'}
+        shared_observations = dict.fromkeys(re.findall(r"^    '([^']+)': true,$", report, re.MULTILINE), True)
+        self.assertEqual(pem_fields & shared_observations.keys(), pem_fields)
+        for rotating in (False, True):
+            fields = ios.ENCRYPTED_ROTATION_PUBLIC_FIELDS if rotating else ios.ENCRYPTED_PUBLIC_FIELDS
+            for platform in ('ios-simulator', 'android-api35-emulator'):
+                with self.subTest(rotating=rotating, platform=platform):
+                    device = dict.fromkeys(fields - pem_fields, True)
+                    device.update({field: shared_observations[field] for field in pem_fields})
+                    device.update(schemaVersion=1, platform=platform, physicalImeVerified=False)
+                    if platform == 'ios-simulator':
+                        check, failure = lambda value: ios.check_result(value, fields), ios.Failure
+                    else:
+                        check = lambda value: android.safe_encrypted_result(json.dumps(value), rotating=rotating)
+                        failure = android.Failure
+                    self.assertEqual(check(device), device)
+                    for field in pem_fields:
+                        absent = {key: value for key, value in device.items() if key != field}
+                        for bad in (absent, {**device, field: False}, {**device, field: 1},
+                                    {**device, 'unknownPemObservation': True}):
+                            with self.subTest(field=field, keys=bad.keys()), self.assertRaises(failure):
+                                check(bad)
+
     def test_rotation_only_runner_drives_four_ordered_checkpoints_and_publishes_one_case(self):
         from PIL import Image
         with tempfile.TemporaryDirectory() as directory:

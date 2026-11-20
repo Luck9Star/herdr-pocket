@@ -484,11 +484,14 @@ def exchange(process, job, root, fixture, report, images, *, publickey=False):
             probe_evidence(fixture.snapshot(), 1)
             report.update(fingerprintMatchedBeforeConfirm=True, displayedHostKeyAlgorithm=value['algorithm'])
         elif phase == 'key_entry':
-            require(value.keys() == {'privateKeyExact', 'passphraseEmpty'} and all(v is True for v in value.values()),
+            require(value.keys() == {'privateKeyExact', 'passphraseEmpty', 'collapsedSemanticsAbsent',
+                                     'summaryHit', 'reopenedExactFocused', 'collapsedAgain'} and all(v is True for v in value.values()),
                     'windows_direct_publickey_entry_unproven')
             require(not os.path.lexists(root / 'target.json'), 'windows_direct_target_file_unconsumed')
             probe_evidence(fixture.snapshot(), 1)
-            report.update(credentialEntry='focusedFlutterTextInput', privateKeyExact=True, passphraseEmpty=True)
+            report.update(credentialEntry='focusedFlutterTextInput', privateKeyExact=True, passphraseEmpty=True,
+                          collapsedSemanticsAbsent=True, summaryHit=True, reopenedExactFocused=True,
+                          collapsedAgain=True)
         elif phase == 'connected':
             require(value == {}, 'windows_direct_connected_payload_invalid')
             def ready():

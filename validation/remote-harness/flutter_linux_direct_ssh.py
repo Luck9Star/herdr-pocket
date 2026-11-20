@@ -222,6 +222,15 @@ def key_rejection_evidence(fixture, root, phase, result):
     return {**result, 'connections': 1, 'authenticationAttempts': 0}
 
 
+def pem_reopen_evidence(fixture, root, result):
+    expected = {'summaryBefore', 'draftExactFocused', 'summaryAfter', 'editorAndSemanticsAbsent'}
+    require(result.keys() == expected and all(value is True for value in result.values()),
+            'flutter_linux_pem_reopen_checkpoint_invalid')
+    require(not os.path.lexists(root / 'target.json'), 'flutter_linux_key_material_not_consumed')
+    probe_evidence(fixture.snapshot(), 1)
+    return dict(result)
+
+
 def closed_rotation(fixture, count):
     require(fixture.wait_for_connections_closed(count), 'flutter_linux_rotation_peer_open')
     try:
@@ -266,7 +275,7 @@ def exchange(process, root, fixture, report, *, encrypted=False, rotating=False)
                     'flutter_linux_key_input_not_exact')
 
     images = {}
-    before_connect = ('mode-switch', 'wrong-passphrase') if encrypted else ()
+    before_connect = ('mode-switch', 'wrong-passphrase', 'pem-reopen') if encrypted else ()
     rotation_steps = ('rotation-rejected', 'rotation-retained', 'rotation-probe') if rotating else ()
     session_count = 4 if rotating else 2
     for phase in ('probe', *before_connect, *rotation_steps, 'connected', 'capture', 'disconnect', 'complete'):
@@ -286,6 +295,8 @@ def exchange(process, root, fixture, report, *, encrypted=False, rotating=False)
                 report['rotation']['freshProbe'] = closed_rotation(fixture, 3)
                 report['rotation']['newFingerprintMatchedBeforeConfirm'] = True
                 report['rotation']['newDisplayedHostKeyAlgorithm'] = value['algorithm']
+        elif phase == 'pem-reopen':
+            report['pemReopen'] = pem_reopen_evidence(fixture, root, value)
         elif phase in before_connect:
             evidence = key_rejection_evidence(fixture, root, phase, value)
             report['modeSwitch' if phase == 'mode-switch' else 'wrongPassphrase'] = evidence

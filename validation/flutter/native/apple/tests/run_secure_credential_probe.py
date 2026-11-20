@@ -15,12 +15,15 @@ CHECKS = {'channelRetired', 'clearDoesNotChangeOtherField', 'clearIsEmpty',
     'retiredLateEditCannotRestore', 'nativeSecureRolePublished', 'secureClass',
     'staleSyncCannotRestore', 'nativeSecureSubrolePublished', 'nativeSecureElementPublished', 'syncReplied',
     'inheritedWindowChildPreserved', 'secureWindowChildPresent', 'secureWindowChildUnique',
-    'secureWindowParentCorrect', 'windowQueriesPreserveFocus', 'hiddenFieldExcluded',
+    'secureWindowParentCorrect', 'windowQueriesPreserveFocus', 'windowQueriesDoNotPublishFocus',
+    'focusReachedFlutterWithoutText', 'disabledFieldDoesNotPublishFocus', 'hiddenFieldExcluded',
     'clippedFieldExcluded', 'detachedFieldExcluded', 'reattachedFieldExposed',
     'preexistingSecureChildDeduplicated', 'retiredFieldNotExposed',
     'rebuiltPasswordIsOnlySecureChild', 'closedWindowNoRegisteredSecureChild',
     'closedWindowClearsNativeValue', 'closedWindowRetiresChannel',
-    'stagedPassphraseIsNative', 'invalidPairsHaveNoEditorOrChannel'}
+    'stagedPassphraseIsNative', 'invalidPairsHaveNoEditorOrChannel',
+    'pendingFlutterReturnPreservesNativeFocus', 'laterChosenEditorKeepsFocus',
+    'finishedHandoffAllowsRendererFocus'}
 
 
 def main():

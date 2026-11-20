@@ -330,6 +330,7 @@
 @media (max-width:359px) {
   #home-ssh[data-ssh-step] #ssh-setup #ssh-approved-note { margin-bottom:12px; }
   #home-ssh[data-ssh-step] #ssh-setup #ssh-key { height:68px; }
+  #home-ssh[data-ssh-step] #ssh-setup #ssh-key-summary { height:68px; min-height:68px; }
 }
 
 #home-ssh #ssh-setup #ssh-closed-feedback[data-phase="failed"], #host-ssh-disconnected[data-phase="failed"] { border-color:var(--hp-dangerBorder); background:var(--hp-dangerSoft); color:var(--hp-dangerText); }

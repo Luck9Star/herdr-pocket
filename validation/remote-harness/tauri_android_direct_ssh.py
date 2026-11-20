@@ -54,6 +54,7 @@ DIRECT_ERROR_CODES = frozenset('''
     direct_setup_layout_unproven direct_mobile_setup_unproven direct_probe_peer_unproven
     direct_active_ui_invalid direct_active_peer_changed direct_active_tap_unproven
     direct_webview_not_ready direct_webview_socket_missing
+    direct_pem_collapse_unproven direct_pem_redraft_mismatch direct_pem_recollapse_unproven
 '''.split())
 ANDROID_ERROR_CODES = {
     'android_adb_unavailable': 'direct_android_adb_unavailable',
@@ -551,8 +552,8 @@ def mobile_setup(browser, fixture, step, *, fingerprint=None, prior=None, method
       const button=(id,label,on=true)=>{const e=one(id);return shown(e)&&e.tagName==='BUTTON'&&
         text(id)===label&&e.disabled===!on;};
       const route=one('home-ssh'), target=one('ssh-target-fields'), trust=one('ssh-trust-review'), auth=one('ssh-credentials');
-      const password=one('ssh-password'), key=one('ssh-key'), phrase=one('ssh-passphrase'), submit=one('ssh-connect');
-      const secrets=[password,key,phrase];
+      const password=one('ssh-password'), key=one('ssh-key'), phrase=one('ssh-passphrase'), summary=one('ssh-key-summary'), submit=one('ssh-connect');
+      const secrets=[password,key,phrase,summary];
       if (!shown(route) || !target || !trust || !auth || !submit || secrets.some(e=>!e) ||
           password.type!=='password' || key.tagName!=='TEXTAREA' || phrase.type!=='password') return false;
       const closedSecrets=()=>secrets.every(e=>!shown(e)&&e.disabled&&e.value==='')&&!shown(submit)&&submit.disabled;
@@ -576,12 +577,18 @@ def mobile_setup(browser, fixture, step, *, fingerprint=None, prior=None, method
       if (!shown(auth) || shown(trust) || text('ssh-step-title')!=='SSH 账号认证' ||
           text('ssh-approved-note')!=='本次主机密钥已确认' || !button('ssh-auth-password','密码') ||
           !button('ssh-auth-key','已有私钥') || !button('ssh-connect','连接 SSH',spec.input==='ready')) return false;
-      const active=spec.method==='password'?password:key, selected=spec.method==='password'?'ssh-auth-password':'ssh-auth-key';
+      const selected=spec.method==='password'?'ssh-auth-password':'ssh-auth-key';
       const inactive=spec.method==='password'?'ssh-auth-key':'ssh-auth-password';
-      if (one(selected).getAttribute('aria-pressed')!=='true'||one(inactive).getAttribute('aria-pressed')!=='false' ||
-          !shown(active)||active.disabled||Boolean(active.value)!==(spec.input!=='empty')) return false;
+      if (one(selected).getAttribute('aria-pressed')!=='true'||one(inactive).getAttribute('aria-pressed')!=='false') return false;
+      if (spec.method==='key'&&spec.input==='ready') {
+        if (shown(key)||key.value!==''||!shown(summary)||summary.tagName!=='BUTTON'||summary.disabled ||
+            text('ssh-key-summary')!=='已填写私钥 · 重新编辑') return false;
+      } else {
+        const active=spec.method==='password'?password:key;
+        if (!shown(active)||active.disabled||Boolean(active.value)!==(spec.input!=='empty')) return false;
+      }
       return spec.method==='password'
-        ? !shown(key)&&!shown(phrase)&&key.value===''&&phrase.value===''
+        ? !shown(key)&&!shown(phrase)&&key.value===''&&phrase.value===''&&!shown(summary)
         : !shown(password)&&password.value===''&&shown(phrase)&&!phrase.disabled&&Boolean(phrase.value)===(spec.input==='ready');
     })()""" % json.dumps(expectation)
     wait_for(lambda: browser.evaluate(expression) is True, 'direct_mobile_setup_unproven', timeout=60)
@@ -770,7 +777,67 @@ def exercise_active_navigation(browser, fixture, *, progress=None, ime_checks=No
 
 CREDENTIAL_VALUES_EXPR = ("!!document.querySelector('#ssh-password').value || "
                           "!!document.querySelector('#ssh-key').value || "
+                          "(!!document.querySelector('#ssh-key-summary') && "
+                          "!document.querySelector('#ssh-key-summary').hidden) || "
                           "!!document.querySelector('#ssh-passphrase').value")
+
+PEM_COLLAPSED_EXPR = """(function directSshPemCollapsed(){
+  const one = selector => {
+    const nodes = document.querySelectorAll(selector);
+    return nodes.length === 1 ? nodes[0] : null;
+  };
+  const key = one('#ssh-key');
+  const summary = one('#ssh-key-summary');
+  const passphrase = one('#ssh-passphrase');
+  if (!key || !summary || !passphrase) return false;
+  const label = '已填写私钥 · 重新编辑';
+  const visible = node => !node.hidden && node.getClientRects().length > 0 &&
+    getComputedStyle(node).visibility === 'visible';
+  const rect = summary.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0 || rect.left < 0 || rect.top < 0 ||
+      rect.right > innerWidth || rect.bottom > innerHeight) return false;
+  const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+  const labelled = [...document.querySelectorAll('button')].filter(node =>
+    visible(node) && !node.disabled && node.innerText.trim() === label);
+  return key.hidden === true && key.value === '' && !key.disabled && !key.readOnly &&
+    summary.tagName === 'BUTTON' && summary.hidden === false && !summary.disabled &&
+    summary.innerText.trim() === label && summary.contains(hit) &&
+    labelled.length === 1 && labelled[0] === summary &&
+    visible(passphrase) && !passphrase.disabled && !passphrase.readOnly && passphrase.value === '';
+})()"""
+CREDENTIALS_CLEARED_EXPR = """(function directSshCredentialsCleared(){
+  const one = selector => {
+    const nodes = document.querySelectorAll(selector);
+    return nodes.length === 1 ? nodes[0] : null;
+  };
+  const key = one('#ssh-key');
+  const summary = one('#ssh-key-summary');
+  const fields = ['#ssh-password', '#ssh-key', '#ssh-passphrase'].map(one);
+  return !!key && !!summary && fields.every(Boolean) &&
+    key.hidden === false && summary.hidden === true &&
+    fields.every(node => node.value === '');
+})()"""
+
+
+def pem_redraft_expression(private_key):
+    return """(function directSshPemRedraft(){
+  const one = selector => {
+    const nodes = document.querySelectorAll(selector);
+    return nodes.length === 1 ? nodes[0] : null;
+  };
+  const key = one('#ssh-key');
+  const summary = one('#ssh-key-summary');
+  return !!key && !!summary && key.hidden === false && key.value === %s &&
+    !key.disabled && !key.readOnly && summary.hidden === true &&
+    document.activeElement === key;
+})()""" % json.dumps(private_key)
+
+
+def _boolean_probe(browser, expression, code):
+    try:
+        return browser.evaluate(expression) is True
+    except Exception:
+        raise GuiFailure(code) from None
 PUBLIC_KEY_EVIDENCE_FIELDS = frozenset({'stage','connections','publicKeyAccepted','authAttempts',
                                         'authSuccesses','ptyRequests','shellRequests','inputBytes','outputBytes'})
 PUBLIC_KEY_EVIDENCE_COUNTS = PUBLIC_KEY_EVIDENCE_FIELDS - {'publicKeyAccepted'}
@@ -788,6 +855,16 @@ def fill_credentials(browser, fixture, *, encrypted_key, staged, progress=None):
         browser.fill('#ssh-key', fixture.private_key)
         if staged:
             mobile_setup(browser, fixture, 'auth', method='key', input_state='pem')
+        browser.click('#ssh-passphrase')
+        wait_for(lambda: _boolean_probe(browser, PEM_COLLAPSED_EXPR, 'direct_pem_collapse_unproven'),
+                 'direct_pem_collapse_unproven', timeout=60)
+        browser.click('#ssh-key-summary')
+        redraft = pem_redraft_expression(fixture.private_key)
+        wait_for(lambda: _boolean_probe(browser, redraft, 'direct_pem_redraft_mismatch'),
+                 'direct_pem_redraft_mismatch', timeout=60)
+        browser.click('#ssh-passphrase')
+        wait_for(lambda: _boolean_probe(browser, PEM_COLLAPSED_EXPR, 'direct_pem_recollapse_unproven'),
+                 'direct_pem_recollapse_unproven', timeout=60)
         if progress is not None: progress['stage']='enter_passphrase'
         browser.fill('#ssh-passphrase', fixture.passphrase)
     else:
@@ -883,6 +960,8 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
     else:
         wait_for(lambda: not browser.evaluate("document.querySelector('#ssh-setup').hidden") and
                  '已断开' in (browser.read('#ssh-status') or ''), 'direct_disconnect_ui_missing', timeout=60)
+    wait_for(lambda: _boolean_probe(browser, CREDENTIALS_CLEARED_EXPR, 'direct_credentials_retained'),
+             'direct_credentials_retained', timeout=60)
     wait_for(lambda: fixture.snapshot().get('sessionClosed') is True,
              'direct_peer_close_missing', timeout=60)
     peer = fixture.snapshot()

@@ -393,13 +393,16 @@ for start in (lambda: paired_gui.FixtureApproval(None, None, None),
                      shellRequests=0, inputBytes=0, outputBytes=0)
         facts = {'connections': 1, 'connectionsClosed': True, 'connectionEvents': [probe]}
         job = SimpleNamespace(QueryInformationJobObject=Mock(return_value=(42,)), JobObjectBasicProcessIdList=3)
+        valid = {'privateKeyExact': True, 'passphraseEmpty': True, 'collapsedSemanticsAbsent': True,
+                 'summaryHit': True, 'reopenedExactFocused': True, 'collapsedAgain': True}
         cases = (
-            (True, {'privateKeyExact': True, 'passphraseEmpty': True}, facts, 11, 'target_file_unconsumed'),
-            (False, {'privateKeyExact': True, 'passphraseEmpty': False}, facts, 11, 'entry_unproven'),
-            (False, {'privateKeyExact': True, 'passphraseEmpty': True, 'raw': 'private detail'}, facts, 11, 'entry_unproven'),
-            (False, {'privateKeyExact': True, 'passphraseEmpty': True},
-             facts | {'connectionEvents': [probe | {'authAttempts': 1}]}, 11, 'probe_not_empty'),
-            (False, {'privateKeyExact': True, 'passphraseEmpty': True}, facts, 12, 'publickey_view_changed'),
+            (False, {'privateKeyExact': True, 'passphraseEmpty': True}, facts, 11, 'entry_unproven'),
+            (False, valid | {'reopenedExactFocused': False}, facts, 11, 'entry_unproven'),
+            (True, valid, facts, 11, 'target_file_unconsumed'),
+            (False, valid | {'passphraseEmpty': False}, facts, 11, 'entry_unproven'),
+            (False, valid | {'raw': 'private detail'}, facts, 11, 'entry_unproven'),
+            (False, valid, facts | {'connectionEvents': [probe | {'authAttempts': 1}]}, 11, 'probe_not_empty'),
+            (False, valid, facts, 12, 'publickey_view_changed'),
         )
         for retained, receipt, peer, view, code in cases:
             with self.subTest(code=code), tempfile.TemporaryDirectory() as directory, \

@@ -137,6 +137,10 @@ void main() {
             expect(evidence, {
               'privateKeyExact': true,
               'passphraseEmpty': true,
+              'collapsedSemanticsAbsent': true,
+              'summaryHit': true,
+              'reopenedExactFocused': true,
+              'collapsedAgain': true,
             });
           }
           checkpoints.add(phase);

@@ -151,9 +151,11 @@ def prepare(destination):
     marker = 'RegisterGeneratedPlugins(registry: flutterViewController)'
     if marker not in mac_text:
         raise SystemExit('Pinned Flutter macOS registration template changed')
+    window_class = 'class MainFlutterWindow: NSWindow {'
     awake = '  override func awakeFromNib() {'
-    if mac_text.count(awake) != 1:
+    if mac_text.count(window_class) != 1 or mac_text.count(awake) != 1:
         raise SystemExit('Pinned Flutter macOS window template changed')
+    mac_text = mac_text.replace(window_class, 'class MainFlutterWindow: HerdrSecureCredentialWindow {', 1)
     mac_text = mac_text.replace(awake,
         '  override func accessibilityChildren() -> [Any]? {\n'
         '    return herdrSecureAccessibilityChildren(window: self, preserving: super.accessibilityChildren())\n'

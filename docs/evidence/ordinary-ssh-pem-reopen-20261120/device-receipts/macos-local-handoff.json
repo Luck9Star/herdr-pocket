@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "beforeSource": "55edd094dc18cd683b8dfc15e2492602558a5fdb",
+  "afterSource": "572e0a6d65a3b5691cbb875916652c1ab0a42fa5",
+  "flutterVersion": "3.47.9",
+  "scope": "visible AppKit Flutter authentication layout with synthetic draft and NSEvent",
+  "nativeXcui": false,
+  "captures": {
+    "beforeAX": {
+      "openedFocusedExact": 2,
+      "collapsedWithDraftIntact": 2,
+      "responderAfterBlur": [
+        "flutter_root",
+        "flutter_root"
+      ],
+      "typingEventsDispatched": 1,
+      "nativeReadbackMatched": false,
+      "flutterReadbackMatched": false,
+      "localAxMasked": true,
+      "sameNativeField": true
+    },
+    "afterAX": {
+      "openedFocusedExact": 2,
+      "collapsedWithDraftIntact": 2,
+      "responderAfterBlur": [
+        "secure",
+        "secure"
+      ],
+      "typingEventsDispatched": 1,
+      "nativeReadbackMatched": true,
+      "flutterReadbackMatched": true,
+      "localAxMasked": true,
+      "sameNativeField": true
+    },
+    "afterDefault": {
+      "openedFocusedExact": 2,
+      "collapsedWithDraftIntact": 2,
+      "responderAfterBlur": [
+        "secure",
+        "secure"
+      ],
+      "typingEventsDispatched": 1,
+      "nativeReadbackMatched": true,
+      "flutterReadbackMatched": true,
+      "localAxMasked": true,
+      "sameNativeField": true
+    }
+  }
+}

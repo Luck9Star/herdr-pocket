@@ -10,7 +10,7 @@ import time
 import unittest
 from copy import deepcopy
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -21,9 +21,13 @@ from PIL import Image
 from screen_proof_token import token_lines
 from tauri_linux_direct_ssh import (
     DesktopDriver,
+    KEY_FIELDS_WITNESS,
+    KEY_REJECTED_WITNESS,
     REVIEW_WITNESS,
     ROTATION_REPROBE_ACTION,
     ROTATION_REPROBE_CREDENTIALS,
+    ROTATION_REVIEW_WITNESS,
+    ROTATION_RETAINED_WITNESS,
     execute,
     DirectSshFixture,
     EncryptedKeyFixture,
@@ -43,6 +47,13 @@ from tauri_linux_direct_ssh import (
     wait_for,
 )
 from terminal_screenshot_gate import ECHO_MARKER
+
+
+def immediate_wait(probe, code, **_):
+    result = probe()
+    if not result:
+        raise GuiFailure(code)
+    return result
 
 
 def real_peer_evidence():
@@ -205,14 +216,18 @@ class EncryptedPeerEvidenceTests(unittest.TestCase):
     def test_wrong_passphrase_click_is_single_and_evidence_has_no_credentials(self):
         driver = Mock()
         driver.observe.return_value = True
+        driver.fill.side_effect = lambda selector, _: driver.click(selector)
         fixture = Mock(private_key='fixture-pem', wrong_passphrase='fixture-wrong',
                        passphrase='fixture-correct', password='fixture-password')
         fixture.wait_for_connections_closed.return_value = True
         fixture.snapshot.return_value = self.rejected
         report = {}
         exercise_wrong_passphrase(driver, fixture, 'fixture@127.0.0.1:2222', report)
-        driver.click.assert_called_once_with('#ssh-connect')
-        self.assertEqual([call.args for call in driver.fill.call_args_list],
+        clicks = [c.args[0] for c in driver.click.call_args_list]
+        self.assertEqual(clicks.count('#ssh-connect'), 1)
+        self.assertEqual(clicks[:5], ['#ssh-key', '#ssh-passphrase', '#ssh-key-summary',
+                                      '#ssh-passphrase', '#ssh-passphrase'])
+        self.assertEqual([c.args for c in driver.fill.call_args_list],
                          [('#ssh-key', fixture.private_key), ('#ssh-passphrase', fixture.wrong_passphrase)])
         self.assertTrue(report['wrongPassphrase']['handshakeCompleted'])
         self.assertEqual(report['wrongPassphrase']['authenticationAttempts'], 0)
@@ -260,7 +275,8 @@ class RotationEvidenceTests(unittest.TestCase):
         with patch('tauri_linux_direct_ssh.capture_outcome', return_value=(b'png', {'bounds': [0, 0, 1, 1]})):
             exercise_rotation_review(driver, fixture, endpoint, target, report)
         self.assertEqual([c.args[0] for c in driver.click.call_args_list],
-                         ['#ssh-connect', '#ssh-key-cancel', '#ssh-probe', '#ssh-trust-confirm', '#ssh-auth-key'])
+                         ['#ssh-passphrase', '#ssh-key-summary', '#ssh-passphrase', '#ssh-connect',
+                          '#ssh-key-cancel', '#ssh-probe', '#ssh-trust-confirm', '#ssh-auth-key'])
         self.assertEqual([c.args for c in fixture.rotation_evidence.call_args_list], [(2,), (2,), (2,), (3,)])
         observations = [call.args for call in driver.observe.call_args_list]
         self.assertIn((REVIEW_WITNESS, endpoint, 'ssh-rsa', fixture.rotated_fingerprint), observations)
@@ -277,7 +293,8 @@ class RotationEvidenceTests(unittest.TestCase):
         with patch('tauri_linux_direct_ssh.capture_outcome', return_value=(b'png', {})), \
              self.assertRaisesRegex(GuiFailure, 'rotation_cancel_dialed'):
             exercise_rotation_review(driver, fixture, 'fixture@127.0.0.1:2222', target, {})
-        self.assertEqual([c.args[0] for c in driver.click.call_args_list], ['#ssh-connect', '#ssh-key-cancel'])
+        self.assertEqual([c.args[0] for c in driver.click.call_args_list],
+                         ['#ssh-passphrase', '#ssh-key-summary', '#ssh-passphrase', '#ssh-connect', '#ssh-key-cancel'])
         driver.send_test_line.assert_not_called()
 
     def test_fresh_review_fails_before_confirmation_without_retention_action_or_locked_empty_fields(self):
@@ -291,7 +308,8 @@ class RotationEvidenceTests(unittest.TestCase):
                  self.assertRaisesRegex(GuiFailure, code):
                 exercise_rotation_review(driver, fixture, 'fixture@127.0.0.1:2222', target, {})
             self.assertEqual([c.args[0] for c in driver.click.call_args_list],
-                             ['#ssh-connect', '#ssh-key-cancel', '#ssh-probe'])
+                             ['#ssh-passphrase', '#ssh-key-summary', '#ssh-passphrase', '#ssh-connect',
+                              '#ssh-key-cancel', '#ssh-probe'])
             self.assertNotIn((3,), [c.args for c in fixture.rotation_evidence.call_args_list])
             driver.send_test_line.assert_not_called()
 
@@ -315,6 +333,24 @@ class WebDriverTests(unittest.TestCase):
         driver.read.return_value = value.replace('\n', '')
         with self.assertRaisesRegex(GuiFailure, 'form_input_mismatch_ssh-key'):
             driver.fill('#ssh-key', value)
+
+    def test_credential_cleanup_witnesses_reject_a_retained_private_key_summary(self):
+        import tauri_linux_direct_ssh as linux_driver
+        cleared = getattr(linux_driver, 'CLEARED_KEY_CONTROLS', None)
+        if cleared is None:
+            self.fail('CLEARED_KEY_CONTROLS is missing')
+        self.assertIn("node('#ssh-key-summary').hidden === true", cleared)
+        self.assertIn("node('#ssh-key').hidden === false", cleared)
+        self.assertIn("!visible(summary)", KEY_FIELDS_WITNESS)
+        self.assertIn("summary.innerText === '已填写私钥 · 重新编辑'", KEY_FIELDS_WITNESS)
+        witnesses = (KEY_REJECTED_WITNESS, ROTATION_REVIEW_WITNESS,
+                     ROTATION_RETAINED_WITNESS, ROTATION_REPROBE_CREDENTIALS)
+        for witness in witnesses:
+            self.assertIn(cleared, witness)
+        source = (HERE / 'tauri_linux_direct_ssh.py').read_text(encoding='utf-8')
+        self.assertIn('CLEARED_KEY_CONTROLS', source)
+        self.assertNotIn('!visible(node("#ssh-key-summary"))', source)
+        self.assertNotIn("!visible(node('#ssh-key-summary'))", source)
 
     def test_native_webkit_session_uses_production_binary_and_public_capabilities(self):
         driver = DesktopDriver()
@@ -429,6 +465,114 @@ class ReviewFlowTests(unittest.TestCase):
         script = 'const WITNESS=' + json.dumps(REVIEW_WITNESS) + ';\n' + script
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True, check=True)
         self.assertEqual(json.loads(result.stdout), [True] + [False] * 8)
+
+
+class PrivateKeyReopenTests(unittest.TestCase):
+    def witnesses(self):
+        import tauri_linux_direct_ssh as linux_driver
+        names = ('OBSERVE_HELPERS', 'KEY_COLLAPSED_WITNESS', 'KEY_REDRAFT_WITNESS',
+                 'CLEARED_KEY_CONTROLS')
+        values = {name: getattr(linux_driver, name, None) for name in names}
+        missing = [name for name, value in values.items() if value is None]
+        if missing:
+            self.fail('missing PEM control constants: ' + ', '.join(missing))
+        return linux_driver, values
+
+    def test_reopen_uses_one_summary_click_and_returns_only_boolean_witnesses(self):
+        linux_driver, witnesses = self.witnesses()
+        driver = Mock()
+        driver.observe.return_value = True
+        driver.fill.side_effect = lambda selector, _: driver.click(selector)
+        fixture = Mock(private_key='fixture-pem')
+        with patch('tauri_linux_direct_ssh.wait_for', immediate_wait):
+            linux_driver.fill_encrypted_credentials(driver, fixture, 'fixture@127.0.0.1:2222',
+                                                    passphrase='fixture-wrong')
+        clicks = [c.args[0] for c in driver.click.call_args_list]
+        self.assertEqual(clicks, ['#ssh-key', '#ssh-passphrase', '#ssh-key-summary',
+                                  '#ssh-passphrase', '#ssh-passphrase'])
+        self.assertEqual(clicks.count('#ssh-key-summary'), 1)
+        self.assertEqual([c.args for c in driver.fill.call_args_list],
+                         [('#ssh-key', 'fixture-pem'), ('#ssh-passphrase', 'fixture-wrong')])
+        self.assertIn(call(witnesses['KEY_REDRAFT_WITNESS'], 'fixture-pem'),
+                      driver.observe.call_args_list)
+        redraft = witnesses['KEY_REDRAFT_WITNESS']
+        self.assertNotIn(fixture.private_key, redraft)
+        self.assertNotIn('fixture-wrong', redraft)
+        self.assertNotIn('return key.value', redraft)
+        self.assertFalse(any('/screenshot' in str(c.args) for c in driver.call.call_args_list))
+        self.assertIn("'script': OBSERVE_HELPERS + script",
+                      (HERE / 'tauri_linux_direct_ssh.py').read_text(encoding='utf-8'))
+
+    def test_unproven_collapse_redraft_and_recollapse_stop_at_each_gate(self):
+        linux_driver, _ = self.witnesses()
+        for position, code in ((4, 'direct_ssh_pem_collapse_unproven'),
+                               (5, 'direct_ssh_pem_redraft_mismatch'),
+                               (6, 'direct_ssh_pem_recollapse_unproven')):
+            with self.subTest(code=code):
+                driver = Mock()
+                driver.observe.side_effect = [True] * (position - 1) + [False] + [True] * (8 - position)
+                fixture = Mock(private_key='fixture-pem')
+                with patch('tauri_linux_direct_ssh.wait_for', immediate_wait), \
+                     self.assertRaisesRegex(GuiFailure, '^' + code + '$'):
+                    linux_driver.fill_encrypted_credentials(driver, fixture, 'fixture@127.0.0.1:2222',
+                                                            passphrase='fixture-wrong')
+                self.assertEqual(driver.observe.call_count, position)
+                clicks = [c.args[0] for c in driver.click.call_args_list]
+                if position == 4:
+                    self.assertNotIn('#ssh-key-summary', clicks)
+                else:
+                    self.assertEqual([c.args[0] for c in driver.fill.call_args_list], ['#ssh-key'])
+
+    @unittest.skipUnless(shutil.which('node'), 'Node is required for the PEM DOM controls')
+    def test_pem_controls_reject_ancestor_hidden_duplicate_covered_or_dirty_evidence(self):
+        _, witnesses = self.witnesses()
+        script = r'''const CLEANUP = 'return ' + CLEARED + ' && arguments[0].every(s => node(s).value === "");';
+        const collapsedCheck = new Function('return (function(){' + HELPERS + '\n' + COLLAPSED + '}).apply(null, arguments)');
+        const cleanupCheck = new Function('return (function(){' + HELPERS + '\n' + CLEANUP + '}).apply(null, arguments)');
+        const rect = {left:10,top:10,right:110,bottom:30,width:100,height:20};
+        const make = (tagName, innerText='', hidden=false) => ({
+          tagName, innerText, hidden, value:'', disabled:false, readOnly:false, ancestorHidden:false, inert:false,
+          getClientRects(){ return this.hidden || this.ancestorHidden ? [] : [this.getBoundingClientRect()]; },
+          getBoundingClientRect(){ return {...rect}; },
+          contains(el){ return el === this; },
+          closest(selector){ return this.inert ? {} : null; }
+        });
+        const label = '已填写私钥 · 重新编辑';
+        const key = make('TEXTAREA', '', true);
+        const summary = make('BUTTON', label);
+        const duplicate = make('BUTTON', label);
+        const passphrase = make('INPUT');
+        const password = make('INPUT');
+        const nodes = {'#ssh-password':password,'#ssh-key':key,'#ssh-passphrase':passphrase,'#ssh-key-summary':summary};
+        let buttons=[summary], covered=false;
+        globalThis.innerWidth=500;globalThis.innerHeight=500;
+        globalThis.getComputedStyle = el => ({visibility: el.hidden || el.ancestorHidden ? 'hidden' : 'visible'});
+        globalThis.document = {
+          querySelector: selector => nodes[selector],
+          querySelectorAll: selector => selector === 'button' ? buttons : (nodes[selector] ? [nodes[selector]] : []),
+          elementFromPoint: () => covered ? {} : summary,
+          activeElement: key
+        };
+        const runCollapsed = () => collapsedCheck();
+        const runCleanup = () => cleanupCheck(FIELDS);
+        const out = [runCollapsed()];
+        key.hidden=false;out.push(runCollapsed());key.hidden=true;
+        key.hidden=false;key.ancestorHidden=true;out.push(runCollapsed());key.hidden=true;key.ancestorHidden=false;
+        summary.hidden=true;out.push(runCollapsed());summary.hidden=false;
+        buttons=[summary,duplicate];out.push(runCollapsed());buttons=[summary];
+        covered=true;out.push(runCollapsed());covered=false;
+        key.hidden=false;summary.hidden=true;
+        out.push(runCleanup());
+        summary.hidden=false;summary.ancestorHidden=true;out.push(runCleanup());summary.hidden=true;summary.ancestorHidden=false;
+        key.hidden=true;out.push(runCleanup());key.hidden=false;
+        passphrase.value='residual';out.push(runCleanup());
+        console.log(JSON.stringify(out));'''
+        script = ('const HELPERS=' + json.dumps(witnesses['OBSERVE_HELPERS']) + ';\n'
+                  'const COLLAPSED=' + json.dumps(witnesses['KEY_COLLAPSED_WITNESS']) + ';\n'
+                  'const CLEARED=' + json.dumps(witnesses['CLEARED_KEY_CONTROLS']) + ';\n'
+                  'const FIELDS=' + json.dumps(['#ssh-password', '#ssh-key', '#ssh-passphrase']) + ';\n' + script)
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True, check=True)
+        self.assertEqual(json.loads(result.stdout), [True] + [False] * 5 + [True] + [False] * 3)
 
 
 class ScreenshotBindingTests(unittest.TestCase):

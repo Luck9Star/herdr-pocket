@@ -1993,17 +1993,98 @@ test('SSH authentication selection clears abandoned secrets and sends only the c
     const keyConfig=h.calls.filter(c=>c.name==='ssh_shell_open').at(-1).args.config;
     assert.match(keyConfig.privateKeyPem,/\nQUJDREVGR0hJSktM\n/);assert.equal(keyConfig.privateKeyPassphrase,'passphrase fixture');assert.equal('password' in keyConfig,false);
     assert.equal(n['ssh-key'].value,'');assert.equal(n['ssh-passphrase'].value,'');
+    assert.equal(n['ssh-key-summary'].hidden,true);
+    n['ssh-key-summary'].click();
+    assert.equal(n['ssh-key'].value,'');assert.equal(n['ssh-key-summary'].hidden,true);
     n['ssh-cancel'].click();await flush();
     n['ssh-key'].value='unused key';n['ssh-passphrase'].value='unused phrase';
     n['ssh-auth-method'].value='password';n['ssh-auth-method'].dispatch('change');
-    assert.equal(n['ssh-key'].value,'');assert.equal(n['ssh-passphrase'].value,'');assert.equal(n['ssh-key-fields'].hidden,true);
+    assert.equal(n['ssh-key'].value,'');assert.equal(n['ssh-passphrase'].value,'');assert.equal(n['ssh-key-fields'].hidden,true);assert.equal(n['ssh-key-summary'].hidden,true);
     n['ssh-password'].value='password fixture';await n['ssh-form'].onsubmit({preventDefault(){}});
     const passwordConfig=h.calls.filter(c=>c.name==='ssh_shell_open').at(-1).args.config;
     assert.equal(passwordConfig.password,'password fixture');assert.equal('privateKeyPem' in passwordConfig,false);
     n['ssh-password'].value='cancel secret';n['ssh-cancel'].click();assert.equal(n['ssh-password'].value,'');
     n['ssh-key'].value='disconnect secret';n['ssh-passphrase'].value='disconnect phrase';n['ssh-disconnect'].click();
-    assert.equal(n['ssh-key'].value,'');assert.equal(n['ssh-passphrase'].value,'');
+    assert.equal(n['ssh-key'].value,'');assert.equal(n['ssh-passphrase'].value,'');assert.equal(n['ssh-key-summary'].hidden,true);
+    n['ssh-key-summary'].click();assert.equal(n['ssh-key'].value,'');assert.equal(n['ssh-key-summary'].hidden,true);
   } finally { h.finish(); await flush(); h.restore(); }
+});
+
+test('any non-empty private-key draft collapses on blur and submits from memory', async () => {
+  const h=await setup(), n=h.nodes;
+  try {
+    n['ssh-host'].value='fixture.invalid';n['ssh-port'].value='22';n['ssh-user'].value='fixture';
+    await n['ssh-probe'].onclick();n['ssh-review'].checked=true;
+    n['ssh-auth-method'].value='key';n['ssh-auth-method'].dispatch('change');
+    n['ssh-key'].value='';n['ssh-key'].dispatch('input');
+    n['ssh-passphrase'].focus();n['ssh-key'].dispatch('blur');
+    assert.equal(n['ssh-key'].hidden,false);assert.equal(n['ssh-key-summary'].hidden,true);
+    n['ssh-key'].value='   ';n['ssh-key'].dispatch('input');
+    n['ssh-key'].dispatch('blur');
+    assert.equal(n['ssh-key'].hidden,true);assert.equal(n['ssh-key'].value,'');
+    assert.equal(n['ssh-key-summary'].hidden,false);
+    assert.equal(n['ssh-key-summary'].textContent,'已填写私钥 · 重新编辑');
+    assert.equal(document.activeElement,n['ssh-passphrase']);
+    n['ssh-key-summary'].click();
+    assert.equal(n['ssh-key'].hidden,false);assert.equal(n['ssh-key-summary'].hidden,true);
+    assert.equal(n['ssh-key'].value,'   ');assert.equal(document.activeElement,n['ssh-key']);
+    n['ssh-key'].value='single incomplete line';n['ssh-key'].dispatch('input');
+    n['ssh-passphrase'].focus();n['ssh-key'].dispatch('blur');
+    assert.equal(n['ssh-key'].hidden,true);assert.equal(n['ssh-key-summary'].hidden,false);
+    n['ssh-key-summary'].click();
+    const pemMarker=word=>`-----${word}-----`;
+    const pem=[pemMarker('BEGIN PRIVATE KEY'),'A'.repeat(136),pemMarker('END PRIVATE KEY'),''].join('\n');
+    n['ssh-key'].value=pem;n['ssh-key'].dispatch('input');
+    n['ssh-passphrase'].value='passphrase fixture';
+    n['ssh-passphrase'].focus();n['ssh-key'].dispatch('blur');
+    assert.equal(n['ssh-key'].hidden,true);assert.equal(n['ssh-key'].value,'');
+    await n['ssh-form'].onsubmit({preventDefault(){}});
+    const keyConfig=h.calls.filter(c=>c.name==='ssh_shell_open').at(-1).args.config;
+    assert.equal(keyConfig.privateKeyPem,pem);assert.equal(keyConfig.privateKeyPassphrase,'passphrase fixture');
+    assert.equal(n['ssh-key'].hidden,false);assert.equal(n['ssh-key'].value,'');
+    assert.equal(n['ssh-key-summary'].hidden,true);assert.equal(n['ssh-passphrase'].value,'');
+  } finally { h.finish(); await flush(); h.restore(); }
+});
+
+test('paste keeps the collapsed draft and focus when the system grants or denies clipboard', async () => {
+  const pemMarker=word=>`-----${word}-----`;
+  const pasted=[pemMarker('BEGIN PRIVATE KEY'),'B'.repeat(64),pemMarker('END PRIVATE KEY'),''].join('\n');
+  const granted=await setup({clipboardRead:async()=>pasted});
+  try {
+    const n=granted.nodes;
+    n['ssh-host'].value='fixture.invalid';n['ssh-port'].value='22';n['ssh-user'].value='fixture';
+    await n['ssh-probe'].onclick();n['ssh-review'].checked=true;
+    n['ssh-auth-method'].value='key';n['ssh-auth-method'].dispatch('change');
+    n['ssh-key'].value='old incomplete draft';n['ssh-key'].dispatch('input');
+    n['ssh-paste-key'].focus();n['ssh-key'].dispatch('blur',{relatedTarget:n['ssh-paste-key']});
+    assert.equal(n['ssh-key'].hidden,true);assert.equal(n['ssh-key'].value,'');
+    assert.equal(n['ssh-key-summary'].hidden,false);assert.equal(document.activeElement,n['ssh-paste-key']);
+    await n['ssh-paste-key'].onclick();await flush();
+    assert.equal(n['ssh-key'].hidden,true);assert.equal(n['ssh-key-summary'].hidden,false);
+    assert.equal(document.activeElement,n['ssh-paste-key']);
+    n['ssh-passphrase'].value='passphrase fixture';
+    await n['ssh-form'].onsubmit({preventDefault(){}});
+    const keyConfig=granted.calls.filter(c=>c.name==='ssh_shell_open').at(-1).args.config;
+    assert.equal(keyConfig.privateKeyPem,pasted);
+  } finally { granted.finish(); await flush(); granted.restore(); }
+  const denied=await setup({clipboardRead:async()=>{throw Error('denied');}});
+  try {
+    const n=denied.nodes;
+    n['ssh-host'].value='fixture.invalid';n['ssh-port'].value='22';n['ssh-user'].value='fixture';
+    await n['ssh-probe'].onclick();n['ssh-review'].checked=true;
+    n['ssh-auth-method'].value='key';n['ssh-auth-method'].dispatch('change');
+    n['ssh-key'].value='old incomplete draft';n['ssh-key'].dispatch('input');
+    n['ssh-paste-key'].focus();n['ssh-key'].dispatch('blur',{relatedTarget:n['ssh-paste-key']});
+    await n['ssh-paste-key'].onclick();await flush();
+    assert.equal(n['ssh-key'].hidden,true);assert.equal(n['ssh-key'].value,'');
+    assert.equal(n['ssh-key-summary'].hidden,false);assert.equal(document.activeElement,n['ssh-paste-key']);
+    n['ssh-key-summary'].click();
+    assert.equal(n['ssh-key'].hidden,false);assert.equal(n['ssh-key'].value,'old incomplete draft');
+    n['ssh-passphrase'].focus();n['ssh-key'].dispatch('blur');
+    n['ssh-auth-method'].value='password';n['ssh-auth-method'].dispatch('change');
+    assert.equal(n['ssh-key'].hidden,false);assert.equal(n['ssh-key'].value,'');
+    assert.equal(n['ssh-key-summary'].hidden,true);
+  } finally { denied.finish(); await flush(); denied.restore(); }
 });
 
 async function openOrdinary(h, id, host = 'fixture.invalid') {

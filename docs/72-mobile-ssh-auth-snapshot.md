@@ -4,6 +4,18 @@
 
 各批沿用 [PR #4 的冻结设计](https://github.com/Luck9Star/herdr-pocket/pull/4)。画板提交为 `79deef0e9c03425f368966e32ff1f1d399a3ac02`。旧版 [15 状态前测](https://github.com/Luck9Star/herdr-pocket/blob/af273abca77fe97fd4806fe624dce89c6595869b/design/evidence/direct-ssh-mobile-20261118/baseline/README.md) 与[首批入口对照](https://github.com/Luck9Star/herdr-pocket/blob/af273abca77fe97fd4806fe624dce89c6595869b/design/evidence/direct-ssh-mobile-20261118/first-batch/README.md)提供独立参照。
 
+## 2026-11-20 私钥收起与重开复验
+
+[PR #56 初批验收](evidence/ordinary-ssh-pem-reopen-20261120/README.md)按源码归档 Win32、Linux GTK/Xvfb、macOS XCUITest 和手机模拟器结果。Windows Flutter 与 Linux Tauri 完成摘要点击、草稿逐字读回和再次收起。Linux Flutter 本批证实点击和读回，进一步的焦点与再次收起断言待复验。
+
+手机首轮仍有三处阻断。Flutter iOS 普通密码和密码换钥完成，独立加密案止于指纹确认后的验收回调。Tauri iOS 手填加密案止于口令控件归属核验。Flutter Android 的模拟器在应用检查点和 SSH 连接前退出。三个加密案均无认证尝试。macOS Flutter 的加密私钥子用例通过，系统遮蔽综合用例失败。端到端状态与新交互的实证以[官方工件索引](evidence/ordinary-ssh-pem-reopen-20261120/official-index.json)为准。
+
+第二批在 Tauri Android API 35、Tauri Linux 和 Flutter Linux 完成加密私钥与主机换钥组合，均经回环公钥认证、终端 OCR 和主动断开。Tauri 两案的通过作业与同源码驱动共同佐证失焦收起、点击重开同一草稿及再次收起。Flutter Linux `2720e2f5` 工件直接记录摘要出现、重开同一草稿并获焦、再次收起和编辑器及其 Flutter 语义节点消失。 [第二批原生作业与证据](evidence/ordinary-ssh-pem-reopen-20261120/README.md#第二批加密私钥与主机换钥)
+
+第二批 Flutter iOS 与 Android 均拒绝错口令且保持零认证，随后在正确口令字段处失败。Tauri iOS R13 在首页仅见 `163×22pt` AX 候选，采样原图的应用区域全白，尚未进入私钥流程。Flutter macOS R3 已通过系统遮罩，私钥收起和重开仍待原生复验。 [第二批官方工件索引](evidence/ordinary-ssh-pem-reopen-20261120/official-followup-index.json)
+
+第三批 Flutter Android 与 iOS 均通过独立加密和加密换钥。新回执直接记录失焦收起、摘要点击后完整草稿获焦，以及再次收起。换钥同源 `9865dafa`，两端均为 A → B → B → B，前三条零认证，末条一次公钥认证。Tauri iOS R15 通过原生手填独立加密案，错／对口令两轮均完整读回、重开和再收起，主动断开后返回首页。macOS R4 已跑通两次重开与再次收起，第二次原生口令点击后的键入未读回。修复在本机 AppKit 两种辅助功能模式均复验通过。正式 R5 随后通过系统遮罩、密码 SSH、加密私钥 SSH 和返回重开四项，工件无截图。 [第三批原生作业、截图与本机对照](evidence/ordinary-ssh-pem-reopen-20261120/README.md#第三批手机回执与-macos-交接)
+
 ## 合并前原生复验
 
 ### R2 联合复验
@@ -205,7 +217,7 @@ git rev-parse HEAD
 - R6 点击产品「粘贴私钥」按钮后动作返回，驱动未能取得 App 根快照，粘贴结果未知。[R6 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44502343881/job/135485062772)
 - R7 冷启动 App 后长按原本为空的 PEM 字段。同窗采样可读，记录为空字段，未取得唯一菜单或内容插入的证据。权限弹窗、菜单实际可用性和产品支持情况均未证实。[R7 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44510667185/job/135513780849)
 
-两次都止于填入口令前的粘贴确认。服务端各只有一条已关闭的 A，认证尝试及成功、PTY、shell、输入及输出均为零。模拟器删除、夹具关闭和私有临时文件移除均通过。恢复验收须先在同一 App 窗口证明粘贴动作及内容插入，结果未知时停止并清理，不能重放原动作。错口令拒绝、正确私钥认证、终端回显及原屏 OCR、主动断开仍待实测。
+两次都止于填入口令前的粘贴确认。服务端各只有一条已关闭的 A，认证尝试及成功、PTY、shell、输入及输出均为零。模拟器删除、夹具关闭和私有临时文件移除均通过。恢复验收须先在同一 App 窗口证明粘贴动作及内容插入，结果未知时停止并清理，不能重放原动作。上述两次作业均未达认证。后续 R15 已通过原生手填，系统粘贴仍待复验。 [R15 手填验收](evidence/ordinary-ssh-pem-reopen-20261120/README.md#第三批手机回执与-macos-交接)
 
 ## Flutter Android 加密私钥与主机换钥
 

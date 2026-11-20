@@ -40,7 +40,12 @@ class Element {
   closest() {
     return this;
   }
-  blur() {}
+  focus() {
+    globalThis.document.activeElement = this;
+  }
+  blur() {
+    if (globalThis.document?.activeElement === this) globalThis.document.activeElement = null;
+  }
 }
 
 function setup({ innerHeight = 956, ios = false, headingTop = 161.906, headerBottom = 130, compact = false, clipboardRead, onBack, failClose = false, closeReply = null } = {}) {
@@ -775,6 +780,7 @@ test("mobile target edits retire late probe and private key paste replies", asyn
     n["ssh-trust-confirm"].onclick();
     n["ssh-auth-key"].onclick();
     const paste = n["ssh-paste-key"].onclick();
+    assert.equal(h.document.activeElement, n["ssh-paste-key"]);
     n["ssh-auth-password"].onclick();
     clipboard.resolve("retired-private-key");
     await paste;

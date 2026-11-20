@@ -98,9 +98,11 @@ def drive(app, output):
     relative = 'cache/herdr-documents-' + run_id
     apk = app / 'build/app/outputs/flutter-apk/app-debug.apk'
     need(apk.is_file() and not apk.is_symlink(), 'apk_missing')
-    apk_hash = hashlib.sha256(apk.read_bytes()).hexdigest()
+    prebuilt_hash = hashlib.sha256(apk.read_bytes()).hexdigest()
+    apk_hash = None
     report = {'schemaVersion': 1, 'sourceSHA': os.environ['GITHUB_SHA'], 'status': 'failed',
-              'binary': 'flutter-integration-test', 'apkSha256': apk_hash, 'stage': 'setup',
+              'binary': 'flutter-integration-test', 'executionMode': 'flutter-test-vm-listener',
+              'prebuiltApkSha256': prebuilt_hash, 'stage': 'setup',
               'checkpoints': [], 'pickerOpens': 0,
               'cleanup': {'package': False, 'folder': False, 'hierarchy': False, 'flutterTool': False}}
     ledger = oracle.Ledger()
@@ -133,8 +135,11 @@ def drive(app, output):
                     need(time.monotonic() < deadline, 'checkpoint_timeout')
                     time.sleep(0.3)
                 if stage == 'app_ready':
-                    need(hashlib.sha256(apk.read_bytes()).hexdigest() == apk_hash, 'built_apk_changed')
+                    # flutter test uses a generated listener entrypoint and can rebuild the
+                    # APK. Bind the actual test binary, not the separate prebuild.
+                    apk_hash = hashlib.sha256(apk.read_bytes()).hexdigest()
                     installed_digest(apk_hash)
+                    report['apkSha256'] = apk_hash
                     picker.launcher = foreground()
                     need(picker.launcher and picker.launcher.split('/')[0] == PACKAGE, 'foreground_unconfirmed')
                     report['installedHashMatched'] = True
@@ -196,6 +201,8 @@ def drive(app, output):
             except subprocess.TimeoutExpired:
                 raise GuiFailure('flutter_exit_timeout') from None
             need(code == 0, 'flutter_test_failed')
+            need(apk_hash is not None and hashlib.sha256(apk.read_bytes()).hexdigest() == apk_hash,
+                 'built_apk_changed')
             report['status'] = 'passed'
         report['cleanup']['flutterTool'] = True
     except SystemImeFailure as error:

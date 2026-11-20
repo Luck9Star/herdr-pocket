@@ -97,7 +97,7 @@ Flutter 平台流与节点 GUI 随后在 `d6c4285` 接入，两套当前源码�
 - [ ] **M0.5-07** 分清断开主机、离开网络/停用配置、删除身份的实际效果，不将停用统一解释为销毁原生节点；重叠地址须证明底层可定向到选定网络，否则拒绝该并发组合并改用显式切换。
   **待验证。** Android 受检会话在停用本网络后关闭，另一网沿原会话续输。物理网络下共享节点、删除身份与同址路由仍须分别取证，见 M2-02 至 M2-05。[隔离验收](65-dual-overlay-validation.md) · [Android 双网](67-android-dual-network-startup.md)
 - [ ] **M0.5-08** 与手机 A/B 并行做 Windows overlay 原生桥最小验证：当前 Dart 候选 `tailscale` 0.9.0 不支持 Windows，不能靠 UI 框架可构建跳过；Linux 验证系统凭据服务缺失/锁定时的行为，不回退明文。
-  **待验证。** Windows 的 EasyTier 桥已有编译、加载和离线流检查，overlay→SSH 待验。Linux 配对共享桥在独立 GNOME 服务及无服务对照中验证了锁定、缺失与临时集合的失败边界。正式软件包、实际桌面与代表性密钥环仍待逐项验证。 [Windows 原生桥](10-blocker-repair.md) · [Linux 密钥环证据](evidence/linux-pairing-secret-service-20261120/README.md)
+  **待验证。** Windows 的 EasyTier 桥已有编译、加载和离线流检查，overlay→SSH 待验。Linux 配对共享桥在独立 GNOME 服务及无服务对照中验证了锁定、缺失与临时集合的失败边界。两壳官方 Linux 测试包和隔离单主机配对已验，其他密钥环、实际用户桌面和跨网待验。 [Windows 原生桥](10-blocker-repair.md) · [Linux 密钥环证据](evidence/linux-pairing-secret-service-20261120/README.md)
 - [ ] **M0.5-09** 按衍生改动继续开源的立场核清候选组件许可与分发条件，再用相同五端 IME、ANSI 与性能用例比较；通过前不锁定组件，也不把项目开源立场直接当作某个 GPL/AGPL 许可证已选定。
   **待验证。** 主许可证已有决定。依赖需按候选产物和渠道闭合，仍缺相同五端 IME、ANSI 和性能对照。[许可审查](17-license-and-distribution-review.md) · [候选对比](64-libghostty-terminal-core-evaluation.md)
 - [ ] **M0.5-10** 字体是终端选型必过项：固定纯 zsh、选定 Oh My Zsh 主题/Powerlevel10k、Oh My Posh 图标配置的五端 fixture，覆盖 Powerline/Git/PUA/CJK/emoji/组合字符、IME、光标列、换行、本地字号/观察视图 resize 与异步重绘；不接管远端 PTY，锁定字体版本与可再分发许可。
@@ -140,7 +140,7 @@ Flutter 平台流与节点 GUI 随后在 `d6c4285` 接入，两套当前源码�
 - [ ] **M1-11** 重连后重新同步状态与全量画面；目标退出或身份变化时关闭发送。
   **待验证。** Android 两壳受保护路径分批有隐藏后取新 full 的证据。服务重启、代际变化、实际切网和五端恢复仍须验证。[0011 / 0014](58-session-handoff-2026-11-09-r2.md) · [目标替换与旧帧](23-mobile-session-watch.md)
 - [ ] **M1-12** 本地凭据安全保存与删除入口，诊断日志脱敏。
-  **待验证。** Android API 35 模拟器有软件 KeyMint 签名与删除证据，macOS 有普通 SSH 安全输入专项。Linux 两壳接入用户已解锁的 Secret Service，私有 GNOME 服务已验共享桥的签名、跨进程原句柄复用和删除边界。锁定或未配置时保留原主机与句柄；未知写入不重放。Tauri ARM64 本机双进程已用原密钥重连受控 OpenSSH，锁定或服务消失时未再次认证。官方 Linux 配对、完整软件包、硬件密钥、五端存储删除和诊断脱敏仍按各平台验收。 [设备身份](55-mobile-shared-network-device.md) · [诊断](53-mobile-connection-diagnostics.md) · [Mac 安全输入](63-design-parity-and-direct-ssh.md) · [Linux 密钥环证据](evidence/linux-pairing-secret-service-20261120/README.md)
+  **待验证。** Android API 35 模拟器有软件 KeyMint 签名与删除证据，macOS 有普通 SSH 安全输入专项。Linux 两壳在私有 GNOME Secret Service 完成官方单主机配对及回环认证，Tauri 另以独立原生进程复用原密钥。Linux 测试包的两份许可与修改来源均已比对。共享桥已验锁定和不可用时拒绝操作，桌面双进程的两类正式负例待验。不同密钥环、硬件密钥、五端存储删除与诊断脱敏仍按平台验收。 [设备身份](55-mobile-shared-network-device.md) · [诊断](53-mobile-connection-diagnostics.md) · [Mac 安全输入](63-design-parity-and-direct-ssh.md) · [Linux 密钥环证据](evidence/linux-pairing-secret-service-20261120/README.md)
 
 验收：手机新用户无需桌面 GUI 也能扫码接入，畸形资料与错配/过期/已完成响应被拒，手动兜底可用；扫码后所需入网/授权步骤明确，实际 SSH 认证成功才计配对完成。五端加密迁移在错误口令/篡改/冲突下不部分导入或自动信任。再通过首连、逐键/TUI、草稿/粘贴、多标签、模式切换、目标变化和恢复；手机辅助与桌面分屏不串目标。保存实际输入及反馈，证明主机、session、目标和内容一致。逐键中断不积压，未知不重放；未通过的平台记录实验或未支持。
 

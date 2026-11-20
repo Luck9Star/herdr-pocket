@@ -132,7 +132,11 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   void rememberPemHeight() { pemEditorHeight = pemLayoutKey.currentContext?.size?.height ?? pemEditorHeight; }
   void credentialsChanged() { rememberPemHeight(); cancelKeyPaste(); if (mounted) setState(() {}); }
   void pemFocusChanged() { if (mounted) { rememberPemHeight(); setState(() { editingPem = pemFocus.hasFocus; }); } }
-  void blurPemForNativePassphrase() { if (pemFocus.hasFocus) pemFocus.unfocus(); }
+  bool blurPemForNativePassphrase() {
+    if (!pemFocus.hasFocus) return false;
+    pemFocus.unfocus();
+    return true;
+  }
   void editPem() {
     setState(() { editingPem = true; });
     WidgetsBinding.instance.addPostFrameCallback((_) {

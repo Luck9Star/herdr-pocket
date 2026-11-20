@@ -7,6 +7,8 @@ final class SecureProbeMessenger: NSObject, FlutterBinaryMessenger {
     var last: FlutterMethodCall?
     var changedEvents = 0
     var focusEvents: [FlutterMethodCall] = []
+    var holdFocusReply = false
+    var focusReply: FlutterBinaryReply?
     private let codec = FlutterStandardMethodCodec.sharedInstance()
     private var nextConnection: Int64 = 0
     private var connections: [Int64: String] = [:]
@@ -18,7 +20,16 @@ final class SecureProbeMessenger: NSObject, FlutterBinaryMessenger {
     }
     func send(onChannel channel: String, message: Data?, binaryReply callback: FlutterBinaryReply?) {
         send(onChannel: channel, message: message)
-        callback?(codec.encodeSuccessEnvelope(nil))
+        if holdFocusReply, let message, codec.decodeMethodCall(message).method == "focused" {
+            focusReply = callback
+        } else {
+            callback?(codec.encodeSuccessEnvelope(nil))
+        }
+    }
+    func acknowledgeFocus() {
+        let reply = focusReply
+        focusReply = nil
+        reply?(codec.encodeSuccessEnvelope(nil))
     }
     func setMessageHandlerOnChannel(_ channel: String, binaryMessageHandler handler: FlutterBinaryMessageHandler?) -> Int64 {
         nextConnection += 1
@@ -38,7 +49,11 @@ final class SecureProbeMessenger: NSObject, FlutterBinaryMessenger {
     }
 }
 
-final class SecureProbeWindow: NSWindow {
+final class SecureProbeRenderView: NSView {
+    override var acceptsFirstResponder: Bool { true }
+}
+
+final class SecureProbeWindow: HerdrSecureCredentialWindow {
     override func accessibilityChildren() -> [Any]? {
         herdrSecureAccessibilityChildren(window: self, preserving: super.accessibilityChildren())
     }
@@ -86,6 +101,11 @@ struct SecureCredentialViewProbe {
         let window = SecureProbeWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 240),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
+        let renderer = SecureProbeRenderView(frame: .zero)
+        let controller = NSViewController()
+        controller.view = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 240))
+        controller.view.addSubview(renderer)
+        window.contentViewController = controller
         field.frame = NSRect(x: 20, y: 120, width: 340, height: 40)
         let ordinary = NSTextField(frame: NSRect(x: 20, y: 40, width: 340, height: 40))
         let publicMarker = UUID().uuidString
@@ -124,9 +144,35 @@ struct SecureCredentialViewProbe {
         for _ in 0..<3 { _ = window.accessibilityChildren(); _ = field.accessibilityParent() }
         checks["windowQueriesPreserveFocus"] = window.firstResponder === editorBefore
         checks["windowQueriesDoNotPublishFocus"] = messenger.focusEvents.count == focusBeforeQueries
+        // The embedder can put a transient accessibility text field in
+        // front of the original rendering child while the PEM is focused.
+        let transient = NSView(frame: .zero)
+        controller.view.addSubview(transient, positioned: .below, relativeTo: renderer)
+        messenger.holdFocusReply = true
+        func beginHandoff() -> NSText? {
+            _ = window.makeFirstResponder(ordinary)
+            _ = window.makeFirstResponder(field)
+            RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+            return field.currentEditor()
+        }
+        let heldEditor = beginHandoff()
+        checks["pendingFlutterReturnPreservesNativeFocus"] = heldEditor != nil && messenger.focusReply != nil
+            && !window.makeFirstResponder(renderer) && window.firstResponder === heldEditor
+            && !window.makeFirstResponder(renderer) && window.firstResponder === heldEditor
+        _ = window.makeFirstResponder(ordinary)
+        let laterEditor = ordinary.currentEditor()
+        messenger.acknowledgeFocus()
+        checks["laterChosenEditorKeepsFocus"] = laterEditor != nil && window.firstResponder === laterEditor
+        let acknowledgedEditor = beginHandoff()
+        messenger.acknowledgeFocus()
+        checks["finishedHandoffAllowsRendererFocus"] = acknowledgedEditor != nil
+            && window.makeFirstResponder(renderer) && window.firstResponder === renderer
+        messenger.holdFocusReply = false
+        _ = window.makeFirstResponder(field)
+        let editorAfterHandoff = window.firstResponder
         sync(2, text: "")
         sync(3)
-        checks["emptySyncPreservesFocus"] = window.firstResponder === editorBefore && field.currentEditor() != nil
+        checks["emptySyncPreservesFocus"] = window.firstResponder === editorAfterHandoff && field.currentEditor() != nil
         let parts = [UUID().uuidString, "合成", UUID().uuidString]
         let secret = parts.joined()
         if let editor = field.currentEditor() as? NSTextView {

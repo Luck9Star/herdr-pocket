@@ -85,11 +85,8 @@ void main() {
       (calls[id]!.lastWhere((c) => c.method == 'sync').arguments
               as Map)['revision']
           as int;
-  Future<void> nativeEvent(
-    WidgetTester tester,
-    int id,
-    MethodCall event,
-  ) async {
+  Future<void> sendNativeEvent(WidgetTester tester, int id, MethodCall event) {
+
     final done = Completer<void>();
     tester.binding.defaultBinaryMessenger.handlePlatformMessage(
       'herdr.pocket/secure-field/$id',
@@ -98,8 +95,13 @@ void main() {
         done.complete();
       },
     );
-    await done.future;
+    return done.future;
+  }
+
+  Future<void> nativeEvent(WidgetTester tester, int id, MethodCall event) async {
+    final result = sendNativeEvent(tester, id, event);
     await tester.pump();
+    await result;
   }
 
   Future<void> edit(WidgetTester tester, int id, int epoch, String text) =>
@@ -259,12 +261,16 @@ void main() {
             }),
           );
           expect(focus.hasPrimaryFocus, isTrue);
-          await nativeEvent(
+          var acknowledged = false;
+          final handoff = sendNativeEvent(
             tester,
             id,
             MethodCall('focused', {'revision': revision(id)}),
-          );
+          ).then((_) => acknowledged = true);
+          await tester.idle();
+          expect(acknowledged, isFalse);
           await tester.pumpAndSettle();
+          await handoff;
           expect(
             pem.evaluate().isEmpty,
             isTrue,

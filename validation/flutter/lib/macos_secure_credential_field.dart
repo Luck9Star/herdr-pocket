@@ -18,7 +18,8 @@ class MacosSecureCredentialField extends StatefulWidget {
   final String label, identifier;
   final bool enabled;
   final InputDecoration? decoration;
-  final VoidCallback? onNativeFocus;
+  /// Returns whether the previous Flutter editor was released.
+  final bool Function()? onNativeFocus;
   @override
   State<MacosSecureCredentialField> createState() =>
       _MacosSecureCredentialFieldState();
@@ -79,7 +80,11 @@ class _MacosSecureCredentialFieldState
       final args = call.arguments;
       if (args is! Map || args['revision'] != _revision) return;
       if (call.method == 'focused' && args.length == 1) {
-        widget.onNativeFocus?.call();
+        if (widget.onNativeFocus?.call() == true) {
+          // Let EditableText close its previous platform input connection
+          // before acknowledging the handoff to the native secure editor.
+          await WidgetsBinding.instance.endOfFrame;
+        }
         return;
       }
       if (call.method != 'changed' || args['text'] is! String) return;

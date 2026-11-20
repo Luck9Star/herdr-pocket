@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:herdr_flutter_probe/device_keys.dart';
 import 'package:herdr_flutter_probe/host_catalog.dart';
 import 'package:herdr_flutter_probe/network_profiles.dart';
 import 'package:herdr_flutter_probe/pairing.dart';
@@ -10,11 +12,13 @@ import 'remote_test_data.dart';
 class MemoryCatalogStorage implements HostCatalogStorage {
   String contents = '',revision = '';
   int writes = 0;
-  Completer<void>? beforeWrite, beforeRead;
+  Completer<void>? beforeWrite;
+  Completer<({String revision,String contents})>? nextRead;
   @override
   Future<({String revision,String contents})> load() async {
-    final pending = beforeRead;
-    if (pending != null) await pending.future;
+    final snapshot = nextRead;
+    nextRead = null;
+    if (snapshot != null) return snapshot.future;
     return (revision:revision,contents:contents);
   }
   @override
@@ -23,6 +27,21 @@ class MemoryCatalogStorage implements HostCatalogStorage {
     if (expected != revision) throw const RemoteFailure('catalog_conflict');
     this.contents = contents; revision = writes.toRadixString(16).padLeft(64,'0'); return revision;
   }
+}
+Future<LinuxPairingOperationLease> heldPairingLease() async {
+  const channel = MethodChannel('dev.herdr/host-catalog');
+  final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+  messenger.setMockMethodCallHandler(channel,(call) async {
+    if (call.method == 'acquirePairingLease') return 'fixture-lease';
+    if (call.method == 'releasePairingLease') return null;
+    fail('Unexpected catalog operation ${call.method}');
+  });
+  final lease = await LinuxPairingOperationLease.acquire();
+  addTearDown(() async {
+    if (lease.held) await lease.release();
+    messenger.setMockMethodCallHandler(channel,null);
+  });
+  return lease;
 }
 PendingDevicePairing catalogPairing({bool authorized = false}) {
   final config = fixtureConfig(), key = fixtureConfig()['expectedHostKey'] as String;
@@ -41,6 +60,7 @@ Future<HostProfile> saveCatalogProfile(HostCatalog catalog,{bool authorized = tr
   await catalog.recordCreatedHandle(p.handle); await catalog.completeCreation(bound); return bound;
 }
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   test('creation intent and key binding survive process restart; trust and live connection do not',() async {
     final disk = MemoryCatalogStorage();
     final first = HostCatalog(storage:disk,clock:() => 1000); await first.load();
@@ -124,7 +144,7 @@ void main() {
     await expectLater(active.update(profile.change(label:'Other',now:1000)),throwsA(isA<RemoteFailure>())); expect(disk.writes,count); active.dispose();
   });
   for (final outcome in ['unchanged','identity changed','network changed','read failed']) {
-    test('catalog refresh gates commands before checking frozen binding ($outcome)',() async {
+    test('leased pairing refresh gates commands before checking frozen binding ($outcome)',() async {
       final disk = MemoryCatalogStorage();
       final catalog = HostCatalog(storage:disk,clock:() => 1000);
       addTearDown(catalog.dispose);
@@ -135,9 +155,11 @@ void main() {
       final bound = host.change(networkProfileId:network.id,replaceNetwork:true,now:1000);
       await catalog.update(bound);
       final frozen = catalog.freezeNetwork(bound);
-      final pending = disk.beforeRead = Completer<void>();
-      final reading = catalog.load();
+      final lease = await heldPairingLease();
+      final pending = disk.nextRead = Completer();
+      final reading = catalog.loadForLinuxPairing(lease);
       expect(catalog.reading,isTrue);
+      expect(catalog.preservingPairingRead,isTrue);
       expect(frozen.stillCurrent(),isTrue);
       expect(frozen.canUseCommands,isFalse);
       expect(() => frozen.requireTransport(overlayReady:true),
@@ -155,11 +177,11 @@ void main() {
         if (outcome == 'network changed') {
           persisted['networkProfiles'] = [network.change(enabled:false).toJson()];
         }
-        disk.contents = jsonEncode(persisted);
-        pending.complete();
+        pending.complete((revision:disk.revision,contents:jsonEncode(persisted)));
       }
       await reading;
       expect(catalog.reading,isFalse);
+      expect(catalog.preservingPairingRead,isFalse);
       expect(frozen.stillCurrent(),outcome == 'unchanged');
       expect(frozen.canUseCommands,outcome != 'read failed');
       if (outcome != 'unchanged') {
@@ -167,6 +189,87 @@ void main() {
       }
     });
   }
+  test('ordinary reload supersedes a leased pairing read and discards its late snapshot',() async {
+    final disk = MemoryCatalogStorage();
+    final catalog = HostCatalog(storage:disk,clock:() => 1000);
+    addTearDown(catalog.dispose);
+    await catalog.load();
+    final host = await saveCatalogProfile(catalog);
+    final frozen = catalog.freezeNetwork(host);
+    final original = (revision:disk.revision,contents:disk.contents);
+    final lease = await heldPairingLease();
+    final first = disk.nextRead = Completer();
+    final pairingRead = catalog.loadForLinuxPairing(lease);
+    final pairingRevoked = expectLater(pairingRead,
+      throwsA(isA<RemoteFailure>().having((e) => e.code,'code','catalog_stale')));
+    expect(frozen.stillCurrent(),isTrue);
+
+    final second = disk.nextRead = Completer();
+    final normalRead = catalog.load();
+    expect(catalog.preservingPairingRead,isFalse);
+    expect(frozen.stillCurrent(),isFalse);
+    expect(frozen.canUseCommands,isFalse);
+    second.complete((revision:'',contents:''));
+    await normalRead;
+    expect(catalog.ready,isTrue);
+    expect(catalog.profiles,isEmpty);
+
+    first.complete(original);
+    await pairingRevoked;
+    expect(catalog.ready,isTrue);
+    expect(catalog.profiles,isEmpty);
+    expect(catalog.reading,isFalse);
+    expect(frozen.stillCurrent(),isFalse);
+  });
+  test('pairing cannot restore the old binding during a concurrent ordinary reload',() async {
+    final disk = MemoryCatalogStorage();
+    final catalog = HostCatalog(storage:disk,clock:() => 1000);
+    addTearDown(catalog.dispose);
+    await catalog.load();
+    final host = await saveCatalogProfile(catalog);
+    final frozen = catalog.freezeNetwork(host);
+    final lease = await heldPairingLease();
+    final first = disk.nextRead = Completer();
+    final normalRead = catalog.load();
+    final second = disk.nextRead = Completer();
+    final pairingRead = catalog.loadForLinuxPairing(lease);
+    expect(catalog.reading,isTrue);
+    expect(catalog.preservingPairingRead,isFalse);
+    expect(frozen.stillCurrent(),isFalse);
+    expect(frozen.canUseCommands,isFalse);
+
+    first.complete((revision:disk.revision,contents:disk.contents));
+    await normalRead;
+    expect(catalog.reading,isTrue);
+    expect(catalog.ready,isFalse);
+    expect(frozen.stillCurrent(),isFalse);
+    second.completeError(const RemoteFailure('catalog_unavailable'));
+    await pairingRead;
+    expect(catalog.reading,isFalse);
+    expect(catalog.profiles,isEmpty);
+    expect(frozen.stillCurrent(),isFalse);
+    expect(frozen.canUseCommands,isFalse);
+  });
+  test('released pairing lease cannot start or apply a catalog read',() async {
+    final disk = MemoryCatalogStorage();
+    final catalog = HostCatalog(storage:disk,clock:() => 1000);
+    addTearDown(catalog.dispose);
+    await catalog.load();
+    final host = await saveCatalogProfile(catalog);
+    final frozen = catalog.freezeNetwork(host);
+    final lease = await heldPairingLease();
+    final pending = disk.nextRead = Completer();
+    final refresh = catalog.loadForLinuxPairing(lease);
+    final refreshRevoked = expectLater(refresh,throwsA(isA<RemoteFailure>()));
+    expect(frozen.stillCurrent(),isTrue);
+    await lease.release();
+    expect(frozen.stillCurrent(),isFalse);
+    await expectLater(catalog.loadForLinuxPairing(lease),throwsA(isA<RemoteFailure>()));
+    pending.complete((revision:disk.revision,contents:disk.contents));
+    await refreshRevoked;
+    expect(catalog.ready,isFalse);
+    expect(catalog.profiles,isEmpty);
+  });
   test('a delayed profile snapshot cannot undo a newer local change',() async {
     final disk = MemoryCatalogStorage();
     final active = HostCatalog(storage:disk,clock:() => 1000); await active.load();

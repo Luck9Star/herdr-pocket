@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'device_keys.dart' show LinuxPairingOperationLease;
 import 'pairing.dart';
 import 'remote_adapter.dart';
 import 'network_profiles.dart';
@@ -207,19 +208,29 @@ class HostCatalog extends ChangeNotifier {
   bool get recoveringConfigImport => _recoveringConfigImport;
   bool _reading = false;
   bool get reading => _reading;
+  LinuxPairingOperationLease? _pairingReadLease;
+  bool get preservingPairingRead => !_disposed && _pairingReadLease?.held == true;
   bool _disposed = false;
   void _notify() { if (!_disposed) notifyListeners(); }
   @override
   void dispose() { _disposed = true; generation++; super.dispose(); }
   int generation = 0;
   Future<void> _tail = Future.value();
-  Future<void> load() async {
-    if (_disposed) return;
+  Future<void> load() async { await _load(); }
+  Future<void> loadForLinuxPairing(LinuxPairingOperationLease lease) async {
+    if (!lease.held) throw const RemoteFailure('pairing_operation_busy');
+    if (!await _load(pairingLease:lease) || !lease.held) throw const RemoteFailure('catalog_stale');
+  }
+  Future<bool> _load({LinuxPairingOperationLease? pairingLease}) async {
+    if (_disposed) return false;
     if (writing) throw const RemoteFailure('catalog_busy');
+    final preserve = ready || (preservingPairingRead && _pairingReadLease == pairingLease);
+    _pairingReadLease = preserve ? pairingLease : null;
     final ticket = ++generation; ready = false; _reading = true; _notify();
     try {
       final raw = await storage.load();
-      if (ticket != generation) return;
+      if (ticket != generation) return false;
+      if (pairingLease != null && !pairingLease.held) throw const RemoteFailure('catalog_stale');
       if (!RegExp(r'^(?:[a-f0-9]{64})?$').hasMatch(raw.revision) || (raw.contents.isEmpty != raw.revision.isEmpty)) throw const RemoteFailure('invalid_catalog');
       final loaded = <HostProfile>[],networks = <NetworkProfile>[];
       var loadedFontSize = 14;
@@ -268,7 +279,9 @@ class HostCatalog extends ChangeNotifier {
         }
       }
     }
-    if (ticket == generation) { _reading = false; _notify(); }
+    if (ticket != generation) return false;
+    _reading = false; _pairingReadLease = null; _notify();
+    return ticket == generation;
   }
   Future<void> _mutate(List<HostProfile> Function(List<HostProfile>) action,{Map<String,dynamic>? pending,bool replacePending=false,VoidCallback? beforeSave,Future<void> Function()? beforeSaveCheck,List<NetworkProfile> Function(List<NetworkProfile>)? networkAction,int? fontSize,bool configImport=false}) {
     final captured = generation;
@@ -407,8 +420,9 @@ class HostCatalog extends ChangeNotifier {
     final network = networkFor(host);
     final binding = jsonEncode({'networkProfileId':host.networkProfileId,'network':network?.toJson()});
     return NetworkConnectionBinding(network,() {
-      // A read in flight retains the last frozen binding. Commands still require ready.
-      if (_disposed || (!ready && !_reading && !_recoveringConfigImport)) return false;
+      // A paired transaction can retain the last frozen binding while it verifies storage.
+      // Commands still require a completed, valid read.
+      if (_disposed || (!ready && !preservingPairingRead && !_recoveringConfigImport)) return false;
       final current = profiles.where((p) => p.id == host.id && p.enabled && !p.retired).toList();
       if (current.length != 1 || current.single.requiresNetworkBinding || !sameHostTarget(current.single.target,host.target) ||
           !samePairingBinding(current.single,host)) return false;

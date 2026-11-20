@@ -202,7 +202,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
         if (widget.catalog == null) throw const RemoteFailure('catalog_unavailable');
         final originalProfile = savedProfile == null ? null : jsonEncode(savedProfile!.toJson());
         operationLease = await LinuxPairingOperationLease.acquire();
-        await widget.catalog!.load();
+        await widget.catalog!.loadForLinuxPairing(operationLease);
         if (!widget.catalog!.ready) throw const RemoteFailure('catalog_unavailable');
         if (!mounted || ticket != revision) return;
         if (originalProfile != null) {

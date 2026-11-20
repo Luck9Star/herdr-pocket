@@ -60,6 +60,8 @@ class LinuxPairingOperationLease {
   LinuxPairingOperationLease._(this.token);
   static const _channel = MethodChannel('dev.herdr/host-catalog');
   final String token;
+  bool _held = true;
+  bool get held => _held;
   static Future<LinuxPairingOperationLease> acquire() async {
     try {
       final token = await _channel.invokeMethod<String>('acquirePairingLease');
@@ -68,6 +70,7 @@ class LinuxPairingOperationLease {
     } catch (_) { throw const RemoteFailure('pairing_operation_busy'); }
   }
   Future<void> release() async {
+    _held = false;
     await _channel.invokeMethod<void>('releasePairingLease',{'token':token});
   }
 }

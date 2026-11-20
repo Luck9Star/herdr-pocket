@@ -1,0 +1,213 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-11-20",
+  "flutterAndroid": {
+    "R4": {
+      "runId": 44656082590,
+      "jobId": 136022521406,
+      "artifactId": 14594355431,
+      "sourceSha": "f91c31ee4596132e5fbca4053b47b12b786bb265",
+      "jobConclusion": "failure",
+      "zipBytes": 2717,
+      "zipSha256": "2695f25462abd978057cfe3d0442dc67b35e66d386ee68e93643bd2a62b0e4c5",
+      "reportFile": "documents-public/flutter-documents-roundtrip.json",
+      "reportSha256": "f7d8b59174b3712f5590cfa36c76231d44cdd89d540ad0dffa5860c4eb8c5d81",
+      "lastAcknowledgedCheckpoint": null,
+      "acknowledgedCheckpoints": 0,
+      "emulatorBootReady": true,
+      "emulatorExitCode": 0,
+      "emulatorSerialRemoved": true,
+      "status": "failed",
+      "stage": "app_ready",
+      "pickerOpens": 0,
+      "cleanup": {
+        "package": false,
+        "folder": false,
+        "hierarchy": false,
+        "flutterTool": false
+      },
+      "error": "installed_hash_mismatch"
+    },
+    "R5": {
+      "runId": 44658430687,
+      "jobId": 136030340149,
+      "artifactId": 14595450173,
+      "sourceSha": "a0bf5ce0308f5427de9207ada210dab608c4c653",
+      "jobConclusion": "failure",
+      "zipBytes": 3298,
+      "zipSha256": "b49e57af5eb4bb2b1ddadfa4197e93bbc13422cea8216bfac206c4c78cec8653",
+      "reportFile": "documents-public/flutter-documents-roundtrip.json",
+      "reportSha256": "5eeb6c8417823421315bbecd1f92d8fe1ece6c2116e8db1436f94c133b4fb236",
+      "lastAcknowledgedCheckpoint": "wrong_picker",
+      "acknowledgedCheckpoints": 9,
+      "emulatorBootReady": true,
+      "emulatorExitCode": 0,
+      "emulatorSerialRemoved": true,
+      "status": "failed",
+      "stage": "hide_wrong",
+      "pickerOpens": 3,
+      "cleanup": {
+        "package": true,
+        "folder": true,
+        "hierarchy": true,
+        "flutterTool": true
+      },
+      "error": "android_system_ime_show_unconfirmed",
+      "pickerStep": "app_foreground"
+    },
+    "R6": {
+      "runId": 44661678588,
+      "jobId": 136041152625,
+      "artifactId": 14595888745,
+      "sourceSha": "02d0ae7f655943e4b37f0bc4f43e94b08170db30",
+      "jobConclusion": "failure",
+      "zipBytes": 3372,
+      "zipSha256": "78124ba999ea6e7f1bd56f5d4c1bbb085e256e84956ca8eea387be95c39c5c5f",
+      "reportFile": "documents-public/flutter-documents-roundtrip.json",
+      "reportSha256": "95237f4a0db6cdeece40cf3bdc7a8cb2368a62d7731bf29de769b9a870ea266a",
+      "lastAcknowledgedCheckpoint": "wrong_done",
+      "acknowledgedCheckpoints": 11,
+      "emulatorBootReady": true,
+      "emulatorExitCode": 0,
+      "emulatorSerialRemoved": true,
+      "status": "failed",
+      "stage": "tampered_picker",
+      "pickerOpens": 4,
+      "cleanup": {
+        "package": true,
+        "folder": true,
+        "hierarchy": true,
+        "flutterTool": true
+      },
+      "error": "picker_target_unconfirmed",
+      "pickerStep": "open_file_row"
+    },
+    "R7": {
+      "runId": 44663450045,
+      "jobId": 136046961081,
+      "artifactId": 14596982282,
+      "sourceSha": "a71571e605c6850e8b6da2ecc9299714a6eb9a08",
+      "jobConclusion": "success",
+      "zipBytes": 3516,
+      "zipSha256": "7de52a1fa619f13335134b8f833d2bdc4e24ef1c979407b93891e648080e41ee",
+      "reportFile": "documents-public/flutter-documents-roundtrip.json",
+      "reportSha256": "8c13792224b3cf92b358695e5015a910f059050a8b49ae34396262647861b0e9",
+      "lastAcknowledgedCheckpoint": "apply_done",
+      "acknowledgedCheckpoints": 19,
+      "emulatorBootReady": true,
+      "emulatorExitCode": 0,
+      "emulatorSerialRemoved": true,
+      "status": "passed",
+      "stage": "apply_done",
+      "pickerOpens": 5,
+      "cleanup": {
+        "package": true,
+        "folder": true,
+        "hierarchy": true,
+        "flutterTool": true
+      },
+      "binary": {
+        "binary": "flutter-integration-test",
+        "executionMode": "flutter-test-vm-listener",
+        "prebuiltApkSha256": "185e6ab49a4ac65a4c0954f0047ec6ea070ad76fc09940211b4c087a194a37a5",
+        "apkSha256": "33c6aa9f7915dee4f57d3d4430079324147d9d87180d86eb9f18197a0ba1d472",
+        "installedHashMatched": true,
+        "installedApkBytes": 93730678,
+        "installedApkSha256": "33c6aa9f7915dee4f57d3d4430079324147d9d87180d86eb9f18197a0ba1d472"
+      },
+      "checkpoints": [
+        "app_ready",
+        "initial19",
+        "cancel_picker",
+        "cancel_done",
+        "hide_export",
+        "save_picker",
+        "export_done",
+        "control13",
+        "wrong_picker",
+        "hide_wrong",
+        "wrong_done",
+        "tampered_picker",
+        "hide_tampered",
+        "tampered_done",
+        "correct_picker",
+        "hide_correct",
+        "preview",
+        "apply_dispatch",
+        "apply_done"
+      ],
+      "emulator": {
+        "emulatorVersion": "Android emulator version 37.2.13.0 (build_id 16740729) (CL:N/A)",
+        "emulatorZipSha256": "cbc7c3cfb83220b8a0f9c513fdab557712e74d339ec19ddffa43f23350ae9bdd",
+        "systemImage": {
+          "Pkg.Revision": "9",
+          "AndroidVersion.ApiLevel": "35",
+          "SystemImage.Abi": "x86_64",
+          "SystemImage.TagId": "google_apis"
+        }
+      },
+      "imeOutcomes": {
+        "hide_export": "system_back",
+        "hide_wrong": "already_hidden",
+        "hide_tampered": "already_hidden",
+        "hide_correct": "already_hidden"
+      },
+      "archive": {
+        "bytes": 126,
+        "sha256": "bd22547829274270c05de573ae8f635cf4aeeed0a873597382ccfb2b91678bdc"
+      },
+      "tamperedFixture": {
+        "bytes": 126,
+        "sha256": "dc73f66968574aace1a981c36efeae0a709dd6e2f6d68853a2eafd7fe08c9996",
+        "exactOneByte": true,
+        "sourceUnchanged": true,
+        "scanRequested": true
+      },
+      "applyAuthorized": true,
+      "applyConfirmed": true,
+      "deviceScreenshots": 0
+    }
+  },
+  "tauriLinuxReplacement": {
+    "44649668455": {
+      "runId": 44649668455,
+      "jobId": 136001096650,
+      "artifactId": 14590124323,
+      "sourceSha": "5a85d5853d2019538d22c99e5a9063866fd1a419",
+      "jobConclusion": "success",
+      "zipBytes": 504014,
+      "zipSha256": "1a28e14af686de77bc6fcce0ee180cc5a36c80911c7a52fdf02c83efbf885406",
+      "status": "passed",
+      "innerHashesVerified": 11,
+      "checkpoints": {
+        "realFileImport": true,
+        "oldFrameRetained": true,
+        "oldConnectDisabled": true,
+        "oldTabManuallyClosed": true,
+        "survivorAdvancedOnOriginalConnection": true,
+        "peersClosedBeforeDriverExit": true,
+        "zeroPeerInputBytes": true
+      }
+    },
+    "44653580682": {
+      "runId": 44653580682,
+      "jobId": 136014197833,
+      "artifactId": 14593545077,
+      "sourceSha": "ab6ef07096698fdedf2bf9f70a980ed77c0121ce",
+      "jobConclusion": "success",
+      "zipBytes": 509648,
+      "zipSha256": "57f997a016111d9a7345ca2146660eb9ad21aa31c7cd8eb232bdab5bcf644ae1",
+      "status": "passed",
+      "innerHashesVerified": 11,
+      "checkpoints": {
+        "realFileImport": true,
+        "oldFrameRetained": true,
+        "oldConnectDisabled": true,
+        "oldTabManuallyClosed": true,
+        "survivorAdvancedOnOriginalConnection": true,
+        "peersClosedBeforeDriverExit": true,
+        "zeroPeerInputBytes": true
+      }
+    }
+  }
+}

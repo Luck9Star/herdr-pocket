@@ -1,0 +1,257 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "299f905fb1331c3657a49d47b275a1dee37e1a36",
+  "runs": {
+    "tauriGuardedS06": {
+      "run": 44692672804,
+      "attempt": 1,
+      "conclusion": "success",
+      "job": 136144597301,
+      "runnerImage": {
+        "imageOS": "ubuntu24",
+        "imageVersion": "20261111.370.1"
+      },
+      "openSshVersion": "OpenSSH_9.6p1 Ubuntu-3ubuntu13.20, OpenSSL 3.0.13 30 Jan 2024",
+      "fixture": {
+        "job": 136141969429,
+        "artifact": 14609083679,
+        "zipSha256": "d6f4348f0803ff544218c65497be8415da79568950ac2f42ebb1bb8f7afd4197",
+        "zipEntries": 5,
+        "crcVerified": true,
+        "verifiedFiles": {
+          "manifest.json": "12c129b2aaa0f4666ca615aeb8d08cbe5214c3fdcb302b59f387111894ec1b0d",
+          "herdr": "8cb39663b4e466006ffb0d68b5efe5be61701446b6c9877bf84cce2c0f762dbc",
+          "herdr-0.9.5-pocket-input.patch": "7f89a79677a456f024bd73555130861cd1b0b47e9d4d69f98d4e18ffc7f1ed8a",
+          "observer-input-modes.json": "0df59b8b8f9e26be4cc67e928ca69eab9d132d5efe9d9c7cb7dc085c32c7869f"
+        },
+        "upstreamSHA": "2ecf19a92fc3a7fff75b6ce3655ef04f4625ec01",
+        "sourceSHA": "299f905fb1331c3657a49d47b275a1dee37e1a36",
+        "sameProvenanceAsGuiManifest": true,
+        "readinessAndCapabilitySmokePassed": true
+      },
+      "report": {
+        "artifact": 14609916474,
+        "zipSha256": "c2b594d004092f3ab2456786c5525dd433937a435ba7893807befe801ae59f49",
+        "zipEntries": 14,
+        "crcVerified": true,
+        "checkedInnerSHA256SUMSEntries": 12,
+        "verifiedFiles": {
+          "manifest.json": "dc6d3634be99aafcd330473244f7143d27ca3f8c2f0134a6d6710b8578cb9c55",
+          "s06-tauri-first-direct-key.json": "cdacd3f744322a45646293bd241fc3f731b67cc55647279858c375c78fc2465d",
+          "s06-tauri-direct-resize.json": "f42666b67ca759fa2f6476d368133c75985dcdd3f86f609ede43ab0ef7315597",
+          "s06-tauri-direct-escape.json": "051362e537831b0c83a66941b4045556fa3a697af5bd3200cb16543dd34955f3",
+          "s06-tauri-peer-close.json": "a5408a1eaf1b01b8df41f3a983a3dad89fa151e0fec4c7b0032b9b7c964d5bf9",
+          "gtk-fonts.txt": "663ef7dfc6428cb80974631cb9d0e9a7aa2c0d7f64691caf8dbb2149f788c6c7"
+        },
+        "linuxKeyring": {
+          "publicKeysMatched": 2,
+          "sameKeyAuthenticated": true
+        },
+        "peerAuthenticationCounts": [
+          1,
+          1
+        ],
+        "originalTargetsPreserved": true,
+        "exactRemoteBytes": true,
+        "peerInputBytes": [
+          9,
+          1
+        ],
+        "peerInputBytesBeforeFirstKey": [
+          0,
+          0
+        ],
+        "peerInputBytesAfterFirstKey": [
+          0,
+          1
+        ],
+        "windowWidths": [
+          1440,
+          700,
+          1440
+        ],
+        "domFocusOwnerSamples": [
+          "panel-b",
+          "panel-b",
+          "panel-b"
+        ],
+        "aFixtureTicksAfterLayoutPause": [
+          182,
+          189
+        ],
+        "guardedDirectEscape": {
+          "trustedChordConsumed": true,
+          "domFocusMovedToA": true,
+          "selectedTargetStayedB": true,
+          "originalTargetsAndPeersPreserved": true,
+          "readOnlyAfterEscape": true,
+          "noExtraInputBytes": true
+        },
+        "peersClosedBeforeDriverExit": true,
+        "peerStatesAfterClosingA": [
+          {
+            "authenticationCount": 1,
+            "recognizedCloseCount": 1,
+            "resetCount": 0,
+            "socketState": "absent"
+          },
+          {
+            "authenticationCount": 1,
+            "recognizedCloseCount": 0,
+            "resetCount": 0,
+            "socketState": "established"
+          }
+        ],
+        "finalPeerStates": [
+          {
+            "authenticationCount": 1,
+            "recognizedCloseCount": 1,
+            "resetCount": 0,
+            "socketState": "absent"
+          },
+          {
+            "authenticationCount": 1,
+            "recognizedCloseCount": 1,
+            "resetCount": 0,
+            "socketState": "absent"
+          }
+        ],
+        "remotePty": [
+          {
+            "initialRows": 40,
+            "initialColumns": 119,
+            "rows": 40,
+            "columns": 119,
+            "changes": 0,
+            "samples": 883,
+            "elapsedMs": 44362,
+            "maxSampleGapMs": 107
+          },
+          {
+            "initialRows": 40,
+            "initialColumns": 119,
+            "rows": 40,
+            "columns": 119,
+            "changes": 0,
+            "samples": 877,
+            "elapsedMs": 44069,
+            "maxSampleGapMs": 117
+          }
+        ],
+        "revokedFixtureKeys": true,
+        "cleanup": {
+          "ownedProcessesStopped": true,
+          "ephemeralKeysRemoved": true,
+          "userAuthorizationFilesTouched": false,
+          "rawLogsUploaded": false
+        }
+      }
+    },
+    "tauriStockConfigReplacement": {
+      "run": 44692672712,
+      "attempt": 1,
+      "conclusion": "success",
+      "job": 136141971206,
+      "runnerImage": {
+        "imageOS": "ubuntu24",
+        "imageVersion": "20261111.370.1"
+      },
+      "openSshVersion": "OpenSSH_9.6p1 Ubuntu-3ubuntu13.20, OpenSSL 3.0.13 30 Jan 2024",
+      "artifact": 14609591448,
+      "zipSha256": "53480ae82ff71168b90f4c8e0288d13fecd2c83612f73c9cd6e171d23663aa77",
+      "zipEntries": 13,
+      "crcVerified": true,
+      "checkedInnerSHA256SUMSEntries": 11,
+      "verifiedFiles": {
+        "manifest.json": "679713f11217d6542745e1d607fa6cfbca31c14cf4f1a532e738ce6a809654ef",
+        "s06-tauri-import-replace.json": "43d1c0b84de00307e1eab0d3359cf3096b13cd64e9d9cb2b0fa24a3e34c736e9"
+      },
+      "linuxKeyring": {
+        "publicKeysMatched": 2,
+        "sameKeyAuthenticated": true
+      },
+      "exactRemoteBytes": true,
+      "peerInputBytes": [
+        0,
+        0
+      ],
+      "peerAuthenticationCounts": [
+        1,
+        1
+      ],
+      "realFileImport": true,
+      "oldFrameRetained": true,
+      "oldConnectDisabled": true,
+      "oldTabManuallyClosed": true,
+      "survivorAdvancedOnOriginalConnection": true,
+      "survivorVisibleTicks": {
+        "beforeResume": 283,
+        "afterResume": 315
+      },
+      "peersClosedBeforeDriverExit": true,
+      "peerStatesAfterApply": [
+        {
+          "authenticationCount": 1,
+          "recognizedCloseCount": 1,
+          "resetCount": 0
+        },
+        {
+          "authenticationCount": 1,
+          "recognizedCloseCount": 0,
+          "resetCount": 0
+        }
+      ],
+      "finalPeerStates": [
+        {
+          "authenticationCount": 1,
+          "recognizedCloseCount": 1,
+          "resetCount": 0
+        },
+        {
+          "authenticationCount": 1,
+          "recognizedCloseCount": 1,
+          "resetCount": 0
+        }
+      ],
+      "revokedFixtureKeys": true,
+      "cleanup": {
+        "ownedProcessesStopped": true,
+        "ephemeralKeysRemoved": true,
+        "userAuthorizationFilesTouched": false,
+        "rawLogsUploaded": false
+      }
+    },
+    "tauriLinuxBuild": {
+      "run": 44692672810,
+      "attempt": 1,
+      "conclusion": "success",
+      "job": 136141971219,
+      "runnerImage": {
+        "os": "Linux-7.0.0-1014-aws-x86_64-with-glibc2.39",
+        "architecture": "x86_64",
+        "imageVersion": "20261111.127.1",
+        "imageOS": "ubuntu24"
+      },
+      "artifact": 14610210750,
+      "zipSha256": "1a794971b88da86c4baea08ef82132785f8477f1cb9a9112c4518614bf9257e0",
+      "zipEntries": 70,
+      "crcVerified": true,
+      "checkedInnerSHA256SUMSEntries": 68,
+      "verifiedFiles": {
+        "build-manifest.json": "1f24c782c056ff4c3042cfba9031719cb0a9d0c0316414ee34ee3374ef77510f",
+        "herdr-pocket-tauri-probe_0.1.0_amd64.deb": "6b1abc1c1c2c267386f63a7a78b8b22ba31437951ecda800f758fe27aad07c39",
+        "browser-preview.zip": "e2598d95ba732c5e9a435b158dc994550ff43ee99f4c1f98e53337d4ffce589c"
+      },
+      "linuxPackagedNoticesMatchedSource": {
+        "usr/share/doc/herdr-pocket-tauri-probe/secret-service-5.1.0/LICENSE-MIT": "074585dbaf488db540c26f7b20f36053a157d7580bb1c390dc9f6afdb017c83a",
+        "usr/share/doc/herdr-pocket-tauri-probe/secret-service-5.1.0/LICENSE-APACHE": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+        "usr/share/doc/herdr-pocket-tauri-probe/secret-service-5.1.0/UPSTREAM": "bb87a220fbab51115ae5b36e920fe01dfd48de7ea207a18245be0e6355d480b5"
+      },
+      "outerSharedFilesMatchedSource": 59,
+      "browserPreviewSharedFilesMatchedSource": 61,
+      "buildOutcome": "success",
+      "deviceResult": "unverified",
+      "signing": "unsigned-test-only"
+    }
+  }
+}

@@ -185,6 +185,44 @@ test('stale native rejection does not revoke any tab or newly created lease', as
   } finally {globalThis.document=oldDocument;globalThis.window=oldWindow;}
 });
 
+test('a blocked replacement opens only the original pending identity after an explicit click', async()=>{
+  const panel=new FakeElement('section'),opener=new FakeElement('button');
+  const oldDocument=globalThis.document,oldWindow=globalThis.window;
+  globalThis.document={hidden:false,getElementById:id=>id==='config-transfer'?panel:opener,createElement:tag=>new FakeElement(tag),createTextNode:text=>new FakeElement('#text',text),addEventListener(){}};
+  globalThis.window={addEventListener(){}};
+  const target={username:'u',host:'fixture.invalid',port:22,session:'s'};
+  const hosts=[{id:'other',name:'同名主机',target,enabled:true},{id:'original',name:'旧主机',target,enabled:true}];
+  const stopped=[], reviewed=[], reads=[];
+  let applies=0;
+  const invoke=async(name,args)=>{
+    if(name==='config_document_platform')return 'webview';
+    if(name==='network_list')return {profiles:[]};
+    if(name==='config_preview')return {ticket:'t',activeHostIds:['original'],plan:{entries:[{index:0,host:{label:'new',provider:'system',target},sameLabelIndices:[],conflicts:hosts}]}};
+    if(name==='config_apply'){applies++;throw 'host_key_creation_pending';}
+    if(name==='pair_pending_status'){reads.push(args.hostId);if(args.hostId==='other')throw 'key_creation_pending';return true;}
+    throw Error(name);
+  };
+  try {
+    initConfigTransfer({native:true,invoke,getHosts:()=>hosts,refreshHosts:async()=>{},onApplied:async()=>assert.fail('must not apply'),onRevoked:event=>stopped.push(event),onReviewPending:id=>reviewed.push(id)});
+    const button=text=>panel.descendants().find(n=>n.tagName==='button' && n.textContent===text);
+    await opener.onclick();
+    const file=panel.descendants().find(n=>n.type==='file');
+    file.files=[{size:1,arrayBuffer:async()=>new Uint8Array([1]).buffer}];
+    file.onchange();
+    panel.descendants().find(n=>n.type==='password' && n.parent.textContent==='导入口令').value='fixture';
+    await button('解密并预览').onclick();
+    panel.descendants().find(n=>n.name==='config-choice-0' && n.value==='replace').onchange();
+    await button('确认应用所选操作').onclick();
+    assert.equal(applies,1);
+    assert.deepEqual(stopped,[]);
+    assert.deepEqual(reads,['other','original']);
+    assert.deepEqual(reviewed,[]);
+    assert.match(panel.querySelector('[role=status]').textContent,/导入未替换资料/);
+    button('打开原主机核对身份').onclick();
+    assert.deepEqual(reviewed,['original']);
+  } finally {globalThis.document=oldDocument;globalThis.window=oldWindow;}
+});
+
 test('native revoke matches only reviewed exact active leases and selected hosts',()=>{
   const snapshot=[{hostId:'a',tabId:'one',clientGeneration:3,nativeGeneration:7},{hostId:'a',tabId:'unconnected',clientGeneration:0,nativeGeneration:null},{hostId:'b',tabId:'other',clientGeneration:5,nativeGeneration:8}];
   const event={hostIds:['a','b'],tabs:[['one',3,7,'a'],['other',5,99,'b']]};

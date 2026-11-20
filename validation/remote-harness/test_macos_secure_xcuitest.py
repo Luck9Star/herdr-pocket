@@ -71,6 +71,7 @@ class ScaffoldTests(unittest.TestCase):
             self.assertIn('HPAX:H',dart);self.assertNotIn('a'*32,dart);self.assertNotIn('b'*32,dart)
             self.assertEqual(dart.count("if (desktop) Text('HPAX:H"),2)
             self.assertEqual(dart.count("Text('HPCLEAR:K${secret.text.isEmpty ? 1 : 0}P${passphrase.text.isEmpty ? 1 : 0}"),3)
+            self.assertIn('R${pemFocus.hasFocus ? 1 : 0}C${pemCollapsed ? 1 : 0}',dart)
             self.assertIn('HPKEY:K${secret.text == utf8.decode(base64.decode(',dart)
             self.assertIn(base64.b64encode(b'b'*32).decode(),dart)
             self.assertIn(base64.b64encode(json.loads(fixture.read_text())['privateKey'].encode()).decode(),dart)
@@ -109,7 +110,7 @@ class ScaffoldTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);fixture=root/'macos-secure-fixture';fixture.mkdir()
             allowed=['fixtureReadable','appLaunched','homepage','maskingHomepage','passwordHomepage','keyHomepage','returnHomepage','passwordFreshVerified','passwordAddressTyped','passwordPortCleared','passwordPortTyped','passwordUsernameTyped','keyFreshVerified','keyAddressTyped','keyPortCleared','keyPortTyped','keyUsernameTyped','ordinaryInputReadable','ordinarySentinelObserved','passwordSecureField','passwordHiddenFocused','passwordHiddenBlurred','maskingScanCompleted','passwordValuePresent','passphraseValuePresent',
-                     'passwordProbeTapped','passwordFingerprintDialog','fingerprintVerified','passwordConfirmAttempt','passwordConfirmed','passwordCredentialAttempt','passwordCredentialEntered','passwordConnectAttempt','sshConnected','disconnectedAndCleared','passphraseSecureField','encryptedKeyProbeTapped','encryptedKeyFingerprintDialog','encryptedKeyFingerprintVerified','keyConfirmAttempt','keyConfirmed','keyCredentialAttempt','pemPasteButtonTapped','keyCredentialEntered','keyConnectAttempt','encryptedKeyConnected','encryptedKeyDisconnectedAndCleared',
+                     'passwordProbeTapped','passwordFingerprintDialog','fingerprintVerified','passwordConfirmAttempt','passwordConfirmed','passwordCredentialAttempt','passwordCredentialEntered','passwordConnectAttempt','sshConnected','disconnectedAndCleared','passphraseSecureField','encryptedKeyProbeTapped','encryptedKeyFingerprintDialog','encryptedKeyFingerprintVerified','keyConfirmAttempt','keyConfirmed','keyCredentialAttempt','pemPasteButtonTapped','pemEditorFocused','pemCollapsedAfterNativeClick','pemReopenedExactFocused','pemCollapsedAgain','keyCredentialEntered','keyConnectAttempt','encryptedKeyConnected','encryptedKeyDisconnectedAndCleared',
                      'passphraseHiddenAfterFocusChanges','modeSwitchCleared','returnAndReopenCleared']
             good_peer={k:True for k in ('authAccepted','ptyRequested','shellRequested','sessionClosed','connectionsClosed')}
             (fixture/'facts.json').write_text(json.dumps({'password':good_peer,'encryptedKey':good_peer}))
@@ -159,6 +160,9 @@ class ScaffoldTests(unittest.TestCase):
             self.assertNotEqual(execute().returncode,0)
             report=json.loads(output.read_text());self.assertIn('timeout',report['failureCategories']);self.assertTrue(report['xcresultDetailsAvailable'])
             self.assertNotIn('synthetic credential',output.read_text())
+            for stage in ('pemEditorFocused', 'pemCollapsedAfterNativeClick', 'pemReopenedExactFocused', 'pemCollapsedAgain'):
+                log.write_text(good_log.replace('HP_XCUI_STAGE='+stage+'\n', ''))
+                self.assertNotEqual(execute().returncode,0);self.assertEqual(json.loads(output.read_text())['status'],'failed')
             del progress['returnAndReopenCleared'];log.write_text(cases+''.join('HP_XCUI_STAGE='+k+'\n' for k in progress))
             self.assertNotEqual(execute().returncode,0);self.assertEqual(json.loads(output.read_text())['status'],'failed')
             log.write_text(good_log)
@@ -229,7 +233,11 @@ class ScaffoldTests(unittest.TestCase):
         self.assertLess(key.index('clickFormButton(app, label: "粘贴私钥")'),key.index('app.typeText("q")'))
         self.assertLess(key.index('XCTAssertTrue(sentinelConfirmed'),key.index('app.typeText(phrase)'))
         self.assertIn('try inputMatches(app, index: 0)',key)
-        self.assertIn('clickNativeKeyPassphrase(app)',key)
+        self.assertEqual(key.count('clickNativeKeyPassphrase(app)'), 2)
+        self.assertLess(key.index('mark("pemEditorFocused")'), key.index('mark("pemCollapsedAfterNativeClick")'))
+        self.assertLess(key.index('mark("pemCollapsedAfterNativeClick")'), key.index('mark("pemReopenedExactFocused")'))
+        self.assertLess(key.index('mark("pemReopenedExactFocused")'), key.index('mark("pemCollapsedAgain")'))
+        self.assertLess(key.index('mark("pemCollapsedAgain")'), key.index('app.typeText("q")'))
         self.assertIn('keyPassphraseNativeClicked',swift)
         return_case=swift[swift.index('func testReturnAndReopen'): ]
         self.assertIn('field.click();app.typeText(password)',return_case)
@@ -285,10 +293,10 @@ class ScaffoldTests(unittest.TestCase):
         self.assertIn('retained?[0] == true && retained?[1] == true && retained?[3] == true && retained?[8] == false', helper)
         self.assertIn('XCTAssertFalse(try ordinaryValue(address) == sentinel', helper)
         self.assertLess(helper.index('tap(app, address)'), helper.index('trailing.click(forDuration:'))
-        self.assertLess(helper.index('trailing.click(forDuration:'), helper.index('address.typeText(sentinel)'))
-        self.assertEqual(helper.count('address.typeText(sentinel)'), 1)
+        self.assertLess(helper.index('trailing.click(forDuration:'), helper.index('app.typeText(sentinel)'))
+        self.assertEqual(helper.count('app.typeText(sentinel)'), 1)
         self.assertNotIn('XCUIKeyboardKey.delete', helper)
-        after_type = helper[helper.index('address.typeText(sentinel)'):]
+        after_type = helper[helper.index('app.typeText(sentinel)'):]
         self.assertNotIn('targetDiagnostics(', after_type)
         self.assertIn('seen = try ordinaryValue(address) == sentinel', after_type)
         self.assertIn('XCTAssertTrue(seen,', after_type)
@@ -322,7 +330,7 @@ class ScaffoldTests(unittest.TestCase):
         self.assertLess(key.index('diagnoseKeyInputs(app)'),key.index('connectByWindowCenter(app)'))
         self.assertIn('XCTAssertTrue(pasted?[0] == true && pasted?[1] == true',key)
         self.assertNotIn('pemKeyboardFallback',key)
-        diagnostics=swift[swift.index('private func diagnoseKeyInputs'):swift.index('private func ordinaryMetrics')]
+        diagnostics=swift[swift.index('private func diagnoseKeyInputs'):swift.index('private func pemEditorCount')]
         self.assertIn('HP_XCUI_KEYINPUT=visible:',diagnostics)
         self.assertIn('HPKEY:K([01])P([01])Q([01])',swift)
         self.assertIn('Date().addingTimeInterval(10)',diagnostics)

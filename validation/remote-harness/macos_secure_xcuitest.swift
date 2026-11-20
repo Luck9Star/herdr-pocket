@@ -222,10 +222,10 @@ final class SecureCredentialUITests: XCTestCase {
     }
 
     private func keyInputBits(_ app: XCUIApplication) throws -> [Bool]? {
-        let expression = try NSRegularExpression(pattern: "HPKEY:K([01])P([01])Q([01])E([01])L([01])T([01])")
+        let expression = try NSRegularExpression(pattern: "HPKEY:K([01])P([01])Q([01])E([01])L([01])T([01])R([01])C([01])")
         for field in try snapshotNodes(app).flatMap({ [$0.label, $0.value as? String ?? ""] }) {
             guard let match = expression.firstMatch(in: field, range: NSRange(field.startIndex..., in: field)) else { continue }
-            return (1...6).map { index in
+            return (1...8).map { index in
                 guard let range = Range(match.range(at: index), in: field) else { return false }
                 return field[range] == "1"
             }
@@ -252,10 +252,50 @@ final class SecureCredentialUITests: XCTestCase {
             if bits?[0] == true && bits?[1] == true { break }
             usleep(200_000)
         } while Date() < deadline
-        let values = bits ?? Array(repeating: false, count: 6)
+        let values = bits ?? Array(repeating: false, count: 8)
         print("HP_XCUI_KEYINPUT=visible:\(bits == nil ? 0 : 1),key:\(values[0] ? 1 : 0),passphrase:\(values[1] ? 1 : 0),sentinel:\(values[2] ? 1 : 0),empty:\(values[3] ? 1 : 0),length:\(values[4] ? 1 : 0),trimmed:\(values[5] ? 1 : 0)")
         fflush(stdout)
         return bits
+    }
+
+    private func pemEditorCount(_ app: XCUIApplication, _ privateKey: String) throws -> Int {
+        let marker = privateKey.components(separatedBy: "\n").first!
+        return try snapshotNodes(app).filter { node in
+            (node.elementType == .textField || node.elementType == .textView) &&
+            [node.label, node.value as? String ?? ""].contains { $0.contains(marker) }
+        }.count
+    }
+
+    private func verifyPemCollapsed(_ app: XCUIApplication, _ privateKey: String) throws {
+        let deadline = Date().addingTimeInterval(8)
+        repeat {
+            let summary = app.buttons.matching(NSPredicate(format: "label == %@", "已填写私钥 · 重新编辑"))
+            let bits = try keyInputBits(app)
+            let nodes = try snapshotNodes(app)
+            let parts = privateKey.components(separatedBy: "\n").filter { $0.count >= 20 }
+            let exposed = nodes.contains { node in
+                [node.label, node.identifier, node.value as? String ?? ""].contains { field in
+                    parts.contains { field.contains($0) }
+                }
+            }
+            if summary.count == 1 && stableHit(summary.firstMatch) &&
+                bits?[7] == true && !exposed { return }
+            usleep(100_000)
+        } while Date() < deadline
+        XCTFail("PEM collapse and unique summary unconfirmed")
+    }
+
+    private func openPemSummary(_ app: XCUIApplication, _ privateKey: String) throws {
+        try verifyPemCollapsed(app, privateKey)
+        clickFormButton(app, label: "已填写私钥 · 重新编辑")
+        let deadline = Date().addingTimeInterval(8)
+        repeat {
+            let bits = try keyInputBits(app)
+            let editors = try pemEditorCount(app, privateKey)
+            if bits?[0] == true && bits?[6] == true && bits?[7] == false && editors == 1 { return }
+            usleep(100_000)
+        } while Date() < deadline
+        XCTFail("PEM editor focus and draft unconfirmed")
     }
 
     private func ordinaryValues(_ nodes: [any XCUIElementSnapshot]) -> [String] {
@@ -299,7 +339,11 @@ final class SecureCredentialUITests: XCTestCase {
         XCTAssertTrue(stableHit(address) && window.frame.contains(trailing.screenPoint) &&
                       window.frame.contains(leading.screenPoint), "requested control is not hittable")
         trailing.click(forDuration: 0.05, thenDragTo: leading)
-        address.typeText(sentinel)
+        XCTAssertTrue(app.state == .runningForeground && stableHit(address) &&
+                      app.secureTextFields.count == 0, "ordinary input target changed")
+        // The Flutter AX proxy may not own AppKit keyboard focus; type once via
+        // the foreground app after the guarded mouse selection, then read back.
+        app.typeText(sentinel)
 
         let deadline = Date().addingTimeInterval(8)
         var seen = false
@@ -799,10 +843,19 @@ final class SecureCredentialUITests: XCTestCase {
         mark("pemPasteButtonTapped")
         XCTAssertTrue(try inputMatches(app, index: 0), "pasted key controller mismatch")
         mark("pemControllerConfirmed")
+        try openPemSummary(app, privateKey)
+        mark("pemEditorFocused")
+        clickNativeKeyPassphrase(app)
+        try verifyPemCollapsed(app, privateKey)
+        mark("pemCollapsedAfterNativeClick")
+        try openPemSummary(app, privateKey)
+        mark("pemReopenedExactFocused")
+        clickNativeKeyPassphrase(app)
+        try verifyPemCollapsed(app, privateKey)
+        mark("pemCollapsedAgain")
         let nativeCount = app.secureTextFields.matching(NSPredicate(format: "identifier == %@", "direct-passphrase")).count
         print("HP_XCUI_PASSFIELD=native:\(min(nativeCount,9)),groups:\(min(app.descendants(matching: .any).matching(identifier: passphraseLabel).count,9))")
         fflush(stdout)
-        clickNativeKeyPassphrase(app)
         app.typeText("q")
         let sentinelConfirmed = try inputMatches(app, index: 2)
         XCTAssertTrue(sentinelConfirmed, "passphrase focus sentinel mismatch")

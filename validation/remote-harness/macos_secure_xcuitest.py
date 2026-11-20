@@ -86,7 +86,7 @@ def prepare(app, fixture=None):
         phrase_encoded = base64.b64encode(config['passphrase'].encode()).decode()
         key_diagnostic = ("      if (desktop && keyAuth) Text('HPKEY:K${secret.text == utf8.decode(base64.decode(\"" + key_encoded +
                        "\")) ? 1 : 0}P${passphrase.text == utf8.decode(base64.decode(\"" + phrase_encoded +
-                       "\")) ? 1 : 0}Q${passphrase.text == 'q' ? 1 : 0}E${secret.text.isEmpty ? 1 : 0}L${secret.text.length == utf8.decode(base64.decode(\"" + key_encoded + "\")).length ? 1 : 0}T${secret.text.trimRight() == utf8.decode(base64.decode(\"" + key_encoded + "\")).trimRight() ? 1 : 0}', style: const TextStyle(fontSize: 1)),\n")
+                       "\")) ? 1 : 0}Q${passphrase.text == 'q' ? 1 : 0}E${secret.text.isEmpty ? 1 : 0}L${secret.text.length == utf8.decode(base64.decode(\"" + key_encoded + "\")).length ? 1 : 0}T${secret.text.trimRight() == utf8.decode(base64.decode(\"" + key_encoded + "\")).trimRight() ? 1 : 0}R${pemFocus.hasFocus ? 1 : 0}C${pemCollapsed ? 1 : 0}', style: const TextStyle(fontSize: 1)),\n")
         connect_point = '  Future<void> connect() async {'
         parse_point = '      final localSocket = await SSHSocket.connect('
         if dart_text.count(connect_point) != 1 or dart_text.count(parse_point) != 1:

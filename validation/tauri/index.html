@@ -248,6 +248,8 @@
 <label>设备名称<input id="pair-device" value="Pocket test" maxlength="48" spellcheck="false"></label>
 <label><input id="pair-target-review" type="checkbox"> 我已独立核对 SSH 用户名和预期主机公钥。</label>
 <button id="pair-create" type="button">创建设备公开请求</button>
+<button id="pair-pending-recover" type="button" hidden>核对并恢复原待处理身份</button>
+<button id="pair-pending-discard" type="button" hidden>放弃并删除原待处理身份</button>
 <label>公开配对请求<textarea id="pair-request" readonly rows="6" spellcheck="false"></textarea></label>
 <p id="pair-request-summary" class="remote-help" hidden></p>
 <div class="remote-actions"><button id="pair-request-copy" type="button" disabled>复制原始公开请求</button><button id="pair-request-select" type="button" disabled>手选公开请求</button></div>

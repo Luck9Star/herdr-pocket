@@ -26,6 +26,8 @@ const errors=Object.freeze({
   network_profile_disabled:'网络配置已停用；无法连接。',
   host_selection_changed:'主机资料已变化；请关闭此标签，重新核对主机、设备与路径。',
   pairing_missing:'此主机没有可用的设备配对；请恢复并核对原设备身份。',
+  key_locked:'系统密钥环已锁定；请解锁后重新审查原身份，不会更换设备密钥。',
+  key_missing:'原设备密钥不存在；主机资料保留，不会自动创建替代身份。',
   key_unavailable:'本机设备密钥不可用；请解锁设备并恢复原身份，不会自动创建替代身份。',
 });
 /** Native errors are untrusted: only exact public codes may reach the interface. */

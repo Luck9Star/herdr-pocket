@@ -70,7 +70,8 @@ fn cleanup_record(
         state
             .store
             .delete(&reference.handle)
-            .map_err(|_| "device_key_delete_unconfirmed")?;
+            .map_err(|e| match e { "key_locked" | "key_unavailable" | "key_missing" => e, _ => "device_key_delete_unconfirmed" })?;
+        state.store.clear_deleted_create(&reference.handle).map_err(|_| "key_cleanup_commit_unconfirmed")?;
         hosts
             .finish_key_cleanup(&ticket)
             .map_err(|_| "key_cleanup_commit_unconfirmed")?;
@@ -120,7 +121,8 @@ pub fn reset_current(
     state
         .store
         .delete(&handle)
-        .map_err(|_| "device_key_delete_unconfirmed")?;
+        .map_err(|e| match e { "key_locked" | "key_unavailable" | "key_missing" => e, _ => "device_key_delete_unconfirmed" })?;
+    state.store.clear_deleted_create(&handle).map_err(|_| "key_cleanup_commit_unconfirmed")?;
     if let Some(ticket) = ticket {
         hosts
             .finish_key_cleanup(&ticket)
@@ -262,7 +264,7 @@ mod tests {
         let fixture = Fixture::new();
         fixture.keys.fail_before.store(true, Ordering::SeqCst);
         assert!(
-            matches!(remove_host(&fixture.state,&fixture.hosts,&fixture.flow,&fixture.id),Err(e)if e=="device_key_delete_unconfirmed")
+            matches!(remove_host(&fixture.state,&fixture.hosts,&fixture.flow,&fixture.id),Err(e)if e=="key_unavailable")
         );
         fixture.pending();
         assert!(fixture.keys.public(&fixture.handle).is_ok());

@@ -25,7 +25,7 @@
 - 复跑来源：与最终源同套 `replay/replay_flutter_m105.py` + `Dockerfile.s06-m105`（命令见 `replay/REPLAY.md`）。
 
 
-## Tauri Linux 原生正式导入（主要证据，本地容器实机）
+## Tauri Linux 原生正式导入（主要证据，本地容器原生窗口）
 
 - 源码：`4541a805007d56c0eed2251c401638439a38b836`；本地隔离 Ubuntu 24.04 arm64 容器，原生 GTK/WebKit 应用直连 WebKitWebDriver，x86_64 stock herdr 经转译执行；同一 OpenSSH 监听、两个配对身份、两条独立认证连接（单 sshd 多身份，非多 sshd 实例）。真实 WebView 文件输入（`input type=file`，无系统 GTK 选择器参与）；测试身份为临时随机 ASCII 口令的进程内存注入身份。
 - 归档文件（`linux/`）：
@@ -36,7 +36,19 @@
   - `s06-tauri-import-old-retained.png`（A 旧标签保留最后画面，tick 199）
   - `s06-tauri-import-survivor-advanced.png`（B 在原连接上推进，tick 185→211）
 - 关键事实：`realFileImport`、`oldFrameRetained`、`oldConnectDisabled`、`oldTabManuallyClosed`、`survivorAdvancedOnOriginalConnection`、`peersClosedBeforeDriverExit` 全为 true。A 侧 1 次认证后导入触发 1 次认可关闭、0 reset；B 侧保持原认证（185→211 推进），最终两侧各 1 次认可关闭、0 reset、0 输入字节。
-- 边界：Ubuntu 24.04 arm64 容器为本地隔离环境；物理 IME/真实键盘输入未验证；非 BMP 自动输入读回存在丢字（见 `password-input.json`），以脱敏 JSON 呈现而非宣称通过。
+- 明确口径：以上为**本地容器桌面原生窗口验证**，非实体设备验证。
+
+## Tauri Linux M1-05 专项本地复放（源 `5a85d58`，待 PR54 引用）
+
+- 源码：`5a85d5853d2019538d22c99e5a9063866fd1a419`（与 `4541a80` 批同一本地 Ubuntu 24.04 arm64 容器、原生 GTK/WebKit 窗口 + WebKitWebDriver 直连拓扑）。专项 `testId` 为 `M1-05-tauri-real-ssh-config-replacement`，全程无 D2 字段（与早前 D2 系列探针无关）。默认 stock D2 回放同 SHA 独立通过（`native-stock-5a85d58`，本地目录不归档）。
+- 归档文件（`linux/r4-5a85d58/`）：
+  - `manifest.json`（`status: passed`，`milestone: M1-05-tauri-real-ssh-config-replacement`）
+  - `s06-tauri-import-replace.json`（导入替换专项账本）
+  - `s06-tauri-import-preview.png`（导入审查页）
+  - `s06-tauri-import-old-retained.png`（A 旧标签保留最后画面，tick 115）
+  - `s06-tauri-import-survivor-advanced.png`（B 在原连接上推进，tick 115→127）
+- 关键事实：`realFileImport`、`oldFrameRetained`、`oldConnectDisabled`、`oldTabManuallyClosed`、`survivorAdvancedOnOriginalConnection`、`peersClosedBeforeDriverExit`、`zeroPeerInputBytes` 全为 true。基线可见 tick `[[106,108],[110,112]]`；A 侧导入触发 1 次认可关闭/0 reset；B 侧保持原认证并在最终关闭时记 1 次认可关闭/0 reset；两侧输入字节为 0。
+- 截图与 `4541a80` 批内容等价（同为旧画面保留 + 幸存帧推进），该批已归档原图，本批仅归档账本/manifest/必要图并逐项 SHA 核验。
 ## Tauri WebKit 390×844（补充证据，模拟 IPC，最终源）
 
 - 源码：`ad0d70e384be5877b191840530cc179271ec210c`。
@@ -66,6 +78,6 @@
 
 - 已验证：真实回环下的替换行为（旧连接关闭、停重连、旧标签保留最后画面且不可输入、其他标签/连接不受影响、新目标须显式连接）；Tauri 模拟链路的保留/可达/恢复与单次 native stop。
 - 未验证：真机、跨网、五端文件提供方、原生文件选择器、连续长时间活动 SSH、系统读屏；五端逐端覆盖未完成。
-- Tauri Linux 正式导入：本地容器原生 GTK/WebKit 实机验证通过（见上文「Tauri Linux 原生正式导入」与 `linux/` 归档）。官方云 Linux x86 路径：R1（run `44640288215`，工件 `14587227607`）首台设备空看板错误；R2（run `44644564603`，工件 `14589381339`）首台配对已过但输入焦点 stale；R3（run `44647186980`，工件 `14589018074`）停在 wide_before 缩放检查——R2/R3 均未执行导入，失败结论保留；PR54 草稿已开，Linux 专项独立 R4 将更新。
+- Tauri Linux 正式导入：本地容器原生 GTK/WebKit 本地原生窗口验证通过（见上文「Tauri Linux 原生正式导入」与 `linux/` 归档；源 `5a85d58` 专项复放见 `linux/r4-5a85d58/`）。官方云 Linux x86 路径：R1（run `44640288215`，工件 `14587227607`）首台设备空看板错误；R2（run `44644564603`，工件 `14589381339`）首台配对已过但输入焦点 stale；R3（run `44647186980`，工件 `14589018074`）停在 wide_before 缩放检查——R2/R3 均未执行导入，失败结论保留；独立 R4（run `44649668455`）正在运行，**待验**；PR54 草稿引用上述可发布归档。
 
 哈希见 [SHA256SUMS](SHA256SUMS)。

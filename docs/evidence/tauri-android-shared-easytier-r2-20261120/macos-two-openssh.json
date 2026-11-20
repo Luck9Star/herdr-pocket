@@ -1,0 +1,51 @@
+{
+  "scope": "macOS local TCP transport, two independently running OpenSSH/herdr fixtures",
+  "sourceSHA": "9916e5a2de80c040cfc656ef4f21280e5a1fb996",
+  "checkpoints": {
+    "both_open": {
+      "a": {
+        "approvedSessions": 1,
+        "active": true,
+        "peerClose": "unconfirmed",
+        "capturedBytes": 0
+      },
+      "b": {
+        "approvedSessions": 1,
+        "active": true,
+        "peerClose": "unconfirmed",
+        "capturedBytes": 0
+      }
+    },
+    "a_closed_b_advanced": {
+      "a": {
+        "approvedSessions": 1,
+        "active": false,
+        "peerClose": "client_disconnect",
+        "capturedBytes": 0
+      },
+      "b": {
+        "approvedSessions": 1,
+        "active": true,
+        "peerClose": "unconfirmed",
+        "capturedBytes": 0
+      }
+    },
+    "both_closed": {
+      "a": {
+        "approvedSessions": 1,
+        "active": false,
+        "peerClose": "client_disconnect",
+        "capturedBytes": 0
+      },
+      "b": {
+        "approvedSessions": 1,
+        "active": false,
+        "peerClose": "client_disconnect",
+        "capturedBytes": 0
+      }
+    }
+  },
+  "fixtureProcessesExited": true,
+  "temporaryHostMaterialRemoved": true,
+  "status": "passed"
+}

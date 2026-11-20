@@ -1,0 +1,11 @@
+[package]
+name = "local-two-sshd-close-probe"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+herdr-readonly-transport = { path = "validation/transport-rust" }
+tokio = { version = "=1.54.1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+
+[patch.crates-io]
+russh = { path = "validation/vendor/russh-0.65.0" }

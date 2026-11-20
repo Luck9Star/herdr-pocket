@@ -5,9 +5,9 @@ import json
 import re
 import subprocess
 
-from PIL import ImageGrab
+from PIL import Image, ImageGrab, ImageOps
 
-from flutter_linux_stock_ui import StockWindow, accessibility
+from flutter_linux_stock_ui import StockWindow, accessibility, unique_match
 from linux_pairing_keyring import KeyringFailure
 from paired_gui import GuiFailure, bounded_wire, fixture_terminal_id, owned_process, wait_for
 from tauri_linux_pairing_restart import no_keyring_writes, require_peers
@@ -16,6 +16,11 @@ from tauri_linux_pairing_restart import no_keyring_writes, require_peers
 TARGET_FIELDS = ('host', 'port', 'username', 'session', 'socketPath', 'herdrPath', 'expectedHostKey')
 APP = 'herdr_flutter_probe'
 PAIR_CONNECT = '主动审查连接并读取看板'
+OBSERVE_MODE = '观察模式 · 不发送远端按键'
+# Frozen terminal background from validation/shared/design-tokens-v2.json.
+TERM_BG = (11, 15, 23)
+FIXTURE_MARKER = re.compile(r'(?i)isolated\s+ssh\s+fixture\.\s+remote\s+input\s+must\s+remain\s+empty\.')
+FIXTURE_TICK = re.compile(r'(?i)synthetic\s+observe\s+tick\s+([0-9]{6})\b')
 DENIAL_NOTICES = {
     'locked': '系统密钥环已锁定 · 请解锁后核验原设备身份。主机资料及原引用已保留。',
     'unavailable': '系统密钥环服务不可用 · 请配置 Secret Service 后核验原设备身份。主机资料及原引用已保留。',
@@ -46,8 +51,8 @@ def catalog_reference(path, config, request):
 
 
 def observed_tick(text):
-    markers = re.findall(r'(?i)isolated\s+ssh\s+fixture\.\s+remote\s+input\s+must\s+remain\s+empty\.', text)
-    matches = re.findall(r'(?i)synthetic\s+observe\s+tick\s+([0-9]{6})\b', text)
+    markers = FIXTURE_MARKER.findall(text)
+    matches = FIXTURE_TICK.findall(text)
     return int(matches[0]) if len(markers) == len(matches) == 1 else None
 
 
@@ -61,17 +66,115 @@ def capture_window(ui):
     return pixels, png.getvalue()
 
 
-def png_observation(ui):
-    pixels, png = capture_window(ui)
-    # The original capture is left unchanged; OCR uses a temporary 2× image.
+def terminal_region(pixels):
+    width, height = pixels.size
+    if pixels.mode != 'RGB':
+        pixels = pixels.convert('RGB')
+    data = pixels.load()
+    columns = [width * fraction // 8 for fraction in (3, 4, 5)]
+    top = 0
+    bands = []
+    for y in range(height + 1):
+        if y < height and sum(data[x, y] == TERM_BG for x in columns) >= 2:
+            continue
+        if y - top >= 120:
+            bands.append((top, y))
+        top = y + 1
+    if len(bands) != 1:
+        return None
+    top, bottom = bands[0]
+    middle = (top + bottom) // 2
+    dark = [x for x in range(width) if data[x, middle] == TERM_BG]
+    return (dark[0], top, dark[-1] + 1, bottom) if dark and dark[-1] - dark[0] >= 240 else None
+
+
+def terminal_ocr(pixels, region):
+    # Only memory copies are cropped, inverted or scaled. Success retains the original PNG.
+    canvas = ImageOps.invert(ImageOps.grayscale(pixels.crop(region)))
     enlarged = io.BytesIO()
-    pixels.resize((pixels.width * 2, pixels.height * 2)).save(enlarged, format='PNG')
-    result = subprocess.run(['tesseract', 'stdin', 'stdout', '-l', 'eng', '--psm', '11'],
+    canvas.resize((canvas.width * 2, canvas.height * 2), Image.Resampling.LANCZOS).save(enlarged, format='PNG')
+    # A terminal is a text block. Sparse mode split the fixture sentence and dropped periods.
+    result = subprocess.run(['tesseract', 'stdin', 'stdout', '-l', 'eng', '--psm', '6'],
                             input=enlarged.getvalue(), capture_output=True, timeout=12, check=True)
-    return observed_tick(result.stdout.decode(errors='replace')), png
+    return result.stdout.decode(errors='replace')
 
 
-def observe(ui, approval, terminals, count):
+def observe_pixels(ui, config, count, output):
+    expected_title = config['session'] + ' · 远端终端'
+    expected_terminal = config['session'] + ' / ' + config['paneId']
+    window = ui.window()
+    diagnostic = {'schemaVersion': 1, 'peer': count, 'samples': 0, 'selectedPaneVisible': False,
+                  'sessionTitleVisible': False, 'terminalHeaderVisible': False, 'readOnlyModeVisible': False,
+                  'terminalRegion': None, 'windowSize': [window.width, window.height],
+                  'exactMarkerSeen': False, 'exactTickSeen': False}
+    last_canvas = None
+    bottom_clipped = False
+
+    def sample():
+        nonlocal last_canvas, bottom_clipped
+        bottom_clipped = False
+        ui.check_focus()
+        nodes = ui.visible()
+        selected = unique_match(nodes, '已选目标 · 只读') is not None
+        title = unique_match(nodes, expected_title) is not None
+        header = unique_match(nodes, expected_terminal) is not None
+        read_only = unique_match(nodes, OBSERVE_MODE) is not None
+        diagnostic['samples'] += 1
+        diagnostic['selectedPaneVisible'] |= selected
+        diagnostic['sessionTitleVisible'] |= title
+        diagnostic['terminalHeaderVisible'] |= header
+        diagnostic['readOnlyModeVisible'] |= read_only
+        if not (title and header and read_only):
+            return None
+        image, original = capture_window(ui)
+        diagnostic['windowSize'] = image.size
+        region = terminal_region(image)
+        if region is None:
+            return None
+        bottom_clipped = region[3] >= image.height - 1
+        diagnostic['terminalRegion'] = region
+        last_canvas = image.crop(region)
+        try:
+            text = terminal_ocr(image, region)
+        except (OSError, subprocess.SubprocessError):
+            raise GuiFailure('stock_flutter_observation_ocr_failed') from None
+        diagnostic['exactMarkerSeen'] |= len(FIXTURE_MARKER.findall(text)) == 1
+        diagnostic['exactTickSeen'] |= len(FIXTURE_TICK.findall(text)) == 1
+        tick = observed_tick(text)
+        return (tick, original) if tick is not None else None
+
+    def fail(code):
+        output.mkdir(exist_ok=True)
+        if last_canvas is not None:
+            # Export only the rendered terminal region of the pinned fixture view.
+            last_canvas.save(output / f'stock-peer-{count}-terminal-crop.png', format='PNG')
+        (output / f'stock-peer-{count}-observation.json').write_text(json.dumps(diagnostic, indent=2) + '\n')
+        raise GuiFailure(code)
+
+    def initial():
+        candidate = sample()
+        if candidate is None and diagnostic['samples'] <= 10:
+            if bottom_clipped:
+                ui.scroll('down', outer=True, steps=1)
+            else:
+                ui.scroll('up', outer=True)
+        return candidate
+
+    def later():
+        candidate = sample()
+        return candidate[1] if candidate is not None and candidate[0] > first[0] else None
+
+    try:
+        first = wait_for(initial, 'stock_flutter_observation_pixels_missing', timeout=20)
+        return first[1], wait_for(later, 'stock_flutter_observation_pixels_unchanged', timeout=22)
+    except GuiFailure as error:
+        if str(error) not in {'stock_flutter_observation_pixels_missing', 'stock_flutter_observation_pixels_unchanged',
+                              'stock_flutter_observation_ocr_failed'}:
+            raise
+        fail(str(error))
+
+
+def observe(ui, approval, terminals, count, config, output):
     ui.tap('stock_flutter_pair_connect_missing', PAIR_CONNECT, scroll='down')
     ui.tap('stock_flutter_review_missing', '我已通过可信渠道核验主机公钥、账号与目标资料', scroll='down', prefixes=True)
     ui.tap('stock_flutter_connect_missing', '核验并读取会话看板', scroll='down')
@@ -80,22 +183,7 @@ def observe(ui, approval, terminals, count):
     wait_for(lambda: any(terminals in name.splitlines() for _, name in ui.visible()),
              'stock_flutter_pane_binding_missing', timeout=25)
     ui.tap('stock_flutter_observe_missing', '选择此 pane 观察', scroll='down')
-    # Bring the rendered terminal into view using real scroll-wheel events.
-    tick = None
-    for _ in range(11):
-        first, png = png_observation(ui)
-        if first is not None:
-            tick = first
-            break
-        ui.scroll('up')
-    if tick is None:
-        raise GuiFailure('stock_flutter_observation_pixels_missing')
-
-    def later():
-        second, candidate = png_observation(ui)
-        return candidate if second is not None and second > tick else None
-    new_png = wait_for(later, 'stock_flutter_observation_pixels_unchanged', timeout=22)
-    return png, new_png
+    return observe_pixels(ui, config, count, output)
 
 
 def stop(ui, approval, count):
@@ -137,7 +225,7 @@ def denial_screens(ui, mode):
     return {'stock-second-denial-notice.png': notice_png, 'stock-second-denial-connect.png': connect_png}
 
 
-def reopen(binary, root, env, atspi, glib, first, config, before, approval, targets, *, mode='off'):
+def reopen(binary, root, env, atspi, glib, first, config, before, approval, targets, output, *, mode='off'):
     with owned_process([str(binary)], cwd=root, env=env, log=root / 'stock-second.log') as second:
         if first.returncode != 0 or second.pid == first.pid:
             raise GuiFailure('stock_flutter_independent_process_unverified')
@@ -149,7 +237,7 @@ def reopen(binary, root, env, atspi, glib, first, config, before, approval, targ
             ui.find('stock_flutter_original_device_unverified', '本机原身份已匹配 · 请核验主机指纹后主动审查连接')
             if not require_peers(approval, 1, all_closed=True):
                 raise GuiFailure('stock_flutter_ssh_before_explicit_review')
-            first_png, later_png = observe(ui, approval, targets, 2)
+            first_png, later_png = observe(ui, approval, targets, 2, config, output)
             stop(ui, approval, 2)
             screens = {'stock-second-before.png': first_png, 'stock-second-after.png': later_png}
         else:
@@ -174,7 +262,7 @@ def run_stock(args, root, env, config, approval):
             ui = StockWindow(first, atspi, glib)
             request = enroll(ui, config, approval)
             before = catalog_reference(catalog, config, request)
-            initial = observe(ui, approval, targets, 1)
+            initial = observe(ui, approval, targets, 1, config, args.output)
             authorized = bounded_wire(root / 'authorized_keys', 4096)
             stop(ui, approval, 1)
             with no_keyring_writes(approval, root, env):
@@ -182,13 +270,13 @@ def run_stock(args, root, env, config, approval):
                 if catalog_reference(catalog, config, request) != before:
                     raise GuiFailure('stock_flutter_catalog_changed_on_exit')
                 if mode == 'off':
-                    restored = reopen(binary, root, env, atspi, glib, first, config, before, approval, targets)
+                    restored = reopen(binary, root, env, atspi, glib, first, config, before, approval, targets, args.output)
             if mode != 'off':
                 from linux_pairing_keyring import denied_service
                 original = bounded_wire(catalog, 262144)
                 with denied_service(approval.keyring, mode) as require_denied:
                     with no_keyring_writes(approval, root, env, service_available=False):
-                        restored = reopen(binary, root, env, atspi, glib, first, config, before, approval, targets, mode=mode)
+                        restored = reopen(binary, root, env, atspi, glib, first, config, before, approval, targets, args.output, mode=mode)
                         require_denied()
                 if bounded_wire(catalog, 262144) != original:
                     raise GuiFailure('stock_flutter_denial_catalog_changed')

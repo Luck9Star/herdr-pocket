@@ -174,10 +174,12 @@ class StockWindow:
         except self.glib.Error:
             return []  # A GTK layout may retire nodes during passive enumeration.
 
-    def scroll(self, direction):
+    def scroll(self, direction, *, outer=False, steps=4):
         box = self.window()
-        self.xdo('mousemove', box.x + box.width // 2, box.y + box.height // 2,
-                 'click', '--repeat', 4, 5 if direction == 'down' else 4)
+        # The remote body's 16px side padding excludes its nested terminal viewport.
+        x = 8 if outer else box.width // 2
+        self.xdo('mousemove', box.x + x, box.y + box.height // 2,
+                 'click', '--repeat', steps, 5 if direction == 'down' else 4)
         time.sleep(0.18)
 
     def find(self, stage, name, *, scroll=None, prefixes=False):

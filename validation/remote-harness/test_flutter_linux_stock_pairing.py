@@ -11,8 +11,10 @@ from flutter_linux_stock_ui import StockWindow, ancestor_labels, geometry, uniqu
 from paired_gui import GuiFailure
 
 if os.name != 'nt':
+    from PIL import Image, ImageDraw
     from flutter_linux_stock_pairing import (
-        DENIAL_NOTICES, PAIR_CONNECT, catalog_reference, connection_profile, denial_screens, observed_tick, reopen,
+        DENIAL_NOTICES, OBSERVE_MODE, PAIR_CONNECT, TERM_BG, catalog_reference, connection_profile, denial_screens,
+        observe_pixels, observed_tick, reopen, terminal_region,
     )
 
 
@@ -103,7 +105,7 @@ class StockPairingTests(unittest.TestCase):
               patch(prefix+'StockWindow', return_value=ui), patch(prefix+'denial_screens', return_value={'proof':b'png'}),
               patch(prefix+'observe') as connect, patch(prefix+'stop') as stop, patch(prefix+'require_peers') as peers):
             args = (Path('/synthetic/probe'), Path('/synthetic'), {}, None, None, first, self.config,
-                    ('original-id','opaque-handle','original-label'), approval, 'synthetic-pane')
+                    ('original-id','opaque-handle','original-label'), approval, 'synthetic-pane', Path('/synthetic/out'))
             peers.return_value = False
             with self.assertRaisesRegex(GuiFailure, 'stock_flutter_denial_original_peer_unproven'):
                 reopen(*args, mode='locked')
@@ -146,3 +148,60 @@ class StockPairingTests(unittest.TestCase):
         self.assertIsNone(observed_tick(marker+'\n'+tick+'\n'+tick))
         self.assertIsNone(observed_tick(marker+'\n'+marker+'\n'+tick))
         self.assertIsNone(observed_tick(marker+'\n'+tick+'0'))
+        self.assertIsNone(observed_tick(marker+'\n'+tick.replace('000047','000O47')))
+
+    def test_terminal_region_requires_one_continuous_rendered_canvas(self):
+        image = Image.new('RGB', (1000, 720), 'white')
+        self.assertIsNone(terminal_region(image))
+        dark = ImageDraw.Draw(image)
+        dark.rectangle((185, 280, 805, 632), fill=TERM_BG)
+        self.assertEqual(terminal_region(image), (185, 280, 806, 633))
+        dark.rectangle((185, 100, 805, 249), fill=TERM_BG)
+        self.assertIsNone(terminal_region(image))
+
+    def test_capture_requires_owned_terminal_and_advancing_exact_tick(self):
+        config = dict(self.config, paneId='w1:p1')
+        ui = Mock()
+        visible = [(1,'pocket-probe · 远端终端'),(2,'pocket-probe / w1:p1'),(3,OBSERVE_MODE)]
+        ui.visible.side_effect = [[], visible, visible, visible]
+        image = Image.new('RGB',(1000,720),TERM_BG)
+        marker = 'Isolated SSH fixture. Remote input must remain empty.'
+        with (tempfile.TemporaryDirectory() as path,
+              patch('flutter_linux_stock_pairing.capture_window', side_effect=[(image,b'one'),(image,b'same'),(image,b'two')]),
+              patch('flutter_linux_stock_pairing.terminal_ocr', side_effect=[marker+'\nSynthetic observe tick '+tick
+                                                                           for tick in ['000041','000041','000042']])):
+            self.assertEqual(observe_pixels(ui, config, 1, Path(path)), (b'one',b'two'))
+            self.assertEqual(list(Path(path).iterdir()), [])
+            ui.scroll.assert_called_once_with('up', outer=True)
+
+    def test_only_owned_terminal_crop_and_fixed_diagnostics_are_written_on_failure(self):
+        config = dict(self.config, paneId='w1:p1')
+        ui = Mock()
+        ui.window.return_value = SimpleNamespace(width=1000, height=720)
+        image = Image.new('RGB', (1000, 720), 'white')
+        ImageDraw.Draw(image).rectangle((185, 280, 805, 632), fill=TERM_BG)
+
+        def one_sample(probe, code, *, timeout):
+            self.assertIsNone(probe())
+            raise GuiFailure(code)
+
+        for bound in (False, True):
+            with (self.subTest(bound=bound), tempfile.TemporaryDirectory() as path,
+                  patch('flutter_linux_stock_pairing.wait_for', side_effect=one_sample),
+                  patch('flutter_linux_stock_pairing.capture_window', return_value=(image,b'whole window')) as capture,
+                  patch('flutter_linux_stock_pairing.terminal_ocr', return_value='non-artifact OCR text')):
+                header = 'pocket-probe / w1:p1' if bound else 'pocket-probe / other-pane'
+                ui.visible.return_value = [(1,'pocket-probe · 远端终端'),(2,header),(3,OBSERVE_MODE)]
+                output = Path(path)
+                with self.assertRaisesRegex(GuiFailure, 'stock_flutter_observation_pixels_missing'):
+                    observe_pixels(ui, config, 1, output)
+                diagnostic = (output/'stock-peer-1-observation.json').read_text()
+                self.assertNotIn('non-artifact OCR text', diagnostic)
+                self.assertEqual(json.loads(diagnostic)['terminalHeaderVisible'], bound)
+                crop = output/'stock-peer-1-terminal-crop.png'
+                if bound:
+                    with Image.open(crop) as captured:
+                        self.assertEqual(captured.size, (621,353))
+                else:
+                    capture.assert_not_called()
+                    self.assertFalse(crop.exists())

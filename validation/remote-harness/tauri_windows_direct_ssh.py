@@ -324,7 +324,127 @@ def private_temporary_directory(base, report):
                 raise GuiFailure('windows_tauri_temp_cleanup_unconfirmed') from None
 
 
-def run(app, report, base):
+@contextmanager
+def key_fixture(mode):
+    if mode == 'plain':
+        with windows_fixture(publickey=True) as (fixture, credentials):
+            try:
+                yield fixture, credentials
+            finally:
+                credentials.clear()
+    else:
+        from ios_encrypted_key_fixture import EncryptedKeyFixture
+        with EncryptedKeyFixture(screen_proof=True, channel_deadline=time.monotonic()+1250) as fixture:
+            credentials = {'privateKey':fixture.private_key, 'passphrase':fixture.passphrase}
+            try:
+                yield fixture, credentials
+            finally:
+                credentials.clear()
+
+
+def publickey_session(facts, *, sent, closed):
+    linux.probe_evidence(facts, 2)
+    linux.verify_shell(facts, 2, 'A', sent=sent, closed=closed, publickey=True)
+
+
+def execute_key(driver, fixture, credentials, report, *, encrypted):
+    host='127.0.0.1'; endpoint=f'{fixture.username}@{host}:{fixture.port}'
+    algorithm=fixture.public_key.split(' ',1)[0]
+    report['stage']='dashboard'
+    wait_for(lambda:driver.observe(linux.DASHBOARD_WITNESS),'direct_ssh_empty_dashboard_entry_unavailable')
+    driver.click('#host-empty-add')
+    report['stage']='connection_choice'
+    wait_for(lambda:driver.observe(linux.CHOICE_WITNESS),'direct_ssh_connection_choice_unavailable')
+    driver.click('#add-ssh')
+    report['stage']='target'
+    wait_for(lambda:driver.observe(linux.TARGET_WITNESS),'direct_ssh_target_form_unavailable')
+    for selector,value in (('#ssh-host',host),('#ssh-port',str(fixture.port)),('#ssh-user',fixture.username)):
+        driver.fill(selector,value)
+    require(driver.observe('return ["#ssh-password", "#ssh-connect", "#ssh-review"].every(s => node(s).disabled);'),
+            'direct_ssh_credentials_ungated_before_probe')
+    report['stage']='probe';driver.click('#ssh-probe')
+    wait_for(lambda:driver.observe(linux.REVIEW_WITNESS,endpoint,algorithm,fixture.fingerprint),
+             'direct_ssh_fingerprint_not_visible_or_mismatched')
+    require(fixture.wait_for_connections_closed(1),'direct_ssh_probe_not_closed')
+    linux.probe_evidence(fixture.snapshot(),1)
+    report['target']={'host':host,'port':fixture.port,'username':fixture.username,
+                      'algorithm':algorithm,'fingerprint':fixture.fingerprint}
+    report['fingerprintReviewed']=True
+    driver.click('#ssh-trust-confirm')
+    wait_for(lambda:driver.observe('return visible(node("#ssh-auth-key")) && node("#ssh-review").checked;'),
+             'direct_ssh_key_choice_unavailable')
+    driver.click('#ssh-auth-key')
+    report['stage']='key_entry'
+    wait_for(lambda:driver.observe(linux.KEY_FIELDS_WITNESS,endpoint),'direct_ssh_key_fields_unproven')
+    require(driver.observe('return node("#ssh-passphrase").type === "password" && '+linux.CLEARED_KEY_CONTROLS+
+                           ' && arguments[0].every(s => node(s).value === "");',linux.SECRET_FIELDS),
+            'direct_ssh_key_fields_not_empty')
+    private_key=credentials['privateKey']
+    require(isinstance(private_key,str) and private_key.count('\n') >= 3 and private_key.endswith('\n'),
+            'windows_tauri_fixture_key_invalid')
+    driver.fill('#ssh-key',private_key)
+    if encrypted:
+        require(driver.observe('return node("#ssh-connect").disabled && node("#ssh-passphrase").value === "";'),
+                'direct_ssh_encrypted_key_did_not_require_passphrase')
+    driver.click('#ssh-passphrase')
+    require(driver.observe(linux.KEY_COLLAPSED_WITNESS),'direct_ssh_pem_collapse_unproven')
+    driver.click('#ssh-key-summary')
+    wait_for(lambda:driver.observe(linux.KEY_REDRAFT_WITNESS,private_key),'direct_ssh_pem_redraft_mismatch')
+    driver.click('#ssh-passphrase')
+    require(driver.observe(linux.KEY_COLLAPSED_WITNESS),'direct_ssh_pem_recollapse_unproven')
+    if encrypted:
+        driver.fill('#ssh-passphrase',credentials['passphrase'])
+        require(driver.observe('return node("#ssh-passphrase").type === "password" && node("#ssh-passphrase").value === arguments[0];',
+                               credentials['passphrase']), 'direct_ssh_passphrase_mask_unproven')
+    require(driver.observe(linux.KEY_FIELDS_WITNESS,endpoint),'direct_ssh_key_review_changed')
+    wait_for(lambda:driver.observe('return actionableButton(node("#ssh-connect"), "连接 SSH");'),
+             'direct_ssh_key_connect_not_actionable')
+    report['keyEntry']={'multilineExact':True,'passphraseMasked':True,'collapsed':True,
+                        'summaryHit':True,'reopenedExactFocused':True,'collapsedAgain':True}
+    private_key=''
+    linux.probe_evidence(fixture.snapshot(),1)
+    report['stage']='connect';driver.click('#ssh-connect')
+    require(fixture.wait_for('shellRequested'),'direct_ssh_shell_not_requested')
+    wait_for(lambda:bool(fixture.snapshot()['connectionEvents'][-1]['outputBytes']),'direct_ssh_shell_no_output')
+    publickey_session(fixture.snapshot(),sent=False,closed=False)
+    report['publicKeyAuthenticated']=True
+    wait_for(lambda:driver.observe('const el = node("#ssh-live-endpoint"); return visible(el) && el.innerText === arguments[0];',endpoint),
+             'direct_ssh_live_target_mismatched')
+    report['stage']='input';driver.click('#ssh-terminal .xterm-screen')
+    wait_for(lambda:linux.terminal_geometry(driver,endpoint),'direct_ssh_input_target_unproven')
+    driver.send_test_line()
+    require(fixture.wait_for('markerReceived'),'direct_ssh_marker_not_received')
+    publickey_session(fixture.snapshot(),sent=True,closed=False)
+    report['stage']='capture';png,screen=linux.capture_terminal(driver,endpoint,fixture.screen_token)
+    publickey_session(fixture.snapshot(),sent=True,closed=False)
+    report['stage']='disconnect';driver.click('#ssh-disconnect')
+    wait_for(lambda:driver.observe('''const card=node('#ssh-closed-feedback'), title=node('#ssh-closed-title'), detail=node('#ssh-closed-detail');
+      return visible(card) && visible(title) && visible(detail) && card.contains(title) && card.contains(detail) &&
+      card.dataset.phase === 'confirmed' && actionableButton(node('#ssh-return-home'),'返回首页') &&
+      title.innerText === '本机已断开' && detail.innerText === '凭据已清空，重连时请重新填写。' &&
+      !visible(node('#ssh-live')) && node('#ssh-live-endpoint').innerText === '';'''),
+      'direct_ssh_ui_disconnect_unconfirmed')
+    require(fixture.wait_for_connections_closed(2),'direct_ssh_peer_disconnect_unconfirmed')
+    publickey_session(fixture.snapshot(),sent=True,closed=True)
+    require(driver.observe('return '+linux.CLEARED_KEY_CONTROLS+
+      ' && arguments[0].every(s => node(s).value === "") && node("#ssh-connect").disabled;',linux.SECRET_FIELDS),
+      'direct_ssh_credentials_not_cleared')
+    outcome_png,outcome=linux.capture_outcome(driver,'#ssh-closed-feedback')
+    publickey_session(fixture.snapshot(),sent=True,closed=True)
+    report['stage']='return_home';driver.click('#ssh-return-home')
+    wait_for(lambda:driver.observe('''const home=node('#home-dashboard'), result=node('#host-ssh-disconnected');
+      const empty=node('#host-empty'), add=node('#host-empty-add'), shortcut=node('#home-open-ssh');
+      return visible(home) && visible(result) && home.contains(result) && result.innerText === '本机已断开' &&
+      result.dataset.phase === 'confirmed' && visible(empty) && home.contains(empty) && empty.contains(add) &&
+      actionableButton(add,'添加主机') && home.contains(shortcut) && actionableButton(shortcut,'普通 SSH') &&
+      !visible(node('#home-ssh'));'''),'direct_ssh_home_not_restored')
+    home_png,home=linux.capture_outcome(driver,'#host-ssh-disconnected')
+    publickey_session(fixture.snapshot(),sent=True,closed=True)
+    report.update(terminal=screen,disconnectOutcome=outcome,homeOutcome=home,returnedHome=True,credentialFieldsCleared=True)
+    return {'ordinary-terminal.png':png,'ordinary-disconnect.png':outcome_png,'ordinary-home.png':home_png}
+
+
+def run(app, report, base, *, authentication="password"):
     report['stage'] = 'desktop'; check_desktop()
     ctypes.windll.user32.SetProcessDpiAwarenessContext.argtypes = [ctypes.c_void_p]
     require(ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)), 'windows_tauri_dpi_unavailable')
@@ -338,8 +458,9 @@ def run(app, report, base):
         for name in ('APPDATA','LOCALAPPDATA','TEMP','TMP'):
             path = root / name; path.mkdir(); env[name] = str(path)
         report['stage'] = 'fixture'
-        with windows_fixture(publickey=False) as (fixture, credentials):
-            credentials.clear()
+        fixture_context = windows_fixture(publickey=False) if authentication == 'password' else key_fixture(authentication)
+        with fixture_context as (fixture, credentials):
+            if authentication == 'password': credentials.clear()
             listener = report['listener'] = {'ownedBeforeLaunch': windows_loopback_listener_owners(fixture.port) == [(True, os.getpid())]}
             require(listener['ownedBeforeLaunch'], 'windows_tauri_unowned_peer_listener')
             set_phase(report, 'launch')
@@ -367,7 +488,8 @@ def run(app, report, base):
                         linux.capture_outcome = lambda d,s: capture_outcome(d,job,hwnd,pid,s)
                         try:
                             set_phase(report, 'interaction')
-                            images = linux.execute(driver, fixture, report)
+                            images = (linux.execute(driver, fixture, report) if authentication == 'password' else
+                                      execute_key(driver, fixture, credentials, report, encrypted=authentication == 'encrypted'))
                         finally:
                             linux.capture_terminal, linux.capture_outcome = original_terminal, original_outcome
                         report['peer'] = fixture.snapshot()
@@ -386,6 +508,10 @@ def run(app, report, base):
         report['stage'] = 'cleanup'; set_phase(report, 'fixture_cleanup')
         verify_listener_release(fixture, listener)
         require(fixture.password == '', 'windows_tauri_password_cleanup_unconfirmed')
+        if authentication == 'encrypted':
+            require(fixture.private_key == '' and fixture.passphrase == '' and fixture.wrong_passphrase == '',
+                    'windows_tauri_key_cleanup_unconfirmed')
+        require(not credentials, 'windows_tauri_key_cleanup_unconfirmed')
         wait_for(lambda: loopback_connect_outcome(port) == 'refused' and loopback_connect_outcome(native_port) == 'refused',
                  'windows_tauri_driver_ports_unreleased', timeout=10)
     require(not root.exists(), 'windows_tauri_temporary_directory_remains')
@@ -399,7 +525,15 @@ def validate_success(report, images):
             'windows_tauri_activation_unconfirmed')
     require(report.get('fingerprintReviewed') is True and report.get('returnedHome') is True and
             report.get('credentialFieldsCleared') is True, 'windows_tauri_receipt_incomplete')
-    linux.session_evidence(report.get('peer', {}), sent=True, closed=True)
+    if report.get('authentication') == 'password':
+        linux.session_evidence(report.get('peer', {}), sent=True, closed=True)
+    else:
+        require(report.get('authentication') == 'publickey' and report.get('keyEncryption') in ('none','openssh') and
+                report.get('publicKeyAuthenticated') is True and
+                report.get('keyEntry') == {'multilineExact':True,'passphraseMasked':True,'collapsed':True,
+                                           'summaryHit':True,'reopenedExactFocused':True,'collapsedAgain':True},
+                'windows_tauri_key_receipt_incomplete')
+        publickey_session(report.get('peer', {}), sent=True, closed=True)
     require(report.get('listener', {}).get('ownedBeforeLaunch') is True and
             report.get('listener', {}).get('fixtureResourcesClosed') is True and
             report.get('listener', {}).get('absentFromWin32Table') is True and
@@ -422,6 +556,7 @@ def main():
     parser.add_argument('--app', required=True, type=Path)
     parser.add_argument('--source-sha', required=True)
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--authentication', choices=('password','plain','encrypted'), default='password')
     args = parser.parse_args(); app=args.app.resolve(); output=args.output.resolve()
     base=Path(os.environ.get('RUNNER_TEMP',tempfile.gettempdir())).resolve()
     if (sys.platform != 'win32' or not re.fullmatch(r'[0-9a-f]{40}',args.source_sha) or not app.is_file()
@@ -431,11 +566,13 @@ def main():
     output.mkdir(parents=True,exist_ok=False)
     report={'schemaVersion':1,'sourceSHA':args.source_sha,'executableSHA256':hashlib.sha256(app.read_bytes()).hexdigest(),
             'platform':'Windows Tauri WebView2',
-            'authentication':'password','scope':'native window, WebDriver input, desktop pixels and isolated SSH',
+            'authentication':'password' if args.authentication == 'password' else 'publickey',
+            **({'keyEncryption':'none' if args.authentication == 'plain' else 'openssh'} if args.authentication != 'password' else {}),
+            'scope':'native window, WebDriver input, desktop pixels and isolated SSH',
             'status':'failed'}
     urllib.request.install_opener(urllib.request.build_opener(urllib.request.ProxyHandler({})))
     try:
-        images=run(app,report,base)
+        images=run(app,report,base,authentication=args.authentication)
         validate_success(report,images)
         for name,png in images.items(): (output/name).write_bytes(png)
         report.update(status='passed',stage='complete')

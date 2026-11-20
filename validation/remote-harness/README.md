@@ -70,11 +70,13 @@ WebDriver 测试采用官方 [Tauri 测试说明](https://v2.tauri.app/develop/t
 ```sh
 gh workflow run paired-gui-validation.yml --ref "$branch" -f linux_keyring=true
 gh workflow run paired-gui-validation.yml --ref "$branch" -f linux_keyring=true -f s06_split=true -f s06_route=both
+gh workflow run paired-gui-validation.yml --ref "$branch" \
+  -f linux_keyring=true -f s06_split=true -f s06_guarded=true -f s06_route=tauri
 gh workflow run flutter-validation.yml --ref "$branch" -f linux_only=true
 gh workflow run tauri-validation.yml --ref "$branch" -f linux_only=true
 ```
 
-首项运行单主机配对，第二项运行两个真实 SSH/herdr 目标的只读 S06。各客户端使用独立 Xvfb、私有 D-Bus 和临时 GNOME Keyring。只有启动于该私有总线的服务已解锁，并且界面提交的每把公钥都与同客户端命名空间的新密钥环条目精确匹配，测试主机才授权。OpenSSH 另行验证实际使用了同一把公钥。总线、密钥环、原始日志和 SSH 配置均留在临时目录。
+首项运行单主机配对，第二项运行两个真实 SSH/herdr 目标的只读 S06，第三项在同一次 Tauri S06 中独立核对密钥环身份、SSH 认证和受保护输入的远端字节。各客户端使用独立 Xvfb、私有 D-Bus 和临时 GNOME Keyring。只有启动于该私有总线的服务已解锁，并且界面提交的每把公钥都与同客户端命名空间的新密钥环条目精确匹配，测试主机才授权。OpenSSH 另行验证实际使用了同一把公钥。总线、密钥环、原始日志和 SSH 配置均留在临时目录。
 
 Tauri 由 WebDriver 操作打包前的真实 GTK/WebView 程序。Flutter 使用原生 Linux runner 中的 `integration_test`，按正常首页和配对控件走正式目录与签名通道，终端候选沿用该工作流既有的锁。它在同一进程用新目录实例核验落盘引用，界面操作由 Flutter 测试驱动。发行程序的外部鼠标键盘操作、两次独立 stock 进程恢复同一身份以及其他 Linux 密钥环实现仍需单独验收。后两项只选择 Linux 软件包，仍执行各自已有的测试门槛。
 

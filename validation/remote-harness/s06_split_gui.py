@@ -248,17 +248,21 @@ def run_gui(args, root, env, config, command, final_pty_evidence, *, import_repl
         for directory, data in zip((root, other), expected):
             if bounded_wire(directory / 'received.bin', 4096) != data:
                 raise GuiFailure('s06_remote_input_target_mismatch')
+        if keyring is not None:
+            scope = 'two reviewed real SSH/herdr sessions using verified Linux Secret Service identities'
+        elif args.paired_gui == 'tauri':
+            scope = ('native Linux GTK WebView config replacement with two real SSH/herdr sessions'
+                     if import_replace else 'native Linux GTK WebView and two real SSH/herdr sessions')
+            if getattr(args, 'private_keyring_session', False):
+                scope += ' in an isolated Secret Service session with no independent keyring binding proof'
+            else:
+                scope += '. Identity storage is unverified.'
+        else:
+            scope = 'real Flutter widget, two real SSH/herdr sessions; explicit test signers and memory journals'
         result.update(status='passed', matchedDeviceKeyInSshd=True,
                       receivedInputBytes=len(expected[0]), peerInputBytes=[len(data) for data in expected],
                       exactRemoteBytes=True, distinctAuthenticatedDeviceKeys=True,
-                      targetBindingsPreserved=True, physicalImeVerified=False,
-                      scope=('two reviewed real SSH/herdr sessions using verified Linux Secret Service identities'
-                             if keyring is not None else
-                             'native Linux GTK WebView config replacement with two real SSH/herdr sessions; process-memory test identities'
-                             if import_replace else
-                             'native Linux GTK WebView and two real SSH/herdr sessions; process-memory test identities'
-                             if args.paired_gui == 'tauri' else
-                             'real Flutter widget, two real SSH/herdr sessions; explicit test signers and memory journals'))
+                      targetBindingsPreserved=True, physicalImeVerified=False, scope=scope)
     except GuiFailure as error:
         result['errorCode'] = str(error)
         result['widgetFailure'] = failure_diagnostics(exchange)

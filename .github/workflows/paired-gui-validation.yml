@@ -44,7 +44,7 @@ on:
         options: ['off', password, tauri-key, tauri-key-rotation, flutter-password, flutter-key, flutter-key-rotation]
         default: 'off'
       s06_split:
-        description: Run two real SSH/herdr targets through the Flutter split UI
+        description: Run two real SSH/herdr targets through the chosen desktop split UI
         type: boolean
         default: false
       s06_guarded:
@@ -116,8 +116,13 @@ jobs:
             echo 'linux_flutter_stock_restart requires linux_keyring and the single-host route' >&2
             exit 1
           fi
-          if [ "$LINUX_KEYRING" = true ] && { [ "$LINUX_DIRECT_SSH" != off ] || [ "$S06_GUARDED" = true ] || [ "$INPUT_FIXTURE" = true ]; }; then
-            echo 'linux_keyring requires the stock desktop pairing route' >&2
+          if [ "$LINUX_KEYRING" = true ] && { [ "$LINUX_DIRECT_SSH" != off ] || [ "$INPUT_FIXTURE" = true ]; }; then
+            echo 'linux_keyring excludes ordinary SSH and the standalone input fixture' >&2
+            exit 1
+          fi
+          if [ "$LINUX_KEYRING" = true ] && [ "$S06_GUARDED" = true ] &&
+             { [ "$S06_SPLIT" != true ] || [ "$S06_ROUTE" != tauri ]; }; then
+            echo 'guarded linux_keyring requires s06_split and s06_route=tauri' >&2
             exit 1
           fi
           if [ "$S06_GUARDED" = true ] && [ "$S06_SPLIT" != true ]; then

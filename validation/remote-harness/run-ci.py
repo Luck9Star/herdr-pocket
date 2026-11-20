@@ -187,8 +187,12 @@ def gui_report_fields(route, result, input_fixture=False, *, import_replace=Fals
     if linux_keyring:
         scopes[route] = ('Linux GTK integration_test driving the real Flutter pairing widgets and native channels'
                          if route == 'flutter' else 'stock Linux GTK WebView with private Secret Service')
+        if route == 'tauri' and input_fixture:
+            scopes[route] = 'Linux GTK WebView with private Secret Service and guarded input fixture'
         proof = result.get('linuxKeyring', {})
-        native_store = (proof.get('publicKeysMatched') in (1, 2) and proof.get('sameKeyAuthenticated') is True)
+        public_keys_matched = proof.get('publicKeysMatched')
+        native_store = ((public_keys_matched == 2 if input_fixture else public_keys_matched in (1, 2)) and
+                        proof.get('sameKeyAuthenticated') is True)
         if not ((route == 'tauri' or flutter_stock) and passed and
                 result.get('restart', {}).get('sameDeviceKeyReauthenticated') is True):
             unverified.append('stock second-process identity restore')
@@ -358,8 +362,10 @@ def main():
     if args.flutter_stock_app and (args.paired_gui != 'flutter' or args.s06_split or args.input_fixture or
                                    not args.linux_keyring_probe):
         parser.error('--flutter-stock-app requires the single-host Flutter Linux private keyring route')
-    if args.linux_keyring_probe and (args.paired_gui not in ('flutter', 'tauri') or args.input_fixture):
-        parser.error('--linux-keyring-probe requires a stock desktop paired route')
+    tauri_split = args.paired_gui == 'tauri' and args.s06_split
+    if args.linux_keyring_probe and (args.paired_gui not in ('flutter', 'tauri') or
+                                    (args.input_fixture and not tauri_split)):
+        parser.error('--linux-keyring-probe requires a stock desktop paired route or guarded Tauri --s06-split')
     if import_replace and (not args.s06_split or args.paired_gui != 'tauri' or args.input_fixture):
         parser.error('S06 import replacement requires stock Tauri --s06-split')
     if args.s06_split and args.paired_gui not in ('flutter', 'tauri'):

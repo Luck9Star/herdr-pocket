@@ -519,7 +519,9 @@ def run_tauri(args, root, env, config, approval):
                     'hostSummaryRetainedOnHome':True,
                     'stoppedStale':True, 'fullRenderAcknowledgements':full, 'deltaRenderAcknowledgements':deltas,
                     'localViewportChanges':2, 'inputQueueAccepted':bool(args.input_fixture),
-                    'keyStore':'private Linux Secret Service' if approval.keyring else 'native process-memory Linux test identity'}
+                    'keyStore':('private Linux Secret Service' if approval.keyring else
+                        'isolated Secret Service session; keyring binding not independently verified'
+                        if getattr(args, 'private_keyring_session', False) else 'Linux identity; storage not independently verified')}
             if restart is not None:
                 restart.before_first_exit(driver, driver_process.pid)
                 lifetime.enter_context(no_keyring_writes(approval, root, env))

@@ -8,7 +8,9 @@
 
 本页继承[技术评估](06-technology-evaluation.md)、[验证范围](09-prototype-validation.md)、[实验修复](10-blocker-repair.md)和 [ADR-0006](adr/0006-three-overlay-providers.md)的证据边界。用户希望分发的衍生改动继续开放。下文保留当时的选项和审查依据。
 
-## 1. 当时的公开和分发范围
+## 1. 当前公开和分发范围
+
+下表反映 2026-11-06 的源码与打包状态。
 
 | 对象 | 本轮确认 | 发行判断与缺口 |
 | --- | --- | --- |
@@ -104,7 +106,9 @@ MIT／BSD／ISC／Apache 主干使这两种方向有继续评估的基础；Apac
 
 **没有发现已核实的主要组件许可必然要求放弃五端／三网目标；也没有足够证据现在宣布完整产品可按 GPL 或 AGPL 无条件分发。**字体声明汇总、平台依赖覆盖与发行材料是当前实际缺口，不能靠选择更强 copyleft 自动修复。
 
-## 6. 当时的后续计划与完成条件
+## 6. 最短下一步与完成条件
+
+以下为 2026-11-06 拟定的计划，许可选择以页首决策记录为准。
 
 1. **生成逐产物依赖清单。**每 GUI × 每目标平台导出实际 enabled features／解析依赖／原生编译单元／系统动态库和随包文件，区分构建工具、测试依赖、被链接代码、系统库。SBOM 至少关联源 commit、lock hash、目标 ABI、artifact hash、上游版本／commit、许可表达式、全文／NOTICE、修改和对应源码入口；清单缺项拒绝把该包标成已审清。
 2. **先闭合现有 GUI 的声明与字体归属材料。**给两条包流程统一收集第三方文本与可见入口，覆盖 xterm、Flutter／engine、Dart、Rust／ring／Unicode／MPL 传递项及 Gradle 图；按本页已固定的 Font Logos Unlicense 来源补全文及 provenance，并补齐其他已使用 glyph 来源的适用声明；不将 audit 的 `Unlicensed` 误读为无许可。对已生成的 APK／App／安装器做包内和外附声明双重校验，而不是只检查工作目录存在文件。

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show SemanticsNode;
 import 'package:flutter/services.dart'
     show Clipboard, ClipboardData, LogicalKeyboardKey, PhysicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
@@ -279,15 +280,54 @@ Future<TextEditingController> prepareEncryptedKey(
       observe('key_retry_paste_tap');
       await tap(tester, 'direct-paste-key');
       observe('key_retry_pem_readback');
-      await waitUi(tester, () => control('direct-edit-pem').evaluate().isNotEmpty,
-          'linux_direct_paste_collapse_timeout');
+      final summary = control('direct-edit-pem');
+      bool summaryVisible() =>
+          summary.hitTestable().evaluate().length == 1 &&
+          find.descendant(of: summary, matching: find.text('已填写私钥 · 重新编辑'))
+              .hitTestable().evaluate().length == 1 &&
+          pem.evaluate().isEmpty;
+      await waitUi(tester, summaryVisible, 'linux_direct_paste_collapse_timeout');
       await tap(tester, 'direct-edit-pem');
+      final editable = find.descendant(of: pem, matching: find.byType(EditableText));
       await waitUi(
         tester,
-        () =>
-            tester.widget<TextField>(pem).controller!.text == target.privateKey,
+        () => editable.evaluate().length == 1 &&
+            tester.state<EditableTextState>(editable).widget.focusNode.hasPrimaryFocus &&
+            tester.state<EditableTextState>(editable).widget.controller.text == target.privateKey,
         'linux_direct_paste_timeout',
       );
+      expect(summary, findsNothing);
+      await tapControl(tester, passphrase, 'linux_pem_blur');
+      final phraseEditor = find.descendant(of: passphrase, matching: find.byType(EditableText));
+      await waitUi(
+        tester,
+        () => summaryVisible() && phraseEditor.evaluate().length == 1 &&
+            tester.state<EditableTextState>(phraseEditor).widget.focusNode.hasPrimaryFocus,
+        'linux_direct_pem_recollapse_timeout',
+      );
+      expect(editable, findsNothing);
+      if (traceCorrectKey) {
+        final semantics = tester.ensureSemantics();
+        await tester.pump();
+        // ignore: deprecated_member_use
+        final root = tester.binding.pipelineOwner.semanticsOwner!.rootSemanticsNode!;
+        final parts = target.privateKey!.split('\n').where((line) => line.length >= 20);
+        var exposed = false;
+        void inspect(SemanticsNode node) {
+          final data = node.getSemanticsData();
+          if (parts.any((part) => data.label.contains(part) || data.value.contains(part))) exposed = true;
+          node.visitChildren((child) { inspect(child); return true; });
+        }
+        inspect(root);
+        expect(exposed, isFalse, reason: 'linux_direct_pem_semantics_exposed');
+        semantics.dispose();
+        await checkpoint('pem-reopen', const {
+          'summaryBefore': true,
+          'draftExactFocused': true,
+          'summaryAfter': true,
+          'editorAndSemanticsAbsent': true,
+        });
+      }
       observe('key_retry_paste_feedback');
       expect(find.text('私钥已粘贴，仅本次使用。'), findsOneWidget);
       pasteVerified = true;

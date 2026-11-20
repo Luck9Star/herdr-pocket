@@ -85,6 +85,106 @@ void main() {
     expect(find.byKey(const ValueKey('direct-edit-pem')), findsNothing);
     semantics.dispose();
   });
+
+  testWidgets('re-tapping the selected auth choice is idempotent for PEM draft and passphrase', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: DirectSshPage(tokens: tokens)));
+    final dynamic state = tester.state(find.byType(DirectSshPage));
+    state.setState(() { state.mobileAuth = true; state.fingerprint = 'fixture'; state.checkedTarget = state.target; });
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('direct-auth-key')));
+    await tester.pumpAndSettle();
+    final field = find.byKey(const ValueKey('direct-secret'));
+    const pem = 'synthetic line one\nsynthetic line two\nsynthetic line three';
+    await tester.ensureVisible(field);
+    await tester.tap(field);
+    await tester.enterText(field, pem);
+    final phrase = find.byKey(const ValueKey('direct-passphrase'));
+    await tester.ensureVisible(phrase);
+    await tester.enterText(phrase, 'draft-passphrase');
+    await tester.pumpAndSettle();
+    // Collapse the editor by focusing passphrase, then re-tap the SAME selected choice.
+    await tester.ensureVisible(find.byKey(const ValueKey('direct-auth-key')));
+    await tester.tap(find.byKey(const ValueKey('direct-auth-key')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('direct-secret')), findsNothing);
+    expect(find.text('已填写私钥 · 重新编辑'), findsOneWidget);
+    expect(find.byKey(const ValueKey('direct-passphrase')), findsOneWidget);
+    await tester.tap(find.text('已填写私钥 · 重新编辑'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(field).controller!.text == pem, isTrue);
+    expect(tester.widget<TextField>(phrase).controller!.text == 'draft-passphrase', isTrue);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('re-tapping the selected password choice keeps the typed password', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: DirectSshPage(tokens: tokens)));
+    final dynamic state = tester.state(find.byType(DirectSshPage));
+    state.setState(() { state.mobileAuth = true; state.fingerprint = 'fixture'; state.checkedTarget = state.target; });
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('direct-auth-password')));
+    await tester.pumpAndSettle();
+    final field = find.byKey(const ValueKey('direct-secret'));
+    await tester.ensureVisible(field);
+    await tester.tap(field);
+    await tester.enterText(field, 'draft-password');
+    await tester.ensureVisible(find.byKey(const ValueKey('direct-auth-password')));
+    await tester.tap(find.byKey(const ValueKey('direct-auth-password')));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(field).controller!.text == 'draft-password', isTrue);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('switching auth type still clears credentials; paste-in-flight on same choice is untouched', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: DirectSshPage(tokens: tokens)));
+    final dynamic state = tester.state(find.byType(DirectSshPage));
+    state.setState(() { state.mobileAuth = true; state.fingerprint = 'fixture'; state.checkedTarget = state.target; });
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('direct-auth-key')));
+    await tester.pumpAndSettle();
+    // Paste in flight, then user re-taps the same choice: paste continues, no clear.
+    final dynamic st = tester.state(find.byType(DirectSshPage));
+    st.setState(() { st.pastingKey = true; });
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('direct-auth-key')));
+    await tester.tap(find.byKey(const ValueKey('direct-auth-key')));
+    await tester.pumpAndSettle();
+    expect((st.pastingKey as bool), isTrue);  // same-choice tap does not cancel the in-flight paste
+    expect(st.pasteStatus, isNull);
+    st.setState(() { st.pastingKey = false; st.pasteStatus = '私钥已粘贴，仅本次使用。'; });
+    await tester.pumpAndSettle();
+    // Real switch clears the draft.
+    final field = find.byKey(const ValueKey('direct-secret'));
+    await tester.ensureVisible(field);
+    await tester.tap(field);
+    await tester.enterText(field, 'old draft');
+    await tester.ensureVisible(find.byKey(const ValueKey('direct-auth-password')));
+    await tester.tap(find.byKey(const ValueKey('direct-auth-password')));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(field).controller!.text.isEmpty, isTrue);
+    await tester.enterText(field, 'password draft');
+    await tester.ensureVisible(find.byKey(const ValueKey('direct-auth-key')));
+    await tester.tap(find.byKey(const ValueKey('direct-auth-key')));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(field).controller!.text.isEmpty, isTrue);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('desktop outside tap reaches passphrase through collapse', (tester) async {
     tester.view.physicalSize = const Size(980, 780);
     tester.view.devicePixelRatio = 1;

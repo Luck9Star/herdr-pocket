@@ -818,7 +818,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
         foregroundColor: t.color(keyAuth == value ? 'brand' : 'textSecondary'),
         side: BorderSide(color: t.color(keyAuth == value ? 'brand' : 'borderStrong')),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-      onPressed: busy || hostKeyReviewRequired ? null : () => setState(() { cancelKeyPaste(); keyAuth = value; secret.clear(); passphrase.clear(); }),
+      onPressed: busy || hostKeyReviewRequired ? null : () { if (keyAuth == value) return; setState(() { cancelKeyPaste(); keyAuth = value; secret.clear(); passphrase.clear(); }); },
       child: Text(text))));
     return entryList(desktop: desktop, key: const ValueKey('direct-form'), children: [
       mobileTargetCard(checkedTarget ?? target), const SizedBox(height: 10),
@@ -1597,7 +1597,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
           ],
           const SizedBox(height: 16),
           SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('使用私钥认证'), value: keyAuth,
-            onChanged: busy || hostKeyReviewRequired ? null : (value) => setState(() { cancelKeyPaste(); keyAuth = value; secret.clear(); passphrase.clear(); })),
+            onChanged: busy || hostKeyReviewRequired ? null : (value) { if (keyAuth == value) return; setState(() { cancelKeyPaste(); keyAuth = value; secret.clear(); passphrase.clear(); }); }),
           const SizedBox(height: 12),
           Semantics(container: true, explicitChildNodes: true, label: keyAuth ? '私钥 PEM（仅本次使用）' : '密码（仅本次使用）',
             child: pemCollapsed ? SizedBox(height: pemEditorHeight, child: collapsedPem(enabled: !busy && !hostKeyReviewRequired)) : !keyAuth && !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS

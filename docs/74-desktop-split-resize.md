@@ -193,7 +193,7 @@ unzip -p mac-s06-r11.zip result.json
 | 2026-11-20 同源 `75df6463` 双端 stock R1 | Ubuntu 24.04 私有 Secret Service、真实回环 OpenSSH/herdr。Flutter GTK integration 作业在 A 的观察取消后丢失分屏，Tauri 原生 GTK 作业在双画面后的焦点点击失败，两端均未完成本轮 S06。 [R1 作业与清理回执](evidence/linux-pairing-secret-service-20261120/README.md#linux-双主机-s06-r1) |
 | 2026-11-20 同源 `1abdfe44` 双端 stock R2 | 私有 Secret Service 与两条回环 SSH 均通过。Flutter GTK integration 验焦点侧关闭及另一侧在原连接推进，未采样原生窗口往返。Tauri 原生 GTK 验 1440→700→1440、布局暂停恢复、手动暂停保留和逐侧关闭。两端各为 0／0 输入字节、远端 PTY 无变化。 [R2 作业、原图与回执](evidence/linux-pairing-secret-service-20261120/README.md#linux-双主机-s06-r2) |
 
-历史 S06 的连接、字节和 PTY 采样见[原验收记录](63-design-parity-and-direct-ssh.md#s06-双侧界面与真实回环验收)。macOS 原生窗口需要在同一次运行中验证两条真实连接、窗口来回变化、键盘切换和服务端 PTY 与输入计数。[S06 隔离运行入口](../validation/remote-harness/README-s06-real-ssh.md)
+历史 S06 的连接、字节和 PTY 采样见[原验收记录](evidence/design-parity-20261115/verification-history.md#s06-双侧界面与真实回环验收)。macOS 原生窗口需要在同一次运行中验证两条真实连接、窗口来回变化、键盘切换和服务端 PTY 与输入计数。[S06 隔离运行入口](../validation/remote-harness/README-s06-real-ssh.md)
 
 ## Flutter 分屏关闭焦点主机
 

@@ -1,6 +1,6 @@
 # 2026-11-09 会话交接（自包含）
 
-> 本文档是**本轮最新交接入口**，可脱离其他文档直接接手。历史全量交接见 [56-project-status-and-handoff.md](56-project-status-and-handoff.md)（保留不改其主体）。
+> 本页保存 2026-11-09 第一轮交接，包含当时的阻塞、权限和操作参数。[早期阶段记录](56-project-status-and-handoff.md) · [第二轮交接](58-session-handoff-2026-11-09-r2.md) · [现行文档导航](README.md)
 >
 > 仓库：`/Users/yangyitian/Documents/dev/Agents/herdr-pocket` · remote `Luck9Star/herdr-pocket` · 主干 `main`
 > 交接时工作分支：`codex/network-batch/with-emulators-zerotier-0008-c3d3036`（本文档基于 `e3da36e`，其上为本文档自身提交 `4f627f9`）

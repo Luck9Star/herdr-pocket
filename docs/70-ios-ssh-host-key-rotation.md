@@ -1,8 +1,6 @@
 # iOS 普通 SSH 与主机换钥验收
 
-状态：2026-11-18，**R21 Tauri 定向复验（运行 44326045427，源 `cdbb41a`）通过：普通与换钥均通过、冷启失败未复现、按钮几何与 R20 一致；R20 官方批次（运行 44320783638，源码 `d28ed26`）：Flutter 普通 SSH 与换钥均通过（返回首页仅在普通场景验证）；Tauri 普通 SSH 通过、底部按钮遮挡已消除，换钥在重新冷启后 `native_home_identity_unproven` 失败，已由 R21 收口**。R19 同源批次两壳普通 SSH 与换钥均通过，作为对照保留；R18、R17、R15 及更早结果保留为历史。
-
-范围为 GitHub 托管 macOS 上的受控 iOS Simulator、临时 loopback SSH 和密码认证。模拟器安装、应用界面、服务端协议、完整测试通过及最终画面复核分别记录；本页不证明 iPhone 真机、手工／中文 IME、外部网络、生产主机或五平台支持。
+本页记录 iOS 26.2 模拟器上的普通密码和主机换钥，以及 R19–R21 的系统底栏像素对照。Flutter R20 与 Tauri R21 都通过各自的普通密码和换钥。Tauri R20 换钥停在冷启首页，R21 的定向批次未复现该阻断。环境是托管 macOS、临时回环 SSH 和自动化输入。[手机私钥复验](72-mobile-ssh-auth-snapshot.md#2026-11-20-私钥收起与重开复验) · [按平台和认证查询普通 SSH](63-design-parity-and-direct-ssh.md#普通-ssh-验收矩阵2026-11-20-更新)
 
 ## R21 Tauri 定向复验：普通与换钥均通过
 
@@ -172,7 +170,7 @@ Tauri 原始导航记录的屏幕为 **440×956 pt**；添加按钮矩形为 **[
 
 固定源码 [Python 导航 guard](https://github.com/Luck9Star/herdr-pocket/blob/80acd9af3477702852543d71033ec9e609ef9a15/validation/remote-harness/tauri_ios_direct_ssh.py#L517) 对每条导航报告的前态强制 `windowCount == 1`，因此下一步报告被拒绝。窗口数量变化本身不能证明产品目标错位或凭据风险，也不确定新增窗口的具体来源。原生点击在报告发送前执行，缺少第二条有效报告不能进一步证明第二次触摸或 SSH 表单的实际结果；本批真实 SSH 会话仍未验收。
 
-官方与下载原字节相符的 Tauri ZIP 为 **1,626 字节**，SHA256 为 `989548fbe3440312756793802e1175bbbf8c136589647bf7c4aa69e10caa9a41`，内层 `sourceSHA` 相符，受检清理通过。本批不新增正式图片归档，最终两壳六张系统原图仍待官方完整通过后整理。
+官方与下载原字节相符的 Tauri ZIP 为 **1,626 字节**，SHA256 为 `989548fbe3440312756793802e1175bbbf8c136589647bf7c4aa69e10caa9a41`，内层 `sourceSHA` 相符，受检清理通过。R4 未新增正式图片归档。两壳通过后取得的六张系统原图见 [R15](#r15-历史同源结果两壳均通过)。
 
 ## R3：换钥局部完成，普通连接与首页点击受阻
 
@@ -266,4 +264,4 @@ R1 前的本机检查记录为：Flutter **594 项通过、7 项跳过**，独�
 
 R1 时的后续计划为同一新源码一次触发两壳，完整验证普通 SSH、S10 拒绝／取消／重新核对／确认 B 后重连及清理，再逐图核验各三张系统原图与两份终端判据。当时工作止于上文 R6 的部分完成结果；后续 R15 结果见本页开头，R1 的局部完成事实与失败记录继续保留。
 
-相关历史：[普通 SSH 与界面设计](63-design-parity-and-direct-ssh.md) · [Android 换钥专项](68-android-ssh-host-key-rotation.md) · [Android 活动终端像素验收](69-mobile-ssh-active-terminal.md)。这些历史结果不补足本次 iOS 的缺项。
+R1 的交叉参考见[普通 SSH 平台矩阵](63-design-parity-and-direct-ssh.md)、[Android 换钥判据](68-android-ssh-host-key-rotation.md)和[Android 活动终端原屏](69-mobile-ssh-active-terminal.md)。

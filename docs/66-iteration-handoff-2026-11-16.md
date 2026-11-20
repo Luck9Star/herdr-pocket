@@ -1,8 +1,8 @@
 # 2026-11-16 迭代收口与交接
 
-> 后续进展（2026-11-16）：Android normal/QA 已在独立 API 35 x86_64 启动探针到达预登录并完成关闭；两壳双网 UI 仍须单独验收。诊断、修复、UI 复验与范围见[第 67 页](67-android-dual-network-startup.md)。下文保留本次交接时的固定点与历史失败记录。
+> 本页保留 2026-11-16 交接时的源码、结果及故障记录。后续结果见[普通 SSH 验收矩阵](63-design-parity-and-direct-ssh.md#普通-ssh-验收矩阵2026-11-20-更新)与[Android 双网专项](67-android-dual-network-startup.md)。2026-11-16 的首次后续探针仅验证 Android normal/QA 在 API 35 x86_64 到达预登录并完成关闭。
 
-本页汇总本轮普通 SSH / UI、终端内核评估、Linux 双网与 Android 设备分层结果。它只记录已固定源码、已验证工件及可复跑入口；**普通 SSH 两壳（Flutter / Tauri Android 与 macOS 真 XCUITest）均通过；Android 双网原生启动未通过（SIGABRT，根因未确证）**，也不把桌面 Widget 截图写成 Android 真机证据。
+本页汇总本轮普通 SSH / UI、终端内核评估、Linux 双网与 Android 设备分层结果。主线整合见 [PR #1](https://github.com/Luck9Star/herdr-pocket/pull/1)。它只记录已固定源码、已验证工件及可复跑入口；**普通 SSH 两壳（Flutter / Tauri Android 与 macOS 真 XCUITest）均通过；Android 双网原生启动未通过（SIGABRT，根因未确证）**，也不把桌面 Widget 截图写成 Android 真机证据。
 
 ## 三个会话的交付
 

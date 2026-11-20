@@ -32,6 +32,7 @@ class DebianDependenciesTests(unittest.TestCase):
             root = Path(temporary) / 'package'
             control = root / 'DEBIAN'
             control.mkdir(parents=True)
+            control.chmod(0o755)
             (control / 'control').write_text('Package: herdr-pocket-notice-test\nVersion: 0.1\nArchitecture: all\n'
                 'Maintainer: Test <test@example.invalid>\nDescription: isolated fixture\n')
             config = Path(__file__).resolve().parents[1] / 'src-tauri/tauri.conf.json'

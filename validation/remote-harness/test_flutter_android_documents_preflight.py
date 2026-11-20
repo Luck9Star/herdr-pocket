@@ -15,6 +15,10 @@ class PreflightTest(unittest.TestCase):
         self.assertEqual(result['终端字号']['matches'], 0)
         self.assertNotIn('secret', str(probe.inventory(tree('secret'))))
 
+    def test_home_merged_settings_semantics_is_allowlisted_but_not_substrings(self):
+        self.assertEqual(probe.inventory(tree('设置&#10;设置'))['设置']['matches'], 1)
+        self.assertEqual(probe.inventory(tree('设置 something'))['设置']['matches'], 0)
+
     def test_duplicate_label_and_invalid_bounds_do_not_authorize_tap(self):
         self.assertNotIn('bounds', probe.inventory(tree(bounds='[0,0][9999,3]'))['设置'])
         duplicate = tree().replace(b'</hierarchy>', tree()[11:-12] + b'</hierarchy>')

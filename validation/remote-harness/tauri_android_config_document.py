@@ -59,12 +59,19 @@ def public_error(error):
     return str(error) if isinstance(error, GuiFailure) and str(error) in ERRORS else 'driver_failed'
 
 
-def open_archive(raw, password):
+def decrypt_archive(raw, password):
     require(50 < len(raw) <= MAX_ARCHIVE and raw.startswith(b'HPKT\x01\x01'), 'archive_invalid')
     key = hashlib.pbkdf2_hmac('sha256', password.encode(), raw[6:22], 600_000, dklen=32)
     try:
-        value = json.loads(AESGCM(key).decrypt(raw[22:34], raw[34:], raw[:34]))
+        return AESGCM(key).decrypt(raw[22:34], raw[34:], raw[:34])
     except (InvalidTag, ValueError, UnicodeError):
+        raise GuiFailure('archive_invalid') from None
+
+
+def open_archive(raw, password):
+    try:
+        value = json.loads(decrypt_archive(raw, password))
+    except (ValueError, UnicodeError):
         raise GuiFailure('archive_invalid') from None
     require(value == {'version': 2, 'hosts': [], 'networks': [],
                       'preferences': {'terminalFontSize': FONT}}, 'archive_invalid')

@@ -14,6 +14,9 @@ PACKAGE = 'dev.herdr.herdr_flutter_probe'
 SERIAL = 'emulator-5554'
 LABELS = ('设置', '终端字号', '加密导出／导入公开主机资料', '加密迁移公开配置',
           '打开加密文件', '加密并另存所选公开资料', '我已核对范围与冲突。迁移不带入信任、身份或授权，替换会停止相关连接。')
+# Flutter Widget semantics combines the two visible settings labels on the empty home.
+# Android's actual mapping is still checked at runtime, never inferred from this fixture.
+LABEL_VARIANTS = {'设置': {'设置', '设置\n设置'}}
 SCRATCH = '/data/local/tmp/herdr-documents-preflight.xml'
 
 
@@ -46,8 +49,9 @@ def inventory(raw):
     parents = {child: parent for parent in root.iter() for child in parent}
     result = {}
     for label in LABELS:
-        matches = [n for n in nodes if n.get('package') == PACKAGE and label in
-                   (n.get('text'), n.get('content-desc'))]
+        labels = LABEL_VARIANTS.get(label, {label})
+        matches = [n for n in nodes if n.get('package') == PACKAGE and
+                   (n.get('text') in labels or n.get('content-desc') in labels)]
         candidates = []
         for node in matches:
             current = node

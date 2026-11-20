@@ -3,6 +3,11 @@ name: Ordinary SSH Android UI acceptance
 on:
   workflow_dispatch:
     inputs:
+      acceptance:
+        description: 'Choose SSH acceptance or read-only documents preflight'
+        type: choice
+        options: [ssh, documents-preflight, documents-roundtrip]
+        default: ssh
       auth_case:
         description: 'SSH acceptance case'
         type: choice
@@ -21,7 +26,7 @@ concurrency:
 
 jobs:
   flutter-ordinary-ssh:
-    if: startsWith(github.ref, 'refs/heads/codex/')
+    if: startsWith(github.ref, 'refs/heads/codex/') && inputs.acceptance != 'documents-preflight' && inputs.acceptance != 'documents-roundtrip'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -90,4 +95,116 @@ jobs:
           path: |
             ${{ runner.temp }}/direct-ssh-public/
             ${{ runner.temp }}/direct-ssh-avd/
+          if-no-files-found: warn
+
+  flutter-documents-preflight:
+    if: github.event_name == 'workflow_dispatch' && inputs.acceptance == 'documents-preflight' && startsWith(github.ref, 'refs/heads/codex/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17.0.18+8'
+      - name: Prepare production entry and candidate dependency
+        run: |
+          python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/documents-sdk"
+          export PATH="$RUNNER_TEMP/documents-sdk/bin:$PATH"
+          flutter precache --android
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
+          sudo apt-get update
+          sudo apt-get install -y acl libpulse0 libgl1 libgl1-mesa-dri libnss3 libxkbcommon-x11-0 libxcb-cursor0
+          python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/documents-app"
+          python3 validation/flutter/tool/candidate.py apply --destination "$RUNNER_TEMP/documents-app"
+          cd "$RUNNER_TEMP/documents-app"
+          flutter pub get
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/documents-app"
+          flutter build apk --debug --target-platform android-x64 --no-pub -t lib/main.dart
+      - name: Inspect read-only production UI on an owned API35 emulator
+        run: |
+          AVD_EVIDENCE_DIR="$RUNNER_TEMP/documents-avd" bash validation/remote-harness/with-android-emulator.sh \
+            python3 validation/remote-harness/flutter_android_documents_preflight.py \
+            --apk "$RUNNER_TEMP/documents-app/build/app/outputs/flutter-apk/app-debug.apk" \
+            --output "$RUNNER_TEMP/documents-public"
+      - name: Upload sanitized preflight and emulator lifecycle
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: flutter-documents-preflight-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/documents-public/
+            ${{ runner.temp }}/documents-avd/
+          if-no-files-found: warn
+
+  flutter-documents-roundtrip:
+    if: github.event_name == 'workflow_dispatch' && inputs.acceptance == 'documents-roundtrip' && startsWith(github.ref, 'refs/heads/codex/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17.0.18+8'
+      - name: Prepare isolated test dependencies and verify guards
+        run: |
+          python3 -m venv "$RUNNER_TEMP/documents-python"
+          "$RUNNER_TEMP/documents-python/bin/pip" install -r validation/pairing/requirements.txt 'paramiko==4.0.0'
+          "$RUNNER_TEMP/documents-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_flutter_android_documents*.py' -v
+          "$RUNNER_TEMP/documents-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_tauri_android_config_document.py' -v
+      - name: Prepare production sources and integration-test wrapper
+        run: |
+          python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/documents-sdk"
+          export PATH="$RUNNER_TEMP/documents-sdk/bin:$PATH"
+          flutter precache --android
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
+          sudo apt-get update
+          sudo apt-get install -y acl libpulse0 libgl1 libgl1-mesa-dri libnss3 libxkbcommon-x11-0 libxcb-cursor0
+          python3 validation/flutter/tool/ci.py prepare --destination "$RUNNER_TEMP/documents-app"
+          python3 validation/flutter/tool/candidate.py apply --destination "$RUNNER_TEMP/documents-app"
+          cd "$RUNNER_TEMP/documents-app"
+          flutter pub get
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/documents-app"
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/android_device_test.py" prepare --destination "$RUNNER_TEMP/documents-app"
+          flutter pub get
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/android_device_test.py" verify-lock --destination "$RUNNER_TEMP/documents-app"
+          cp "$GITHUB_WORKSPACE/validation/remote-harness/flutter_android_documents_device_test.dart" integration_test/flutter_android_documents_device_test.dart
+          flutter analyze integration_test/flutter_android_documents_device_test.dart
+          flutter build apk --debug --target-platform android-x64 --no-pub --dart-define=HERDR_ANDROID_DOCUMENTS=1 --dart-define="HERDR_ANDROID_DOCUMENTS_RUN_ID=$GITHUB_RUN_ID" -t integration_test/flutter_android_documents_device_test.dart
+      - name: Install the pinned emulator in the job's private directory
+        run: |
+          archive="$RUNNER_TEMP/documents-emulator-16740729.zip"
+          curl --fail --location --silent --show-error --max-time 600 \
+            'https://redirector.gvt1.com/edgedl/android/repository/emulator-linux_x64-16740729.zip' --output "$archive"
+          test "$(stat -c %s "$archive")" = 349658551
+          printf '%s  %s\n' cbc7c3cfb83220b8a0f9c513fdab557712e74d339ec19ddffa43f23350ae9bdd "$archive" | sha256sum --check --status
+          mkdir "$RUNNER_TEMP/documents-emulator" "$RUNNER_TEMP/documents-avd"
+          unzip -q "$archive" -d "$RUNNER_TEMP/documents-emulator"
+          printf '%s\n' cbc7c3cfb83220b8a0f9c513fdab557712e74d339ec19ddffa43f23350ae9bdd > "$RUNNER_TEMP/documents-avd/emulator-archive-sha256.txt"
+      - name: Run integration-test wrapper with real system DocumentsUI
+        run: |
+          export PATH="$RUNNER_TEMP/documents-sdk/bin:$PATH"
+          AVD_EMULATOR_LAUNCHER="$RUNNER_TEMP/documents-emulator/emulator/emulator" \
+          AVD_EXPECTED_EMULATOR_VERSION='Android emulator version 37.2.13.0 (build_id 16740729) (CL:N/A)' \
+          AVD_EXPECTED_IMAGE_REVISION=9 \
+          AVD_EVIDENCE_DIR="$RUNNER_TEMP/documents-avd" bash validation/remote-harness/with-android-emulator.sh \
+            "$RUNNER_TEMP/documents-python/bin/python" validation/remote-harness/flutter_android_documents_device.py \
+            --project "$RUNNER_TEMP/documents-app" --output "$RUNNER_TEMP/documents-public"
+      - name: Upload only sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: flutter-documents-roundtrip-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/documents-public/
+            ${{ runner.temp }}/documents-avd/
           if-no-files-found: warn

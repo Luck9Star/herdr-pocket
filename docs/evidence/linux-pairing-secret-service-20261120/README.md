@@ -126,7 +126,7 @@ Linux ARM64 的 `557f56d4` 对应 99／99 原生单测，另在隔离的真实 G
 
 ## PR #59 官方集成复验
 
-下列已核对的运行来自 `299f905fb1331c3657a49d47b275a1dee37e1a36`，均为首次尝试。每个 ZIP 均核对 GitHub SHA-256、CRC 与存在的内附校验表。 [本批脱敏回执](official-pr59-integration-receipt.json) · [归档校验和](SHA256SUMS)
+以下三项 Linux 定向运行来自 `299f905fb1331c3657a49d47b275a1dee37e1a36`，均为首次尝试。每个 ZIP 均核对 GitHub SHA-256、CRC 与存在的内附校验表。 [本批脱敏回执](official-pr59-integration-receipt.json) · [归档校验和](SHA256SUMS)
 
 ### Tauri 受保护输入双主机 S06
 
@@ -143,6 +143,10 @@ Ubuntu 24.04 x86_64 原生 Tauri 在隔离 GNOME Keyring 和回环 OpenSSH 上�
 ### Linux 测试包
 
 Ubuntu 24.04 x86_64 生成未签名的 amd64 Debian 测试包。包内 Secret Service 5.1.0 的 `LICENSE-APACHE`、`LICENSE-MIT` 和 `UPSTREAM` 与同源 vendored 文件逐字节一致，包清单的文件哈希和外层、浏览器预览的共享资产已比对。构建清单 `deviceResult=unverified`，安装和已签名发行仍待验。 [Linux 构建作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44692672810/job/136141971219) · [原始工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44692672810/artifacts/14610210750)
+
+### Tauri 五平台测试包
+
+`869f9cf94e4471237193774263cb203d4c8bf8fa` 的五平台六个构建目标最终均通过。首次尝试通过 Android、macOS、Windows、Linux 和 iOS 模拟器。iOS 设备目标在 macOS 宿主的普通 SSH 子进程回收测试超时，未进入构建。第二次在同一 SHA 仅重跑该目标，宿主测试、未签名设备包及符号校验均通过。六个成功 ZIP 均核对 GitHub SHA-256、CRC、内附 `SHA256SUMS` 以及构建清单的源码和成功状态。iOS 设备包的原始 ZIP SHA-256 为 `991e495cf3291b592568e102be683ce0272633a4112b27d59d6d9bcb42d87d84`。实体设备运行和签名分发仍待验。 [五平台运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/44693385114) · [首次 iOS 设备目标](https://github.com/Luck9Star/herdr-pocket/actions/runs/44693385114/job/136144301054) · [同源复跑作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44693385114/job/136149629539) · [iOS 设备包原件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44693385114/artifacts/14609734789)
 
 ## 复跑与回滚依据
 

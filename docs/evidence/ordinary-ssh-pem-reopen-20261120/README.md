@@ -1,6 +1,6 @@
 # 普通 SSH 私钥收起与重开验收
 
-2026-11-20，[PR #56](https://github.com/Luck9Star/herdr-pocket/pull/56) 的七个原生作业已按各自源码归档。Windows Flutter、Linux Flutter 和 Linux Tauri 完成受控回环会话。Windows 和 Tauri Linux 证实私钥摘要可实际点击，编辑器重开后得到同一份完整草稿，再失焦时收起。Flutter Linux 的现有作业证实点击摘要并逐字读回，第二次收起仍需用加强后的驱动复验。
+2026-11-20，[PR #56](https://github.com/Luck9Star/herdr-pocket/pull/56) 的首批七个原生作业已按各自源码归档。Windows Flutter、Linux Flutter 和 Linux Tauri 完成受控回环会话。Windows 和 Tauri Linux 证实私钥摘要可实际点击，编辑器重开后得到同一份完整草稿，再失焦时收起。Flutter Linux 证实点击摘要并逐字读回，第二次收起仍需用加强后的驱动复验。第二批结果见[加密私钥与主机换钥](#第二批加密私钥与主机换钥)。
 
 ## 原生作业与新交互
 
@@ -15,6 +15,34 @@
 | Flutter Android，API 35 x86_64 模拟器 | 已观察应用包，未观察应用检查点，也未交付凭据。SSH 连接数为零。Emulator 37.3.10 的受管进程退出值为 132，反向转发及卸载两项清理未证实。 | 本次未达私钥交互。退出码记录了模拟器进程的终止状态，现有工件不足以定位触发原因。 | [作业 136021715465](https://github.com/Luck9Star/herdr-pocket/actions/runs/44655838242/job/136021715465) · [工件 14593502076](https://github.com/Luck9Star/herdr-pocket/actions/runs/44655838242/artifacts/14593502076) |
 
 作业使用临时 SSH 夹具和受控回环。Win32、GTK/Xvfb 与 macOS XCUITest 均运行对应原生桌面应用，输入由验收驱动完成。手机记录来自模拟器。实体设备、物理 IME 和真实远端或跨网连接不在本批范围内。
+
+## 第二批加密私钥与主机换钥
+
+Tauri Android API 35 和 Linux 两壳完成加密私钥与主机换钥组合。每案各有四条已关闭的连接，顺序为 A 探测、B 拒绝、B 重探、B 公钥认证。前三条均为零认证、零 PTY、零输入。最后一条均完成一次认证成功、一次 PTY、一次 Shell，服务端收到 9 字节输入并发出 102 字节输出。
+
+| 平台和作业源码 | 实测结果 | 私钥收起与重开证据 | 官方来源 |
+| --- | --- | --- | --- |
+| Tauri Android API 35 x86_64，`d1ed8646` | 换钥拒绝、取消保旧、重探确认后以公钥连接。最后一条两次认证尝试、一次成功。系统原屏通过终端 OCR，主动断开、凭据清空与五项清理通过。 | 同源码驱动以 CDP 点击口令框验证收起，再点击唯一摘要。检查编辑器焦点和草稿逐字一致，再点口令框核对第二次收起。通过作业与驱动源码共同支撑这些检查。口令与私钥录入为 WebView 交互，系统 IME 组字待验。[驱动](https://github.com/Luck9Star/herdr-pocket/blob/d1ed86462745556ad020189c4dd3ad066fd69cf1/validation/remote-harness/tauri_android_direct_ssh.py#L784-L869) | [作业 136044961608](https://github.com/Luck9Star/herdr-pocket/actions/runs/44662840108/job/136044961608) · [工件 14596169777](https://github.com/Luck9Star/herdr-pocket/actions/runs/44662840108/artifacts/14596169777) |
+| Tauri Linux，WebKitGTK/Xvfb，`0ae850ea` | 拒绝新密钥并取消后保留旧信任。重探确认 B，最后一条两次认证尝试、一次成功。终端 OCR、主动断开、返回首页和清理通过。 | 同源码驱动强制真实 WebDriver 点击摘要、核对焦点及完整草稿，再点击口令框核对第二次收起。通过作业与驱动源码共同支撑这些检查。[驱动](https://github.com/Luck9Star/herdr-pocket/blob/0ae850eae4fc6aa492c1bf01304ee222f1907a5d/validation/remote-harness/tauri_linux_direct_ssh.py#L250-L268) | [作业 136038119946](https://github.com/Luck9Star/herdr-pocket/actions/runs/44660753647/job/136038119946) · [工件 14594674668](https://github.com/Luck9Star/herdr-pocket/actions/runs/44660753647/artifacts/14594674668) |
+| Flutter Linux，GTK/Xvfb，`0ae850ea` 与 `2720e2f5` | 两次均保留旧信任并重探确认 B。错口令在客户端被拒绝，当时仅 A 探测且零认证。最后一条一次认证尝试、一次成功。终端 OCR、主动断开、返回首页、凭据清空和清理通过。 | `0ae850ea` 证实摘要点击和逐字读回。`2720e2f5` 的 `pemReopen` 四项均为真，覆盖摘要出现、实点后草稿逐字一致且获焦、再次收起，以及编辑器与其 Flutter 语义节点消失。[加强后的驱动](https://github.com/Luck9Star/herdr-pocket/blob/2720e2f536c69adbed9ce3f91d70e0466114af0d/validation/flutter/integration_test/linux_direct_ssh_test.dart#L263-L330) | [早期作业 136038119937](https://github.com/Luck9Star/herdr-pocket/actions/runs/44660753582/job/136038119937) · [早期工件 14596196132](https://github.com/Luck9Star/herdr-pocket/actions/runs/44660753582/artifacts/14596196132) · [严格复验 136049825334](https://github.com/Luck9Star/herdr-pocket/actions/runs/44664325486/job/136049825334) · [严格复验工件 14596687636](https://github.com/Luck9Star/herdr-pocket/actions/runs/44664325486/artifacts/14596687636) |
+
+| 平台和作业源码 | 实测断点 | 官方来源 |
+| --- | --- | --- |
+| Flutter iOS，`939097e1` | 加密案已核对指纹并拒绝错口令。第二次尝试在 `encrypted_connect` 报 `StateError`，同源码第 617 行读取口令字段失败。加密夹具仅一条已关闭 A 探测，零认证、PTY 和收发。普通和密码换钥的终端证据与加密案独立。[字段读取](https://github.com/Luck9Star/herdr-pocket/blob/939097e17ffceef1ca5739f580eda36e4572932b/validation/flutter/integration_test/direct_ssh_ui_steps.dart#L611-L629) · [重试](https://github.com/Luck9Star/herdr-pocket/blob/939097e17ffceef1ca5739f580eda36e4572932b/validation/flutter/integration_test/direct_ssh_ui_steps.dart#L905-L929) | [作业 136034860976](https://github.com/Luck9Star/herdr-pocket/actions/runs/44659776085/job/136034860976) · [工件 14595348177](https://github.com/Luck9Star/herdr-pocket/actions/runs/44659776085/artifacts/14595348177) |
+| Flutter Android API 35，`0ae850ea` | 加密案已拒绝错口令。最后完成的 `encrypted_rejected` 之后，正确口令字段的点击在同源码第 154 行因控件未就绪失败。工件没有足够细节定位候选缺失或遮挡。服务端仅一条已关闭 A 探测，零认证、PTY 和收发。[点击条件](https://github.com/Luck9Star/herdr-pocket/blob/0ae850eae4fc6aa492c1bf01304ee222f1907a5d/validation/flutter/integration_test/direct_ssh_ui_steps.dart#L143-L157) · [重试](https://github.com/Luck9Star/herdr-pocket/blob/0ae850eae4fc6aa492c1bf01304ee222f1907a5d/validation/flutter/integration_test/direct_ssh_ui_steps.dart#L950-L966) | [作业 136037669336](https://github.com/Luck9Star/herdr-pocket/actions/runs/44660617833/job/136037669336) · [工件 14596052057](https://github.com/Luck9Star/herdr-pocket/actions/runs/44660617833/artifacts/14596052057) |
+| Tauri iOS R13，`1684d15e` | `encrypted_key_open_add` 阶段索引到 `163×22pt` 的 AX 候选，同时 XCUIScreen 原图在系统状态栏以下全白。快照在 9.531 秒已报告结构就绪，图像只证明其采样时刻的渲染状态。快捷入口点击未发生，对端零连接，私钥与口令阶段未运行。 | [作业 136036755995](https://github.com/Luck9Star/herdr-pocket/actions/runs/44660347850/job/136036755995) · [工件 14595039692](https://github.com/Luck9Star/herdr-pocket/actions/runs/44660347850/artifacts/14595039692) |
+| Flutter macOS R3，`34c3e54c` | 四项运行，系统遮罩、密码 SSH、从首页重新进入后密码清空三项通过。加密案已观测原生口令字段输入，在第 281 行未证明私钥收起及唯一可命中摘要，整项作业失败。原生加密认证和摘要重开仍待验。[私钥门禁](https://github.com/Luck9Star/herdr-pocket/blob/34c3e54ce276ad52a43909ff582ddfdfd570502c/validation/remote-harness/macos_secure_xcuitest.swift#L265-L281) | [作业 136043832798](https://github.com/Luck9Star/herdr-pocket/actions/runs/44662494257/job/136043832798) · [工件 14596239411](https://github.com/Luck9Star/herdr-pocket/actions/runs/44662494257/artifacts/14596239411) |
+
+### 第二批可恢复图像与工件
+
+| 场景 | 可恢复图像 |
+| --- | --- |
+| Tauri Android | [换钥审查，CDP WebView PNG](followup/android-tauri-rotation/s10-host-key-change-android.png) · [回显，1080 × 2340 系统原屏](followup/android-tauri-rotation/ssh-rotation-terminal-android.png) |
+| Tauri Linux | [换钥审查](followup/linux-tauri-rotation/rotation-rejected.png) · [回显](followup/linux-tauri-rotation/ordinary-terminal.png) · [首页，沿用同字节副本](linux-tauri/ordinary-home.png)。两张新增图均为 1440 × 1200 WebKitGTK 视口。 |
+| Flutter Linux，严格复验 `2720e2f5` | [换钥审查](followup/linux-flutter-rotation/rotation-rejected.png) · [回显](followup/linux-flutter-rotation/ordinary-terminal.png) · [首页，沿用同字节副本](linux-flutter/ordinary-home.png)。两张新增图均为 1920 × 1080 X11 framebuffer。 |
+| Tauri iOS R13 | [首页采样，1320 × 2868 系统原屏](followup/ios-tauri-r13/tauri-manual-key-empty-home.png) |
+
+八份 ZIP 的 CRC 均有效，大小和 SHA-256 与官方工件记录一致，清单源码与 Actions 的工件关联 `head_sha` 一致。新增七张图经过 Vision OCR 与目视检查，检测到的长编码串位于公开主机指纹栏。Android 和 Linux 六张新增图保留原 PNG 字节。iOS R13 白屏图只移除 `eXIf` 和 `iTXt`，解码像素逐字节一致。两张 Linux 首页图与首批副本逐字节一致。其余图像在索引保留原成员哈希，可在工件保留期内下载原件。校验步骤见下文。 [第二批工件索引](official-followup-index.json) · [归档文件校验](SHA256SUMS)
 
 ## 截图和源码
 
@@ -38,7 +66,7 @@
 
 ## 校验和复跑
 
-七个 ZIP 的大小、SHA-256 和源码 SHA 均与 GitHub Actions 工件记录一致。每个 ZIP 的 CRC 和 `result.json` 的源码、状态已复核，内图逐张核对原始报告的摘要。Windows 测试源码按检出时的 CRLF 核对，Linux Flutter 按 LF 核对。索引保留原报告哈希、判定和值班所需的协议计数，原始报告和日志仍由上表的工件链接提供。
+首批七个 ZIP 的大小、SHA-256 和源码 SHA 均与 GitHub Actions 工件记录一致。每个 ZIP 的 CRC 和 `result.json` 的源码、状态已复核，内图逐张核对原始报告的摘要。Windows 测试源码按检出时的 CRLF 核对，Linux Flutter 按 LF 核对。索引保留原报告哈希、判定和协议计数，原始报告和日志仍由首批工件链接提供。
 
 在本目录执行下列命令。若 GitHub 工件仍在保留期，需使用有读取权限的 GitHub CLI。ZIP 存在于独立临时目录。
 
@@ -53,7 +81,7 @@ shasum -a 256 "$zip"
 unzip -p "$zip" result.json | shasum -a 256
 ```
 
-将下载的 ZIP 和报告哈希与 [工件索引](official-index.json)比较。Android 原报告路径为 `direct-ssh-public/result.json`，可在索引的 `manifestFile` 查看。
+将下载的 ZIP 和报告哈希与对应批次的索引比较。清单成员路径以 `manifestFile` 为准，第二批 Tauri Android 使用 `tauri-direct-evidence/manifest.json`，Flutter Android 使用 `direct-ssh-public/result.json`。 [首批工件索引](official-index.json) · [第二批工件索引](official-followup-index.json)
 
 本地 Flutter 回归从目标提交导出到临时目录，使用 Flutter 3.47.9 和 Paramiko 4.0.0。几何测试使用本机临时 SSH 夹具，工作树无需切换。
 

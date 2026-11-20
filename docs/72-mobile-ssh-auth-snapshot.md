@@ -10,6 +10,10 @@
 
 手机首轮仍有三处阻断。Flutter iOS 普通密码和密码换钥完成，独立加密案止于指纹确认后的验收回调。Tauri iOS 手填加密案止于口令控件归属核验。Flutter Android 的模拟器在应用检查点和 SSH 连接前退出。三个加密案均无认证尝试。macOS Flutter 的加密私钥子用例通过，系统遮蔽综合用例失败。端到端状态与新交互的实证以[官方工件索引](evidence/ordinary-ssh-pem-reopen-20261120/official-index.json)为准。
 
+第二批在 Tauri Android API 35、Tauri Linux 和 Flutter Linux 完成加密私钥与主机换钥组合，均经回环公钥认证、终端 OCR 和主动断开。Tauri 两案的通过作业与同源码驱动共同佐证失焦收起、点击重开同一草稿及再次收起。Flutter Linux `2720e2f5` 工件直接记录摘要出现、重开同一草稿并获焦、再次收起和编辑器及其 Flutter 语义节点消失。 [第二批原生作业与证据](evidence/ordinary-ssh-pem-reopen-20261120/README.md#第二批加密私钥与主机换钥)
+
+第二批 Flutter iOS 与 Android 均拒绝错口令且保持零认证，随后在正确口令字段处失败。Tauri iOS R13 在首页仅见 `163×22pt` AX 候选，采样原图的应用区域全白，尚未进入私钥流程。Flutter macOS R3 已通过系统遮罩，私钥收起和重开仍待原生复验。 [第二批官方工件索引](evidence/ordinary-ssh-pem-reopen-20261120/official-followup-index.json)
+
 ## 合并前原生复验
 
 ### R2 联合复验

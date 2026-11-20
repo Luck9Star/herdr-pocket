@@ -21,16 +21,39 @@ SCRATCH = '/data/local/tmp/herdr-documents-preflight.xml'
 
 
 class Failure(Exception):
-    pass
+    def __init__(self, code, *, operation=None, outcome=None):
+        super().__init__(code)
+        self.operation = operation
+        self.outcome = outcome
+
+
+def command_kind(args):
+    # Public diagnostics use only fixed operation names, never command arguments.
+    words = args[3:] if args[:3] == ('adb', '-s', SERIAL) else args[1:]
+    if args[:1] == ('adb',) and args[1:] == ('devices',):
+        return 'devices'
+    table = (('shell', 'dumpsys', 'window'), ('shell', 'uiautomator', 'dump'),
+             ('shell', 'pm', 'list'), ('shell', 'pm', 'path'), ('shell', 'getprop'),
+             ('shell', 'am', 'get-current-user'), ('shell', 'am', 'start'),
+             ('shell', 'input', 'tap'), ('shell', 'test'), ('shell', 'rm'),
+             ('exec-out', 'cat'), ('install',), ('uninstall',))
+    names = ('window', 'hierarchy_dump', 'package_list', 'package_path', 'device_property',
+             'current_user', 'launch', 'tap', 'scratch_check', 'scratch_remove',
+             'file_read', 'install', 'uninstall')
+    return next((name for prefix, name in zip(table, names) if words[:len(prefix)] == prefix), 'other')
 
 
 def command(*args, timeout=30):
     try:
         p = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
-    except (OSError, subprocess.TimeoutExpired):
-        raise Failure('command_unavailable') from None
-    if p.returncode or len(p.stdout) > 160_000_000 or len(p.stderr) > 1_000_000:
-        raise Failure('command_failed')
+    except subprocess.TimeoutExpired:
+        raise Failure('command_unavailable', operation=command_kind(args), outcome='timeout') from None
+    except OSError:
+        raise Failure('command_unavailable', operation=command_kind(args), outcome='os_error') from None
+    if p.returncode:
+        raise Failure('command_failed', operation=command_kind(args), outcome='nonzero')
+    if len(p.stdout) > 160_000_000 or len(p.stderr) > 1_000_000:
+        raise Failure('command_failed', operation=command_kind(args), outcome='output_limit')
     return p.stdout
 
 
@@ -179,6 +202,8 @@ def main():
         report['status'] = 'passed'
     except Failure as error:
         report['error'] = str(error)
+        if error.operation and error.outcome:
+            report['commandDiagnostic'] = {'operation': error.operation, 'outcome': error.outcome}
     except Exception:
         report['error'] = 'unexpected_failure'
     finally:

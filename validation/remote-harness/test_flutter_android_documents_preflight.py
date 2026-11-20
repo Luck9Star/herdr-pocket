@@ -1,3 +1,4 @@
+import subprocess
 import unittest
 from unittest.mock import patch
 import flutter_android_documents_preflight as probe
@@ -39,6 +40,17 @@ class PreflightTest(unittest.TestCase):
         with patch.object(probe, 'hierarchy', return_value=state), patch.object(probe, 'adb') as adb:
             probe.tap_unique(state, '设置')
             adb.assert_called_once_with('shell', 'input', 'tap', '60', '70')
+
+    def test_diagnostics_are_fixed_and_do_not_contain_command_arguments(self):
+        with patch.object(probe.subprocess, 'run', side_effect=subprocess.TimeoutExpired('secret', 1)):
+            with self.assertRaises(probe.Failure) as caught:
+                probe.adb('shell', 'uiautomator', 'dump', 'secret')
+        self.assertEqual((caught.exception.operation, caught.exception.outcome), ('hierarchy_dump', 'timeout'))
+        self.assertNotIn('secret', str(caught.exception))
+        with patch.object(probe.subprocess, 'run', side_effect=OSError('secret')):
+            with self.assertRaises(probe.Failure) as caught:
+                probe.adb('shell', 'input', 'tap', '100', '200')
+        self.assertEqual((caught.exception.operation, caught.exception.outcome), ('tap', 'os_error'))
 
     def test_invalid_xml_is_rejected(self):
         with self.assertRaisesRegex(probe.Failure, 'hierarchy_invalid'):

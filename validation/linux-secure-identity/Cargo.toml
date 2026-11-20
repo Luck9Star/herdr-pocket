@@ -1,0 +1,15 @@
+[package]
+name = "herdr-linux-secure-identity"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96"
+publish = false
+
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+[dependencies]
+base64ct = { version = "=1.8.3", features = ["alloc"] }
+ring = "=0.17.14"
+zeroize = "=1.9.1"
+secret-service = { path = "vendor/secret-service", features = ["rt-async-io-crypto-rust"] }

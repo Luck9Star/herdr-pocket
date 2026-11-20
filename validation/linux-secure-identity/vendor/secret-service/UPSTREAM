@@ -1,0 +1,2 @@
+secret-service 5.1.0, crates.io archive SHA-256 9a62d7f86047af0077255a29494136b9aaaf697c76ff70b8e49cded4e2623c14.
+Local change: the blocking prompt executor returns Error::Prompt without displaying or executing a prompt. Callers use only already-unlocked collections.

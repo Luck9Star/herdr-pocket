@@ -14,6 +14,18 @@ node design/penpot/direct-ssh-mobile.mjs \
 
 直接打开目录内的 `<状态>-390.svg` 或 `<状态>-320.svg` 即可按原尺寸测量。`geometry.json` 中每页的 `atlas` 指定其在总览中的裁切区域，`anchors` 给出画板内坐标。总览画板组以 `<状态>-<宽>` 命名，内部层为 `<状态>-<宽>-<锚点>`。标签标题在裁切区域外。Penpot 可逐页拖入 SVG 后将要编辑的画面建为画板。此次交付在线编辑器登录未就绪，实际导入时的文本转换和字体回退仍待核对。 [导入与图层](https://help.penpot.app/user-guide/designing/layers/) · [SVG 数据模型](https://help.penpot.app/technical-guide/developer/data-model/)
 
+## 私钥编辑与失焦状态
+
+在原有空白私钥画板基础上，附加了 320、390 宽度的独立状态页：[聚焦编辑与失焦摘要](direct-ssh-pem-states/mobile/)。聚焦时同一两行编辑区展示可滚动的合成示意；失焦且非空时以同尺寸「已填写私钥 · 重新编辑」按钮替代正文，点击回到同一内容的编辑状态。空内容保持编辑框；认证切换、取消及断开仍按原有凭据清除规则处理，口令继续遮罩。示意文字不是私钥。连接可用性仍由实际完整凭据决定。
+
+以下命令在临时目录生成既有总览与逐页，并把附加状态写入第四个参数指定的目录，不移动或改变原有画板：
+
+```sh
+node design/penpot/direct-ssh-mobile.mjs /tmp/ssh-mobile.svg /tmp/ssh-mobile-pages design/penpot/direct-ssh-pem-states/mobile
+```
+
+附加页的 `geometry.json` 记录同一凭据区域的编辑框或重编辑按钮锚点；它们是离线设计，非 Penpot 导入或设备运行验收。
+
 ## 页面与状态
 
 画板呈现每一步的独立状态。普通 SSH 可以从空首页直接进入，也可经「添加主机」进入连接方式选择。空首页画板用于无已保存主机的默认首页。已有主机、搜索与筛选态继续沿用 [v2 S01](../evidence/v2-S01.png) 与[主机筛选记录](../evidence/mobile-host-filter-20261108.json)。P1-empty 是历史设计来源，演示数据属于历史原型。主路径为填写地址、探测、核对、账号认证、活动终端、断开后回首页。凭据字段为示意，域名、账号、指纹和终端输出均使用虚构数据。实测时可用临时夹具替换这些值，保留状态和测量条件。

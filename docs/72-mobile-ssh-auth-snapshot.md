@@ -1,20 +1,17 @@
 # 手机普通 SSH 核验与认证快照
 
-2026-11-19，合并前复验覆盖 Android API 35 和 iOS 26.2 模拟器。Android 两壳与 Flutter iOS 的 R2、Tauri iOS 的 R7 均通过回环普通 SSH 和主机密钥更换验收。四个作业使用一致的产品源码及构建输入，分别保留实测提交。R2 之后的 Tauri iOS 驱动诊断、R22 入口批和 R23 本地核验保留在历史记录中。
+本页记录手机普通 SSH 表单、主机指纹核验和私钥认证的原生模拟器证据。R2 联合复验与 Tauri iOS R7 记录密码与换钥，11-20 的复验证明私钥收起、重开与认证。终端导航、软键盘和原屏几何见[活动终端与切页](73-mobile-ssh-terminal-navigation.md)。[按平台和认证查询普通 SSH](63-design-parity-and-direct-ssh.md#普通-ssh-验收矩阵2026-11-20-更新)
 
 各批沿用 [PR #4 的冻结设计](https://github.com/Luck9Star/herdr-pocket/pull/4)。画板提交为 `79deef0e9c03425f368966e32ff1f1d399a3ac02`。旧版 [15 状态前测](https://github.com/Luck9Star/herdr-pocket/blob/af273abca77fe97fd4806fe624dce89c6595869b/design/evidence/direct-ssh-mobile-20261118/baseline/README.md) 与[首批入口对照](https://github.com/Luck9Star/herdr-pocket/blob/af273abca77fe97fd4806fe624dce89c6595869b/design/evidence/direct-ssh-mobile-20261118/first-batch/README.md)提供独立参照。
 
 ## 2026-11-20 私钥收起与重开复验
 
-[PR #56 初批验收](evidence/ordinary-ssh-pem-reopen-20261120/README.md)按源码归档 Win32、Linux GTK/Xvfb、macOS XCUITest 和手机模拟器结果。Windows Flutter 与 Linux Tauri 完成摘要点击、草稿逐字读回和再次收起。Linux Flutter 本批证实点击和读回，进一步的焦点与再次收起断言待复验。
+- Flutter Android 和 iOS 分别通过独立加密和加密换钥。作业回执直接记录失焦后收起、点击摘要重开同一草稿并获焦，再次失焦收起。换钥两端同源码 `9865dafa`，A/B/B/B 的前三条连接零认证，末条一次公钥认证。
+- Tauri Android 通过 `d1ed8646` 加密私钥与换钥组合。成功作业与同源码驱动共同证明摘要实点、逐字读回和再次收起。Tauri iOS R15（`9865dafa`）通过原生手填独立加密，错／对口令两轮完整读回并重开，主动断开后返回首页。iOS 系统粘贴与加密换钥组合仍待验。
 
-手机首轮仍有三处阻断。Flutter iOS 普通密码和密码换钥完成，独立加密案止于指纹确认后的验收回调。Tauri iOS 手填加密案止于口令控件归属核验。Flutter Android 的模拟器在应用检查点和 SSH 连接前退出。三个加密案均无认证尝试。macOS Flutter 的加密私钥子用例通过，系统遮蔽综合用例失败。端到端状态与新交互的实证以[官方工件索引](evidence/ordinary-ssh-pem-reopen-20261120/official-index.json)为准。
+[第二批 Android 组合案](evidence/ordinary-ssh-pem-reopen-20261120/README.md#第二批加密私钥与主机换钥) · [第三批手机原件与强制回执](evidence/ordinary-ssh-pem-reopen-20261120/README.md#第三批手机回执与-macos-交接)
 
-第二批在 Tauri Android API 35、Tauri Linux 和 Flutter Linux 完成加密私钥与主机换钥组合，均经回环公钥认证、终端 OCR 和主动断开。Tauri 两案的通过作业与同源码驱动共同佐证失焦收起、点击重开同一草稿及再次收起。Flutter Linux `2720e2f5` 工件直接记录摘要出现、重开同一草稿并获焦、再次收起和编辑器及其 Flutter 语义节点消失。 [第二批原生作业与证据](evidence/ordinary-ssh-pem-reopen-20261120/README.md#第二批加密私钥与主机换钥)
-
-第二批 Flutter iOS 与 Android 均拒绝错口令且保持零认证，随后在正确口令字段处失败。Tauri iOS R13 在首页仅见 `163×22pt` AX 候选，采样原图的应用区域全白，尚未进入私钥流程。Flutter macOS R3 已通过系统遮罩，私钥收起和重开仍待原生复验。 [第二批官方工件索引](evidence/ordinary-ssh-pem-reopen-20261120/official-followup-index.json)
-
-第三批 Flutter Android 与 iOS 均通过独立加密和加密换钥。新回执直接记录失焦收起、摘要点击后完整草稿获焦，以及再次收起。换钥同源 `9865dafa`，两端均为 A → B → B → B，前三条零认证，末条一次公钥认证。Tauri iOS R15 通过原生手填独立加密案，错／对口令两轮均完整读回、重开和再收起，主动断开后返回首页。macOS R4 已跑通两次重开与再次收起，第二次原生口令点击后的键入未读回。修复在本机 AppKit 两种辅助功能模式均复验通过。正式 R5 随后通过系统遮罩、密码 SSH、加密私钥 SSH 和返回重开四项，工件无截图。 [第三批原生作业、截图与本机对照](evidence/ordinary-ssh-pem-reopen-20261120/README.md#第三批手机回执与-macos-交接)
+首批手机三案都止于认证前。Flutter iOS 独立加密卡在指纹确认回调，Tauri iOS 卡在口令控件归属，Flutter Android 模拟器在应用检查点前退出。第二批 Flutter 两端已拒绝错口令，再次提交时卡在正确口令字段。Tauri iOS R13 只取得首页 AX 候选和应用区域白屏原图，未进入私钥表单。各次失败保留各自阶段、源码和清理记录。[第一批工件索引](evidence/ordinary-ssh-pem-reopen-20261120/official-index.json) · [第二批工件索引](evidence/ordinary-ssh-pem-reopen-20261120/official-followup-index.json)
 
 ## 合并前原生复验
 
@@ -63,7 +60,7 @@ R7 在 PR #6 合并前提交 `1c441c0cae12ccb00cea64dc9db09b0949626b39` 上运�
 - 换钥案同样经添加入口。服务端顺序为 `A → B → B → B`。B 第一次被拒绝，取消后保留 A，重探并明确确认 B。前三条连接均零认证、零 PTY，只有最后一条密码认证成功并建立 PTY 和 Shell，收到一次完整终端输入行。驱动明确断开，四条连接均已关闭。本案验收到断开。
 - 两案均由 XCTest 输入一行夹具命令。服务端每案记录 9 字节输入、102 字节输出，系统截图的 OCR 均核对了标记和回显序列。证据包含两张终端原图、各自 OCR 门禁和一张换钥核对截图。模拟器、夹具及临时文件均已清理。
 
-R7 验收范围为受控回环密码认证与 XCTest 输入。活动终端在三个底栏页之间切换时保活、实体设备、系统 IME 组词、真实跨网和 Tauri iOS 私钥认证仍待独立验收。原始 ZIP 经完整性及 SHA256 核验，摘要为 `f4c58ce8b68da11470348ea52ff22578722c590bfafd1f297a81990bc3cba4c5`。[R7 原生作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44450826220/job/135314034354) · [证据 ZIP](https://github.com/Luck9Star/herdr-pocket/actions/runs/44450826220/artifacts/14497110066)
+R7 验收范围为受控回环密码认证与 XCTest 输入。之后由[原生模拟器导航](73-mobile-ssh-terminal-navigation.md#tauri-android-与-ios-原生模拟器-r4)验证底栏切换时保活，由 [R15 手填案](#2026-11-20-私钥收起与重开复验)验证独立加密认证。实体设备、系统 IME 组词和真实跨网仍待验。原始 ZIP 经完整性及 SHA256 核验，摘要为 `f4c58ce8b68da11470348ea52ff22578722c590bfafd1f297a81990bc3cba4c5`。[R7 原生作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44450826220/job/135314034354) · [证据 ZIP](https://github.com/Luck9Star/herdr-pocket/actions/runs/44450826220/artifacts/14497110066)
 
 长期归档保留三张 1320 × 2868 的系统截图。PNG 仅移除 EXIF 和文本块，解码像素一致。终端内的 `POCKET-ANDROID-SSH-OK` 是共用夹具的回显标记。[普通终端](evidence/mobile-ssh-auth-r23/tauri-ios-r7/ordinary-terminal.png) · [换钥核对](evidence/mobile-ssh-auth-r23/tauri-ios-r7/key-change-review.png) · [换钥后终端](evidence/mobile-ssh-auth-r23/tauri-ios-r7/key-change-terminal.png) · [来源、哈希与脱敏结果](evidence/mobile-ssh-auth-r23/tauri-ios-r7/official-index.json)
 
@@ -111,7 +108,7 @@ R7 验收范围为受控回环密码认证与 XCTest 输入。活动终端在三
 | 密码换钥（`keyChange`） | `key-change-terminal.png` | `key-change-terminal-ocr.json` |
 | 独立加密私钥（`encryptedKey`） | `encrypted-key-terminal.png` | `encrypted-key-terminal-ocr.json` |
 
-ZIP 同时保留 `key-change-review.png` 核对原图和 `preconnect.png` 已遮罩的连接前原图。私钥与主机换钥组合、实体设备、物理键盘、系统中文 IME 及真实跨网仍待独立验证。[仓库原件及成员校验清单](evidence/flutter-ios-encrypted-key-r1-20261119/README.md)
+ZIP 同时保留 `key-change-review.png` 核对原图和 `preconnect.png` 已遮罩的连接前原图。R1 未执行私钥与主机换钥组合，随后由 [R3](#独立加密私钥与主机换钥-r3)补验。实体设备、物理键盘、系统中文 IME 和真实跨网仍待验。[仓库原件及成员校验清单](evidence/flutter-ios-encrypted-key-r1-20261119/README.md)
 
 ## R22 Android 设备证据
 
@@ -142,7 +139,7 @@ Flutter 在 Widget Navigator 上复现旧版断开后边缘拖动无法开始，
 
 两壳均采用 320×640（上 24、下 24 pt）及 390×844（上 47、下 34 pt）。原 R23 中 Flutter 的 140 个已量应用锚点在 2 pt 内，18 个源未量锚点单列；Tauri 158 个已量应用锚点最大偏差 1 pt。原始坐标与中心命中记录见[本地量测和四对截图](evidence/mobile-ssh-auth-r23/README.md)。
 
-2026-11-19，Flutter 在产品提交 `26d8abfcd25d78fa22d5ead31e58bc39cb6e34ca` 补量原先缺失的 18 项，两档各 9 项，逐坐标偏差均为 0 pt；定向测试提交 `e69d92bcd7dc8b3b37a3c2410fa51faa8487139c`。原 140 项与独立补采的 18 项合计覆盖 158 个应用锚点，并非同一次采样；[补测矩形、原尺寸截图与哈希](evidence/mobile-ssh-auth-r23/supplement-20261119/README.md)保留独立来源。物理键盘、中文 IME、原生状态栏与键盘几何、原生设备上的活动终端与设置往返、实体设备、外网与五平台就绪仍待补证；相关本地验证见 [docs/73](73-mobile-ssh-terminal-navigation.md)。
+2026-11-19，Flutter 在产品提交 `26d8abfcd25d78fa22d5ead31e58bc39cb6e34ca` 补量原先缺失的 18 项，两档各 9 项，逐坐标偏差均为 0 pt；定向测试提交 `e69d92bcd7dc8b3b37a3c2410fa51faa8487139c`。原 140 项与独立补采的 18 项合计覆盖 158 个应用锚点，并非同一次采样；[补测矩形、原尺寸截图与哈希](evidence/mobile-ssh-auth-r23/supplement-20261119/README.md)保留独立来源。R23 的窗口几何来自本机模拟。后续手机模拟器已核对系统软键盘和活动终端设置往返，各案的原生状态栏与键盘边界以原屏为准。实体设备、物理键盘、系统中文 IME 与真实外网仍待验。[手机导航原生复验](73-mobile-ssh-terminal-navigation.md)
 
 ## 恢复与回滚
 

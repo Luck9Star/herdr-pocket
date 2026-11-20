@@ -1,8 +1,8 @@
 # 手机普通 SSH 活动终端与切页
 
-2026-11-19，本地验证通过两壳的活动终端、模拟键盘开合和设置往返。用户约定是从活动终端切到看板、网络或设置的实际页面后，保留原 SSH 会话和回显。切走时禁止终端输入，从底栏返回终端时保持键盘收起。主动断开才关闭本轮测试会话。
+从普通 SSH 终端切到看板、网络或设置时，原连接和回显保留。离开终端后停止接受终端输入，从底栏返回时保持软键盘收起。Android 和 iOS 的 Flutter、Tauri 模拟器都已在独立回环上复验。Tauri Android R7 另外证明导航后可第二次打开系统键盘，并继续使用原 SSH 会话。[Tauri 双端 R4](#tauri-android-与-ios-原生模拟器-r4) · [Tauri Android R7](#tauri-android-r7-导航后第二次打开键盘) · [按平台和认证查询普通 SSH](63-design-parity-and-direct-ssh.md#普通-ssh-验收矩阵2026-11-20-更新)
 
-两壳修前使用 `0705b9b70ac1cda2b58b20e0ebaf7596cbd8ebcb`。Flutter 修后为 `b6f89a3bcf317bdf69211d6a3c11ce7c7f491b71`，包含 `e47b593`。Tauri 首版布局修后为 `ea1694c29e3d9f5a12fca35875d54c3b9396ea55`。画板来自 `c063e785da173ad41bc740cf0dc64eaa8ccce3fb` 的[冻结设计](../design/penpot/direct-ssh-mobile.md)。Flutter Android、Flutter iOS 均通过本批原生模拟器导航验收。Tauri Android R3 复现系统键盘已打开但网页状态未同步，修后同一源码已通过 Android 和 iOS [原生模拟器 R4](#tauri-android-与-ios-原生模拟器-r4)。R4 之后的一次[键盘布局回归对照](#tauri-android-r5-键盘修前后官方对照)按整案失败归档。[普通 SSH 原生证据](72-mobile-ssh-auth-snapshot.md)
+本地对照的修前两壳源码为 `0705b9b70ac1cda2b58b20e0ebaf7596cbd8ebcb`。Flutter 修后为 `b6f89a3bcf317bdf69211d6a3c11ce7c7f491b71`，包含 `e47b593`。Tauri 首版布局修后为 `ea1694c29e3d9f5a12fca35875d54c3b9396ea55`。画板来自 `c063e785da173ad41bc740cf0dc64eaa8ccce3fb` 的[冻结设计](../design/penpot/direct-ssh-mobile.md)。[手机指纹与认证证据](72-mobile-ssh-auth-snapshot.md)
 
 ## 同尺寸画面与测量
 
@@ -72,7 +72,7 @@ Tauri Android R1 在连接阶段报告 `direct_active_ui_invalid`。Tauri iOS R1
 
 `2bd6dc83ce3e40a6ac34232078f3214163c04bba` 在 iPhone 17 Pro Max、iOS 26.2 模拟器通过。普通案的八个检查点依次为键盘开合、看板进入／返回、网络进入／返回和设置进入／返回。八步的回环服务端均为连接 #2，累计一次认证、一次 PTY 和一次 Shell，输入为零且连接未关闭。全部八个控件的原生记录均为归属已核验、启用、完整可见、中心可见和可命中。440 × 956 pt 原生屏中，键盘按钮为 44 × 44 pt，收起操作的可见区为 `[0,54,440,601]`。归档保留八条控件、状态栏和可见区完整矩形。[作业 44461266808](https://github.com/Luck9Star/herdr-pocket/actions/runs/44461266808/job/135348341572) · [正式工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44461266808/artifacts/14500344080) · [原生几何与服务端摘要](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-ios-r2/official-index.json)
 
-普通案为 `A → A`，换钥案为 `A → B → B → B`。探测与拒绝阶段均零认证、零 PTY、零输入，换钥取消后保留 A，重探并确认 B 后才认证。两案末条连接各有一次认证、一次 PTY 和一次 Shell，收到 9 字节夹具输入并输出 102 字节。两案分别通过原图 OCR、主动断开及服务端关闭，普通案另确认退回空首页。模拟器、夹具和临时文件均已清理。八项导航只属于普通案。系统输入法组词、Tauri iOS 私钥、实体设备与真实跨网仍待独立验收。
+普通案为 `A → A`，换钥案为 `A → B → B → B`。探测与拒绝阶段均零认证、零 PTY、零输入，换钥取消后保留 A，重探并确认 B 后才认证。两案末条连接各有一次认证、一次 PTY 和一次 Shell，收到 9 字节夹具输入并输出 102 字节。两案分别通过原图 OCR、主动断开及服务端关闭，普通案另确认退回空首页。模拟器、夹具和临时文件均已清理。八项导航只属于普通案。Tauri iOS 独立加密私钥由[后续原生手填 R15](72-mobile-ssh-auth-snapshot.md#2026-11-20-私钥收起与重开复验)验收。系统输入法组词、实体设备与真实跨网仍待验。
 
 本轮和旧 R7 使用相同型号与运行时。以下 1320 × 2868 px 原生终端图的系统键盘均不可见，可同状态目视对照应用顶栏、回显区和底栏。两张新图的解码像素与原图一致，只移除了文本及 EXIF 元数据。原生逐锚 2 pt 验收仍独立于这组对照。
 
@@ -159,4 +159,4 @@ Android API 35 x86_64 模拟器上的正式作业通过普通连接、换钥和�
 
 普通案完成八次操作，依次打开与收起键盘、进入看板与返回终端、进入网络与返回终端、进入设置与返回终端。导航后的第二次打开键盘前后，系统采样从 `owned_hidden` 到 `owned_visible`，编辑器激活状态从 `false` 到 `true`。两次都核对到同一条活连接，累计成功认证、PTY 和 Shell 各一次，输入仍为零。三案随后均核对输入回显、主动断开及五项清理，包括浏览器、应用、端口正反向转发和夹具连接。
 
-三张原始系统图均保留对应门禁 JSON。键盘图通过夹具标记、隐藏认证表单和零输入检查，普通与换钥回显图通过标记、令牌及回显顺序检查。实体设备、系统输入法组词、真实跨网及加密私钥与换钥的组合仍待验证。 [键盘原图](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r7/ime-keyboard-opened-native.png) · [普通连接原图](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r7/ssh-terminal-android.png) · [换钥原图](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r7/ssh-rotation-terminal-android.png)
+三张原始系统图均保留对应门禁 JSON。键盘图通过夹具标记、隐藏认证表单和零输入检查，普通与换钥回显图通过标记、令牌及回显顺序检查。R7 各自运行独立加密和密码换钥。加密私钥与换钥的组合由独立认证作业通过。实体设备、系统输入法组词和真实跨网仍待验证。[Tauri Android 加密换钥](72-mobile-ssh-auth-snapshot.md#tauri-android-加密私钥与主机换钥) [键盘原图](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r7/ime-keyboard-opened-native.png) · [普通连接原图](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r7/ssh-terminal-android.png) · [换钥原图](evidence/mobile-ssh-terminal-navigation-20261119/native/tauri-android-r7/ssh-rotation-terminal-android.png)

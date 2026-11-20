@@ -189,9 +189,10 @@ unzip -p mac-s06-r11.zip result.json
 | 2026-11-19 macOS 双回环 | 有两套真实配对、独立 OpenSSH 认证、各 10 字节和清理。运行入口是无界面夹具。[脱敏报告](evidence/dual-overlay-20261115/macos-two-paired-hosts.json) |
 | 2026-11-19 Flutter D2，`3ff4d23` | Widget 验证窗口阈值、分屏位置、暂停和恢复、键盘焦点及输入隔离，使用合成适配器。[验证记录](evidence/desktop-split-resize-20261119/widget-verification.json) |
 | 2026-11-19 Flutter D2 回宽自动恢复，`c9410f9` | Widget 红绿验证两轮复核反例：布局暂停的活跃观察拉宽自动恢复、等新帧期间资格保持、手动暂停与从未观察不自动；合成适配器。[运行摘要](evidence/desktop-split-resize-20261119/r2-c9410f9-widget-run-summary.json) |
-| 2026-11-19 同源 `c5aa64a` 双端 guarded | 同一提交并行 Flutter Widget 与 Tauri 原生 GTK 两条真实 SSH/herdr 回环：两端 [9,1] 字节、[1,1] 认证、共享 PTY 0 resize、清理全过；Tauri 另含 guarded 直接输入/Esc/窗口往返探针。[证据](evidence/s06-same-source-20261120/README.md) |
+| 2026-11-19 同源 `c5aa64a` 双端 guarded | 同一提交并行 Flutter Widget 与 Tauri 原生 GTK 两条真实 SSH/herdr 回环：两端实际输入均为 [9,1]，审查指纹与实际 SSH 认证匹配，PTY 无尺寸变化，清理通过。Flutter 记录客户端各连接一次。Tauri 另有 sshd [1,1] 认证及逐侧关闭证据，并核对逐键、退出组合键和窗口往返。[证据](evidence/s06-same-source-20261120/README.md) |
 | 2026-11-20 同源 `75df6463` 双端 stock R1 | Ubuntu 24.04 私有 Secret Service、真实回环 OpenSSH/herdr。Flutter GTK integration 作业在 A 的观察取消后丢失分屏，Tauri 原生 GTK 作业在双画面后的焦点点击失败，两端均未完成本轮 S06。 [R1 作业与清理回执](evidence/linux-pairing-secret-service-20261120/README.md#linux-双主机-s06-r1) |
 | 2026-11-20 同源 `1abdfe44` 双端 stock R2 | 私有 Secret Service 与两条回环 SSH 均通过。Flutter GTK integration 验焦点侧关闭及另一侧在原连接推进，未采样原生窗口往返。Tauri 原生 GTK 验 1440→700→1440、布局暂停恢复、手动暂停保留和逐侧关闭。两端各为 0／0 输入字节、远端 PTY 无变化。 [R2 作业、原图与回执](evidence/linux-pairing-secret-service-20261120/README.md#linux-双主机-s06-r2) |
+| 2026-11-20 #59 集成 `299f905f`，Tauri guarded | 原生 Linux GTK、私有 Secret Service，同轮核对两把公钥及各一次 sshd 认证。首键后 [0,1]、最终 [9,1]，1440→700→1440 保留 B 焦点，A 在原目标取得新帧，两个 PTY 保持 119 × 40，退出驱动前逐侧确认关闭。 [作业、原件与回执](evidence/linux-pairing-secret-service-20261120/README.md#tauri-受保护输入双主机-s06) |
 
 历史 S06 的连接、字节和 PTY 采样见[原验收记录](evidence/design-parity-20261115/verification-history.md#s06-双侧界面与真实回环验收)。macOS 原生窗口需要在同一次运行中验证两条真实连接、窗口来回变化、键盘切换和服务端 PTY 与输入计数。[S06 隔离运行入口](../validation/remote-harness/README-s06-real-ssh.md)
 

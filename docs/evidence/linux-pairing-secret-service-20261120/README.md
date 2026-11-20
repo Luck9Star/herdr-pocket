@@ -76,9 +76,11 @@ Ubuntu 24.04 x86_64，两端私有 Secret Service 的两把设备公钥均与各
 
 Flutter 实验候选通过 Ubuntu 补丁与锁定检查，安全测试 696 通过、43 跳过，渲染回归 10 通过，随后生成 Linux debug tar。Tauri 生成 Linux amd64 Debian 测试包。两个包内的两份许可与 `UPSTREAM` 均与同一源码逐字节一致。两份外侧 `shared/` 和 Tauri 浏览器预览的 59 个共享资产均与源码一致，且无迁走的校验脚本、`__pycache__` 或 `.pyc`。R2 只复验 Linux 构建产物，R1 记录原五端矩阵。 [Flutter 候选 Linux job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44677046405/job/136092777380) · [Flutter 候选检查](https://github.com/Luck9Star/herdr-pocket/actions/runs/44677046405/job/136091246849) · [Tauri Linux job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44677046240/job/136091246844)
 
-### Tauri guarded S06 夹具
+<a id="tauri-guarded-s06-夹具"></a>
 
-**未验证 — 环境受限。** `1abdfe44` 的受保护输入作业没有可用依赖缓存。固定版本的 `vancluever/translate-c` 在 Codeberg 五次取件超时，预取达到 8 分钟上限，随后原子输入保护及服务端夹具构建达到 40 分钟上限。GUI job 跳过，运行没有上传工件，当前版本的受保护 S06 未执行。旧夹具绑定 `c5aa64a0`，入口逐次检查工件 `sourceSHA` 和当前源码一致，未复用旧构建。 [夹具 job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44677046426/job/136091247764) · [跳过的 GUI job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44677046426/job/136108890815) · [历史夹具](https://github.com/Luck9Star/herdr-pocket/actions/runs/44583986909/artifacts/14561610690) · [脱敏回执](guarded-s06-r2-blocker.json)
+### Tauri guarded S06 夹具（R2 历史失败）
+
+**R2 未执行 GUI。** `1abdfe44` 的受保护输入作业没有可用依赖缓存。固定版本的 `vancluever/translate-c` 在 Codeberg 五次取件超时，预取达到 8 分钟上限，随后原子输入保护及服务端夹具构建达到 40 分钟上限。GUI job 跳过，运行没有上传工件。旧夹具绑定 `c5aa64a0`，入口逐次检查工件 `sourceSHA` 和当前源码一致，未复用旧构建。 [夹具 job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44677046426/job/136091247764) · [跳过的 GUI job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44677046426/job/136108890815) · [历史夹具](https://github.com/Luck9Star/herdr-pocket/actions/runs/44583986909/artifacts/14561610690) · [脱敏回执](guarded-s06-r2-blocker.json)
 
 ## 官方运行 R3
 
@@ -112,7 +114,35 @@ Flutter 解锁对照在 `9079914bfd0fb1d9cd575703190abb05eef3ac89` 的首次尝�
 | 首次配对 | [观察起始](flutter-r4-first-before.png) · [观察推进](flutter-r4-first-after.png) | 84→86 |
 | 原身份恢复 | [恢复后起始](flutter-r4-second-before.png) · [恢复后推进](flutter-r4-second-after.png) | 138→140 |
 
-R4 覆盖隔离密钥环、正常应用重启及回环只读观察。当前版本的 guarded S06 仍受夹具构建超时阻塞。用户现有密钥环、实际跨网、物理输入法和已签名发行包的安装运行各自待验。 [guarded S06 夹具断点](#tauri-guarded-s06-夹具)
+R4 覆盖隔离密钥环、正常应用重启及回环只读观察。用户现有密钥环、实际跨网、物理输入法和已签名发行包的安装运行各自待验。 [R2 的 guarded 夹具断点](#tauri-guarded-s06-夹具)
+
+## Tauri 待创建身份恢复
+
+基线 `02941d42` 的本机 Rust 对照在临时目录使用合成身份，用对照用例 `baseline_removal_and_import_orphan_an_unattached_identity` 分别通过原生移除主机和导入替换入口复现同一问题。若密钥已创建、主机目录尚未关联它，两个入口都能移走原主机记录。待创建记录和原密钥仍存在，却失去恢复入口。该对照以观察到旧行为为通过条件。 [修复提交 76109ba0](https://github.com/Luck9Star/herdr-pocket/commit/76109ba00493af1439c882c5ba7a3f869587bdf3)
+
+修复后，Tauri 原生移除与导入替换在停止连接前检查对应主机的待创建记录，导入提交前再核对一次。首轮发现该主机有待创建身份时保留目录、原句柄和原连接，界面引导审查恢复或显式放弃。提交前的复查阻止目录改写。其他主机仍可正常处理。用户可以继续原配对，或在显式放弃成功后重新提交移除或替换。前端定向测试在基线上失败，修复后通过。macOS 本机在 `299f905f` 的 Node 套件 738／738、Rust 原生壳 93／93 通过。Rust 定向测试 `unattached_creation_preserves_original_until_explicit_discard`、`final_import_cas_checks_a_journal_before_committing` 和 `removal_cancels_only_the_original_legacy_observation_after_review` 分别核对移除和替换前拒绝、提交前复查、其他主机隔离及同目标旧观察的取消边界。 [导入回归](../../../validation/tauri/src-tauri/src/config_exchange.rs) · [删除回归](../../../validation/tauri/src-tauri/src/key_cleanup.rs)
+
+Linux ARM64 的 `557f56d4` 对应 99／99 原生单测，另在隔离的真实 GNOME Keyring 上核对待创建记录恢复、原句柄删除与服务不可用。首次并行运行有一项既有进程锁测试报 `host_storage_busy`，定向、串行和六次默认并行均通过。`557f56d4` 将新增磁盘夹具限定在 Linux 和 macOS，产品路径与 `299f905f` 相同。用户实际桌面环境中断后的完整恢复仍待验。 [测试范围提交](https://github.com/Luck9Star/herdr-pocket/commit/557f56d41245d5b9839147efba3e3e246906e011)
+
+## PR #59 官方集成复验
+
+下列已核对的运行来自 `299f905fb1331c3657a49d47b275a1dee37e1a36`，均为首次尝试。每个 ZIP 均核对 GitHub SHA-256、CRC 与存在的内附校验表。 [本批脱敏回执](official-pr59-integration-receipt.json) · [归档校验和](SHA256SUMS)
+
+### Tauri 受保护输入双主机 S06
+
+Ubuntu 24.04 x86_64 的原生 Tauri 和私有 GNOME Keyring 在同一次运行中完成两条真实回环 OpenSSH/herdr 连接。独立验证器在授权前将两把申请公钥分别与密钥环中的新条目比对，sshd 各用对应公钥认证一次。两目标的同名 pane 绑定到不同 terminal。B 的首键使对端从 `[0,0]` 变为 `[0,1]`，A 的草稿确认后最终精确为 `[9,1]`。无迟到输入，也没有附加回车。 [GUI 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44692672804/job/136144597301) · [原始 GUI 工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44692672804/artifacts/14609916474)
+
+原生窗口以 1440→700→1440 往返，B 的原编辑器和输入焦点保持，A 从布局暂停恢复到原目标并取得新可见帧，计数从 182 到 189。退出逐键组合键后，焦点移到 A，选中的原目标仍为 B，两侧转为只读，未增字节。先关 A 时 B 的原连接仍在，随后再关 B。驱动退出前两条原连接均各有一次正常关闭，均无 reset，原 socket 均消失。两端 PTY 均保持 119 × 40，撤销授权及清理通过。
+
+夹具 job 完成固定 Zig 依赖取件、原子输入保护检查与构建。独立比对同一源码 SHA、固定上游和补丁、夹具实际二进制等摘要，以及 GUI manifest 的夹具来源。R2 的失败记录仍可查阅，本次有独立构建与正式 GUI 原件。此 S06 只覆盖隔离环境中的 Tauri，真实用户密钥环、实际跨网、物理输入法和发布安装仍待验。 [同源夹具作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44692672804/job/136141969429) · [原始夹具](https://github.com/Luck9Star/herdr-pocket/actions/runs/44692672804/artifacts/14609083679)
+
+### 正常导入替换
+
+Ubuntu 24.04 x86_64 原生 Tauri 在隔离 GNOME Keyring 和回环 OpenSSH 上完成实际文件选择、解密、预览与替换。独立验证器将两把配对公钥与密钥环条目比对，sshd 分别用原密钥认证一次。替换时 A 的原连接关闭，旧画面保留，连接入口禁用，旧标签可手动关闭。B 在原连接恢复后可见计数从 283 到 315。驱动退出前两侧各有一次正常关闭、零 reset，实际输入为 `[0,0]`，临时授权已撤销，清理通过。此运行覆盖可正常替换的对照。待创建身份阻止替换的结果来自上节的本机回归。 [导入作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44692672712/job/136141971206) · [原始工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44692672712/artifacts/14609591448)
+
+### Linux 测试包
+
+Ubuntu 24.04 x86_64 生成未签名的 amd64 Debian 测试包。包内 Secret Service 5.1.0 的 `LICENSE-APACHE`、`LICENSE-MIT` 和 `UPSTREAM` 与同源 vendored 文件逐字节一致，包清单的文件哈希和外层、浏览器预览的共享资产已比对。构建清单 `deviceResult=unverified`，安装和已签名发行仍待验。 [Linux 构建作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44692672810/job/136141971219) · [原始工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44692672810/artifacts/14610210750)
 
 ## 复跑与回滚依据
 

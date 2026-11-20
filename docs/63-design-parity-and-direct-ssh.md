@@ -56,7 +56,7 @@ Flutter 切到看板、网络或设置时保留原连接和终端滚动位置。
 
 Windows Tauri 的原生作业只运行密码认证，私钥路径尚无该平台的原生作业结果。[Windows 工作流](../.github/workflows/windows-ordinary-ssh.yml)
 
-实体手机、系统输入法组字、生产 SSH 主机、真实跨网、长期运行和发布安装包仍须独立验证。Linux 系统密钥环在 [PR #59](https://github.com/Luck9Star/herdr-pocket/pull/59) 的 Linux herdr 配对草稿中，普通 SSH 使用本次输入的凭据。配对双连接及真实网络隔离见[桌面 S06](74-desktop-split-resize.md#已有-s06-运行范围)、[Linux 双网](65-dual-overlay-validation.md)和[Android 双网与共享节点](67-android-dual-network-startup.md)。
+实体手机、系统输入法组字、生产 SSH 主机、真实跨网、长期运行和发布安装包仍须独立验证。普通 SSH 使用本次连接提供的密码或既有私钥及其口令。Linux herdr 配对使用经主机审查授权的设备密钥，[PR #59](https://github.com/Luck9Star/herdr-pocket/pull/59) 提议由当前桌面会话的 Secret Service 保存该配对身份。两条入口各有独立验收。 [Linux 配对密钥环](evidence/linux-pairing-secret-service-20261120/README.md) · [桌面 S06](74-desktop-split-resize.md#已有-s06-运行范围) · [Linux 双网](65-dual-overlay-validation.md) · [Android 双网与共享节点](67-android-dual-network-startup.md)
 
 ## 复跑与专题
 

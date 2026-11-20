@@ -208,6 +208,7 @@ Linux 历史探针曾禁用 Flutter 设备配对，Tauri 则使用明确标示�
 | 剪贴板不可用/超大/失焦 | 系统剪贴板读取异常、内容超限或目标窗口失焦 | Flutter：跳过粘贴，提示手动输入；Tauri：未聚焦/超大分别拒绝，其余塌缩为通用码；配对复制不可用时可手动选择公开请求全文 | 「系统剪贴板不可用，可手动输入临时私钥」「复制不可用时，可手动选择上方公开请求全文」 | `clipboard_unavailable`（塌缩码）、`clipboard_too_large`、`clipboard_unfocused` | [remote_page.dart:1175-1177](../validation/flutter/lib/remote_page.dart)、[clipboard.rs:36-38](../validation/tauri/src-tauri/src/clipboard.rs)、[pair_copy.rs:39,363](../validation/tauri/src-tauri/src/pair_copy.rs)、[pairing_page.dart:236,512](../validation/flutter/lib/pairing_page.dart) |
 | 相机不可用/权限被拒 | 无视频设备、输入无法加入 session、授权拒绝或用户取消 | 扫描终止并返回公开文本 null；不阻塞手动路径 | 「相机不可用、权限被拒绝或扫描取消 · 可继续手动输入响应」「扫描不可用或资料无效 · 未填入表单，可手动粘贴」 | `camera_unavailable`、`camera_permission_denied` | [PairScanner.swift:44,47,56,61,65](../validation/pairing/native/camera/apple/PairScanner.swift)、[pairing_page.dart:429,450](../validation/flutter/lib/pairing_page.dart) |
 | Linux 配对密钥环锁定、缺失或不可用 | Secret Service 无法访问、集合锁定，或原句柄查找不到；已知临时 `session` 集合拒绝新建 | 保留原主机与句柄，停在当前操作，不猜测不存在、不明文回退、不自动换钥；写入未知只核验原句柄 | 要求配置或解锁后核验原身份，缺项也保留引用 | Flutter `device_key_locked`／`device_key_missing`／`device_key_store_unavailable`／`device_key_write_unknown`；Tauri `key_locked`／`key_missing`／`key_unavailable`／`key_write_unknown` | [Linux 配对规则与实测](evidence/linux-pairing-secret-service-20261120/README.md)。旧 Dart Tailscale wrapper 的 `secret-tool` 记录适用于节点实验。 |
+| Tauri Linux 配对身份待创建 | 原主机有未关联的待创建记录，用户尝试删除或导入替换 | 操作在停止连接及改写目录前拒绝，保留原主机、句柄和恢复入口 | 审查后继续原配对或显式放弃，再重新提交原操作 | `host_key_creation_pending` | [本机原生回归及范围](evidence/linux-pairing-secret-service-20261120/README.md#tauri-待创建身份恢复) |
 | 多标签容量/陈旧 | 标签满（8 个上限）或 owner/generation 不匹配 | 容量：拒绝新标签；陈旧：取消旧 claim 并拒绝操作，防跨代误用 | 标签操作失败并报码 | `tab_capacity`、`tab_stale`、`state_unavailable`、`input_stale` | [remote_sessions.rs:45](../validation/tauri/src-tauri/src/remote_sessions.rs)（`>=8`）、[remote_tab_commands.rs:23,33,45,56](../validation/tauri/src-tauri/src/remote_tab_commands.rs) |
 
 ## 未确认项清单
@@ -216,5 +217,5 @@ Linux 历史探针曾禁用 Flutter 设备配对，Tauri 则使用明确标示�
 2. **后续 CI sshd 版本**：四个已核查作业的版本见[批次记录](#ci-sshd-批次记录)。APT 未锁定版本，新增批次须以届时日志及可用的运行 manifest 为准。
 3. **native/tool 全目录 unittest discover**（`-p 'test_*.py'`）：CI 只按单文件形态跑（android-network-experiment.yml:140,336）；全目录形式未核实，文中已标注为同约定外推。
 4. **docs/17 的核查日期**：文内无显式日期字段，取 git 最后提交日 2026-11-07。
-5. **Linux Secret Service 桌面覆盖**已有独立 GNOME Keyring、两壳官方单主机与 S06 双主机只读回环、Linux 测试包声明比对。两壳桌面第二进程在服务可用时复用原身份，在锁定或服务停止时均拒绝连接并保留原身份。其他密钥环、当前版本 guarded S06 与实际跨网待验。 [Linux 本批证据](evidence/linux-pairing-secret-service-20261120/README.md)
+5. **Linux Secret Service 桌面覆盖**已有独立 GNOME Keyring、两壳官方单主机与 S06 双主机只读回环、Linux 测试包声明比对。两壳桌面第二进程在服务可用时复用原身份，在锁定或服务停止时均拒绝连接并保留原身份。#59 的 Tauri guarded S06 在同次隔离运行核对两把设备公钥、实际 [9,1] 输入和逐侧关闭。其他密钥环、真实用户桌面及实际跨网待验。 [Linux 本批证据](evidence/linux-pairing-secret-service-20261120/README.md)
 6. **Mac17,3 / macOS 26.6.2**：为 2026-10-30 批次记录（docs/09:26），当前 runner 版本未复核。

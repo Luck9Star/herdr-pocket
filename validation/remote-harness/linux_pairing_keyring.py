@@ -1,10 +1,11 @@
 """Start one private, non-activating D-Bus and verify public identities on it."""
 import argparse
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 import os
 from pathlib import Path
 import re
 import secrets
+import socket
 import subprocess
 import sys
 import tempfile
@@ -12,8 +13,14 @@ import time
 
 
 SERVICE = 'org.freedesktop.secrets'
+SECRET_PATH = '/org/freedesktop/secrets'
+DBUS = 'org.freedesktop.DBus'
+DBUS_PATH = '/org/freedesktop/DBus'
 NAMESPACE = {'flutter': 'herdr-pocket.flutter', 'tauri': 'herdr-pocket.tauri'}
 MARKER = 'HERDR_LINUX_PAIRING_SESSION'
+DENIAL_MODES = ('locked', 'unavailable')
+DENIAL_CHANNEL = 'HERDR_LINUX_PAIRING_DENIAL_FD'
+COLLECTION = re.compile(r"\(objectpath '(/org/freedesktop/secrets/collection/[A-Za-z0-9_]+)',\)")
 BUS_CONFIG = '''<busconfig><type>session</type><listen>unix:path={socket}</listen>
 <policy context="default"><allow send_destination="*"/><allow receive_sender="*"/>
 <allow own="*"/></policy></busconfig>'''
@@ -33,52 +40,171 @@ def bus_call(destination, path, method, *args):
 def private_home():
     raw = os.environ.get(MARKER, '')
     root = Path(raw)
+    configured_bus = re.escape(f'unix:path={root / "bus"}') + r'(?:,guid=[a-f0-9]{32})?'
     if (not raw or not root.is_absolute() or root.parent != Path('/tmp') or
             not root.name.startswith('herdr-pairing-keyring.') or root.is_symlink() or
             not root.is_dir() or root.stat().st_uid != os.getuid() or
             root.stat().st_mode & 0o077 or os.environ.get('HOME') != str(root / 'home') or
-            os.environ.get('DBUS_SESSION_BUS_ADDRESS', '').split(',', 1)[0] != f'unix:path={root / "bus"}' or
-            not (root / 'bus').is_socket()):
+            not re.fullmatch(configured_bus, os.environ.get('DBUS_SESSION_BUS_ADDRESS', '')) or
+            (root / 'bus').is_symlink() or not (root / 'bus').is_socket()):
         raise KeyringFailure('private_keyring_session_required')
     return root
 
 
+def service_owner_present():
+    reply = bus_call(DBUS, DBUS_PATH, DBUS + '.NameHasOwner', SERVICE)
+    if reply not in ('(true,)', '(false,)'):
+        raise KeyringFailure('private_keyring_owner_unconfirmed')
+    return reply == '(true,)'
+
+
+def default_collection():
+    item = COLLECTION.fullmatch(bus_call(SERVICE, SECRET_PATH, 'org.freedesktop.Secret.Service.ReadAlias', 'default'))
+    if not item or item[1].endswith('/session'):
+        raise KeyringFailure('private_keyring_default_collection_unconfirmed')
+    return item[1]
+
+
+def collection_locked(collection):
+    reply = bus_call(SERVICE, collection, DBUS + '.Properties.Get', 'org.freedesktop.Secret.Collection', 'Locked')
+    if reply not in ('(<true>,)', '(<false>,)'):
+        raise KeyringFailure('private_keyring_lock_unconfirmed')
+    return reply == '(<true>,)'
+
+
+def stop_owned(process):
+    if process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+
+
 @contextmanager
-def start_daemon(daemon):
+def start_daemon(daemon, password=None):
     root = private_home()
-    owner = bus_call('org.freedesktop.DBus', '/org/freedesktop/DBus',
-                     'org.freedesktop.DBus.NameHasOwner', SERVICE)
-    if owner != '(false,)':
+    if service_owner_present():
         raise KeyringFailure('private_keyring_already_owned')
-    with (root / 'daemon.log').open('xb') as log:
+    if password is None:
+        password = secrets.token_hex(24).encode()
+    with tempfile.TemporaryFile(dir=root) as log:
         with subprocess.Popen([str(daemon), '--foreground', '--unlock', '--components=secrets'],
                               stdin=subprocess.PIPE, stdout=log, stderr=subprocess.STDOUT) as process:
             try:
-                process.stdin.write(secrets.token_hex(24).encode() + b'\n')
+                process.stdin.write(password + b'\n')
                 process.stdin.close()
-                alias = re.compile(r"\(objectpath '(/org/freedesktop/secrets/collection/[A-Za-z0-9_]+)',\)")
                 deadline = time.monotonic() + 12
                 while time.monotonic() < deadline and process.poll() is None:
                     try:
-                        item = alias.fullmatch(bus_call(SERVICE, '/org/freedesktop/secrets',
-                                                       'org.freedesktop.Secret.Service.ReadAlias', 'default'))
-                        if item and bus_call(SERVICE, item[1], 'org.freedesktop.DBus.Properties.Get',
-                                             'org.freedesktop.Secret.Collection', 'Locked') == '(<false>,)':
+                        owner = bus_call(DBUS, DBUS_PATH, DBUS + '.GetConnectionUnixProcessID', SERVICE)
+                        if owner == f'(uint32 {process.pid},)' and not collection_locked(default_collection()):
                             break
-                    except subprocess.CalledProcessError:
+                    except (KeyringFailure, subprocess.CalledProcessError):
                         pass
                     time.sleep(0.15)
                 else:
                     raise KeyringFailure('private_keyring_unlock_unconfirmed')
-                yield
+                yield process
             finally:
-                if process.poll() is None:
-                    process.terminate()
-                    try:
-                        process.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        process.kill()
-                        process.wait(timeout=5)
+                stop_owned(process)
+
+
+def require_denial(mode, collection):
+    if mode == 'locked':
+        if not service_owner_present() or default_collection() != collection or not collection_locked(collection):
+            raise KeyringFailure('private_keyring_locked_denial_unconfirmed')
+    elif mode != 'unavailable' or service_owner_present():
+        raise KeyringFailure('private_keyring_unavailable_denial_unconfirmed')
+
+
+@contextmanager
+def denied_service(keyring, mode):
+    """Deny only on the inherited private test supervisor channel, then restore."""
+    private_home()
+    fd = os.environ.get(DENIAL_CHANNEL, '')
+    if mode not in DENIAL_MODES or not re.fullmatch(r'[0-9]{1,6}', fd) or int(fd) < 3:
+        raise KeyringFailure('private_keyring_denial_channel_required')
+    collection = default_collection()
+    items = keyring.items(keyring.namespace)
+    if (len(keyring.verified) != 1 or len(items) != 1 or not items[0].startswith(collection + '/') or
+            keyring.handles(items) != keyring.verified):
+        raise KeyringFailure('private_keyring_denial_original_reference_unproven')
+    with socket.socket(fileno=int(fd)) as channel:
+        channel.set_inheritable(False)
+        channel.settimeout(30)
+
+        def request(message):
+            channel.sendall(message)
+            if channel.recv(32) != b'ok':
+                raise KeyringFailure('private_keyring_denial_control_failed')
+
+        def require_denied():
+            require_denial(mode, collection)
+
+        request(mode.encode('ascii'))
+        try:
+            require_denied()
+            yield require_denied
+            require_denied()
+        finally:
+            request(b'restore')
+
+
+def run_with_denial(command, daemon, mode):
+    # The supervisor owns the only service it may stop. The random unlock
+    # phrase stays in supervisor memory and is reused only on the same bus/home.
+    password = secrets.token_hex(24).encode()
+    with ExitStack() as service:
+        original = service.enter_context(start_daemon(daemon, password))
+        channel, child = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+        with channel, child:
+            channel.settimeout(0.2)
+            env = dict(os.environ, **{DENIAL_CHANNEL: str(child.fileno())})
+            with subprocess.Popen(command, env=env, pass_fds=(child.fileno(),)) as test:
+                child.close()
+
+                def read_command():
+                    while test.poll() is None:
+                        try:
+                            return channel.recv(32)
+                        except TimeoutError:
+                            continue
+                    return b''
+
+                try:
+                    for expected in (mode.encode('ascii'), b'restore'):
+                        message = read_command()
+                        if not message:
+                            if test.wait(timeout=5):
+                                return test.returncode
+                            raise KeyringFailure('private_keyring_denial_sequence_incomplete')
+                        if message != expected:
+                            channel.sendall(b'error')
+                            raise KeyringFailure('private_keyring_denial_sequence_invalid')
+                        try:
+                            if message == b'restore':
+                                service.close()
+                                service.enter_context(start_daemon(daemon, password))
+                            else:
+                                owner = bus_call(DBUS, DBUS_PATH, DBUS + '.GetConnectionUnixProcessID', SERVICE)
+                                if owner != f'(uint32 {original.pid},)':
+                                    raise KeyringFailure('private_keyring_denial_owner_changed')
+                                collection = default_collection()
+                                if mode == 'locked':
+                                    bus_call(SERVICE, SECRET_PATH, 'org.freedesktop.Secret.Service.Lock',
+                                             f"[objectpath '{collection}']")
+                                else:
+                                    service.close()
+                                require_denial(mode, collection)
+                        except (KeyringFailure, OSError, ValueError, subprocess.SubprocessError):
+                            channel.sendall(b'error')
+                            raise
+                        channel.sendall(b'ok')
+                    return test.wait()
+                finally:
+                    stop_owned(test)
 
 
 class KeyringEvidence:
@@ -144,12 +270,13 @@ class KeyringEvidence:
         self.verify_public(next(iter(self.verified)), public_key)
 
 
-def run_private(command, daemon):
+def run_private(command, daemon, denial=None):
     # The caller bus is not passed into dbus-run-session. This configuration
     # has no service directories and cannot activate the user's keyring.
     with tempfile.TemporaryDirectory(prefix='herdr-pairing-keyring.', dir='/tmp') as name:
         root = Path(name)
-        env = {key: value for key, value in os.environ.items() if not key.startswith(('DBUS_', 'GNOME_KEYRING_'))}
+        env = {key: value for key, value in os.environ.items() if not key.startswith(('DBUS_', 'GNOME_KEYRING_'))
+               and key != DENIAL_CHANNEL}
         for key, dirname in {'HOME':'home', 'XDG_CONFIG_HOME':'config', 'XDG_DATA_HOME':'data',
                              'XDG_STATE_HOME':'state', 'XDG_CACHE_HOME':'cache', 'XDG_RUNTIME_DIR':'runtime'}.items():
             directory = root / dirname
@@ -158,8 +285,9 @@ def run_private(command, daemon):
         config = root / 'bus.conf'
         config.write_text(BUS_CONFIG.format(socket=root / 'bus'), encoding='utf-8')
         env.update({MARKER: str(root), 'GSETTINGS_BACKEND': 'memory'})
+        options = ['--denial-mode', denial] if denial else []
         return subprocess.run(['/usr/bin/dbus-run-session', f'--config-file={config}', '--', sys.executable,
-                               str(Path(__file__).resolve()), '--child', '--daemon', str(daemon), '--', *command],
+                               str(Path(__file__).resolve()), '--child', '--daemon', str(daemon), *options, '--', *command],
                               env=env).returncode
 
 
@@ -167,6 +295,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--child', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--daemon', type=Path, default=Path('/usr/bin/gnome-keyring-daemon'))
+    parser.add_argument('--denial-mode', choices=DENIAL_MODES)
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
     command = args.command[1:] if args.command[:1] == ['--'] else args.command
@@ -174,9 +303,11 @@ def main():
         parser.error('provide an absolute command and daemon path')
     try:
         if args.child:
+            if args.denial_mode:
+                return run_with_denial(command, args.daemon, args.denial_mode)
             with start_daemon(args.daemon):
                 return subprocess.run(command).returncode
-        return run_private(command, args.daemon)
+        return run_private(command, args.daemon, args.denial_mode)
     except KeyringFailure as error:
         print(str(error), file=sys.stderr)
     except (OSError, ValueError, subprocess.SubprocessError):

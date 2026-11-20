@@ -17,6 +17,7 @@ sys.path.insert(0, str(REPO / 'helper'))
 sys.path.insert(0, str(REPO / 'validation/pairing'))
 from pairing import fingerprint
 from guarded_input import ANDROID_ROUTES, DIRECT, DRAFT, EvidenceError, expected_bytes, mobile_receipts, mobile_tui_evidence
+from linux_pairing_keyring import DENIAL_MODES, KeyringFailure, denied_service
 from paired_tui import validate_report
 
 # The pairing fixture uses POSIX authorization files and a PTY. The Windows
@@ -438,6 +439,9 @@ def stop_tauri_observation(driver):
 
 def run_tauri(args, root, env, config, approval):
     native = approval.keyring is not None
+    denial = getattr(args, 'linux_keyring_denial', 'off')
+    if denial != 'off' and (denial not in DENIAL_MODES or not native):
+        raise GuiFailure('denial_requires_native_private_keyring')
     if native and args.input_fixture:
         raise GuiFailure('restart_requires_stock_read_only')
     driver = WebDriver(native_webkit=native)
@@ -524,20 +528,46 @@ def run_tauri(args, root, env, config, approval):
                         if getattr(args, 'private_keyring_session', False) else 'Linux identity; storage not independently verified')}
             if restart is not None:
                 restart.before_first_exit(driver, driver_process.pid)
-                lifetime.enter_context(no_keyring_writes(approval, root, env))
+                if denial == 'off':
+                    lifetime.enter_context(no_keyring_writes(approval, root, env))
         finally:
             driver.close()
         if restart is not None:
             restart.after_first_exit()
-            second = WebDriver(native_webkit=True)
-            try:
-                second.start(args.tauri_app)
-                if second.session == driver.session:
-                    raise GuiFailure('restart_webview_session_reused')
-                result['restart'] = restart.second(second, driver_process.pid)
-            finally:
-                second.close()
+            with ExitStack() as second_lifetime:
+                if denial != 'off':
+                    restart.before_denial()
+                    require_denied = second_lifetime.enter_context(denied_service(approval.keyring, denial))
+                    second_lifetime.enter_context(no_keyring_writes(approval, root, env, service_available=False))
+                second = WebDriver(native_webkit=True)
+                try:
+                    second.start(args.tauri_app)
+                    if second.session == driver.session:
+                        raise GuiFailure('restart_webview_session_reused')
+                    if denial == 'off':
+                        result['restart'] = restart.second(second, driver_process.pid)
+                    else:
+                        second_app = restart.second_denied(second, driver_process.pid, denial)
+                        require_denied()
+                finally:
+                    second.close()
+                if denial != 'off':
+                    restart.wait_second_exit(second_app)
+            if denial != 'off':
+                result['keyringDenial'] = restart.after_denial(denial)
     return result
+
+
+def checked_keyring_denial(proof, mode):
+    flags = ('independentAppProcesses', 'noticeVisible', 'connectDisabled', 'originalHostAndIdentityRetained',
+             'authorizationUnchanged', 'firstPeerClosed', 'noKeyringWrites')
+    if (mode not in DENIAL_MODES or not isinstance(proof, dict) or
+            proof.keys() != {'mode', 'exactPeerAuthentications', 'receivedInputBytes', *flags} or
+            proof['mode'] != mode or any(proof[key] is not True for key in flags) or
+            type(proof['exactPeerAuthentications']) is not int or proof['exactPeerAuthentications'] != 1 or
+            type(proof['receivedInputBytes']) is not int or proof['receivedInputBytes'] != 0):
+        raise GuiFailure('keyring_denial_proof_incomplete')
+    return proof
 
 
 def run_gui(args, root, env, config):
@@ -553,6 +583,9 @@ def run_gui(args, root, env, config):
     case = 'reviewed-device-key-to-direct-and-draft' if guarded_mobile else 'reviewed-device-key-to-observe'
     if getattr(args, 'flutter_stock_app', None):
         case = 'reviewed-device-key-across-stock-linux-restart'
+    denial = getattr(args, 'linux_keyring_denial', 'off')
+    if denial != 'off':
+        case = 'reviewed-device-key-denied-on-stock-linux-restart'
     result = {'adapter': args.paired_gui, 'testId': case, 'status':'failed'}
     keyring = getattr(args, 'linux_keyring', None)
     try:
@@ -577,9 +610,12 @@ def run_gui(args, root, env, config):
                     exercise = run_tauri if args.paired_gui == 'tauri' else run_flutter
                 terminal = fixture_terminal_id(config) if guarded_mobile else None
                 observed = exercise(args, root, env, config, approval)
+                denial_proof = observed.pop('keyringDenial', None)
                 receipts = observed.pop('inputReceipts', None)
                 tui = observed.pop('tui', None)  # Publish only after strict validation.
                 observed.pop('hostTui', None)  # Host attestation can never originate from a GUI.
+                if denial != 'off' and 'restart' in observed:
+                    raise GuiFailure('keyring_denial_conflicts_with_reauthentication')
                 result.update(observed)
                 expected = expected_bytes(args.paired_gui, bool(args.input_fixture))
                 if expected and result.get('inputQueueAccepted') is not True:
@@ -607,6 +643,10 @@ def run_gui(args, root, env, config):
                 elif tui is not None:
                     raise GuiFailure('unexpected_mobile_tui')
                 approval.verify_ssh(expected)
+                if denial != 'off':
+                    result['keyringDenial'] = checked_keyring_denial(denial_proof, denial)
+                elif denial_proof is not None:
+                    raise GuiFailure('unexpected_keyring_denial_proof')
                 if keyring is not None:
                     if len(keyring.verified) != 1:
                         raise GuiFailure('private_keyring_public_proof_missing')
@@ -628,7 +668,7 @@ def run_gui(args, root, env, config):
                     approval.revoke()
                     result['revokedFixtureKey'] = approval.applied
         result.update(status='passed', matchedDeviceKeyInSshd=True, receivedInputBytes=len(expected), revokedFixtureKey=True)
-    except GuiFailure as exc:
+    except (GuiFailure, KeyringFailure) as exc:
         result['errorCode'] = str(exc)
     except (OSError, ValueError, KeyError, subprocess.SubprocessError) as exc:
         result['errorCode'] = 'gui_'+type(exc).__name__.lower()

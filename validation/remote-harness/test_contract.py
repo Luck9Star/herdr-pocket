@@ -3,6 +3,7 @@ import importlib.util
 import io
 from contextlib import redirect_stderr
 from pathlib import Path
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -39,6 +40,25 @@ class HarnessGuards(unittest.TestCase):
             with self.assertRaises(harness.ProbeFailure):
                 harness.require_runner(env)
         harness.require_runner({'GITHUB_ACTIONS': 'true', 'GITHUB_RUN_ID': '123', 'GITHUB_REF': 'refs/heads/codex/test'})
+
+    def test_keyring_denial_requires_the_hosted_single_host_stock_entry(self):
+        args = {'linux_keyring_denial': 'locked', 'linux_keyring_probe': Path('public-probe'), 's06_split': False,
+                'input_fixture': None, 'android_guarded_input': False, 'android_tui': False,
+                'paired_gui': 'tauri', 'flutter_stock_app': None}
+        for mode in ('locked', 'unavailable'):
+            for route, stock in (('tauri', None), ('flutter', Path('normal-app'))):
+                harness.validate_linux_keyring_denial(
+                    SimpleNamespace(**dict(args, linux_keyring_denial=mode, paired_gui=route, flutter_stock_app=stock)),
+                    import_replace=False, hosted_linux=True)
+        for changes in ({'paired_gui': 'flutter'}, {'paired_gui': 'tauri-android'}, {'input_fixture': Path('guarded')},
+                        {'s06_split': True}, {'linux_keyring_probe': None}, {'android_guarded_input': True}):
+            with self.subTest(changes=changes), self.assertRaisesRegex(harness.ProbeFailure, 'keyring_denial_requires'):
+                harness.validate_linux_keyring_denial(SimpleNamespace(**dict(args, **changes)),
+                                                     import_replace=False, hosted_linux=True)
+        for import_replace, hosted in ((True, True), (False, False)):
+            with self.assertRaisesRegex(harness.ProbeFailure, 'keyring_denial_requires'):
+                harness.validate_linux_keyring_denial(SimpleNamespace(**args), import_replace=import_replace,
+                                                     hosted_linux=hosted)
 
     def test_import_route_requires_stock_desktop_tauri_before_fixture_setup(self):
         env = {'GITHUB_ACTIONS': 'true', 'GITHUB_RUN_ID': '123', 'GITHUB_REF': 'refs/heads/codex/test',

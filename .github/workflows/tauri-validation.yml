@@ -9,6 +9,11 @@ on:
         type: boolean
         default: false
   workflow_dispatch:
+    inputs:
+      android_only:
+        description: Build only the Android test shell
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:

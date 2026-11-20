@@ -25,6 +25,12 @@ R5 第 2 次运行在 API 35 x86_64 模拟器中通过。Flutter 用同一受审
 
 R4 在关闭 A 后未取得 A 的对端 EOF。R5 第 1 次运行在准备 NDK 时解压失败，设备步骤跳过。第 2 次使用同一源码通过。覆盖范围为 Flutter Android 模拟器中的共享节点只读观察与释放，实体设备、真实跨网、共享节点上的主动输入和其他 provider 组合仍待验证。[R4 原件](evidence/flutter-android-shared-easytier-r4-20261120/README.md) · [R5 第 1 次作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44569648650/job/135720886765) · [R5 第 2 次作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44569648650/job/135725621442)
 
+## 2026-11-20 · Tauri 共享 EasyTier 节点双主机
+
+R2 在 API 35 x86_64 模拟器通过。同次运行构建的普通 APK 经安装校验，Tauri 在正常界面将两个独立 SSH/herdr 主机绑定到同一 EasyTier 节点。A 标签关闭后，A 对端记录 `client_disconnect`。窄屏显式选回 B 并恢复观察后，B 在原批准会话显示 tick 580 → 581。关闭 B 后，B 对端单独记录 `client_disconnect`。两边始终各一次认证、零输入。随后显式停止原节点，两条受控 relay 均从 1 降至 0，应用和宿主夹具清理通过，独占 AVD 首次检查即确认 serial 消失。[R2 验收、复跑及原件](evidence/tauri-android-shared-easytier-r2-20261120/README.md)
+
+R1 中两标签移除后 OpenSSH 仍将两条原连接标为活跃。显式停节点使 relay 归零，SSH 关闭未获对端确认，验收以 `dual_shared_peer_still_active` 失败。R2 将单标签主动关闭接入原连接的有序退场。本机两个独立 OpenSSH 对端也验证了逐个关闭。实体设备、Android arm64、真实跨网、共享节点主动输入、同 provider 多节点及其他 provider 仍待分别验收。[R1 失败与本机复测](evidence/tauri-android-shared-easytier-r2-20261120/README.md#r1-的失败与修复)
+
 <details>
 <summary>修复过程与上一阶段设备快照（历史，不替代当前结果）</summary>
 

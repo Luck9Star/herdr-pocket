@@ -66,6 +66,10 @@ for name, peer in (('password', 'password'), ('key', 'encryptedKey')):
             (root / 'macos-secure-private.log').write_text(
                 'HP_XCUI_PEM=visible:1,draft:1,focus:0,expanded:1,editoradded:0,summarygone:1\n'
                 'HP_XCUI_PEM=visible:1,draft:secret-data,focus:1,expanded:1,editoradded:1,summarygone:1\n'
+                'HP_XCUI_PEMCOLLAPSE=phase:pasted,bits:1011011100\n'
+                'HP_XCUI_PEMCOLLAPSE=phase:firstblur,bits:1101100011\n'
+                'HP_XCUI_PEMCOLLAPSE=phase:secret-data,bits:1011011100\n'
+                'HP_XCUI_PEMCOLLAPSE=phase:secondblur,bits:1011011100 secret-data\n'
                 'HP_XCUI_KEYINPUT=visible:1,key:1,passphrase:0,sentinel:0,empty:0,length:1,trimmed:1 secret-data\n'
                 'HP_XCUI_KEYINPUT=visible:0,key:0,passphrase:0,sentinel:0,empty:0,length:0,trimmed:0\n'
                 'HP_XCUI_KEYINPUT=visible:1,key:secret-data,passphrase:1,sentinel:0,empty:0,length:1,trimmed:1\n'
@@ -87,6 +91,13 @@ for name, peer in (('password', 'password'), ('key', 'encryptedKey')):
                     self.assertIs(report['peerCloseObservedDuringDisconnectWindows'], password and key)
                     self.assertEqual(report['status'], 'failed')
                     self.assertEqual(report['pemOpenMetrics'], [{'visible':True,'draftExact':True,'focused':False,'expanded':True,'editorAdded':False,'summaryGone':True}])
+                    self.assertEqual(report['pemCollapseMetrics'], [
+                        {'phase':'pasted','stateBeforePresent':True,'focusedBefore':False,'collapsedBefore':True,
+                         'stateAfterPresent':True,'focusedAfter':False,'collapsedAfter':True,
+                         'summaryUnique':True,'summaryClickable':True,'pemLineExposed':False,'keyBodyExposed':False},
+                        {'phase':'firstblur','stateBeforePresent':True,'focusedBefore':True,'collapsedBefore':False,
+                         'stateAfterPresent':True,'focusedAfter':True,'collapsedAfter':False,
+                         'summaryUnique':False,'summaryClickable':False,'pemLineExposed':True,'keyBodyExposed':True}])
                     self.assertEqual(report['keyInputMetrics'], [
                         {'visible': True, 'key': True, 'passphrase': False, 'sentinel': False, 'empty': False, 'lengthMatches': True, 'trimmedMatches': True},
                         {'visible': False, 'key': False, 'passphrase': False, 'sentinel': False, 'empty': False, 'lengthMatches': False, 'trimmedMatches': False}])

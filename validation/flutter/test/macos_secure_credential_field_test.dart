@@ -1,7 +1,9 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+
 import '../lib/macos_secure_credential_field.dart';
 import '../lib/direct_ssh_page.dart';
 import '../lib/design_tokens.dart';
@@ -83,13 +85,15 @@ void main() {
       (calls[id]!.lastWhere((c) => c.method == 'sync').arguments
               as Map)['revision']
           as int;
-  Future<void> edit(WidgetTester tester, int id, int epoch, String text) async {
+  Future<void> nativeEvent(
+    WidgetTester tester,
+    int id,
+    MethodCall event,
+  ) async {
     final done = Completer<void>();
     tester.binding.defaultBinaryMessenger.handlePlatformMessage(
       'herdr.pocket/secure-field/$id',
-      codec.encodeMethodCall(
-        MethodCall('changed', {'revision': epoch, 'text': text}),
-      ),
+      codec.encodeMethodCall(event),
       (_) {
         done.complete();
       },
@@ -97,6 +101,13 @@ void main() {
     await done.future;
     await tester.pump();
   }
+
+  Future<void> edit(WidgetTester tester, int id, int epoch, String text) =>
+      nativeEvent(
+        tester,
+        id,
+        MethodCall('changed', {'revision': epoch, 'text': text}),
+      );
 
   macTestWidgets(
     'native edits reach the memory controller without Flutter EditableText',
@@ -183,6 +194,114 @@ void main() {
       controller.dispose();
     },
   );
+
+  for (final staged in [false, true]) {
+    macTestWidgets(
+      'native passphrase focus collapses PEM in the ${staged ? 'staged' : 'legacy'} form',
+      (tester) async {
+        final semantics = tester.ensureSemantics();
+        try {
+          final tokens = (await tester.runAsync(DesignTokens.load))!;
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: tokens.theme,
+              home: DirectSshPage(
+                tokens: tokens,
+                desktopFlowShell: staged
+                    ? (page, select, [selected]) => page
+                    : null,
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          if (staged) {
+            final dynamic page = tester.state(find.byType(DirectSshPage));
+            page.setState(() {
+              page.mobileAuth = true;
+              page.fingerprint = 'synthetic host fingerprint';
+              page.checkedTarget = page.target;
+            });
+            await tester.pumpAndSettle();
+          }
+          final toggle = staged
+              ? find.byKey(const ValueKey('direct-auth-key'))
+              : find.byType(SwitchListTile);
+          await tester.ensureVisible(toggle);
+          await tester.tap(toggle);
+          await tester.pumpAndSettle();
+          final pem = find.byKey(const ValueKey('direct-secret'));
+          final summary = find.byKey(const ValueKey('direct-edit-pem'));
+          final id = calls.keys.last;
+          const draft = 'Synthetic preview\nLong enough to detect';
+          bool draftExposed() =>
+              tester.semantics.simulatedAccessibilityTraversal().any((node) {
+                final data = node.getSemanticsData();
+                return data.label.contains(draft) || data.value.contains(draft);
+              });
+          await tester.ensureVisible(pem);
+          await tester.tap(pem);
+          await tester.enterText(pem, draft);
+          await tester.pumpAndSettle();
+          final focus = tester.widget<TextField>(pem).focusNode!;
+          expect(focus.hasPrimaryFocus, isTrue);
+          expect(draftExposed(), isTrue);
+          await nativeEvent(
+            tester,
+            id,
+            MethodCall('focused', {'revision': revision(id) - 1}),
+          );
+          await nativeEvent(
+            tester,
+            id,
+            MethodCall('focused', {
+              'revision': revision(id),
+              'text': 'unexpected',
+            }),
+          );
+          expect(focus.hasPrimaryFocus, isTrue);
+          await nativeEvent(
+            tester,
+            id,
+            MethodCall('focused', {'revision': revision(id)}),
+          );
+          await tester.pumpAndSettle();
+          expect(
+            pem.evaluate().isEmpty,
+            isTrue,
+            reason: 'native focus must hide the PEM editor',
+          );
+          expect(summary, findsOneWidget);
+          expect(draftExposed(), isFalse);
+          await tester.ensureVisible(summary);
+          await tester.tap(summary);
+          await tester.pumpAndSettle();
+          expect(
+            tester.widget<TextField>(pem).focusNode!.hasPrimaryFocus,
+            isTrue,
+          );
+          expect(
+            tester.widget<TextField>(pem).controller!.text == draft,
+            isTrue,
+          );
+          await nativeEvent(
+            tester,
+            id,
+            MethodCall('focused', {'revision': revision(id)}),
+          );
+          await tester.pumpAndSettle();
+          expect(
+            pem.evaluate().isEmpty,
+            isTrue,
+            reason: 'native refocus must hide the PEM editor',
+          );
+          expect(summary, findsOneWidget);
+          expect(draftExposed(), isFalse);
+        } finally {
+          semantics.dispose();
+        }
+      },
+    );
+  }
 
   macTestWidgets(
     'macOS form keeps PEM editable and retires secrets across authentication switches',

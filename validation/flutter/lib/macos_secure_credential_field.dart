@@ -12,11 +12,13 @@ class MacosSecureCredentialField extends StatefulWidget {
     required this.identifier,
     required this.enabled,
     this.decoration,
+    this.onNativeFocus,
   });
   final TextEditingController controller;
   final String label, identifier;
   final bool enabled;
   final InputDecoration? decoration;
+  final VoidCallback? onNativeFocus;
   @override
   State<MacosSecureCredentialField> createState() =>
       _MacosSecureCredentialFieldState();
@@ -75,11 +77,12 @@ class _MacosSecureCredentialFieldState
           _unavailable)
         return;
       final args = call.arguments;
-      if (call.method != 'changed' ||
-          args is! Map ||
-          args['revision'] != _revision ||
-          args['text'] is! String)
+      if (args is! Map || args['revision'] != _revision) return;
+      if (call.method == 'focused' && args.length == 1) {
+        widget.onNativeFocus?.call();
         return;
+      }
+      if (call.method != 'changed' || args['text'] is! String) return;
       final text = args['text'] as String;
       _fromNative = true;
       widget.controller.value = TextEditingValue(

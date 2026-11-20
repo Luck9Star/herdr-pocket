@@ -112,6 +112,21 @@ final class HerdrSecureTextField: NSSecureTextField, NSTextFieldDelegate {
         return super.accessibilityParent()
     }
 
+    override func becomeFirstResponder() -> Bool {
+        let accepted = super.becomeFirstResponder()
+        if accepted {
+            // An AppKit overlay click does not reach Flutter's tap regions.
+            // Wait until AppKit has installed this field's editor as responder.
+            let focusedRevision = revision
+            DispatchQueue.main.async { [weak self] in
+                guard let self, !self.retired, self.isEnabled, self.revision == focusedRevision,
+                      let editor = self.currentEditor(), self.window?.firstResponder === editor else { return }
+                self.channel.invokeMethod("focused", arguments: ["revision": focusedRevision])
+            }
+        }
+        return accepted
+    }
+
     private func wipe() {
         if let editor = currentEditor() as? NSTextView {
             editor.string = ""

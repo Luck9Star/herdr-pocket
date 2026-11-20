@@ -132,6 +132,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
   void rememberPemHeight() { pemEditorHeight = pemLayoutKey.currentContext?.size?.height ?? pemEditorHeight; }
   void credentialsChanged() { rememberPemHeight(); cancelKeyPaste(); if (mounted) setState(() {}); }
   void pemFocusChanged() { if (mounted) { rememberPemHeight(); setState(() { editingPem = pemFocus.hasFocus; }); } }
+  void blurPemForNativePassphrase() { if (pemFocus.hasFocus) pemFocus.unfocus(); }
   void editPem() {
     setState(() { editingPem = true; });
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -805,6 +806,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
         return ConstrainedBox(constraints: BoxConstraints(minHeight: height), child: MacosSecureCredentialField(
           key: ValueKey(id), controller: controller,
           enabled: credentialEnabled, label: label, identifier: id,
+          onNativeFocus: id == 'direct-passphrase' ? blurPemForNativePassphrase : null,
           decoration: mobileInput('').copyWith(contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3))));
       }
       if (pem && pemCollapsed) return SizedBox(height: height, child: collapsedPem(enabled: credentialEnabled));
@@ -1613,7 +1615,7 @@ class _DirectSshPageState extends State<DirectSshPage> with WidgetsBindingObserv
             Semantics(container: true, explicitChildNodes: true, label: '私钥口令（可选）',
               child: !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS
                 ? MacosSecureCredentialField(key: const ValueKey('direct-passphrase'), controller: passphrase, enabled: !busy && !hostKeyReviewRequired,
-                    label: '私钥口令（可选）', identifier: 'direct-passphrase')
+                    label: '私钥口令（可选）', identifier: 'direct-passphrase', onNativeFocus: blurPemForNativePassphrase)
                 : TextField(key: const ValueKey('direct-passphrase'), controller: passphrase,
                     enabled: !busy && !hostKeyReviewRequired, obscureText: true, decoration: const InputDecoration(label: ExcludeSemantics(child: Text('私钥口令（可选）'))))),
           ],

@@ -222,8 +222,12 @@ final class SecureCredentialUITests: XCTestCase {
     }
 
     private func keyInputBits(_ app: XCUIApplication) throws -> [Bool]? {
+        try keyInputBits(snapshotNodes(app))
+    }
+
+    private func keyInputBits(_ nodes: [any XCUIElementSnapshot]) throws -> [Bool]? {
         let expression = try NSRegularExpression(pattern: "HPKEY:K([01])P([01])Q([01])E([01])L([01])T([01])R([01])C([01])")
-        for field in try snapshotNodes(app).flatMap({ [$0.label, $0.value as? String ?? ""] }) {
+        for field in nodes.flatMap({ [$0.label, $0.value as? String ?? ""] }) {
             guard let match = expression.firstMatch(in: field, range: NSRange(field.startIndex..., in: field)) else { continue }
             return (1...8).map { index in
                 guard let range = Range(match.range(at: index), in: field) else { return false }
@@ -262,27 +266,41 @@ final class SecureCredentialUITests: XCTestCase {
         try snapshotNodes(app).filter { $0.elementType == .textField || $0.elementType == .textView }.count
     }
 
-    private func verifyPemCollapsed(_ app: XCUIApplication, _ privateKey: String) throws {
-        let deadline = Date().addingTimeInterval(8)
-        repeat {
-            let summary = app.buttons.matching(NSPredicate(format: "label == %@", "已填写私钥 · 重新编辑"))
-            let bits = try keyInputBits(app)
-            let nodes = try snapshotNodes(app)
-            let parts = privateKey.components(separatedBy: "\n").filter { $0.count >= 20 }
-            let exposed = nodes.contains { node in
-                [node.label, node.identifier, node.value as? String ?? ""].contains { field in
-                    parts.contains { field.contains($0) }
-                }
-            }
-            if summary.count == 1 && stableHit(summary.firstMatch) &&
-                bits?[7] == true && !exposed { return }
-            usleep(100_000)
-        } while Date() < deadline
-        XCTFail("PEM collapse and unique summary unconfirmed")
+    private enum PemCollapsePhase: String {
+        case pasted, firstBlur = "firstblur", beforeReopen = "beforereopen", secondBlur = "secondblur"
     }
 
-    private func openPemSummary(_ app: XCUIApplication, _ privateKey: String) throws {
-        try verifyPemCollapsed(app, privateKey)
+    private func verifyPemCollapsed(_ app: XCUIApplication, _ privateKey: String, phase: PemCollapsePhase) throws {
+        let deadline = Date().addingTimeInterval(8)
+        let summary = app.buttons.matching(NSPredicate(format: "label == %@", "已填写私钥 · 重新编辑"))
+        let lines = privateKey.components(separatedBy: "\n").filter { $0.count >= 20 }
+        let body = lines.filter { !$0.hasPrefix("-----") }
+        var passed = false
+        var facts = ""
+        repeat {
+            let before = try keyInputBits(app)
+            let unique = summary.count == 1
+            let clickable = unique && stableHit(summary.firstMatch)
+            let nodes = try snapshotNodes(app)
+            let after = try keyInputBits(nodes)
+            let fields = nodes.flatMap { [$0.label, $0.identifier, $0.value as? String ?? ""] }
+            let exposed = fields.contains { field in lines.contains { field.contains($0) } }
+            let bodyExposed = fields.contains { field in body.contains { field.contains($0) } }
+            facts = [before != nil, before?[6] == true, before?[7] == true,
+                     after != nil, after?[6] == true, after?[7] == true,
+                     unique, clickable, exposed, bodyExposed].map { $0 ? "1" : "0" }.joined()
+            passed = clickable && before?[6] == false && before?[7] == true &&
+                after?[6] == false && after?[7] == true && !exposed
+            if passed { break }
+            usleep(100_000)
+        } while Date() < deadline
+        print("HP_XCUI_PEMCOLLAPSE=phase:\(phase.rawValue),bits:\(facts)")
+        fflush(stdout)
+        XCTAssertTrue(passed, "PEM collapse and unique summary unconfirmed")
+    }
+
+    private func openPemSummary(_ app: XCUIApplication, _ privateKey: String, phase: PemCollapsePhase) throws {
+        try verifyPemCollapsed(app, privateKey, phase: phase)
         let collapsedEditors = try ordinaryEditorCount(app)
         usleep(100_000)
         XCTAssertEqual(try ordinaryEditorCount(app), collapsedEditors, "PEM editor baseline changed")
@@ -847,15 +865,15 @@ final class SecureCredentialUITests: XCTestCase {
         mark("pemPasteButtonTapped")
         XCTAssertTrue(try inputMatches(app, index: 0), "pasted key controller mismatch")
         mark("pemControllerConfirmed")
-        try openPemSummary(app, privateKey)
+        try openPemSummary(app, privateKey, phase: .pasted)
         mark("pemEditorFocused")
         clickNativeKeyPassphrase(app)
-        try verifyPemCollapsed(app, privateKey)
+        try verifyPemCollapsed(app, privateKey, phase: .firstBlur)
         mark("pemCollapsedAfterNativeClick")
-        try openPemSummary(app, privateKey)
+        try openPemSummary(app, privateKey, phase: .beforeReopen)
         mark("pemReopenedExactFocused")
         clickNativeKeyPassphrase(app)
-        try verifyPemCollapsed(app, privateKey)
+        try verifyPemCollapsed(app, privateKey, phase: .secondBlur)
         mark("pemCollapsedAgain")
         let nativeCount = app.secureTextFields.matching(NSPredicate(format: "identifier == %@", "direct-passphrase")).count
         print("HP_XCUI_PASSFIELD=native:\(min(nativeCount,9)),groups:\(min(app.descendants(matching: .any).matching(identifier: passphraseLabel).count,9))")

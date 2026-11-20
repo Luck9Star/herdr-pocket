@@ -6,11 +6,15 @@ final class SecureProbeMessenger: NSObject, FlutterBinaryMessenger {
     var handlers: [String: FlutterBinaryMessageHandler] = [:]
     var last: FlutterMethodCall?
     var changedEvents = 0
+    var focusEvents: [FlutterMethodCall] = []
     private let codec = FlutterStandardMethodCodec.sharedInstance()
     private var nextConnection: Int64 = 0
     private var connections: [Int64: String] = [:]
     func send(onChannel channel: String, message: Data?) {
-        if let message { last = codec.decodeMethodCall(message); changedEvents += 1 }
+        guard let message else { return }
+        let call = codec.decodeMethodCall(message)
+        if call.method == "focused" { focusEvents.append(call) }
+        if call.method == "changed" { last = call; changedEvents += 1 }
     }
     func send(onChannel channel: String, message: Data?, binaryReply callback: FlutterBinaryReply?) {
         send(onChannel: channel, message: message)
@@ -111,9 +115,15 @@ struct SecureCredentialViewProbe {
         checks["labelPreserved"] = field.accessibilityLabel() == "私钥口令（可选）"
         checks["identifierPreserved"] = field.accessibilityIdentifier() == "direct-passphrase"
         checks["emptyFieldCanFocus"] = window.makeFirstResponder(field) && field.currentEditor() != nil
+        RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+        let initialFocus = messenger.focusEvents.first?.arguments as? [String: Int]
+        checks["focusReachedFlutterWithoutText"] = messenger.focusEvents.count == 1
+            && initialFocus == ["revision": 1]
         let editorBefore = window.firstResponder
+        let focusBeforeQueries = messenger.focusEvents.count
         for _ in 0..<3 { _ = window.accessibilityChildren(); _ = field.accessibilityParent() }
         checks["windowQueriesPreserveFocus"] = window.firstResponder === editorBefore
+        checks["windowQueriesDoNotPublishFocus"] = messenger.focusEvents.count == focusBeforeQueries
         sync(2, text: "")
         sync(3)
         checks["emptySyncPreservesFocus"] = window.firstResponder === editorBefore && field.currentEditor() != nil
@@ -153,6 +163,11 @@ struct SecureCredentialViewProbe {
         sync(6, text: "")
         checks["clearedFieldCanFocusAgain"] = field.currentEditor() != nil && field.stringValue.isEmpty
         sync(7, enabled: false)
+        _ = window.makeFirstResponder(ordinary)
+        let focusBeforeDisabled = messenger.focusEvents.count
+        _ = window.makeFirstResponder(field)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+        checks["disabledFieldDoesNotPublishFocus"] = messenger.focusEvents.count == focusBeforeDisabled
         let eventsBeforeDisabled = messenger.changedEvents
         field.stringValue = secret
         field.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: field))

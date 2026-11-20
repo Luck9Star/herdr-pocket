@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "e031c5676e1168bf4580e62a033d4533750f81f8",
+  "executableSHA256": "962bb8e469f390c07d04c0a08f0d73118696ab19e775cc84aedfa4d34dbb7cd4",
+  "platform": "Windows Tauri WebView2",
+  "authentication": "password",
+  "scope": "native window, WebDriver input, desktop pixels and isolated SSH",
+  "status": "failed",
+  "stage": "fixture",
+  "listener": {
+    "ownedBeforeLaunch": true
+  },
+  "checkpoint": "job_release_gate",
+  "peer": {
+    "authAccepted": false,
+    "ptyRequested": false,
+    "shellRequested": false,
+    "markerReceived": false,
+    "sessionClosed": false,
+    "connections": 0,
+    "connectionsClosed": true,
+    "ptySizes": [],
+    "connectionEvents": []
+  },
+  "errorCode": "windows_tauri_runner_failed",
+  "runnerFailure": {
+    "exceptionClass": "PermissionError",
+    "winError": 32
+  }
+}

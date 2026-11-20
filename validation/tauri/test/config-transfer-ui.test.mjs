@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildImportChoices, previewIsCurrent, validExportPassword, exportIfCurrent, initConfigTransfer } from '../src/config-transfer-ui.js';
+import { buildImportChoices, reviewedImportLeases, reviewedImportLegacy, previewIsCurrent, validExportPassword, exportIfCurrent, initConfigTransfer } from '../src/config-transfer-ui.js';
 const entries = [{ index: 0, conflicts: [{ id: 'a' }, { id: 'b' }] }, { index: 1, conflicts: [] }];
 test('requires an explicit choice per entry and replaces every conflict', () => {
   assert.throws(() => buildImportChoices(entries, new Map([[0, 'replace']])));
@@ -130,13 +130,14 @@ for (const [field, owners] of [
     if(name==='config_preview')return {ticket:'single',[field]:owners,plan:{entries:[entry(0,'opaque-id-a'),entry(1,'opaque-id-b'),entry(2,'opaque-id-c')]}};
     if(name==='config_apply') {
       appliedChoices=args.choices;
+      args.onRevoke.onmessage({hostIds:['opaque-id-b'],tabs:[],legacy:null});
       return {added:[],retired:[],removedIds:[]};
     }
     throw Error(name);
   }
   try {
     initConfigTransfer({native:true,invoke,getHosts:()=>[],refreshHosts:async()=>{},onApplied:async()=>{},
-      getTabImpacts:ids=>ids.flatMap(id=>impacts[id] || []),onAffected:ids=>stopped.push(ids)});
+      getTabImpacts:ids=>ids.flatMap(id=>impacts[id] || []),onRevoked:event=>stopped.push(event.hostIds)});
     const button=label=>panel.descendants().find(n=>n.tagName==='button' && n.textContent===label);
     const choose=(index,value)=>panel.descendants().find(n=>n.name===`config-choice-${index}` && n.value===value).onchange();
     const impact=()=>panel.descendants().filter(n=>n.className==='config-affected').flatMap(n=>[n,...n.descendants()]).map(n=>n.textContent).join(' ');
@@ -146,6 +147,7 @@ for (const [field, owners] of [
     assert.doesNotMatch(panel.descendants().map(n=>n.textContent).join(' '),/opaque-id-|synthetic-passphrase|将关闭.*标签/);
     assert.doesNotMatch(impact(),/研发|运维|本机主机 3/);
     choose(0,'replace');choose(1,'add');
+    assert.match(impact(),/旧标签.*保留.*最后画面.*手动关闭/);
     assert.match(impact(),/标签 1 · 研发 · w1:p1.*观察已暂停.*输入已关闭/);
     assert.match(impact(),/标签 3 · 研发 · w1:p2.*正在观察.*草稿输入已启用/);
     assert.doesNotMatch(impact(),/运维|本机主机 3/);
@@ -165,4 +167,53 @@ for (const [field, owners] of [
     assert.deepEqual(appliedChoices.map(choice=>choice.replaceIds),[[],['opaque-id-b'],[]]);
     assert.deepEqual(stopped,[['opaque-id-b']]);
   } finally {globalThis.document=previousDocument;globalThis.window=previousWindow;}
+});
+
+test('stale native rejection does not revoke any tab or newly created lease', async()=>{
+  const panel=new FakeElement('section'),opener=new FakeElement('button');
+  const oldDocument=globalThis.document,oldWindow=globalThis.window;
+  globalThis.document={hidden:false,getElementById:id=>id==='config-transfer'?panel:opener,createElement:tag=>new FakeElement(tag),createTextNode:text=>new FakeElement('#text',text),addEventListener(){}};
+  globalThis.window={addEventListener(){}};
+  const stopped=[];const target={username:'u',host:'fixture.invalid',port:22,session:'s'};
+  const invoke=async(name)=>{if(name==='config_document_platform')return 'macos';if(name==='network_list')return {profiles:[]};if(name==='config_document_open')return [1];if(name==='config_preview')return {ticket:'t',activeHostIds:['a'],plan:{entries:[{index:0,host:{label:'new',provider:'system',target},sameLabelIndices:[],conflicts:[{id:'a',name:'old',target}]}]}};if(name==='config_apply')throw 'transfer_active_changed';};
+  try {
+    initConfigTransfer({native:true,invoke,getHosts:()=>[],refreshHosts:async()=>{},onApplied:async()=>{},onRevoked:event=>stopped.push(event.hostIds)});
+    const button=text=>panel.descendants().find(n=>n.tagName==='button' && n.textContent===text);
+    await opener.onclick();await button('选择加密文件').onclick();panel.descendants().find(n=>n.type==='password' && n.parent.textContent==='导入口令').value='fixture';await button('解密并预览').onclick();
+    panel.descendants().find(n=>n.name==='config-choice-0' && n.value==='replace').onchange();
+    await button('确认应用所选操作').onclick();assert.deepEqual(stopped,[]);
+  } finally {globalThis.document=oldDocument;globalThis.window=oldWindow;}
+});
+
+test('native revoke matches only reviewed exact active leases and selected hosts',()=>{
+  const snapshot=[{hostId:'a',tabId:'one',clientGeneration:3,nativeGeneration:7},{hostId:'a',tabId:'unconnected',clientGeneration:0,nativeGeneration:null},{hostId:'b',tabId:'other',clientGeneration:5,nativeGeneration:8}];
+  const event={hostIds:['a','b'],tabs:[['one',3,7,'a'],['other',5,99,'b']]};
+  assert.deepEqual(reviewedImportLeases(event,snapshot,['a']),snapshot.slice(0,2));
+  assert.deepEqual(reviewedImportLeases(event,snapshot,['b']),[]);
+  const pending=[{hostId:'a',tabId:'one',clientGeneration:3,nativeGeneration:null}];
+  assert.deepEqual(reviewedImportLeases(event,pending,['a']),[{...pending[0],nativeGeneration:7}]);
+});
+
+test('revocation is retained when storage fails after native confirmation', async()=>{
+  const panel=new FakeElement('section'),opener=new FakeElement('button');
+  const oldDocument=globalThis.document,oldWindow=globalThis.window;
+  globalThis.document={hidden:false,getElementById:id=>id==='config-transfer'?panel:opener,createElement:tag=>new FakeElement(tag),createTextNode:text=>new FakeElement('#text',text),addEventListener(){}};
+  globalThis.window={addEventListener(){}};
+  const revoked=[];const target={username:'u',host:'fixture.invalid',port:22,session:'s'};
+  const invoke=async(name,args)=>{if(name==='config_document_platform')return 'macos';if(name==='network_list')return {profiles:[]};if(name==='config_document_open')return [1];if(name==='config_preview')return {ticket:'t',activeHostIds:['a'],plan:{entries:[{index:0,host:{label:'new',provider:'system',target},sameLabelIndices:[],conflicts:[{id:'a',name:'old',target}]}]}};if(name==='config_apply'){args.onRevoke.onmessage({hostIds:['a'],tabs:[['old',2,9,'a']],legacy:null});throw 'host_storage_unavailable';}};
+  try {
+    initConfigTransfer({native:true,invoke,getHosts:()=>[],refreshHosts:async()=>{},onApplied:async()=>{},captureLeases:()=>[{tabId:'old',clientGeneration:2}],onRevoked:(event,snapshot)=>revoked.push({event,snapshot})});
+    const button=text=>panel.descendants().find(n=>n.tagName==='button' && n.textContent===text);
+    await opener.onclick();await button('选择加密文件').onclick();panel.descendants().find(n=>n.type==='password' && n.parent.textContent==='导入口令').value='fixture';await button('解密并预览').onclick();
+    panel.descendants().find(n=>n.name==='config-choice-0' && n.value==='replace').onchange();await button('确认应用所选操作').onclick();
+    assert.equal(revoked.length,1);assert.deepEqual(revoked[0].snapshot,[{tabId:'old',clientGeneration:2}]);assert.ok(panel.descendants().some(n=>n.textContent.includes('重新预览并审查')));
+  } finally {globalThis.document=oldDocument;globalThis.window=oldWindow;}
+});
+
+test('legacy revoke matches both client and known native attempt generations',()=>{
+  const event={legacy:[3,8,'a']},reviewed={hostId:'a',generation:3,nativeGeneration:8};
+  assert.equal(reviewedImportLegacy(event,reviewed,{...reviewed}),true);
+  assert.equal(reviewedImportLegacy(event,reviewed,{...reviewed,nativeGeneration:9}),false);
+  assert.equal(reviewedImportLegacy(event,{...reviewed,nativeGeneration:9},reviewed),false);
+  assert.equal(reviewedImportLegacy(event,reviewed,{...reviewed,generation:4}),false);
 });

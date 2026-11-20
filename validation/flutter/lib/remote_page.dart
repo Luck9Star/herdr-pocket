@@ -39,7 +39,7 @@ class RemotePage extends StatefulWidget {
   final DesignTokens tokens;
   final NetworkConnectionBinding? networkBinding;
   final RemoteReadOnlyAdapter? adapter;
-  final VoidCallback Function(Future<void> Function())? registerTransport;
+  final RegisterHostTransport? registerTransport;
   @visibleForTesting final RemoteReadOnlyAdapter Function(SocketConnector)? overlayAdapterFactory;
   final Map<String,dynamic>? pairedTarget;
   final DeviceKeys? deviceKeys;
@@ -48,7 +48,8 @@ class RemotePage extends StatefulWidget {
   final ValueListenable<bool>? visibility;
   final ValueNotifier<bool>? layoutHidden;
   final ValueListenable<bool>? inputEligible;
-  bool get ownsInput => inputEligible?.value ?? true;
+  bool get canUseCommands => networkBinding?.canUseCommands ?? true;
+  bool get ownsInput => (inputEligible?.value ?? true) && canUseCommands;
   final void Function(String,String?,String?,DateTime?)? onViewState;
   final RemotePane? requestedTarget;
   final void Function(RemotePane)? onOpenPane;
@@ -74,12 +75,18 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   late final adapter = widget.networkBinding?.profile != null
     ? widget.overlayAdapterFactory?.call(overlayConnector) ?? RemoteReadOnlyAdapter(inputJournal:const PlatformRemoteInputJournal(),connector:overlayConnector)
     : widget.adapter ?? RemoteReadOnlyAdapter(inputJournal:const PlatformRemoteInputJournal());
-  VoidCallback? releaseTransport;
+  ReleaseHostTransport? releaseTransport;
   Future<void>? tabClosing;
+  late final bool Function() allowDial = () => mounted && widget.canUseCommands;
+  Future<void> confirmTransportClose(Future<void> cancelling) async {
+    final retirement = adapter.transportRetirement;
+    await cancelling;
+    if (!await retirement) throw const RemoteFailure('network_transport_failed');
+  }
   Future<void> closeForTab() {
     if (tabClosing != null) return tabClosing!;
     adapter.requestGracefulClose();
-    return tabClosing = stop('对应网络正在停止 · 已封住输入，正在清退连接');
+    return tabClosing = confirmTransportClose(stop('标签正在关闭 · 已封住输入，正在清退连接'));
   }
   final fields = <String,TextEditingController>{
     for (final name in ['host','port','username','expectedHostKey','privateKeyPem','socketPath','herdrPath','session','paneId'])
@@ -220,7 +227,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     widget.summaryLease?.registry.addListener(summaryChanged);
     originalNetworkBinding = widget.networkBinding;
     adapter.captureInputJournalReview = inputGate.captureJournalRefresh;
-    releaseTransport = widget.registerTransport?.call(closeForTab);
+    adapter.canDispatchDial = allowDial;
+    releaseTransport = widget.registerTransport?.call(closeForTab,takeScreen:takeScreen);
     draft.addListener(draftChanged);
     terminalFocus.addListener(terminalFocusChanged);
     widget.visibility?.addListener(visibilityChanged);
@@ -366,7 +374,18 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     if (widget.networkBinding?.stillCurrent() == false) {
       networkBindingInvalidated = true;
       stop('网络绑定已改变、停用或目录不可用 · 已停止，请关闭后重新审查');
+    } else if (!widget.canUseCommands) {
+      reviewed = false;
+      inputEligibilityChanged();
     } else if (mounted) { setState(() {}); }
+  }
+  RetainedHostScreen? takeScreen() {
+    final screen = terminal, frame = snapshot, frameAt = capturedAt;
+    if (screen == null || frame == null || frameAt == null) return null;
+    terminal = null;
+    screen.onOutput = null;
+    return RetainedHostScreen(screen,frame.session,frame.paneId,capturedTerminalId,frameAt,
+      (widget.networkBinding?.terminalFontSize ?? 14).toDouble());
   }
   void visibilityChanged() {
     if (tabClosing != null) return;
@@ -404,7 +423,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     }
   }
   void resumeObservation() {
-    if (!viewPaused || widget.visibility?.value == false || networkBindingInvalidated) return;
+    if (!viewPaused || widget.visibility?.value == false || networkBindingInvalidated || !widget.canUseCommands) return;
     summaryAttempt = widget.summaryLease?.begin();
     if (widget.networkBinding?.stillCurrent() == false || !adapter.resumeObservation()) {
       stop('原连接或网络绑定已失效 · 请关闭后重新审查'); return;
@@ -425,12 +444,13 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     }
   }
   Future<void> stop([String message = '已取消；不会重连或发送输入']) {
+    if (tabClosing != null) return tabClosing!;
     showingFontDiagnostics = false;
     resetKeyboardControls();
     dismissPasteReview(); clearScreenSelection(); retirePendingPasteRead();
     widget.summaryLease?.invalidate(); summaryAttempt = null;
     inputGate.invalidate(); terminalFocus.unfocus(); if (mounted) FocusScope.of(context).unfocus();
-    request++; frozenNode = null; identityLease?.cancel();
+    request++; frozenNode = null; identityLease?.cancel(); identityLease = null;
     final cancelling = adapter.cancel();
     unawaited(cancelling.then<void>((_) {},onError:(Object _,StackTrace __) {}));
     connectionDiagnostics?.stopped();
@@ -442,7 +462,6 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
   @override
   void dispose() {
-    releaseTransport?.call();
     dismissInputReview(); dismissPasteReview();
     widget.inputEligible?.removeListener(inputEligibilityChanged);
     widget.summaryLease?.registry.removeListener(summaryChanged);
@@ -451,19 +470,23 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     widget.networkBinding?.changes?.removeListener(networkChanged);
     WidgetsBinding.instance.removeObserver(this); request++; identityLease?.cancel();
     adapter.captureInputJournalReview = null;
+    if (identical(adapter.canDispatchDial,allowDial)) adapter.canDispatchDial = null;
     inputGate.onChanged = null; inputGate.invalidate();
     clearScreenSelection(); screenText.dispose(); screenTextFocus.dispose();
     terminalFocus.removeListener(terminalFocusChanged); terminalFocus.dispose(); draftFocus.dispose(); draft.removeListener(draftChanged); draft.dispose();
-    unawaited((tabClosing ?? adapter.cancel()).then<void>((_) {},onError:(Object _,StackTrace __) {})); terminal?.dispose();
     widget.onViewState?.call(inputGate.unknown != null || adapter.pendingInput != null ? 'unknown' : 'stale',
       selectedPane ?? widget.requestedTarget?.paneId,selectedTarget?.terminalId ?? widget.requestedTarget?.terminalId,
       snapshot != null && capturedTerminalId != null && selectedPane == snapshot!.paneId && selectedTarget?.terminalId == capturedTerminalId ? capturedAt : null);
+    final closing = tabClosing ?? confirmTransportClose(adapter.cancel());
+    unawaited(closing.then<void>((_) {},onError:(Object _,StackTrace __) {}));
+    releaseTransport?.call(closing,takeScreen());
+    terminal?.dispose();
     for (final c in fields.values) { c.clear(); c.dispose(); }
     super.dispose();
   }
 
   Future<void> connect() async {
-    if (networkBindingInvalidated || !identical(originalNetworkBinding,widget.networkBinding) ||
+    if (networkBindingInvalidated || !widget.canUseCommands || !identical(originalNetworkBinding,widget.networkBinding) ||
         !reviewed || busy || widget.visibility?.value == false) return;
     showingFontDiagnostics = false; resetKeyboardControls(); dismissPasteReview(); clearScreenSelection();
     final ticket = ++request;
@@ -606,7 +629,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     } catch (error) {
       if (!mounted || ticket != request) return;
       widget.summaryLease?.invalidate(); summaryAttempt = null;
-      identityLease?.cancel(); widget.onStopped?.call();
+      identityLease?.cancel(); frozenNode = null; widget.onStopped?.call();
       clearScreenSelection();
       inputGate.invalidate(); terminalFocus.unfocus();
       final code = error is RemoteFailure ? error.code : 'connection_failed';
@@ -622,6 +645,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           'network_identity_unavailable' => '本机网络身份不可用或当前无密码模式不受支持 · 已停止，请核对本机资料',
           'network_runtime_unavailable' => '节点状态或连接桥不可确认 · 已停止，请刷新状态后重新审查',
           'network_binding_changed' => '网络绑定已改变或停用 · 已停止，请关闭后重新审查',
+          'catalog_unavailable' => '目录待核验 · 未开始连接，请重新读取目录后主动审查',
           'device_key_unavailable' || 'device_key_changed' => '设备密钥锁定、丢失或不可用 · 已停止，不会生成替代身份或使用明文',
           'host_key_mismatch' => '主机指纹不符 · 已在认证前拒绝，请从可信渠道重新核验',
           'session_mismatch' || 'pane_missing' || 'invalid_terminal_id' || 'invalid_snapshot' || 'stale_selection' => '指定会话或目标不匹配 · 已停止，请检查资料',
@@ -1374,7 +1398,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             RemoteWorkflowSteps(tokens:widget.tokens,labels:const ['连接目标','身份核验','只读观察'],current:0),
           ],
           if (dashboard != null && MediaQuery.viewInsetsOf(context).bottom == 0) sessionTabs(),
-          if (snapshot != null && !widget.ownsInput) RemoteWorkflowNotice(tokens:widget.tokens,child:const Text('只读观察 · 获取输入焦点后可选择输入模式',key:ValueKey('remote-input-ineligible'))),
+          if (snapshot != null && !widget.ownsInput) RemoteWorkflowNotice(tokens:widget.tokens,child:Text(
+            widget.canUseCommands ? '只读观察 · 获取输入焦点后可选择输入模式' : '目录待核验 · 当前连接继续只读观察',key:const ValueKey('remote-input-ineligible'))),
           if (snapshot != null || inputGate.unknown != null) modeSelector(),
           if ((snapshot != null || inputGate.unknown != null) && inputGate.mode == RemoteInputMode.draft) inputPanel(),
           if (snapshot != null) ExpansionTile(key:const ValueKey('remote-display-tools'),
@@ -1453,16 +1478,16 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           input('privateKeyPem','临时 Ed25519 私钥',secret:true),
           ] else const Padding(padding:EdgeInsets.symmetric(vertical:12),child:Text('设备独立身份 · 私钥不进入表单；密钥不可用时停止')),
           CheckboxListTile(key:const ValueKey('remote-review'),contentPadding:EdgeInsets.zero,
-            value:reviewed,onChanged:busy || networkBindingInvalidated ? null : (value) => setState(() { reviewed = value ?? false; }),
+            value:reviewed,onChanged:busy || networkBindingInvalidated || !widget.canUseCommands ? null : (value) => setState(() { reviewed = value ?? false; }),
             title:const Text('我已通过可信渠道核验主机公钥、账号与目标资料'),
             subtitle:const Text('输入或保存资料不等于信任；任何编辑都会清除此确认。')),
           const SizedBox(height:8),
           if (networkBindingInvalidated) const Text('网络绑定已改变 · 请关闭本页并重新打开，审查后才能连接。',key:ValueKey('remote-network-invalidated')),
-          FilledButton.icon(key:const ValueKey('remote-connect'),onPressed:reviewed && !busy && !networkBindingInvalidated ? connect : null,
+          FilledButton.icon(key:const ValueKey('remote-connect'),onPressed:reviewed && !busy && !networkBindingInvalidated && widget.canUseCommands ? connect : null,
             icon:const Icon(Icons.lock_outline),label:Text(dashboard == null ? '核验并读取会话看板' : '重新审查并连接')),
           ])),
           ],
-          if (snapshot != null) ...[
+          if (snapshot != null && terminal != null) ...[
             Text('${snapshot!.session} / ${snapshot!.paneId}\n${live ? inputGate.mode == RemoteInputMode.observe ? '只读观察中' : '实时终端 · 显式输入模式' : '旧画面 · 已停止'} · seq $sequence\n更新于 ${capturedAt!.toLocal().toIso8601String()} · 观察画布 ${terminal!.viewWidth}×${terminal!.viewHeight}'),
           ],
           RemoteWorkflowCard(key:const ValueKey('remote-connection-settings'),tokens:widget.tokens,title:'连接状态与观察设置',icon:Icons.settings_outlined,
@@ -1490,7 +1515,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
               key:const ValueKey('remote-host-task-summary'));
           }),
           if (viewPaused && widget.visibility?.value != false) FilledButton(key:const ValueKey('remote-resume'),
-            onPressed:resumeObservation,child:const Text('恢复原目标观察')),
+            onPressed:widget.canUseCommands ? resumeObservation : null,child:const Text('恢复原目标观察')),
           if (busy) TextButton.icon(key:const ValueKey('remote-cancel'),onPressed:stop,
             icon:const Icon(Icons.stop_circle_outlined),label:const Text('停止并断开')),
           ])),

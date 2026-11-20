@@ -13,7 +13,8 @@ import time
 from paired_gui import GuiFailure, owned_process
 import flutter_android_documents_oracle as oracle
 from flutter_android_documents_preflight import PACKAGE, SERIAL, Failure as AdbFailure, adb
-from flutter_android_gui import SystemImeFailure, public_file_pending, public_ime_diagnostic, wait_system_ime
+from flutter_android_gui import (SystemImeFailure, parse_system_ime, public_file_pending, public_ime_diagnostic,
+                                 wait_system_ime)
 from tauri_android_config_document import (Picker, ARCHIVE, CORRUPT, DOWNLOADS, MAX_ARCHIVE,
                                            foreground, binary_file, wait_download_storage)
 
@@ -28,6 +29,51 @@ ROOT = Path(__file__).resolve().parents[2]
 def need(condition, code):
     if not condition:
         raise GuiFailure(code)
+
+
+def wait_import_ime(read_dump):
+    """Wait for two consecutive owned samples with either settled visibility."""
+    deadline = time.monotonic() + 12
+    previous = None
+    last = {'formatVersion': 1, 'reason': 'no_sample'}
+    attempts = 0
+    while time.monotonic() < deadline and attempts < 100:
+        attempts += 1
+        try:
+            sample = parse_system_ime(*read_dump(), PACKAGE)
+        except SystemImeFailure as error:
+            error.diagnostic['attempts'] = attempts
+            if not error.retryable:
+                raise
+            last = error.diagnostic
+            previous = None
+        else:
+            last = sample['diagnostic']
+            state = last['visibility']
+            if state in ('visible', 'hidden') and state == previous:
+                return {**sample, 'diagnostic': {**last, 'attempts': attempts}}
+            previous = state
+        time.sleep(0.15)
+    raise SystemImeFailure('android_system_ime_state_unconfirmed', {**last, 'attempts': attempts, 'timedOut': True})
+
+
+def dismiss_document_ime(stage, launcher):
+    def read_dump():
+        return (adb('shell', 'dumpsys', 'input_method').decode('utf-8', 'replace'),
+                adb('shell', 'dumpsys', 'window', 'displays').decode('utf-8', 'replace'))
+
+    need(launcher and foreground() == launcher, 'ime_foreground_unconfirmed')
+    # Export separately proves an actual IME show/hide. Import only needs a
+    # clear viewport after fixture entry and can return with the IME hidden.
+    before = wait_system_ime(read_dump, PACKAGE, True) if stage == 'hide_export' else wait_import_ime(read_dump)
+    need(foreground() == launcher, 'ime_foreground_unconfirmed')
+    detail = {'outcome': 'already_hidden', 'before': public_ime_diagnostic(before['diagnostic'])}
+    if before['visible']:
+        adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+        after = wait_system_ime(read_dump, PACKAGE, False)
+        need(foreground() == launcher, 'ime_foreground_unconfirmed')
+        detail.update(outcome='system_back', after=public_ime_diagnostic(after['diagnostic']))
+    return detail
 
 
 def device_catalog():
@@ -272,12 +318,8 @@ def drive(app, output):
                         private.unlink(missing_ok=True)
                     report['archive'] = {'bytes': len(raw), 'sha256': hashlib.sha256(raw).hexdigest()}
                 elif stage.startswith('hide_'):
-                    def ime_dump():
-                        return (adb('shell', 'dumpsys', 'input_method').decode('utf-8', 'replace'),
-                                adb('shell', 'dumpsys', 'window', 'displays').decode('utf-8', 'replace'))
-                    wait_system_ime(ime_dump, PACKAGE, True)
-                    adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
-                    wait_system_ime(ime_dump, PACKAGE, False)
+                    observation = dismiss_document_ime(stage, picker.launcher)
+                    report.setdefault('imeStages', {})[stage] = observation
                 elif stage == 'apply_dispatch':
                     need(device_catalog() == ledger.reference, 'catalog_changed')
                     ledger.begin_apply()

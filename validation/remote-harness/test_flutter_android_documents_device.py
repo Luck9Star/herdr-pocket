@@ -6,7 +6,7 @@ from contextlib import contextmanager
 import subprocess
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import flutter_android_documents_device as driver
 from paired_gui import GuiFailure
@@ -131,6 +131,92 @@ class InstalledDigestTest(unittest.TestCase):
         with self.assertRaisesRegex(GuiFailure, 'installed_hash_mismatch'):
             self.verify([self.reply(b'12344\n'),
                 self.reply((self.DIGEST + '  ' + self.PATH).encode())])
+
+
+class DocumentImeTest(unittest.TestCase):
+    LAUNCHER = driver.PACKAGE + '/.MainActivity'
+
+    @staticmethod
+    def sample(visibility):
+        return {'visible': visibility == 'visible', 'hidden': visibility == 'hidden',
+                'diagnostic': {'visibility': visibility, 'focusOwner': 'owned', 'raw': 'private diagnostic'}}
+
+    def test_import_accepts_already_hidden_without_pressing_back(self):
+        with patch.object(driver, 'foreground', return_value=self.LAUNCHER), \
+             patch.object(driver, 'wait_import_ime', return_value=self.sample('hidden')), \
+             patch.object(driver, 'adb') as adb, patch.object(driver, 'wait_system_ime') as strict:
+            expected = {'outcome': 'already_hidden', 'before': {'visibility': 'hidden', 'focusOwner': 'owned'}}
+            self.assertEqual(driver.dismiss_document_ime('hide_wrong', self.LAUNCHER), expected)
+            adb.assert_not_called()
+            strict.assert_not_called()
+
+    def test_visible_import_sends_one_back_and_verifies_hidden(self):
+        with patch.object(driver, 'foreground', return_value=self.LAUNCHER), \
+             patch.object(driver, 'wait_import_ime', return_value=self.sample('visible')), \
+             patch.object(driver, 'adb') as adb, \
+             patch.object(driver, 'wait_system_ime', return_value=self.sample('hidden')) as strict:
+            result = driver.dismiss_document_ime('hide_tampered', self.LAUNCHER)
+            self.assertEqual(result['outcome'], 'system_back')
+            self.assertEqual((result['before']['visibility'], result['after']['visibility']), ('visible', 'hidden'))
+            self.assertIs(strict.call_args.args[2], False)
+            adb.assert_called_once_with('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+
+    def test_export_requires_native_show_before_back(self):
+        hidden = driver.SystemImeFailure('android_system_ime_show_unconfirmed', {'reason': 'owned_hidden'})
+        with patch.object(driver, 'foreground', return_value=self.LAUNCHER), \
+             patch.object(driver, 'wait_import_ime') as optional, patch.object(driver, 'adb') as adb, \
+             patch.object(driver, 'wait_system_ime', side_effect=hidden) as strict:
+            with self.assertRaisesRegex(driver.SystemImeFailure, 'show_unconfirmed'):
+                driver.dismiss_document_ime('hide_export', self.LAUNCHER)
+            self.assertIs(strict.call_args.args[2], True)
+            optional.assert_not_called()
+            adb.assert_not_called()
+
+        with patch.object(driver, 'foreground', return_value=self.LAUNCHER), \
+             patch.object(driver, 'wait_system_ime', side_effect=[self.sample('visible'), self.sample('hidden')]) as strict, \
+             patch.object(driver, 'adb') as adb:
+            result = driver.dismiss_document_ime('hide_export', self.LAUNCHER)
+            self.assertEqual([call.args[2] for call in strict.call_args_list], [True, False])
+            self.assertEqual(result['outcome'], 'system_back')
+            adb.assert_called_once_with('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+
+    def test_foreground_change_and_unconfirmed_back_block_progress(self):
+        for owners in ([None], [self.LAUNCHER, 'foreign/.Picker']):
+            with self.subTest(owners=owners), patch.object(driver, 'foreground', side_effect=owners), \
+                 patch.object(driver, 'wait_import_ime', return_value=self.sample('visible')), patch.object(driver, 'adb') as adb:
+                with self.assertRaisesRegex(GuiFailure, 'ime_foreground_unconfirmed'):
+                    driver.dismiss_document_ime('hide_correct', self.LAUNCHER)
+                adb.assert_not_called()
+        failure = driver.SystemImeFailure('android_system_ime_hide_unconfirmed', {'reason': 'owned_visible'})
+        with patch.object(driver, 'foreground', return_value=self.LAUNCHER), \
+             patch.object(driver, 'wait_import_ime', return_value=self.sample('visible')), patch.object(driver, 'adb') as adb, \
+             patch.object(driver, 'wait_system_ime', side_effect=failure):
+            with self.assertRaisesRegex(driver.SystemImeFailure, 'hide_unconfirmed'):
+                driver.dismiss_document_ime('hide_correct', self.LAUNCHER)
+            adb.assert_called_once()
+
+        with patch.object(driver, 'foreground', side_effect=[self.LAUNCHER, self.LAUNCHER, None]), \
+             patch.object(driver, 'wait_import_ime', return_value=self.sample('visible')), patch.object(driver, 'adb') as adb, \
+             patch.object(driver, 'wait_system_ime', return_value=self.sample('hidden')):
+            with self.assertRaisesRegex(GuiFailure, 'ime_foreground_unconfirmed'):
+                driver.dismiss_document_ime('hide_correct', self.LAUNCHER)
+            adb.assert_called_once()
+
+    def test_import_requires_consecutive_owned_samples(self):
+        hidden = self.sample('hidden')
+        retry = driver.SystemImeFailure('android_system_ime_target_mismatch', {'reason': 'focus_null'}, retryable=True)
+        samples = [hidden, retry, hidden, self.sample('transition'), hidden, hidden]
+        with patch.object(driver, 'parse_system_ime', side_effect=samples) as parse, patch.object(driver.time, 'sleep'):
+            result = driver.wait_import_ime(Mock(return_value=('service dump', 'display dump')))
+        self.assertTrue(result['hidden'])
+        self.assertEqual(result['diagnostic']['attempts'], 6)
+        self.assertEqual(parse.call_count, 6)
+        foreign = driver.SystemImeFailure('android_system_ime_target_mismatch', {'reason': 'focus_foreign'})
+        with patch.object(driver, 'parse_system_ime', side_effect=[hidden, foreign, hidden]) as parse, \
+             patch.object(driver.time, 'sleep'):
+            with self.assertRaisesRegex(driver.SystemImeFailure, 'target_mismatch'):
+                driver.wait_import_ime(Mock(return_value=('service dump', 'display dump')))
+        self.assertEqual(parse.call_count, 2)
 
 
 class CleanupTest(unittest.TestCase):

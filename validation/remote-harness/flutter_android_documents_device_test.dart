@@ -117,13 +117,14 @@ class _Ui {
     return finder;
   }
 
-  Future<void> press(String key) async {
+  Future<void> press(String key, {VoidCallback? beforeTap}) async {
     final finder = _control(key);
     await show(
       finder,
       key,
       enabled: () => tester.widget<FilledButton>(finder).onPressed != null,
     );
+    beforeTap?.call();
     await tester.tap(finder);
   }
 
@@ -249,17 +250,43 @@ class _Ui {
     );
     _check(tester.widget<TextField>(field).obscureText, 'plain_password_field');
     await tester.tap(field);
+    // Fixture text enters through the Flutter test input channel. Only the
+    // host's Android window and IME samples prove system keyboard visibility.
     await tester.enterText(field, value);
+    checkPassword(key, value);
+  }
+
+  void checkPassword(String key, String value) {
+    final field = _control(key);
+    _check(_single(field), 'password_field_unconfirmed');
+    final widget = tester.widget<TextField>(field);
     _check(
-      tester.widget<TextField>(field).controller?.text == value,
+      widget.enabled == true &&
+          widget.obscureText &&
+          widget.controller?.text == value,
       'password_entry_unconfirmed',
     );
   }
 
+  bool get _keyboardHiddenInForeground =>
+      tester.binding.lifecycleState == AppLifecycleState.resumed &&
+      tester.view.viewInsets.bottom == 0;
+
   Future<void> keyboardHidden() async {
     await waitFor(
-      'keyboard_dismissed',
-      () => tester.view.viewInsets.bottom == 0,
+      'keyboard_dismissed_in_foreground',
+      () => _keyboardHiddenInForeground,
+    );
+  }
+
+  Future<void> decrypt(String password) async {
+    await keyboardHidden();
+    await press(
+      'transfer-decrypt',
+      beforeTap: () {
+        _check(_keyboardHiddenInForeground, 'decrypt_viewport_changed');
+        checkPassword('transfer-password', password);
+      },
     );
   }
 
@@ -359,8 +386,7 @@ void main() {
       ui.checkNoPreview();
       await ui.enterPassword('transfer-password', password);
       await exchange.checkpoint('hide_${picker.split('_').first}');
-      await ui.keyboardHidden();
-      await ui.press('transfer-decrypt');
+      await ui.decrypt(password);
       if (done == 'preview') {
         await ui.status(_preview, 'preview');
         await ui.show(

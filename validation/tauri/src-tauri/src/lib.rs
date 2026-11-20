@@ -351,13 +351,16 @@ async fn host_cleanup_retry(id:String,hosts:State<'_,Hosts>,pairing:State<'_,Pai
     key_cleanup::retry_cleanup(&pairing,&hosts,&flow,&id)
 }
 struct PairingState { store: Arc<dyn KeyStore>, current: Arc<Mutex<Option<Pairing>>>, busy: AtomicBool, restore_required: AtomicBool }
-struct PairingLease<'a>(&'a AtomicBool);
-impl Drop for PairingLease<'_> { fn drop(&mut self) { self.0.store(false,Ordering::Release); } }
+struct PairingLease<'a> { busy: &'a AtomicBool, _transaction: Box<dyn Send> }
+impl Drop for PairingLease<'_> { fn drop(&mut self) { self.busy.store(false,Ordering::Release); } }
 impl PairingState {
     fn new(store: Arc<dyn KeyStore>) -> Self { Self { store, current: Arc::new(Mutex::new(None)), busy:AtomicBool::new(false), restore_required:AtomicBool::new(false) } }
     fn enter(&self)->Result<PairingLease<'_>,String> {
         self.busy.compare_exchange(false,true,Ordering::AcqRel,Ordering::Acquire).map_err(|_|"pairing_busy")?;
-        Ok(PairingLease(&self.busy))
+        match self.store.transaction() {
+            Ok(transaction)=>Ok(PairingLease{busy:&self.busy,_transaction:transaction}),
+            Err(error)=>{self.busy.store(false,Ordering::Release);Err(error.into())}
+        }
     }
 }
 #[derive(Serialize)]
@@ -367,11 +370,64 @@ fn pairing_view(p: &Pairing) -> Result<PairingView,String> { Ok(PairingView {req
 fn now() -> Result<u64,String> { std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|x|x.as_secs()).map_err(|_|"invalid_time".into()) }
 // Offline pairing manages only the local device identity and public helper request.
 fn create_offline_pair(store:Arc<dyn KeyStore>,config:&RemoteConfig,device:&str,time:u64)->Result<Pairing,String>{
-    let mut p=Pairing::create(store,&config.username,&config.expected_host_key,device,time).map_err(str::to_string)?;
-    if let Err(e)=p.bind_target(config) {let _=p.delete_local();return Err(e.into());}Ok(p)
+    let mut p=Pairing::create(store.clone(),&config.username,&config.expected_host_key,device,time).map_err(str::to_string)?;
+    if let Err(e)=p.bind_target(config) {let _=store.failed_create_cleanup(p.local_handle());return Err(e.into());}Ok(p)
 }
 fn restore_offline_pair(store:Arc<dyn KeyStore>,reference:&herdr_readonly_transport::pairing::PairingReference,config:&RemoteConfig,reviewed:bool,time:u64)->Result<Pairing,String>{
     if reference.status==ReferenceStatus::Authorized {Pairing::restore(store,reference,config,reviewed)} else {Pairing::restore_pending(store,reference,config,reviewed,time)}.map_err(str::to_string)
+}
+// Existing journal recovery exposes no private bytes and never invokes create.
+struct RecoveredPairStore { inner: Arc<dyn KeyStore>, value: Mutex<Option<(String,String)>> }
+impl KeyStore for RecoveredPairStore {
+    fn create(&self)->herdr_readonly_transport::Result<(String,String)> { self.value.lock().map_err(|_|"key_unavailable")?.take().ok_or("key_creation_pending") }
+    fn public(&self,h:&str)->herdr_readonly_transport::Result<String>{self.inner.public(h)}
+    fn sign(&self,h:&str,data:&[u8])->herdr_readonly_transport::Result<Vec<u8>>{self.inner.sign(h,data)}
+    fn delete(&self,h:&str)->herdr_readonly_transport::Result<()>{self.inner.delete(h)}
+    fn failed_create_cleanup(&self,_:&str)->herdr_readonly_transport::Result<()>{Err("key_write_unknown")}
+}
+#[tauri::command]
+fn pair_pending_status(host_id:String,state:State<'_,PairingState>,hosts:State<'_,Hosts>)->Result<bool,String>{
+    let host=hosts.get(&host_id)?;
+    let target=serde_json::to_string(&host.target).map_err(|_|"invalid_config")?;
+    Ok(state.store.pending_create(&host_id,&target).map_err(str::to_string)?.is_some())
+}
+#[tauri::command]
+fn pair_discard_pending(host_id:String,state:State<'_,PairingState>,hosts:State<'_,Hosts>,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<(),String>{
+    let _lease=state.enter()?;
+    if flow.lock().map_err(|_|"state_unavailable")?.owner.is_some(){return Err("connection_active".into());}
+    if state.current.lock().map_err(|_|"state_unavailable")?.is_some(){return Err("pairing_already_exists".into());}
+    let host=hosts.get(&host_id)?;
+    if host.pairing.is_some(){return Err("host_pairing_exists".into());}
+    let target=serde_json::to_string(&host.target).map_err(|_|"invalid_config")?;
+    let handle=state.store.pending_create(&host_id,&target).map_err(str::to_string)?.ok_or("key_creation_missing")?;
+    state.store.delete(&handle).map_err(str::to_string)?;
+    state.store.clear_deleted_create(&handle).map_err(str::to_string)?;
+    Ok(())
+}
+#[tauri::command]
+async fn pair_recover_pending(config:RemoteConfig,device:String,host_id:String,state:State<'_,PairingState>,hosts:State<'_,Hosts>,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<PairingView,String>{
+    let _lease=state.enter()?;
+    if flow.lock().map_err(|_|"state_unavailable")?.owner.is_some(){return Err("connection_active".into());}
+    let mut current=state.current.lock().map_err(|_|"state_unavailable")?;
+    if current.is_some(){return Err("pairing_already_exists".into());}
+    config.validate_pair_target().map_err(str::to_string)?;
+    let host=hosts.get(&host_id)?;
+    if !host.enabled || host.target!=Target::from_config(&config) {return Err("host_pairing_exists".into());}
+    let target=serde_json::to_string(&host.target).map_err(|_|"invalid_config")?;
+    let handle=state.store.pending_create(&host_id,&target).map_err(str::to_string)?.ok_or("key_creation_missing")?;
+    let public=state.store.public(&handle).map_err(str::to_string)?;
+    let p=if let Some(reference)=host.pairing.as_ref(){
+        if reference.handle!=handle{return Err("key_creation_pending".into());}
+        restore_offline_pair(state.store.clone(),reference,&config,true,now()?)?
+    } else {
+        let recovered:Arc<dyn KeyStore>=Arc::new(RecoveredPairStore{inner:state.store.clone(),value:Mutex::new(Some((handle.clone(),public)))});
+        let p=create_offline_pair(recovered,&config,&device,now()?)?;
+        let reference=p.pending_reference(&config).map_err(str::to_string)?;
+        hosts.attach_pending(&host_id,&host.target,reference)?;
+        p
+    };
+    state.store.finish_create(&handle).map_err(str::to_string)?;
+    let view=pairing_view(&p)?;*current=Some(p);state.restore_required.store(false,Ordering::SeqCst);Ok(view)
 }
 #[tauri::command]
 async fn pair_create(config:RemoteConfig,device:String,host_id:String,state:State<'_,PairingState>,hosts:State<'_,Hosts>,flow:State<'_,Arc<Mutex<RemoteFlow>>>) -> Result<PairingView,String> {
@@ -382,9 +438,12 @@ async fn pair_create(config:RemoteConfig,device:String,host_id:String,state:Stat
     if current.is_some() { return Err("pairing_already_exists".into()); }
     config.validate_pair_target().map_err(str::to_string)?;
     let host=hosts.get(&host_id)?; if !host.enabled || host.target!=Target::from_config(&config) || host.pairing.is_some() {return Err("host_pairing_exists".into());}
+    let target=serde_json::to_string(&host.target).map_err(|_|"invalid_config")?;
+    state.store.begin_create(&host_id,&target).map_err(str::to_string)?;
     let p=create_offline_pair(state.store.clone(),&config,&device,now()?)?;
     let stored=p.pending_reference(&config).map_err(str::to_string).and_then(|reference|hosts.attach_pending(&host_id,&host.target,reference)).is_ok();
-    let mut view=pairing_view(&p)?; if !stored {view.request.clear();view.state="storage-failed";view.stored=false;} *current=Some(p); Ok(view)
+    let committed = stored && state.store.finish_create(p.local_handle()).is_ok();
+    let mut view=pairing_view(&p)?; if !committed {view.request.clear();view.state="storage-failed";view.stored=false;} *current=Some(p); Ok(view)
 }
 #[tauri::command]
 fn pair_accept(response:String,reviewed:bool,state:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,hosts:State<'_,Hosts>) -> Result<PairingView,String> {
@@ -602,9 +661,11 @@ fn remote_ack(generation:u64,epoch:u64,seq:u64,flow:State<'_,Arc<Mutex<RemoteFlo
 fn remote_cancel(client_generation:u64,state:State<'_,Mutex<AttemptGate>>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,pairing:State<'_,PairingState>)->Result<(),String> {
     let mut f=flow.lock().map_err(|_|"state_unavailable")?; let mut g=state.lock().map_err(|_|"state_unavailable")?; if f.owner==Some(client_generation) { if let Some(p)=pairing.current.lock().map_err(|_|"state_unavailable")?.as_mut() { if p.state=="connecting" {p.cancel();} } } f.cancel(client_generation,&mut g); Ok(())
 }
-#[cfg(target_os="windows")]
+#[cfg(target_os="linux")]
+mod linux_pairing_keys;
+#[cfg(any(target_os="linux",target_os="windows"))]
 struct UnavailableKeyStore;
-#[cfg(target_os="windows")]
+#[cfg(any(target_os="linux",target_os="windows"))]
 impl KeyStore for UnavailableKeyStore {
     fn create(&self)->herdr_readonly_transport::Result<(String,String)> {Err("key_unavailable")}
     fn public(&self,_:&str)->herdr_readonly_transport::Result<String> {Err("key_unavailable")}
@@ -620,7 +681,7 @@ mod ios_keys;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder=tauri::Builder::default();
-    #[cfg(any(target_os="linux",target_os="macos"))]
+    #[cfg(target_os="macos")]
     let builder=builder.manage(PairingState::new(Arc::new(herdr_readonly_transport::pairing::VolatileKeyStore::default())));
     #[cfg(target_os="windows")]
     let builder=builder.manage(PairingState::new(Arc::new(UnavailableKeyStore)));
@@ -638,11 +699,19 @@ pub fn run() {
         .manage(network_nodes::Nodes::default())
         .manage(config_exchange::Transfers::default())
         .setup(|app| {
+            #[cfg(target_os="linux")]
+            {
+                let store:Arc<dyn KeyStore>=match app.path().app_local_data_dir() {
+                    Ok(root)=>Arc::new(linux_pairing_keys::LinuxPairingStore::new(root.join("host-records-v1"))),
+                    Err(_)=>Arc::new(UnavailableKeyStore),
+                };
+                app.manage(PairingState::new(store));
+            }
             let recovery=app.path().app_local_data_dir().ok().map(|p|herdr_readonly_transport::recovery::Recovery::open(p.join("remote-input-v1"))).unwrap_or_else(herdr_readonly_transport::recovery::Recovery::disabled);
             let flow=RemoteFlow {recovery:Some(recovery),..Default::default()};
             app.manage(Arc::new(Mutex::new(flow))); Ok(())
         })
-        .invoke_handler(tauri::generate_handler![direct_shell::ssh_host_key_probe,direct_shell::ssh_shell_open,direct_shell::ssh_shell_write,direct_shell::ssh_shell_resize,direct_shell::ssh_shell_close,direct_shell::ssh_shell_ack,fixture_begin,fixture_next,fixture_ack,fixture_cancel,remote_read_once,remote_tab_reserve,remote_tab_cancel,remote_tab_commands::remote_tab_close,remote_tab_commands::remote_tab_observe,remote_tab_commands::remote_tab_ack,remote_tab_commands::remote_tab_select,remote_tab_commands::remote_tab_control,remote_tab_commands::remote_tab_visible,remote_tab_commands::remote_tab_input_mode,remote_tab_commands::remote_tab_input_recover,remote_tab_commands::remote_tab_input_send,remote_observe,remote_select,remote_ack,remote_cancel,remote_input_mode,remote_input_recover,remote_input_send,pair_create,pair_copy::pair_copy_request,pair_accept,pair_cancel,pair_reset,pair_scan_response,host_init,host_list,host_save,host_new,host_select,host_restore,host_update,host_remove,host_cleanup_retry,preferences_save,network_list,network_save,network_delete,network_bind,network_identity_status,network_identity_write,zerotier_device_status,zerotier_device_write,network_node_status,network_node_start,network_node_stop,network_node_login,network_node_login_status,network_node_open_auth,
+        .invoke_handler(tauri::generate_handler![direct_shell::ssh_host_key_probe,direct_shell::ssh_shell_open,direct_shell::ssh_shell_write,direct_shell::ssh_shell_resize,direct_shell::ssh_shell_close,direct_shell::ssh_shell_ack,fixture_begin,fixture_next,fixture_ack,fixture_cancel,remote_read_once,remote_tab_reserve,remote_tab_cancel,remote_tab_commands::remote_tab_close,remote_tab_commands::remote_tab_observe,remote_tab_commands::remote_tab_ack,remote_tab_commands::remote_tab_select,remote_tab_commands::remote_tab_control,remote_tab_commands::remote_tab_visible,remote_tab_commands::remote_tab_input_mode,remote_tab_commands::remote_tab_input_recover,remote_tab_commands::remote_tab_input_send,remote_observe,remote_select,remote_ack,remote_cancel,remote_input_mode,remote_input_recover,remote_input_send,pair_create,pair_pending_status,pair_discard_pending,pair_recover_pending,pair_copy::pair_copy_request,pair_accept,pair_cancel,pair_reset,pair_scan_response,host_init,host_list,host_save,host_new,host_select,host_restore,host_update,host_remove,host_cleanup_retry,preferences_save,network_list,network_save,network_delete,network_bind,network_identity_status,network_identity_write,zerotier_device_status,zerotier_device_write,network_node_status,network_node_start,network_node_stop,network_node_login,network_node_login_status,network_node_open_auth,
             mobile_clipboard_read_text,terminal_keyboard::mobile_terminal_keyboard,terminal_keyboard::mobile_system_top_inset,config_document_platform,config_document_open,config_document_save,config_export,config_preview,config_apply,config_discard])
         .run(tauri::generate_context!())
         .expect("Tauri probe startup failed");

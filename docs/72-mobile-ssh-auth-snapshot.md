@@ -4,6 +4,12 @@
 
 各批沿用 [PR #4 的冻结设计](https://github.com/Luck9Star/herdr-pocket/pull/4)。画板提交为 `79deef0e9c03425f368966e32ff1f1d399a3ac02`。旧版 [15 状态前测](https://github.com/Luck9Star/herdr-pocket/blob/af273abca77fe97fd4806fe624dce89c6595869b/design/evidence/direct-ssh-mobile-20261118/baseline/README.md) 与[首批入口对照](https://github.com/Luck9Star/herdr-pocket/blob/af273abca77fe97fd4806fe624dce89c6595869b/design/evidence/direct-ssh-mobile-20261118/first-batch/README.md)提供独立参照。
 
+## 2026-11-20 私钥收起与重开复验
+
+[PR #56 初批验收](evidence/ordinary-ssh-pem-reopen-20261120/README.md)按源码归档 Win32、Linux GTK/Xvfb、macOS XCUITest 和手机模拟器结果。Windows Flutter 与 Linux Tauri 完成摘要点击、草稿逐字读回和再次收起。Linux Flutter 本批证实点击和读回，进一步的焦点与再次收起断言待复验。
+
+手机首轮仍有三处阻断。Flutter iOS 普通密码和密码换钥完成，独立加密案止于指纹确认后的验收回调。Tauri iOS 手填加密案止于口令控件归属核验。Flutter Android 的模拟器在应用检查点和 SSH 连接前退出。三个加密案均无认证尝试。macOS Flutter 的加密私钥子用例通过，系统遮蔽综合用例失败。端到端状态与新交互的实证以[官方工件索引](evidence/ordinary-ssh-pem-reopen-20261120/official-index.json)为准。
+
 ## 合并前原生复验
 
 ### R2 联合复验

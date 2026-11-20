@@ -133,6 +133,63 @@ class InstalledDigestTest(unittest.TestCase):
                 self.reply((self.DIGEST + '  ' + self.PATH).encode())])
 
 
+class DamagedFixtureTest(unittest.TestCase):
+    FOLDER = driver.DOWNLOADS + '/hp-config-' + 'a' * 24
+
+    def test_one_byte_corruption_is_pushed_read_back_and_scanned_once(self):
+        original = b'HPKT' + bytes(range(64))
+        damaged = original[:-1] + bytes([original[-1] ^ 1])
+        with tempfile.TemporaryDirectory() as temp, \
+             patch.object(driver, 'adb') as adb, \
+             patch.object(driver, 'binary_file', side_effect=[damaged, original]) as read:
+            proof = driver.publish_damaged_fixture(original, self.FOLDER, Path(temp))
+            self.assertFalse(list(Path(temp).glob('flutter-damaged-*')))
+        self.assertTrue(proof['exactOneByte'])
+        self.assertEqual(proof['sha256'], driver.hashlib.sha256(damaged).hexdigest())
+        self.assertEqual(read.call_count, 2)
+        self.assertEqual([c.args[0] for c in adb.call_args_list], ['push', 'shell'])
+        self.assertIn('android.intent.action.MEDIA_SCANNER_SCAN_FILE', adb.call_args.args)
+
+    def test_mismatch_or_unknown_push_stops_without_scanning_or_replay(self):
+        original = b'HPKT' + bytes(range(64))
+        with tempfile.TemporaryDirectory() as temp, patch.object(driver, 'adb') as adb, \
+             patch.object(driver, 'binary_file', return_value=original):
+            with self.assertRaisesRegex(GuiFailure, 'damaged_fixture_mismatch'):
+                driver.publish_damaged_fixture(original, self.FOLDER, Path(temp))
+            self.assertEqual(adb.call_count, 1)
+        with tempfile.TemporaryDirectory() as temp, patch.object(driver, 'adb', side_effect=driver.AdbFailure('timeout')) as adb, \
+             patch.object(driver, 'binary_file') as read:
+            with self.assertRaises(driver.AdbFailure):
+                driver.publish_damaged_fixture(original, self.FOLDER, Path(temp))
+            self.assertEqual(adb.call_count, 1)
+            read.assert_not_called()
+
+    def test_source_change_after_push_blocks_scan(self):
+        original = b'HPKT' + bytes(range(64))
+        damaged = original[:-1] + bytes([original[-1] ^ 1])
+        with tempfile.TemporaryDirectory() as temp, patch.object(driver, 'adb') as adb, \
+             patch.object(driver, 'binary_file', side_effect=[damaged, b'changed']):
+            with self.assertRaisesRegex(GuiFailure, 'archive_changed'):
+                driver.publish_damaged_fixture(original, self.FOLDER, Path(temp))
+            self.assertEqual(adb.call_count, 1)
+
+    def test_rejects_unowned_destination(self):
+        with tempfile.TemporaryDirectory() as temp, patch.object(driver, 'adb') as adb:
+            with self.assertRaisesRegex(GuiFailure, 'damaged_fixture_path_invalid'):
+                driver.publish_damaged_fixture(b'not empty', '/sdcard/Download/other', Path(temp))
+            adb.assert_not_called()
+
+
+class PickerDiagnosticTest(unittest.TestCase):
+    def test_reports_bounded_exact_title_counts_without_dumping_tree(self):
+        xml = b'''<hierarchy rotation="0"><node package="com.android.documentsui" resource-id="android:id/title" text="herdr-pocket.hpkt"/><node package="com.android.documentsui" resource-id="android:id/title" text="herdr-pocket-corrupt.hpkt" visible-to-user="false"/><node package="other" resource-id="android:id/title" text="private"/></hierarchy>'''
+        picker = SimpleNamespace(package='com.android.documentsui', hierarchy=Mock(return_value=xml))
+        facts = driver.picker_title_diagnostic(picker, driver.CORRUPT)
+        self.assertEqual(facts, {'titleNodes': 2, 'expectedTitleNodes': 1,
+                                 'visibleExpectedTitleNodes': 0, 'originalTitleNodes': 1})
+        self.assertNotIn('private', json.dumps(facts))
+
+
 class DocumentImeTest(unittest.TestCase):
     LAUNCHER = driver.PACKAGE + '/.MainActivity'
 

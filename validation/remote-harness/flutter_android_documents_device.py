@@ -16,7 +16,7 @@ from flutter_android_documents_preflight import PACKAGE, SERIAL, Failure as AdbF
 from flutter_android_gui import (SystemImeFailure, parse_system_ime, public_file_pending, public_ime_diagnostic,
                                  wait_system_ime)
 from tauri_android_config_document import (Picker, ARCHIVE, CORRUPT, DOWNLOADS, MAX_ARCHIVE,
-                                           foreground, binary_file, wait_download_storage)
+                                           foreground, binary_file, wait_download_storage, picker_tree, exposed_nodes)
 
 PASSWORD = 'fixture-document-passphrase'
 STAGES = ('app_ready', 'initial19', 'cancel_picker', 'cancel_done', 'hide_export', 'save_picker', 'export_done',
@@ -74,6 +74,46 @@ def dismiss_document_ime(stage, launcher):
         need(foreground() == launcher, 'ime_foreground_unconfirmed')
         detail.update(outcome='system_back', after=public_ime_diagnostic(after['diagnostic']))
     return detail
+
+
+def publish_damaged_fixture(original, folder, temp):
+    """Publish one verified changed byte; scanner request is not picker evidence."""
+    need(re.fullmatch(re.escape(DOWNLOADS) + r'/hp-config-[0-9a-f]{24}', folder) is not None,
+         'damaged_fixture_path_invalid')
+    need(isinstance(original, bytes) and 0 < len(original) <= MAX_ARCHIVE, 'archive_invalid')
+    damaged = original[:-1] + bytes([original[-1] ^ 1])
+    destination = folder + '/' + CORRUPT
+    private = temp / ('flutter-damaged-' + secrets.token_hex(12))
+    try:
+        private.write_bytes(damaged)
+        adb('push', str(private), destination)
+    finally:
+        private.unlink(missing_ok=True)
+    readback = binary_file([], destination, MAX_ARCHIVE, 'damaged_fixture_read_failed')
+    need(readback == damaged, 'damaged_fixture_mismatch')
+    source = binary_file([], folder + '/' + ARCHIVE, MAX_ARCHIVE, 'archive_read_failed')
+    need(source == original, 'archive_changed')
+    # Request indexing once; the real, unique DocumentsUI row remains mandatory.
+    adb('shell', 'am', 'broadcast', '-a', 'android.intent.action.MEDIA_SCANNER_SCAN_FILE',
+        '-d', 'file://' + destination)
+    return {'bytes': len(readback), 'sha256': hashlib.sha256(readback).hexdigest(),
+            'exactOneByte': True, 'sourceUnchanged': True, 'scanRequested': True}
+
+
+def picker_title_diagnostic(picker, expected):
+    """Counts only; the shared picker remains responsible for unique row selection."""
+    raw = picker.hierarchy()
+    if raw is None:
+        return None
+    root = picker_tree(raw)
+    def titles(nodes):
+        return [node for node in nodes if node.get('package') == picker.package
+                and node.get('resource-id') == 'android:id/title']
+    all_titles = titles(root.iter('node'))
+    visible = titles(exposed_nodes(root))
+    count = lambda nodes, name: min(sum(node.get('text') == name for node in nodes), 9)
+    return {'titleNodes': min(len(all_titles), 99), 'expectedTitleNodes': count(all_titles, expected),
+            'visibleExpectedTitleNodes': count(visible, expected), 'originalTitleNodes': count(all_titles, ARCHIVE)}
 
 
 def device_catalog():
@@ -310,12 +350,7 @@ def drive(app, output):
                         pass
                     else:
                         raise GuiFailure('tamper_guard_failed')
-                    private = temp / ('flutter-damaged-' + secrets.token_hex(12))
-                    try:
-                        private.write_bytes(damaged)
-                        adb('push', str(private), path + '/' + CORRUPT)
-                    finally:
-                        private.unlink(missing_ok=True)
+                    report['tamperedFixture'] = publish_damaged_fixture(raw, path, temp)
                     report['archive'] = {'bytes': len(raw), 'sha256': hashlib.sha256(raw).hexdigest()}
                 elif stage.startswith('hide_'):
                     observation = dismiss_document_ime(stage, picker.launcher)
@@ -334,7 +369,16 @@ def drive(app, output):
                         if stage == 'save_picker':
                             picker.save(folder)
                         else:
-                            picker.open(folder, CORRUPT if stage == 'tampered_picker' else ARCHIVE)
+                            filename = CORRUPT if stage == 'tampered_picker' else ARCHIVE
+                            try:
+                                picker.open(folder, filename)
+                            except GuiFailure as error:
+                                if str(error) == 'picker_target_unconfirmed':
+                                    try:
+                                        report['pickerTitleCounts'] = picker_title_diagnostic(picker, filename)
+                                    except (GuiFailure, AdbFailure):
+                                        report['pickerTitleCounts'] = None
+                                raise
                     picker.wait_return()
                 acknowledge(relative, stage)
                 report['checkpoints'].append(stage)

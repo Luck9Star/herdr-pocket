@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:terminal_view/terminal_view.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
+import 'package:herdr_flutter_probe/config_transfer.dart';
 import 'package:herdr_flutter_probe/device_keys.dart';
 import 'package:herdr_flutter_probe/host_catalog.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
@@ -15,6 +16,7 @@ import 'package:herdr_flutter_probe/pairing_page.dart';
 import 'package:herdr_flutter_probe/remote_adapter.dart';
 import 'package:herdr_flutter_probe/remote_input.dart';
 import 'host_catalog_test.dart' show MemoryCatalogStorage;
+import 'import_widget_evidence.dart';
 import 'pairing_gui_test.dart' as pairing;
 import 'pairing_gui_ssh_test.dart' show GuiSshMemoryInputJournal;
 
@@ -53,6 +55,8 @@ void main() {
       .cast<Map<String, dynamic>>();
     final exchange = Directory(env['HERDR_S06_DIR']!);
     final guarded = env['HERDR_S06_GUARDED'] == '1';
+    final importReplace = env['HERDR_S06_IMPORT_REPLACE'] == '1';
+    final captureKey = GlobalKey();
     final keys = SplitDeviceKeys([for (final name in ['HERDR_S06_KEY_A', 'HERDR_S06_KEY_B'])
       File(env[name]!).readAsStringSync()]);
     final journals = [GuiSshMemoryInputJournal(), GuiSshMemoryInputJournal()];
@@ -60,6 +64,9 @@ void main() {
     final catalog = HostCatalog(storage: MemoryCatalogStorage()), tabs = HostTabs();
     traceAdapters.addAll(adapters); traceTabs = tabs;
     final tokens = (await tester.runAsync(DesignTokens.load))!;
+    final theme = importReplace
+      ? (await tester.runAsync(() => loadImportEvidenceFonts(tokens.theme,env['HERDR_S06_CJK_FONT'])))!
+      : tokens.theme;
     tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(1440, 1000);
     // Live binding keeps an independent 800x600 render surface unless this is
     // set; physicalSize alone changes MediaQuery but not layout constraints.
@@ -108,11 +115,12 @@ void main() {
       await until(() => settled && (failure != null || (peerAck?.existsSync() ?? true)));
       if (failure != null) throw failure!;
     }
+    Future<void> capture(String name) => captureImportEvidence(tester,captureKey,File('${exchange.path}/$name.png'));
     stage('s06_homepage');
-    await tester.pumpWidget(MaterialApp(theme: tokens.theme, home: HostCatalogPage(
+    await tester.pumpWidget(RepaintBoundary(key: captureKey, child: MaterialApp(debugShowCheckedModeBanner: false, theme: theme, home: HostCatalogPage(
       tokens: tokens, catalog: catalog, tabs: tabs, keys: keys,
       adapterFactory: (profile) => adapters[profile.target['session'] == configs[0]['session'] ? 0 : 1],
-      offlineBuilder: (_) => const SizedBox())));
+      offlineBuilder: (_) => const SizedBox()))));
     await tester.pumpAndSettle();
     expect(tester.getSize(find.byType(HostCatalogPage)), const Size(1440, 1000));
     final tabIds = <String>[];
@@ -235,7 +243,96 @@ void main() {
     expect(journals.every((j) => j.prepares == (guarded ? 1 : 0)), isTrue);
     final after = adapters.map((a) => a.evidence.deltaFrames).toList();
     await until(() => adapters[0].evidence.deltaFrames > after[0] && adapters[1].evidence.deltaFrames > after[1]);
-    if (!guarded) {
+    if (importReplace) {
+      stage('s06_import_replace');
+      final oldProfile = catalog.profiles.singleWhere((p) => p.target['session'] == configs[0]['session']);
+      final oldTab = tabs.find(tabIds[0])!, survivor = tabs.find(tabIds[1])!;
+      final b = adapters[1], originalBGeneration = adapters[1].generation;
+      final aGeneration = adapters[0].generation;
+      const password = 'local M1-05 fixture archive';
+      final config = catalog.exportConfig({oldProfile.id}, {}, includePreferences:false);
+      final archive = (await tester.runAsync(() => encryptPortableConfig(password, config)))!;
+      final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(NativeConfigDocuments.channel, (call) async {
+        expect(call.method, 'open');
+        return archive;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(NativeConfigDocuments.channel, null));
+      for (final view in views) {
+        await tester.ensureVisible(find.descendant(of: view, matching: find.byType(TerminalView)).first);
+        await tester.pump();
+      }
+      await capture('import-before');
+      await tap('home-tab-3');
+      expect(survivor.visible.value, isTrue);
+      expect(survivor.inputEligible.value, isFalse);
+      expect(b.inputTarget, same(targets[1]));
+      await tap('hosts-transfer');
+      await tap('transfer-open');
+      final passwordField = find.byKey(const ValueKey('transfer-password'));
+      await tester.ensureVisible(passwordField);
+      await tester.enterText(passwordField, password);
+      await tap('transfer-decrypt');
+      final choice = find.byKey(const ValueKey('transfer-choice-0'));
+      await until(() => choice.evaluate().isNotEmpty);
+      await tester.ensureVisible(choice);
+      await tester.pump();
+      await tester.tap(find.descendant(of: choice, matching: find.byIcon(Icons.arrow_drop_down)).hitTestable());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('替换全部冲突').hitTestable().last);
+      await tester.pumpAndSettle();
+      expect(find.byKey(ValueKey('transfer-affected-tab-${oldTab.id}')), findsOneWidget);
+      expect(find.byKey(ValueKey('transfer-affected-tab-${survivor.id}')), findsNothing);
+      await tap('transfer-review');
+      await tap('transfer-apply');
+      await until(() => catalog.profiles.any((p) => p.id == oldProfile.id && p.retired));
+      final replacement = catalog.profiles.singleWhere((p) => p.id != oldProfile.id && p.label == oldProfile.label);
+      expect(replacement.hasIdentity, isFalse);
+      expect(tabs.tabs, [oldTab, survivor]);
+      expect(oldTab.view.value.state, 'retired');
+      expect(oldTab.inputEligible.value, isFalse);
+      expect(oldTab.retainedScreen?.terminal, same(terminals[0]));
+      expect(adapters[0].generation, aGeneration + 1);
+      expect(adapters[0].inputTarget, isNull);
+      File('${exchange.path}/focused-close-request').createSync(exclusive: true);
+      await until(File('${exchange.path}/focused-close-ack').existsSync);
+      final bDelta = b.evidence.deltaFrames;
+      await until(() => b.evidence.deltaFrames > bDelta);
+      expect(b.generation, originalBGeneration);
+      expect(b.inputTarget, same(targets[1]));
+      expect(b.evidence.connectionCount, 1);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tap('home-tab-1');
+      await until(() => find.byKey(ValueKey('retired-host-view-${oldTab.id}')).evaluate().isNotEmpty);
+      final oldTerminal = find.descendant(of: views[0], matching: find.byType(TerminalView));
+      expect(tester.widget<TerminalView>(oldTerminal).readOnly, isTrue);
+      expect(firstLine(0, markers[0].length), markers[0]);
+      expect(terminals[0].onOutput, isNull);
+      for (final key in ['pair-connect', 'remote-connect', 'remote-resume', 'remote-mode-direct', 'remote-mode-draft']) {
+        expect(find.descendant(of: views[0], matching: find.byKey(ValueKey(key))), findsNothing);
+      }
+      expect(survivor.inputEligible.value, isTrue);
+      final bTerminal = find.descendant(of: views[1], matching: find.byType(TerminalView));
+      expect(tester.widget<TerminalView>(bTerminal).terminal, same(terminals[1]));
+      terminals[0].textInput('retired-a');
+      if (guarded) {
+        await tap('remote-mode-direct', owner: views[1]);
+        terminals[1].textInput('s'); await tester.pump();
+        await until(() => journals[1].prepares == 2 && journals[1].clears == 2);
+      }
+      for (final terminal in [oldTerminal, bTerminal]) {
+        await tester.ensureVisible(terminal);
+        await tester.pump();
+      }
+      await capture('import-after');
+      expect(journals[0].prepares, guarded ? 1 : 0);
+      await tap('host-tab-close-${oldTab.id}');
+      expect(tabs.find(oldTab.id), isNull);
+      expect(adapters[0].generation, aGeneration + 1);
+      expect(b.generation, originalBGeneration);
+      expect(b.inputTarget, same(targets[1]));
+    } else if (!guarded) {
       stage('s06_close_focused_tab');
       await tap('workspace-focus-${tabIds[0]}');
       expect(tabs.activeId, tabIds[0]);
@@ -287,7 +384,7 @@ void main() {
       expect(journals.every((j) => j.prepares == 0), isTrue);
     }
     stage('s06_stop_both');
-    if (guarded) {
+    if (guarded && !importReplace) {
       for (var side = 0; side < views.length; side++) {
         final beforeStop = adapters[side].generation;
         await tap('remote-cancel', owner: views[side]);
@@ -312,8 +409,9 @@ void main() {
       for (final name in ['normalHomepage', 'twoReviewedIdentities', 'samePaneDifferentTerminal',
         'bothVisible', 'independentFrames', 'bothAdvanced', 'singleInputFocus',
         'focusDoesNotRestoreInput', 'lateInputRejected', 'stoppedBoth']) name: true,
-      if (!guarded) 'focusedTabClosedPeerAdvanced': true,
-      if (!guarded) 'stockPeersClosedBeforeDriverExit': true,
+      if (!guarded && !importReplace) 'focusedTabClosedPeerAdvanced': true,
+      if (!guarded && !importReplace) 'stockPeersClosedBeforeDriverExit': true,
+      if (importReplace) 'replacedTabRetainedAndPeerAdvanced': true,
       'sides': [for (final adapter in adapters) {'connectionCount': adapter.evidence.connectionCount,
         'frameCount': adapter.evidence.frameCount, 'deltaFrames': adapter.evidence.deltaFrames,
         'inputAccepted': guarded}],

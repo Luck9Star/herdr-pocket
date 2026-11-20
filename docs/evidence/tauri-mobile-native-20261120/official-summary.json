@@ -433,6 +433,338 @@
           }
         }
       }
+    },
+    "R9": {
+      "runId": 44628431596,
+      "jobId": 135928338818,
+      "sourceSHA": "3bf931305cf6808fb783130bea8b52a146ec7aa2",
+      "jobConclusion": "failure",
+      "artifact": {
+        "id": 14580874796,
+        "expiresAtUtc": "2027-02-17T22:25:09Z",
+        "zipSha256": "d06af272bf164c1971e5260b6d802cbc958383bbaf7fef1df56dab2c424c0ce7",
+        "memberSha256": {
+          "result.json": "598f916ee04228cc2f202f26999bb68c692adc42f319ab9bef5217deff661155"
+        }
+      },
+      "facts": {
+        "platform": "ios-simulator",
+        "scope": "owned_loopback_ordinary_ssh_encrypted_key_manual",
+        "status": "failed",
+        "lastCompletedStage": "encrypted_key_form",
+        "nativeCheckpoint": "encrypted_key_open_add",
+        "nativeFailureCode": "native_encrypted_key_home_shortcut_unproven",
+        "cleanup": {
+          "simulatorDeleted": true,
+          "fixturesClosed": true,
+          "privateFilesRemoved": true,
+          "encryptedSecretsCleared": true,
+          "rawLogsUploaded": false
+        },
+        "cases": {
+          "ordinary": "not_run",
+          "keyChange": "not_run",
+          "encryptedKey": "failed"
+        },
+        "homeReadiness": {
+          "outcome": "ready",
+          "strictSamples": 3,
+          "waitCalls": 2
+        },
+        "homeDiagnostics": {
+          "appForeground": true,
+          "compactEmptyHome": true,
+          "inputCount": 0,
+          "memberClassifications": {
+            "ordinaryShortcut": {
+              "count": 0,
+              "roles": []
+            },
+            "compactShortcut": {
+              "count": 1,
+              "roles": [
+                "button"
+              ]
+            },
+            "sshOption": {
+              "count": 1,
+              "roles": [
+                "button"
+              ]
+            }
+          }
+        },
+        "navigationTraceReported": false,
+        "homeEntryReported": false,
+        "manualHostEntryReported": false,
+        "inputReadbackReported": false,
+        "peerBeforeAndAfterCleanup": {
+          "beforeCleanup": {
+            "connections": 0,
+            "connectionsClosed": true
+          },
+          "afterCleanup": {
+            "connections": 0,
+            "connectionsClosed": true
+          }
+        }
+      }
+    },
+    "R10": {
+      "runId": 44633057494,
+      "jobId": 135944465338,
+      "sourceSHA": "e9811becd8b4d69eee3075c73f19b5fba69f6269",
+      "jobConclusion": "failure",
+      "artifact": {
+        "id": 14584020355,
+        "expiresAtUtc": "2027-02-17T22:55:23Z",
+        "zipSha256": "d8fa28c8328e92ccceee927707664350bbb1ff6ea3a993128109798eab0383e3",
+        "memberSha256": {
+          "result.json": "6be33c5a28f42a95d7cc354fafdc11ac5cb224e4eb0cf1bf2343039af5ac284c"
+        }
+      },
+      "facts": {
+        "platform": "ios-simulator",
+        "scope": "owned_loopback_ordinary_ssh_encrypted_key_manual",
+        "status": "failed",
+        "lastCompletedStage": "encrypted_key_form",
+        "nativeCheckpoint": "encrypted_key_open_add",
+        "nativeFailureCode": "native_encrypted_key_home_shortcut_unproven",
+        "cleanup": {
+          "simulatorDeleted": true,
+          "fixturesClosed": true,
+          "privateFilesRemoved": true,
+          "encryptedSecretsCleared": true,
+          "rawLogsUploaded": false
+        },
+        "cleanupNote": "reported fields only; overall path and native tap acceptance not passed",
+        "cases": {
+          "ordinary": "not_run",
+          "keyChange": "not_run",
+          "encryptedKey": "failed"
+        },
+        "homeReadiness": {
+          "outcome": "ready",
+          "elapsedMs": 4771,
+          "strictSamples": 2,
+          "waitCalls": 1
+        },
+        "homeDiagnostics": {
+          "appForeground": true,
+          "compactEmptyHome": true,
+          "inputCount": 0,
+          "memberClassifications": {
+            "ordinaryShortcut": {
+              "count": 0,
+              "roles": []
+            },
+            "compactShortcut": {
+              "count": 1,
+              "roles": [
+                "button"
+              ]
+            },
+            "sshOption": {
+              "count": 1,
+              "roles": [
+                "button"
+              ]
+            }
+          }
+        },
+        "shortcutDiagnostic": {
+          "reason": "button_size_or_role",
+          "candidateSizePt": [
+            163,
+            22
+          ],
+          "liveSizePt": [
+            163,
+            22
+          ],
+          "buttonGapPt": 5,
+          "visibleCandidates": 1,
+          "visibleAddMarkers": 0
+        },
+        "navigationTraceReported": false,
+        "homeEntryReported": false,
+        "manualHostEntryReported": false,
+        "inputReadbackReported": false,
+        "measurementLimit": "pre-tap native measurement; does not assert the product's actual tap target",
+        "peerBeforeAndAfterCleanup": {
+          "beforeCleanup": {
+            "connections": 0,
+            "connectionsClosed": true
+          },
+          "afterCleanup": {
+            "connections": 0,
+            "connectionsClosed": true
+          }
+        }
+      }
+    },
+    "R11": {
+      "runId": 44637828749,
+      "jobId": 135960850882,
+      "sourceSHA": "65319ae6c750ce5b60c6cd19ef37557c95f4dd28",
+      "jobConclusion": "failure",
+      "artifact": {
+        "id": 14586380779,
+        "expiresAtUtc": "2027-02-17T23:27:38Z",
+        "zipSha256": "a8aa8fc106e8161f0495cc9b40abba0afd49aa96c4f22f69b3ddd5fe201006b6",
+        "memberSha256": {
+          "result.json": "52d66036eb1ff3baaa7af05e5fe89272b3800359c50608c83b20d2e100e680f6",
+          "tauri-manual-key-empty-home.png": "c5b3fa3e7fe0364692dc5c0650f3e40fab024481101b2cfd9c7281b27b914010"
+        }
+      },
+      "facts": {
+        "platform": "ios-simulator",
+        "client": "tauri",
+        "scope": "owned_loopback_ordinary_ssh_encrypted_key_manual",
+        "status": "failed",
+        "lastCompletedStage": "encrypted_key_wrong_pem_verified",
+        "nativeCheckpoint": "encrypted_key_passphrase",
+        "nativeFailureCode": "native_secret_exposed",
+        "error": "tauri_ios_native_check_failed",
+        "cleanup": {
+          "simulatorDeleted": true,
+          "fixturesClosed": true,
+          "privateFilesRemoved": true,
+          "encryptedSecretsCleared": true,
+          "rawLogsUploaded": false
+        },
+        "cleanupNote": "reported fields only; overall native path and encrypted-key acceptance not passed",
+        "cases": {
+          "ordinary": "not_run",
+          "keyChange": "not_run",
+          "encryptedKey": "failed"
+        },
+        "homeReadiness": {
+          "outcome": "ready",
+          "elapsedMs": 6850,
+          "strictSampleMs": 741,
+          "strictSamples": 3,
+          "waitCalls": 2
+        },
+        "nativeClick": {
+          "member": "ordinaryShortcut",
+          "selection": "buttonRole",
+          "method": "systemHitPoint",
+          "performed": true,
+          "ordinaryShortcutFramePt": [
+            40,
+            354,
+            360,
+            48
+          ],
+          "emptyAddFramePt": [
+            40,
+            294,
+            360,
+            48
+          ],
+          "buttonSizePt": [
+            360,
+            48
+          ],
+          "enteredAddPage": false,
+          "enteredSSHForm": true,
+          "route": "directSSH",
+          "sameAppWindow": true
+        },
+        "inputReadbacks": {
+          "host": {
+            "state": "match",
+            "samples": 1,
+            "role": "textField"
+          },
+          "port": {
+            "state": "match",
+            "samples": 1,
+            "role": "textField"
+          },
+          "username": {
+            "state": "match",
+            "samples": 1,
+            "role": "textField"
+          }
+        },
+        "fingerprintProbe": {
+          "credentialEntry": "nativeTypeText",
+          "fingerprintReviewed": true,
+          "wrongPemExact": true,
+          "connections": 1,
+          "closedInHandshake": true,
+          "closedMs": 190,
+          "closeReason": "preauth_peer_reset",
+          "socketErrorKind": "connection_reset",
+          "authAttempts": 0,
+          "authSuccesses": 0,
+          "ptyRequests": 0,
+          "shellRequests": 0,
+          "inputBytes": 0,
+          "outputBytes": 0,
+          "markerReceived": false
+        },
+        "secretDiagnostic": {
+          "count": 12,
+          "roles": [
+            "staticText"
+          ],
+          "scope": "sameWeb",
+          "relation": "descendant",
+          "valueExposedByBoundedCheck": 12,
+          "labelExposedByBoundedCheck": 12,
+          "privateKeyHeader": 2,
+          "privateKeyBody": 10,
+          "geometryMismatch": 10,
+          "contentNotExact": 2,
+          "passphrase": 0,
+          "identifier": 0,
+          "interpretation": "bounded XCTest classification only; does not prove actual system screen-reader exposure or a real-user secret leak"
+        },
+        "shortcutScreenshot": {
+          "file": "tauri-manual-key-empty-home.png",
+          "sha256": "c5b3fa3e7fe0364692dc5c0650f3e40fab024481101b2cfd9c7281b27b914010",
+          "systemCapture": "XCUIScreen.main",
+          "nativeScale": 3,
+          "screenPixels": [
+            1320,
+            2868
+          ],
+          "syntheticEmptyHome": true,
+          "containsCredentials": false
+        },
+        "conclusionLimits": {
+          "nativeClickProven": true,
+          "encryptedKeyPassed": false,
+          "explainsR10Geometry": false,
+          "ordinaryAndPasswordKeyChangeRun": false,
+          "realScreenReaderOrRealLeakInferred": false
+        },
+        "peerBeforeAndAfterCleanup": {
+          "beforeCleanup": {
+            "connections": 1,
+            "connectionsClosed": true,
+            "authAttempts": 0,
+            "authSuccesses": 0,
+            "ptyRequests": 0,
+            "shellRequests": 0,
+            "inputBytes": 0,
+            "outputBytes": 0
+          },
+          "afterCleanup": {
+            "connections": 1,
+            "connectionsClosed": true,
+            "authAttempts": 0,
+            "authSuccesses": 0,
+            "ptyRequests": 0,
+            "shellRequests": 0,
+            "inputBytes": 0,
+            "outputBytes": 0
+          }
+        }
+      }
     }
   }
 }

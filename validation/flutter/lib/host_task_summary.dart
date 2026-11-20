@@ -74,7 +74,9 @@ class HostTaskSummaries extends ChangeNotifier {
   void reconcile() {
     if (_disposed) return;
     if (!catalog.ready) {
-      for (final lease in _leases.toList()) { lease.invalidate(); }
+      if (!catalog.recoveringConfigImport) {
+        for (final lease in _leases.toList()) { lease.invalidate(); }
+      }
       for (final id in _values.keys.toList()) { _values[id] = _values[id]!.stale(); }
     } else {
       _admissions.removeWhere((id,_) => _profile(id) == null);
@@ -120,6 +122,7 @@ class HostTaskSummaries extends ChangeNotifier {
     }
   }
   void _accept(HostDashboardAttempt attempt,RemoteDashboard board) {
+    if (catalog.recoveringConfigImport) return;
     final lease = attempt.lease,source = board.source;
     if (_disposed || !_foreground || lease.closed || !_leases.contains(lease) || !lease.visible() ||
         attempt.epoch != lease.epoch || attempt.lifecycle != _lifecycle || !identical(attempt.admission,_admissions[lease.hostId]) || source == null || board.syncedAt == null) return;

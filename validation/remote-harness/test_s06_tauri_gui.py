@@ -1,3 +1,4 @@
+import hashlib
 import json
 import tempfile
 from pathlib import Path
@@ -8,8 +9,8 @@ from unittest.mock import MagicMock, patch
 try:
     from s06_tauri_gui import (SplitDriver, exercise_window_resize, layout_matches, observed_tick,
                                peer_connection_evidence, require_same_positions, require_side_by_side,
-                               window_dimensions, exercise_direct_resize, exercise_peer_close, peer_close_sample,
-                               owned_xvfb, park_xvfb_pointer, GuiFailure)
+                               window_dimensions, exercise_direct_resize, exercise_import_replace, exercise_peer_close, peer_close_sample,
+                               owned_xvfb, park_xvfb_pointer, wait_import_survivor_tick, write_import_fixture, GuiFailure)
 except ModuleNotFoundError as missing:
     if missing.name != 'cryptography':
         raise
@@ -18,6 +19,90 @@ except ModuleNotFoundError as missing:
 
 @unittest.skipIf(observed_tick is None, 'pairing requirements are installed in the native GUI workflow')
 class TauriSplitEvidenceTests(unittest.TestCase):
+    def test_import_fixture_preserves_the_public_payload_with_a_keyboard_safe_password(self):
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        with tempfile.TemporaryDirectory() as directory:
+            archive, password = write_import_fixture(Path(directory))
+            self.assertEqual(archive.parent, Path(directory))
+            self.assertRegex(password, '^[0-9a-f]{32}$')
+            raw = archive.read_bytes()
+            self.assertEqual(raw[:6], b'HPKT\x01\x01')
+            key = hashlib.pbkdf2_hmac('sha256', password.encode('ascii'), raw[6:22], 600_000)
+            payload = AESGCM(key).decrypt(raw[22:34], raw[34:], raw[:34])
+            shared = Path(__file__).resolve().parents[1] / 'shared/config-transfer-v1.json'
+            self.assertEqual(payload.decode('utf-8'), json.loads(shared.read_text())['plaintext'])
+
+    def test_import_requires_original_peers_and_zero_bytes_before_leaving_workspace(self):
+        open_peer = {'authenticationCount': 1, 'recognizedCloseCount': 0, 'resetCount': 0}
+        for peer, code in ((dict(open_peer, authenticationCount=2), 's06_import_initial_peers_not_open'),
+                           (open_peer, 's06_tauri_remote_bytes_changed')):
+            ui, driver = MagicMock(), MagicMock()
+            check_bytes = MagicMock(side_effect=GuiFailure('s06_tauri_remote_bytes_changed'))
+            with patch('s06_tauri_gui.peer_close_sample', return_value=[open_peer, peer]), \
+                 patch('s06_tauri_gui.write_import_fixture') as archive:
+                with self.assertRaisesRegex(GuiFailure, '^' + code + '$'):
+                    exercise_import_replace(ui, driver, None, [], ['A', 'B'], [[1, 2], [1, 2]], check_bytes)
+            archive.assert_not_called()
+            driver.click.assert_not_called()
+            ui.named.assert_not_called()
+
+    @patch('paired_gui.time.sleep')
+    def test_import_survivor_requires_a_current_advancing_frame(self, _sleep):
+        ui = MagicMock()
+        ui.read.side_effect = [False, True, True, True]
+        ui.rendered_tick.side_effect = [GuiFailure('s06_tauri_visible_peer_marker_missing'), 7, 8]
+        self.assertEqual(wait_import_survivor_tick(ui, 'original-B', after=7), 8)
+        self.assertEqual(ui.read.call_count, 4)
+        self.assertTrue(all(call.args[-1] == 'original-B' for call in ui.read.call_args_list))
+        self.assertEqual(ui.rendered_tick.call_count, 3)
+        ui.named.assert_not_called()
+        ui.driver.click.assert_not_called()
+
+        ui.read.side_effect = None
+        ui.read.return_value = True
+        ui.rendered_tick.side_effect = GuiFailure('s06_tauri_tick_scroll_changed_focus')
+        with self.assertRaisesRegex(GuiFailure, '^s06_tauri_tick_scroll_changed_focus$'):
+            wait_import_survivor_tick(ui, 'original-B', after=8)
+
+    def test_pairing_opens_once_from_the_visible_empty_or_saved_board_entry(self):
+        board = '#host-home:not([hidden]) #home-dashboard:not([hidden])'
+        choice = '#host-home:not([hidden]) #home-add:not([hidden]) #add-herdr'
+        form = '#remote-page:not([hidden]) #remote-setup[open] #remote-host'
+        for empty_board, entry in (
+            (True, board + ' #host-empty:not([hidden]) #host-empty-add'),
+            (False, 'body:has(' + board + ' #host-list .saved-host-card) #host-open-remote'),
+        ):
+            driver = MagicMock()
+            ui = SplitDriver(driver)
+            ui.open_pairing(empty_board=empty_board)
+            self.assertEqual([(event[0], event[1]) for event in driver.mock_calls],
+                             [('click', (entry,)), ('click', (choice,)), ('wait_control', (form,))])
+            driver.reset_mock()
+            driver.click.side_effect = GuiFailure('webdriver_click_element_not_interactable')
+            with self.assertRaisesRegex(GuiFailure, '^webdriver_click_element_not_interactable$'):
+                ui.open_pairing(empty_board=empty_board)
+            driver.click.assert_called_once_with(entry)
+            driver.wait_control.assert_not_called()
+
+    def test_entry_failure_publishes_only_fixed_visibility_booleans(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            file = output / 's06-tauri-entry-failure.json'
+            driver = MagicMock(session='/session/fixture')
+            ui = SplitDriver(driver, output)
+            driver.call.return_value = [True, True, False] + [False] * 7
+            ui.entry_failure('pair_0')
+            report = json.loads(file.read_text())
+            self.assertEqual(report['stage'], 'pair_0')
+            self.assertEqual({key for key, value in report['visible'].items() if value}, {'board', 'emptyAdd'})
+            self.assertNotIn('/session/fixture', file.read_text())
+            file.unlink()
+
+            driver.call.return_value = [True] * 9 + ['unexpected UI value']
+            ui.entry_failure('import_replace')
+            self.assertFalse(file.exists())
+
     def test_first_key_requires_same_ready_editor_and_records_both_peer_byte_counts(self):
         ready = {'originalTargetsActive': True, 'selectedB': True, 'originalEditorB': True,
                  'aReadOnly': True, 'documentFocused': True, 'bEditorFocused': True,

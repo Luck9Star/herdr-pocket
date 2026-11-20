@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:dartssh2/dartssh2.dart' show SSHSocket;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:terminal_view/terminal_view.dart';
@@ -11,6 +13,7 @@ import 'package:herdr_flutter_probe/remote_input.dart';
 import 'host_catalog_test.dart' show MemoryCatalogStorage;
 import 'pairing_gui_test.dart' show TestDeviceKeys,tapVisible,authorizedResponse;
 import 'remote_page_test.dart' show PendingAdapter;
+import 'remote_adapter_test.dart' show FakeSocket;
 import 'remote_input_widget_test.dart' show mode;
 import 'remote_test_data.dart';
 import 'dart:convert';
@@ -74,6 +77,45 @@ Future<void> connectTab(WidgetTester tester,TabFixtureAdapter adapter,{String pa
   await tester.pump();
 }
 void main() {
+  for (final leaveRemotePage in [false,true]) {
+    testWidgets('replacement joins a pending dial after remote route departed: $leaveRemotePage', (tester) async {
+      tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(390,844);
+      addTearDown(tester.view.reset);
+      final catalog = HostCatalog(storage:MemoryCatalogStorage(),clock:() => 1000); await catalog.load();
+      final profile = tabProfile('Dial A','probeA','127.0.0.1','unspecified','opaque-dial');
+      await catalog.add(profile);
+      final socketFuture = Completer<SSHSocket>(), socket = FakeSocket();
+      var dials = 0;
+      final adapter = RemoteReadOnlyAdapter(connector:(_,_) { dials++; return socketFuture.future; });
+      final tabs = HostTabs(), tokens = (await tester.runAsync(DesignTokens.load))!;
+      await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:HostCatalogPage(tokens:tokens,catalog:catalog,tabs:tabs,
+        keys:TestDeviceKeys(fixtureConfig()['privateKeyPem'] as String),adapterFactory:(_) => adapter,offlineBuilder:(_) => const SizedBox())));
+      await tester.pumpAndSettle();
+      await tapVisible(tester,'host-open-${profile.id}'); await tester.pumpAndSettle();
+      await tapVisible(tester,'pair-connect'); await tester.pumpAndSettle();
+      await tapVisible(tester,'remote-review'); await tapVisible(tester,'remote-connect');
+      expect(dials,1);
+      final tab = tabs.active!;
+      if (leaveRemotePage) {
+        await tester.tap(find.byTooltip('返回离线验证')); await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('pair-connect')),findsOneWidget);
+        expect(find.byKey(const ValueKey('remote-connect')),findsNothing);
+      }
+      var completed = false;
+      final retirement = tabs.retireReplacedHosts({profile.id}).then((_) { completed = true; });
+      await tester.pump();
+      try {
+        expect(completed,isFalse);
+        expect(tab.view.value.state,'retiring');
+      } finally { socketFuture.complete(socket); }
+      await tester.pumpAndSettle(); await retirement;
+      expect(socket.destroyed,isTrue);
+      expect(tab.view.value.state,'retired');
+      expect(dials,1);
+      expect(adapter.evidence.authStarted,isFalse);
+      await tester.pumpWidget(const SizedBox()); tabs.dispose(); catalog.dispose();
+    });
+  }
   testWidgets('MT01 MT02 MT03 MT05 UI double: views stay independent and resume only by explicit new full',(tester) async {
     tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(390,844);
     addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);

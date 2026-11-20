@@ -183,6 +183,7 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
     final linuxKeys = NativeDeviceKeys.linuxStore && store is NativeDeviceKeys ? store : null;
     String? handle;
     String? reservation, pendingId;
+    LinuxPairingOperationLease? operationLease;
     var createStarted = false;
     var reservedCreateReturned = false;
     var phase = '核验连接资料';
@@ -199,6 +200,15 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
       final label = savedProfile?.label ?? (fullLabel.length > 64 ? fullLabel.substring(0,64) : fullLabel);
       if (linuxKeys != null) {
         if (widget.catalog == null) throw const RemoteFailure('catalog_unavailable');
+        final originalProfile = savedProfile == null ? null : jsonEncode(savedProfile!.toJson());
+        operationLease = await LinuxPairingOperationLease.acquire();
+        await widget.catalog!.load();
+        if (!widget.catalog!.ready) throw const RemoteFailure('catalog_unavailable');
+        if (!mounted || ticket != revision) return;
+        if (originalProfile != null) {
+          final matching = widget.catalog!.profiles.where((p) => p.id == savedProfile!.id).toList();
+          if (matching.length != 1 || jsonEncode(matching.single.toJson()) != originalProfile) throw const RemoteFailure('catalog_binding_changed');
+        }
         reservation = await linuxKeys.reserve();
         if (!mounted || ticket != revision) return;
       }
@@ -261,6 +271,8 @@ class _PairingPageState extends State<PairingPage> with WidgetsBindingObserver {
         if (linuxKeys != null && widget.catalog?.ready == false) profileBlocked = true;
         creationUnknown = createStarted;
         status = linuxDeviceKeyNotice(error) ?? (createStarted ? '${phase}未完成 · 设备安全存储不可用或创建结果未知 · 请核验原身份，不会重放创建' : '${phase}未完成 · 未创建设备身份'); });
+    } finally {
+      if (operationLease != null) await operationLease.release();
     }
   }
   bool requestAvailable(PendingDevicePairing p) => p.state == 'awaiting-host' && !p.consumed && now < (p.request['expires_at'] as int);

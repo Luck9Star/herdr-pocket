@@ -101,6 +101,16 @@ bool WriteTemp(int dir, const char* name, const std::string& contents) {
 
 }  // namespace
 
+int AcquirePairingLease(const char* data_home) {
+  const Fd dir(OpenDirectory(data_home));
+  struct stat info;
+  if (dir.value < 0 || !Owned(dir.value, true, &info)) return -1;
+  const int lock = openat(dir.value, "pairing.lock", O_CREAT | O_RDWR | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC, 0600);
+  if (lock < 0) return -1;
+  if (!Owned(lock, false, &info) || flock(lock, LOCK_EX | LOCK_NB) != 0) { close(lock); return -1; }
+  return lock;
+}
+
 bool LoadCatalog(const char* data_home, CatalogRead* snapshot) {
   return WithLock(data_home, [&](int dir) { return ReadLocked(dir, snapshot); });
 }

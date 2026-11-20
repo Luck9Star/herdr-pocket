@@ -47,6 +47,23 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
   late final catalog = widget.catalog ?? HostCatalog();
   late final tabs = widget.tabs ?? HostTabs();
   late final summaries = HostTaskSummaries(catalog);
+  Future<T> withPendingPairing<T>(Map<String,dynamic> expected,Future<T> Function(Map<String,dynamic>) work) async {
+    LinuxPairingOperationLease? lease;
+    try {
+      if (NativeDeviceKeys.linuxStore) {
+        lease = await LinuxPairingOperationLease.acquire();
+        await catalog.load();
+        if (!catalog.ready || jsonEncode(catalog.pendingCreation) != jsonEncode(expected)) {
+          throw const RemoteFailure('catalog_binding_changed');
+        }
+      }
+      final pending = catalog.pendingCreation;
+      if (pending == null || jsonEncode(pending) != jsonEncode(expected)) throw const RemoteFailure('catalog_binding_changed');
+      return await work(pending);
+    } finally {
+      if (lease != null) await lease.release();
+    }
+  }
   String? notice;
   bool busy = false;
   bool sshClosedNotice = false, sshClosedSucceeded = false;
@@ -800,13 +817,14 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
             TextButton(
               key: const ValueKey('hosts-recheck-pending'),
               onPressed: busy || !catalog.ready ? null : () => action(() async {
-                final pending = catalog.pendingCreation!;
-                final handle = pending['handle'] as String;
-                final publicKey = await (widget.keys ?? NativeDeviceKeys()).public(handle);
-                final fingerprint = pairingFingerprint(publicKey);
-                if (mounted && catalog.ready && identical(catalog.pendingCreation,pending)) {
-                  setState(() { notice = '已找到原设备密钥 · 公钥指纹 $fingerprint。待核验记录已保留。'; });
-                }
+                final expected = catalog.pendingCreation!;
+                await withPendingPairing(expected,(pending) async {
+                  final publicKey = await (widget.keys ?? NativeDeviceKeys()).public(pending['handle'] as String);
+                  final fingerprint = pairingFingerprint(publicKey);
+                  if (mounted && catalog.ready && identical(catalog.pendingCreation,pending)) {
+                    setState(() { notice = '已找到原设备密钥 · 公钥指纹 $fingerprint。待核验记录已保留。'; });
+                  }
+                });
               }),
               child: const Text('核验待确认的原设备密钥'),
             ),
@@ -816,10 +834,12 @@ class _HostCatalogPageState extends State<HostCatalogPage> with WidgetsBindingOb
               onPressed: busy || !catalog.ready
                   ? null
                   : () => action(() async {
-                      final handle =
-                          catalog.pendingCreation!['handle'] as String;
-                      await (widget.keys ?? NativeDeviceKeys()).delete(handle);
-                      await catalog.clearDeletedCreation(handle);
+                      final expected = catalog.pendingCreation!;
+                      await withPendingPairing(expected,(pending) async {
+                        final handle = pending['handle'] as String;
+                        await (widget.keys ?? NativeDeviceKeys()).delete(handle);
+                        await catalog.clearDeletedCreation(handle);
+                      });
                     }),
               child: const Text('明确删除未完成的本机身份（不撤销主机）'),
             ),

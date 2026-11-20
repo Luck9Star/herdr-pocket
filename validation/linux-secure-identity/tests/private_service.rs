@@ -39,6 +39,11 @@ fn actual_service_restarts_and_preserves_namespace_isolation() {
     assert!(Command::new("gdbus").args(["call", "--session", "--dest", "org.freedesktop.secrets",
         "--object-path", "/org/freedesktop/secrets", "--method", "org.freedesktop.Secret.Service.SetAlias",
         "default", session.collection_path.as_str()]).output().unwrap().status.success());
+    let transient = Store::reserve().unwrap();
+    let result = a.create_reserved(&transient);
+    if result.is_ok() { a.delete(&transient).unwrap(); }
+    assert_eq!(result, Err("key_unavailable"));
+    assert_eq!(a.public(&transient), Err("key_missing"));
     assert_eq!(a.public(&first).unwrap(), public);
     a.delete(&first).unwrap();
     assert_eq!(a.public(&first), Err("key_missing"));

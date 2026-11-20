@@ -13,6 +13,14 @@ const PURPOSE: &str = "ssh-pairing-v1";
 const CONTENT: &str = "application/vnd.herdr-pocket.ed25519-seed";
 pub type Result<T> = std::result::Result<T, &'static str>;
 
+fn check_session_alias(default: &str, session: std::result::Result<String, secret_service::Error>) -> Result<()> {
+    match session {
+        Ok(path) if path == default => Err("key_unavailable"),
+        Ok(_) | Err(secret_service::Error::NoResult) => Ok(()),
+        Err(_) => Err("key_unavailable"),
+    }
+}
+
 pub struct Store { app: &'static str }
 impl Store {
     pub fn new(app: &'static str) -> Result<Self> {
@@ -33,6 +41,10 @@ impl Store {
     }
     fn unlocked_default<'a>(ss: &'a SecretService<'a>) -> Result<secret_service::blocking::Collection<'a>> {
         let col = ss.get_default_collection().map_err(|_| "key_unavailable")?;
+        // A session collection is explicitly transient and cannot back a durable identity.
+        // NoResult means the optional alias is absent; transport failures are not absence.
+        check_session_alias(col.collection_path.as_str(),
+            ss.get_collection_by_alias("session").map(|session| session.collection_path.to_string()))?;
         if col.is_locked().map_err(|_| "key_unavailable")? { return Err("key_locked"); }
         Ok(col)
     }
@@ -183,6 +195,13 @@ mod ffi {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn session_alias_absence_is_not_a_service_error() {
+        assert_eq!(check_session_alias("/persistent", Err(secret_service::Error::NoResult)), Ok(()));
+        assert_eq!(check_session_alias("/persistent", Err(secret_service::Error::Unavailable)), Err("key_unavailable"));
+        assert_eq!(check_session_alias("/persistent", Ok("/session".into())), Ok(()));
+        assert_eq!(check_session_alias("/session", Ok("/session".into())), Err("key_unavailable"));
+    }
     #[test]
     fn reserved_handles_are_distinct_and_valid() {
         let a = Store::reserve().unwrap(); let b = Store::reserve().unwrap();

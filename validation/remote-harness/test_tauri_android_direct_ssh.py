@@ -32,7 +32,7 @@ class Fixture:
 
 
 class Browser:
-    def __init__(self): self.actions=[];self.expressions=[];self.review=True;self.echo=True;self.entry='#host-open-remote'
+    def __init__(self): self.actions=[];self.expressions=[];self.review=True;self.echo=True;self.entry='#host-open-remote';self.credentials_cleared=True
     def click(self,selector): self.actions.append(('click',selector))
     def fill(self,selector,value): self.actions.append(('fill',selector,value))
     def select_option(self,selector,value): self.actions.append(('select',selector,value))
@@ -43,6 +43,7 @@ class Browser:
         if 'dashboardAddEntry' in expression: return self.entry
         if 'sshSetupLayout' in expression: return 'legacy'
         if "#ssh-review" in expression: return self.review
+        if 'directSshCredentialsCleared' in expression: return self.credentials_cleared
         if "#ssh-password" in expression: return ''
         if "#ssh-setup" in expression: return False
         if 'xterm-rows' in expression: return self.echo
@@ -148,6 +149,90 @@ class RotationBrowser:
 _real_wait_for=driver.wait_for
 def _fast_wait_for(probe,code,timeout=60):
     return _real_wait_for(probe,code,timeout=0.2)
+
+def _pem_wait_for(probe,code,timeout=60):
+    for _ in range(5):
+        value=probe()
+        if value: return value
+    raise driver.GuiFailure(code)
+
+
+class PemReopenBrowser:
+    """Stateful fake for collapse, summary reopen, redraft and recollapse."""
+    def __init__(self, *, collapsed_expr, redraft_expr, cleared_expr, failure=None):
+        self.actions=[]; self.expressions=[]
+        self.collapsed_expr=collapsed_expr; self.redraft_expr=redraft_expr; self.cleared_expr=cleared_expr
+        self.failure=failure; self.method=None
+        self.draft=''; self.key_value=''; self.key_hidden=False; self.summary_hidden=True
+        self.passphrase_value=''; self.active=None; self.state='empty'
+        self.passphrase_clicks=0; self.summary_clicks=0; self.focus_pending=False
+        self.credentials_cleared=True
+    def click(self,selector):
+        self.actions.append(('click',selector))
+        if selector=='#ssh-auth-key': self.method='key'
+        elif selector=='#ssh-passphrase':
+            self.passphrase_clicks+=1
+            self.active='#ssh-passphrase'
+            if self.state in ('draft','redraft'):
+                if self.failure=='collapse' and self.passphrase_clicks==1: return
+                if self.failure=='recollapse' and self.passphrase_clicks==2: return
+                self.key_hidden=True; self.key_value=''; self.summary_hidden=False; self.state='collapsed'
+        elif selector=='#ssh-key-summary':
+            self.summary_clicks+=1
+            if self.state=='collapsed':
+                self.state='redraft'; self.key_hidden=False
+                self.key_value='altered draft' if self.failure=='redraft' else self.draft
+                self.summary_hidden=True; self.active=None; self.focus_pending=True
+    def fill(self,selector,value):
+        self.actions.append(('fill',selector,value))
+        if selector=='#ssh-key':
+            self.draft=value; self.key_value=value; self.key_hidden=False
+            self.summary_hidden=True; self.state='draft'; self.active='#ssh-key'
+        elif selector=='#ssh-passphrase':
+            self.passphrase_value=value; self.active='#ssh-passphrase'; self.state='passphrase'
+    def select_option(self,selector,value):
+        self.actions.append(('select',selector,value)); self.method=value
+    def evaluate(self,expression):
+        self.expressions.append(expression)
+        if expression==self.collapsed_expr:
+            return (self.state=='collapsed' and self.key_hidden is True and self.key_value=='' and
+                    self.summary_hidden is False and self.passphrase_value=='')
+        if expression==self.redraft_expr:
+            if self.focus_pending:
+                self.focus_pending=False; self.active='#ssh-key'; return False
+            return (self.state=='redraft' and self.key_hidden is False and self.key_value==self.draft and
+                    self.summary_hidden is True and self.active=='#ssh-key')
+        if expression==self.cleared_expr: return self.credentials_cleared
+        return True
+
+
+class PemFixture(Fixture):
+    private_key='synthetic private key draft'
+    passphrase='synthetic passphrase'
+    def snapshot(self):
+        return {**super().snapshot(), 'connections':2,
+                'connectionEvents':[{'hostKey':'A'}, {'hostKey':'A','authAccepted':True}]}
+
+
+class PemExerciseBrowser(PemReopenBrowser):
+    """Extends the PEM state machine with the generic exercise_ui probes."""
+    def __init__(self, *, collapsed_expr, redraft_expr, cleared_expr, staged=True, credentials_cleared=True):
+        super().__init__(collapsed_expr=collapsed_expr, redraft_expr=redraft_expr, cleared_expr=cleared_expr)
+        self.staged=staged; self.credentials_cleared=credentials_cleared
+        self.entry='#host-open-remote'; self.review=True; self.echo=True
+    def evaluate(self,expression):
+        if 'dashboardAddEntry' in expression: return self.entry
+        if 'sshSetupLayout' in expression: return 'staged' if self.staged else 'legacy'
+        if "#ssh-review" in expression: return self.review
+        if 'directSshCredentialsCleared' in expression: return self.credentials_cleared
+        if "#ssh-password" in expression: return ''
+        if "#ssh-setup" in expression: return False
+        if 'xterm-rows' in expression: return self.echo
+        return super().evaluate(expression)
+    def read(self,selector):
+        return {'#ssh-fingerprint':Fixture.fingerprint,'#ssh-status':'已连接，已断开'}.get(selector,'')
+    def call(self,name,args): self.actions.append((name,args))
+
 
 
 class DirectSshAndroidTests(unittest.TestCase):
@@ -658,8 +743,184 @@ entries['#host-home #home-dashboard'][0].hidden = true; assert.equal(select(), n
         with self.assertRaisesRegex(driver.GuiFailure,'direct_rotation_review_content_missing'):
             driver.exercise_key_change_ui(Opaque(state),RotationFixture(state))
 
-
-
+class PemReopenTests(unittest.TestCase):
+    def setUp(self):
+        self._wait_patcher=patch.object(driver,'wait_for',_pem_wait_for)
+        self._wait_patcher.start(); self.addCleanup(self._wait_patcher.stop)
+    def constants(self):
+        import tauri_android_direct_ssh as mod
+        names=('PEM_COLLAPSED_EXPR','CREDENTIALS_CLEARED_EXPR','pem_redraft_expression')
+        values={name:getattr(mod,name,None) for name in names}
+        missing=[]
+        for name in names:
+            value=values[name]
+            if value is None or (name=='pem_redraft_expression' and not callable(value)):
+                missing.append(name)
+            if name!='pem_redraft_expression' and (not isinstance(value,str) or not value.strip()):
+                missing.append(name)
+        if missing: self.fail('missing Android PEM control constants: '+', '.join(sorted(set(missing))))
+        return mod, values
+    def test_pem_control_constants_exist_and_codes_are_public(self):
+        mod, values=self.constants()
+        codes=('direct_pem_collapse_unproven','direct_pem_redraft_mismatch','direct_pem_recollapse_unproven')
+        for code in codes:
+            self.assertEqual(mod.public_driver_error(mod.GuiFailure(code)),code)
+        self.assertTrue(values['PEM_COLLAPSED_EXPR'].strip().startswith('('))
+        self.assertTrue(values['CREDENTIALS_CLEARED_EXPR'].strip().startswith('('))
+        redraft=values['pem_redraft_expression']('synthetic draft')
+        self.assertIn('"synthetic draft"',redraft)
+        self.assertTrue(redraft.strip().startswith('('))
+    def test_staged_encrypted_pem_reopen_preserves_sequence_and_exports_no_secrets(self):
+        mod, values=self.constants()
+        fixture=PemFixture()
+        redraft=values['pem_redraft_expression'](fixture.private_key)
+        browser=PemExerciseBrowser(collapsed_expr=values['PEM_COLLAPSED_EXPR'],redraft_expr=redraft,
+                                   cleared_expr=values['CREDENTIALS_CLEARED_EXPR'],staged=True)
+        progress={}
+        with patch.object(mod,'mobile_setup') as verify, \
+             patch.object(mod,'require_first_probe'), \
+             patch.object(mod,'native_active_tap', side_effect=lambda b,s:b.click(s)):
+            result=mod.exercise_ui(browser,fixture,encrypted_key=True,progress=progress)
+        self.assertTrue(result['returnedHome'])
+        self.assertEqual([('auth','key','empty'),('auth','key','pem'),('auth','key','ready')],
+                         [(c.args[2],c.kwargs['method'],c.kwargs.get('input_state','empty'))
+                          for c in verify.call_args_list if 'method' in c.kwargs])
+        requested=[('fill','#ssh-key',fixture.private_key),('click','#ssh-passphrase'),
+                   ('click','#ssh-key-summary'),('click','#ssh-passphrase'),
+                   ('fill','#ssh-passphrase',fixture.passphrase)]
+        self.assertEqual([a for a in browser.actions if a in requested],requested)
+        self.assertEqual(browser.summary_clicks,1)
+        self.assertEqual(browser.passphrase_clicks,2)
+        self.assertIn(redraft,browser.expressions)
+        report=json.dumps({'progress':progress,'result':result})
+        for secret in (fixture.private_key,fixture.passphrase,fixture.password):
+            self.assertNotIn(secret,report)
+    def test_pem_flow_failure_codes_are_fixed_and_stop_before_passphrase(self):
+        mod, values=self.constants()
+        fixture=types.SimpleNamespace(private_key='synthetic private key draft',passphrase='synthetic passphrase')
+        redraft=values['pem_redraft_expression'](fixture.private_key)
+        cases=(('collapse','direct_pem_collapse_unproven'),
+               ('redraft','direct_pem_redraft_mismatch'),
+               ('recollapse','direct_pem_recollapse_unproven'))
+        for failure,code in cases:
+            with self.subTest(failure=failure):
+                browser=PemReopenBrowser(collapsed_expr=values['PEM_COLLAPSED_EXPR'],redraft_expr=redraft,
+                                         cleared_expr=values['CREDENTIALS_CLEARED_EXPR'],failure=failure)
+                with patch.object(mod,'mobile_setup'), self.assertRaises(mod.GuiFailure) as caught:
+                    mod.fill_credentials(browser,fixture,encrypted_key=True,staged=True,progress={})
+                self.assertEqual(str(caught.exception),code)
+                self.assertEqual(mod.public_driver_error(caught.exception),code)
+                self.assertNotIn(('fill','#ssh-passphrase',fixture.passphrase),browser.actions)
+    def test_pem_redraft_evaluate_failure_uses_fixed_code_and_never_exports_draft(self):
+        mod, values=self.constants()
+        fixture=types.SimpleNamespace(private_key='synthetic private key draft',passphrase='synthetic passphrase')
+        redraft=values['pem_redraft_expression'](fixture.private_key)
+        class LeakyPemBrowser(PemReopenBrowser):
+            def evaluate(self,expression):
+                if expression==redraft:
+                    self.expressions.append(expression)
+                    raise RuntimeError('CDP failure: '+expression)
+                return super().evaluate(expression)
+        browser=LeakyPemBrowser(collapsed_expr=values['PEM_COLLAPSED_EXPR'],redraft_expr=redraft,
+                                cleared_expr=values['CREDENTIALS_CLEARED_EXPR'])
+        with patch.object(mod,'mobile_setup'), self.assertRaises(mod.GuiFailure) as caught:
+            mod.fill_credentials(browser,fixture,encrypted_key=True,staged=True,progress={})
+        self.assertEqual(str(caught.exception),'direct_pem_redraft_mismatch')
+        self.assertEqual(mod.public_driver_error(caught.exception),'direct_pem_redraft_mismatch')
+        self.assertNotIn(fixture.private_key,str(caught.exception))
+        self.assertNotIn(('fill','#ssh-passphrase',fixture.passphrase),browser.actions)
+    def test_disconnect_credentials_cleanup_failure_is_public_for_staged_and_legacy(self):
+        mod, values=self.constants()
+        for staged in (False,True):
+            fixture=PemFixture()
+            redraft=values['pem_redraft_expression'](fixture.private_key)
+            with self.subTest(staged=staged):
+                browser=PemExerciseBrowser(collapsed_expr=values['PEM_COLLAPSED_EXPR'],redraft_expr=redraft,
+                                           cleared_expr=values['CREDENTIALS_CLEARED_EXPR'],
+                                           staged=staged,credentials_cleared=False)
+                with patch.object(mod,'mobile_setup'), patch.object(mod,'require_first_probe'), \
+                     patch.object(mod,'native_active_tap', side_effect=lambda b,s:b.click(s)), \
+                     self.assertRaises(mod.GuiFailure) as caught:
+                    mod.exercise_ui(browser,fixture,encrypted_key=True,progress={})
+                self.assertEqual(str(caught.exception),'direct_credentials_retained')
+                self.assertEqual(mod.public_driver_error(caught.exception),'direct_credentials_retained')
+                self.assertNotIn(('click','#ssh-return-home'),browser.actions)
+                self.assertNotIn(('click','#show-remote'),browser.actions)
+    @unittest.skipUnless(shutil.which('node'),'requires Node.js for DOM predicate checks')
+    def test_dom_predicates_reject_stale_editors_duplicate_buttons_overlays_and_cleanup_residue(self):
+        mod, values=self.constants()
+        draft='SYNTHETIC-PEM-DRAFT'
+        redraft=values['pem_redraft_expression'](draft)
+        script=r'''const assert=require('node:assert/strict');
+const draft=%s;
+const label='已填写私钥 · 重新编辑';
+const collapsed=()=>%s;
+const redraft=()=>%s;
+const cleared=()=>%s;
+const element=(options)=>Object.assign({
+  innerText:'', value:'', hidden:false, disabled:false, readOnly:false,
+  tagName:'DIV', ancestorHidden:false, visible:true, computedVisibility:'visible',
+  rect:[10,20,100,30], children:[],
+  getClientRects(){ return this.hidden || this.ancestorHidden || !this.visible ? [] : [this.rect]; },
+  getBoundingClientRect(){ const [left,top,width,height]=this.rect; return {left,top,width,height,right:left+width,bottom:top+height}; },
+  contains(other){ return other===this || this.children.includes(other); },
+  closest(selector){ return this.ancestorHidden && selector==='[hidden]' ? {} : null; }
+}, options);
+const key=element({tagName:'TEXTAREA',hidden:true});
+const summary=element({tagName:'BUTTON',innerText:label});
+const phrase=element({tagName:'INPUT'});
+const credential=element({tagName:'INPUT'});
+const nodes={'ssh-key':key,'ssh-key-summary':summary,'ssh-passphrase':phrase,'ssh-password':credential};
+let buttons=[summary];
+let hit=summary;
+const overlay=element({innerText:'overlay'});
+global.document={
+  querySelectorAll(selector){
+    if (selector==='button') return buttons;
+    const id=selector.startsWith('#') ? selector.slice(1) : selector;
+    return nodes[id] ? [nodes[id]] : [];
+  },
+  elementFromPoint(){ return hit; },
+  activeElement:null
+};
+global.getComputedStyle=(el)=>({visibility:el.computedVisibility});
+global.innerWidth=400; global.innerHeight=800;
+const setCollapsed=()=>{
+  key.hidden=true; key.value=''; key.ancestorHidden=false; key.visible=true;
+  summary.hidden=false; summary.innerText=label; summary.ancestorHidden=false; summary.visible=true;
+  phrase.hidden=false; phrase.value=''; phrase.visible=true; phrase.computedVisibility='visible';
+  credential.value=''; buttons=[summary]; hit=summary; document.activeElement=summary;
+  summary.rect=[10,20,100,30];
+};
+const setCleanup=()=>{
+  key.hidden=false; key.value=''; key.ancestorHidden=false; key.visible=true;
+  summary.hidden=true; summary.innerText=''; summary.ancestorHidden=false; summary.visible=true;
+  phrase.hidden=false; phrase.value=''; phrase.visible=true;
+  credential.value=''; buttons=[summary]; hit=summary; document.activeElement=null;
+};
+setCollapsed(); assert.equal(collapsed(),true,'normal collapsed state');
+key.value='stale'; assert.equal(collapsed(),false,'editor DOM residue');
+key.value=''; key.hidden=false; key.ancestorHidden=true; assert.equal(collapsed(),false,'ancestor-hidden editor');
+setCollapsed(); summary.hidden=true; assert.equal(collapsed(),false,'summary hidden');
+setCollapsed();
+const duplicate=element({tagName:'BUTTON',innerText:label});
+buttons=[summary,duplicate]; assert.equal(collapsed(),false,'duplicate label button');
+setCollapsed(); hit=overlay; assert.equal(collapsed(),false,'covered hit point');
+setCollapsed(); phrase.value='stale'; assert.equal(collapsed(),false,'passphrase residue');
+setCollapsed(); assert.equal(collapsed(),true,'restored collapsed state');
+setCleanup(); key.value=draft; document.activeElement=key;
+assert.equal(redraft(),true,'reopened original draft');
+key.value='altered'; assert.equal(redraft(),false,'altered draft');
+key.value=draft; document.activeElement=null; assert.equal(redraft(),false,'focus missing');
+document.activeElement=key; summary.hidden=false; assert.equal(redraft(),false,'summary visible');
+setCleanup(); assert.equal(cleared(),true,'cleanup state');
+summary.hidden=false; summary.ancestorHidden=true; assert.equal(cleared(),false,'ancestor-hidden summary');
+setCleanup(); credential.value='stale'; assert.equal(cleared(),false,'credential residue');
+setCleanup(); key.hidden=true; assert.equal(cleared(),false,'key editor hidden');
+''' % (json.dumps(draft), values['PEM_COLLAPSED_EXPR'], redraft, values['CREDENTIALS_CLEARED_EXPR'])
+        result=subprocess.run(['node','-e',script],capture_output=True,text=True,check=False)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(result.stdout,'')
 
 class ActiveNavigationTests(unittest.TestCase):
     def peer(self):

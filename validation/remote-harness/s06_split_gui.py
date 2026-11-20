@@ -147,6 +147,7 @@ def run_gui(args, root, env, config, command, final_pty_evidence, *, import_repl
             config['host'] != '127.0.0.1' or (root / 'authorized_keys').stat().st_size):
         raise GuiFailure('s06_unsafe_fixture')
     guarded = bool(args.input_fixture)
+    keyring = getattr(args, 'linux_keyring', None)
     if import_replace and (args.paired_gui != 'tauri' or guarded):
         raise GuiFailure('s06_import_requires_stock_tauri')
     other = root / 's06-peer-b'
@@ -173,25 +174,32 @@ def run_gui(args, root, env, config, command, final_pty_evidence, *, import_repl
         terminals = [fixture_terminal_id(item) for item in (config, second)]
         if terminals[0] == terminals[1]:
             raise GuiFailure('s06_distinct_terminal_binding_missing')
-        command(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-C',
-                 'ephemeral-s06-device-b', '-f', root / 'client-b'])
+        if keyring is None:
+            command(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-C',
+                     'ephemeral-s06-device-b', '-f', root / 'client-b'])
         (exchange / 'config.json').write_text(json.dumps([config, second]))
         widget_env = dict(env, HERDR_S06_CONFIG=str(exchange / 'config.json'),
-                          HERDR_S06_DIR=str(exchange), HERDR_S06_KEY_A=str(root / 'client'),
-                          HERDR_S06_KEY_B=str(root / 'client-b'), HERDR_S06_GUARDED='1' if guarded else '0')
+                          HERDR_S06_DIR=str(exchange), HERDR_S06_GUARDED='1' if guarded else '0')
+        if keyring is None:
+            widget_env.update(HERDR_S06_KEY_A=str(root / 'client'), HERDR_S06_KEY_B=str(root / 'client-b'))
         home = root / 's06-helper'
         home.mkdir(mode=0o700)
         for index, target in enumerate((config, second)):
             scratch = Path(home) / str(index)
             scratch.mkdir(mode=0o700)
             approvals.append(FixtureApproval(root, target,
-                Host(scratch, target['username'], target['expectedHostKey'])))
+                Host(scratch, target['username'], target['expectedHostKey']), keyring=keyring))
         if args.paired_gui == 'tauri':
             from s06_tauri_gui import exercise
             result.update(exercise(args, root, env, (config, second), approvals, expected,
                                    import_replace=import_replace))
         else:
-            argv = ['flutter', 'test', '--no-pub', '--reporter', 'expanded', 'test/s06_real_ssh_test.dart']
+            if keyring is not None:
+                widget_env.pop('FLUTTER_TEST', None)
+                from flutter_linux_pairing import native_command
+                argv = native_command(args, root, env, split=True)
+            else:
+                argv = ['flutter', 'test', '--no-pub', '--reporter', 'expanded', 'test/s06_real_ssh_test.dart']
             with owned_process(argv, cwd=args.flutter_app, env=widget_env, log=root / 's06-widget.log') as proc:
                 for index, approval in enumerate(approvals):
                     request = exchange / f'request-{index}.json'
@@ -199,7 +207,7 @@ def run_gui(args, root, env, config, command, final_pty_evidence, *, import_repl
                         if proc.poll() is not None:
                             raise widget_failure(exchange, 's06_widget_exited_before_pairing')
                         return request.is_file()
-                    wait_for(ready, 's06_pairing_request_timeout', timeout=100)
+                    wait_for(ready, 's06_pairing_request_timeout', timeout=420 if keyring is not None and index == 0 else 100)
                     response = approval.approve(bounded_wire(request))
                     pending = exchange / f'response-{index}.new'
                     pending.write_bytes(response)
@@ -214,7 +222,12 @@ def run_gui(args, root, env, config, command, final_pty_evidence, *, import_repl
                     raise widget_failure(exchange, 's06_widget_completion_timeout') from None
                 if code or not (exchange / 'result.json').is_file():
                     raise widget_failure(exchange, 's06_widget_failed')
-                result.update(checked_widget_result(json.loads(bounded_wire(exchange / 'result.json', 4096)), guarded))
+                raw = json.loads(bounded_wire(exchange / 'result.json', 4096))
+                result.update(checked_widget_result(raw, guarded))
+                if keyring is not None:
+                    if raw.get('nativeCatalogAndKeys') is not True:
+                        raise GuiFailure('s06_flutter_native_identity_unproven')
+                    result.update(nativeCatalogReadback=True, flutterNativeSource=args.flutter_native_source)
                 if not guarded:
                     states = stock_peer_states(approvals)
                     result['stockStopEvidence']['postDriverPeerStates'] = states
@@ -228,6 +241,10 @@ def run_gui(args, root, env, config, command, final_pty_evidence, *, import_repl
                 raise GuiFailure('s06_reviewed_device_not_authenticated')
             if fixture_terminal_id((config, second)[index]) != terminals[index]:
                 raise GuiFailure('s06_terminal_binding_changed')
+        if keyring is not None:
+            if len(keyring.verified) != 2:
+                raise GuiFailure('private_keyring_public_proof_missing')
+            result['linuxKeyring'] = {'publicKeysMatched': 2, 'sameKeyAuthenticated': True}
         for directory, data in zip((root, other), expected):
             if bounded_wire(directory / 'received.bin', 4096) != data:
                 raise GuiFailure('s06_remote_input_target_mismatch')
@@ -235,7 +252,9 @@ def run_gui(args, root, env, config, command, final_pty_evidence, *, import_repl
                       receivedInputBytes=len(expected[0]), peerInputBytes=[len(data) for data in expected],
                       exactRemoteBytes=True, distinctAuthenticatedDeviceKeys=True,
                       targetBindingsPreserved=True, physicalImeVerified=False,
-                      scope=('native Linux GTK WebView config replacement with two real SSH/herdr sessions; process-memory test identities'
+                      scope=('two reviewed real SSH/herdr sessions using verified Linux Secret Service identities'
+                             if keyring is not None else
+                             'native Linux GTK WebView config replacement with two real SSH/herdr sessions; process-memory test identities'
                              if import_replace else
                              'native Linux GTK WebView and two real SSH/herdr sessions; process-memory test identities'
                              if args.paired_gui == 'tauri' else

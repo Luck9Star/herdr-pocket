@@ -184,7 +184,9 @@ def gui_report_fields(route, result, input_fixture=False, *, import_replace=Fals
                          if route == 'flutter' else 'stock Linux GTK WebView with private Secret Service')
         proof = result.get('linuxKeyring', {})
         native_store = (proof.get('publicKeysMatched') in (1, 2) and proof.get('sameKeyAuthenticated') is True)
-        unverified.extend(['stock second-process identity restore', 'other Linux keyring implementations'])
+        if not (route == 'tauri' and passed and result.get('restart', {}).get('sameDeviceKeyReauthenticated') is True):
+            unverified.append('stock second-process identity restore')
+        unverified.append('other Linux keyring implementations')
         if route == 'flutter':
             unverified.append('unmodified Flutter release app with external user input')
     if not passed or not native_store:

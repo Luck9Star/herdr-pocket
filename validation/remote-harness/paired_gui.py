@@ -1,5 +1,5 @@
 """Exercise a real pairing UI against the runner's disposable SSH server."""
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 import json
 import os
 from pathlib import Path
@@ -309,9 +309,10 @@ def run_flutter(args, root, env, config, approval):
 
 class WebDriver:
     """Minimal W3C client. Exercise public controls in the native Linux WebView."""
-    def __init__(self):
+    def __init__(self, *, native_webkit=False):
         self.base = 'http://127.0.0.1:4444'
         self.session = ''
+        self.native_webkit = native_webkit
 
     def call(self, method, path, data=None):
         raw = None if data is None else json.dumps(data).encode()
@@ -336,8 +337,10 @@ class WebDriver:
             except (OSError, ValueError):
                 return False
         wait_for(ready, 'webdriver_unavailable')
-        reply = self.call('POST', '/session', {'capabilities':{'alwaysMatch':{
-            'tauri:options':{'application':str(binary.resolve())}}}})
+        application = str(binary.resolve())
+        options = ({'webkitgtk:browserOptions': {'binary': application, 'args': []}} if self.native_webkit
+                   else {'tauri:options': {'application': application}})
+        reply = self.call('POST', '/session', {'capabilities': {'alwaysMatch': options}})
         self.session = '/session/' + reply['sessionId']
         self.call('POST', self.session + '/window/rect', {'width':390, 'height':844})
 
@@ -434,12 +437,23 @@ def stop_tauri_observation(driver):
 
 
 def run_tauri(args, root, env, config, approval):
-    driver = WebDriver()
-    with owned_process(['tauri-driver'], cwd=root, env=env, log=root/'driver.log'):
+    native = approval.keyring is not None
+    if native and args.input_fixture:
+        raise GuiFailure('restart_requires_stock_read_only')
+    driver = WebDriver(native_webkit=native)
+    restart = None
+    if native:
+        from tauri_linux_pairing_restart import RestartReceipt, no_keyring_writes
+        restart = RestartReceipt(args.tauri_app, root, env, config, approval)
+    command = ['/usr/bin/WebKitWebDriver', '--host=127.0.0.1', '--port=4444'] if native else ['tauri-driver']
+    driver_env = dict(env, TAURI_WEBVIEW_AUTOMATION='true') if native else env
+    with owned_process(command, cwd=root, env=driver_env, log=root/'driver.log') as driver_process, ExitStack() as lifetime:
         try:
             driver.start(args.tauri_app)
-            driver.click('#host-open-remote')
-            driver.click('#add-herdr')
+            if restart is not None:
+                restart.first_started(driver_process.pid)
+            from s06_tauri_gui import SplitDriver
+            SplitDriver(driver).open_pairing(empty_board=True)
             for field, key in [('host','host'), ('port','port'), ('user','username'), ('session','session'),
                                ('herdr','herdrPath'), ('socket','socketPath'), ('pin','expectedHostKey')]:
                 driver.fill('#remote-'+field, config[key])
@@ -500,14 +514,28 @@ def run_tauri(args, root, env, config, approval):
             wait_for(lambda: retained_host_card_matches(retained,
                 driver.read('#host-list [data-host-task-summary]')),
                      'retained_home_summary_missing')
-            return {'paired':True, 'paneChosen':True, 'fullRendered':True, 'deltaRendered':True,
+            result = {'paired':True, 'paneChosen':True, 'fullRendered':True, 'deltaRendered':True,
                     'initialHostBoardPhase':initial_board, 'hostBoardPhaseDuringTerminal':terminal_board,
                     'hostSummaryRetainedOnHome':True,
                     'stoppedStale':True, 'fullRenderAcknowledgements':full, 'deltaRenderAcknowledgements':deltas,
                     'localViewportChanges':2, 'inputQueueAccepted':bool(args.input_fixture),
                     'keyStore':'private Linux Secret Service' if approval.keyring else 'native process-memory Linux test identity'}
+            if restart is not None:
+                restart.before_first_exit(driver, driver_process.pid)
+                lifetime.enter_context(no_keyring_writes(approval, root, env))
         finally:
             driver.close()
+        if restart is not None:
+            restart.after_first_exit()
+            second = WebDriver(native_webkit=True)
+            try:
+                second.start(args.tauri_app)
+                if second.session == driver.session:
+                    raise GuiFailure('restart_webview_session_reused')
+                result['restart'] = restart.second(second, driver_process.pid)
+            finally:
+                second.close()
+    return result
 
 
 def run_gui(args, root, env, config):

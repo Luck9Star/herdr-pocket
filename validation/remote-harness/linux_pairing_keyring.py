@@ -111,22 +111,37 @@ class KeyringEvidence:
             raise KeyringFailure('private_keyring_items_unverified')
         return items
 
-    def verify(self, public_key):
-        items = self.items(self.namespace)
-        if len(items) != len(self.verified) + 1:
-            raise KeyringFailure('private_keyring_item_count_wrong')
+    def handles(self, items):
         handles = set()
         for item in items:
             attributes = bus_call(SERVICE, item, 'org.freedesktop.DBus.Properties.Get',
                                   'org.freedesktop.Secret.Item', 'Attributes')
-            handles.update(re.findall(r"'handle': '([a-f0-9]{32})'", attributes))
-        if len(handles) != len(items) or not self.verified <= handles or len(handles - self.verified) != 1:
-            raise KeyringFailure('private_keyring_reference_mismatch')
-        handle = (handles - self.verified).pop()
+            found = re.findall(r"'handle': '([a-f0-9]{32})'", attributes)
+            if len(found) != 1 or found[0] in handles:
+                raise KeyringFailure('private_keyring_reference_mismatch')
+            handles.add(found[0])
+        return handles
+
+    def verify_public(self, handle, public_key):
         result = subprocess.run([str(self.probe), self.namespace, handle], capture_output=True, text=True, timeout=15)
         if result.returncode or result.stdout != public_key + '\n':
             raise KeyringFailure('private_keyring_public_key_mismatch')
+
+    def verify(self, public_key):
+        items = self.items(self.namespace)
+        if len(items) != len(self.verified) + 1:
+            raise KeyringFailure('private_keyring_item_count_wrong')
+        handles = self.handles(items)
+        if not self.verified <= handles or len(handles - self.verified) != 1:
+            raise KeyringFailure('private_keyring_reference_mismatch')
+        handle = (handles - self.verified).pop()
+        self.verify_public(handle, public_key)
         self.verified.add(handle)
+
+    def verify_existing(self, public_key):
+        if len(self.verified) != 1 or self.handles(self.items(self.namespace)) != self.verified:
+            raise KeyringFailure('private_keyring_original_reference_changed')
+        self.verify_public(next(iter(self.verified)), public_key)
 
 
 def run_private(command, daemon):

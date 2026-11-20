@@ -47,5 +47,9 @@ class PrivateKeyringTests(unittest.TestCase):
             verifier.verify('ssh-ed25519 reviewed')
             run.assert_called_with(['/bin/ls', 'herdr-pocket.flutter', handle], capture_output=True, text=True, timeout=15)
             self.assertEqual(verifier.verified, {handle})
+            verifier.verify_existing('ssh-ed25519 reviewed')
+            call.return_value = "(<{'handle': '" + 'b' * 32 + "'}>,)"
+            with self.assertRaisesRegex(KeyringFailure, 'private_keyring_original_reference_changed'):
+                verifier.verify_existing('ssh-ed25519 reviewed')
             with self.assertRaisesRegex(KeyringFailure, 'private_keyring_item_count_wrong'):
                 verifier.verify('ssh-ed25519 reviewed')

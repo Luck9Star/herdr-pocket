@@ -215,6 +215,26 @@ class StockWindow:
         if not node.do_action(index):
             raise GuiFailure(stage + '_tap_rejected')
 
+    def disabled_button(self, stage, label, *, scroll=None):
+        self.find(stage, label, scroll=scroll)
+        self.check_focus()
+        node = unique_match(self.visible(), label)
+        if node is None:
+            raise GuiFailure(stage)
+        try:
+            state = node.get_state_set()
+            actions = [node.get_action_name(i) for i in range(node.get_n_actions())] if 'Action' in node.get_interfaces() else []
+            # Flutter GTK reports SENSITIVE for a button with an enabled state,
+            # including when it explicitly withholds ENABLED and the Tap action.
+            disabled = (node.get_role() == self.atspi.Role.PUSH_BUTTON and
+                        state.contains(self.atspi.StateType.SENSITIVE) and
+                        not state.contains(self.atspi.StateType.ENABLED) and
+                        'Tap' not in actions)
+        except self.glib.Error:
+            disabled = False
+        if not disabled:
+            raise GuiFailure(stage + '_not_disabled')
+
     def paste(self, stage, label, data, *, scroll=None):
         # Own the OS clipboard with bounded synthetic public data, then send
         # ordinary keyboard shortcuts only to the already focused stock window.

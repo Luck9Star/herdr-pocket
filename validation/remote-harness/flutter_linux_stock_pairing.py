@@ -1,4 +1,4 @@
-"""Run paired SSH twice through unmodified Linux GTK launcher and normal UI."""
+"""Exercise Linux GTK recovery through two normal application processes."""
 import hashlib
 import io
 import json
@@ -15,6 +15,11 @@ from tauri_linux_pairing_restart import no_keyring_writes, require_peers
 
 TARGET_FIELDS = ('host', 'port', 'username', 'session', 'socketPath', 'herdrPath', 'expectedHostKey')
 APP = 'herdr_flutter_probe'
+PAIR_CONNECT = '主动审查连接并读取看板'
+DENIAL_NOTICES = {
+    'locked': '系统密钥环已锁定 · 请解锁后核验原设备身份。主机资料及原引用已保留。',
+    'unavailable': '系统密钥环服务不可用 · 请配置 Secret Service 后核验原设备身份。主机资料及原引用已保留。',
+}
 
 
 def connection_profile(config):
@@ -46,23 +51,28 @@ def observed_tick(text):
     return int(matches[0]) if len(markers) == len(matches) == 1 else None
 
 
-def png_observation(ui):
+def capture_window(ui):
     window = ui.window()
     pixels = ImageGrab.grab(bbox=window.region)
     if ui.window() != window or pixels.size != (window.width, window.height):
         raise GuiFailure('stock_flutter_observation_window_changed')
     png = io.BytesIO()
     pixels.save(png, format='PNG')
+    return pixels, png.getvalue()
+
+
+def png_observation(ui):
+    pixels, png = capture_window(ui)
     # The original capture is left unchanged; OCR uses a temporary 2× image.
     enlarged = io.BytesIO()
     pixels.resize((pixels.width * 2, pixels.height * 2)).save(enlarged, format='PNG')
     result = subprocess.run(['tesseract', 'stdin', 'stdout', '-l', 'eng', '--psm', '11'],
                             input=enlarged.getvalue(), capture_output=True, timeout=12, check=True)
-    return observed_tick(result.stdout.decode(errors='replace')), png.getvalue()
+    return observed_tick(result.stdout.decode(errors='replace')), png
 
 
 def observe(ui, approval, terminals, count):
-    ui.tap('stock_flutter_pair_connect_missing', '主动审查连接并读取看板', scroll='down')
+    ui.tap('stock_flutter_pair_connect_missing', PAIR_CONNECT, scroll='down')
     ui.tap('stock_flutter_review_missing', '我已通过可信渠道核验主机公钥、账号与目标资料', scroll='down', prefixes=True)
     ui.tap('stock_flutter_connect_missing', '核验并读取会话看板', scroll='down')
     wait_for(lambda: approval.fingerprint_authenticated() if count == 1 else require_peers(approval, count, all_closed=False),
@@ -116,10 +126,47 @@ def enroll(ui, config, approval):
     return json.loads(raw)
 
 
+def denial_screens(ui, mode):
+    notice = DENIAL_NOTICES[mode]
+    ui.find('stock_flutter_denial_notice_missing', notice)
+    notice_png = capture_window(ui)[1]
+    ui.find('stock_flutter_denial_notice_changed', notice)
+    ui.disabled_button('stock_flutter_denial_connect_missing', PAIR_CONNECT, scroll='down')
+    connect_png = capture_window(ui)[1]
+    ui.disabled_button('stock_flutter_denial_connect_changed', PAIR_CONNECT)
+    return {'stock-second-denial-notice.png': notice_png, 'stock-second-denial-connect.png': connect_png}
+
+
+def reopen(binary, root, env, atspi, glib, first, config, before, approval, targets, *, mode='off'):
+    with owned_process([str(binary)], cwd=root, env=env, log=root / 'stock-second.log') as second:
+        if first.returncode != 0 or second.pid == first.pid:
+            raise GuiFailure('stock_flutter_independent_process_unverified')
+        ui = StockWindow(second, atspi, glib)
+        ui.find('stock_flutter_original_host_missing', '已恢复 1 个本机资料 · 连接前需重新审查')
+        ui.tap('stock_flutter_original_host_open_missing', '观察会话 · 审查',
+               owner=(before[2], '会话 ' + config['session']))
+        if mode == 'off':
+            ui.find('stock_flutter_original_device_unverified', '本机原身份已匹配 · 请核验主机指纹后主动审查连接')
+            if not require_peers(approval, 1, all_closed=True):
+                raise GuiFailure('stock_flutter_ssh_before_explicit_review')
+            first_png, later_png = observe(ui, approval, targets, 2)
+            stop(ui, approval, 2)
+            screens = {'stock-second-before.png': first_png, 'stock-second-after.png': later_png}
+        else:
+            screens = denial_screens(ui, mode)
+            if not require_peers(approval, 1, all_closed=True):
+                raise GuiFailure('stock_flutter_denial_original_peer_unproven')
+        ui.close()
+    return screens
+
+
 def run_stock(args, root, env, config, approval):
     binary = args.flutter_stock_app.resolve(strict=True)
     if binary.name != APP or not binary.is_file() or not approval.keyring or args.input_fixture:
         raise GuiFailure('stock_flutter_requires_private_read_only_bundle')
+    mode = getattr(args, 'linux_keyring_denial', 'off')
+    if mode not in ('off', *DENIAL_NOTICES):
+        raise GuiFailure('stock_flutter_denial_mode_invalid')
     catalog = root / 'data/herdr-pocket.flutter/catalog.json'
     targets = config['paneId'] + ' · ' + fixture_terminal_id(config)
     with accessibility(root, env) as (atspi, glib):
@@ -134,39 +181,45 @@ def run_stock(args, root, env, config, approval):
                 ui.close()
                 if catalog_reference(catalog, config, request) != before:
                     raise GuiFailure('stock_flutter_catalog_changed_on_exit')
-                with owned_process([str(binary)], cwd=root, env=env, log=root / 'stock-second.log') as second:
-                    if first.returncode != 0 or second.pid == first.pid:
-                        raise GuiFailure('stock_flutter_independent_process_unverified')
-                    ui = StockWindow(second, atspi, glib)
-                    ui.find('stock_flutter_original_host_missing', '已恢复 1 个本机资料 · 连接前需重新审查')
-                    ui.tap('stock_flutter_original_host_open_missing', '观察会话 · 审查',
-                           owner=(before[2], '会话 ' + config['session']))
-                    ui.find('stock_flutter_original_device_unverified', '本机原身份已匹配 · 请核验主机指纹后主动审查连接')
-                    if not require_peers(approval, 1, all_closed=True):
-                        raise GuiFailure('stock_flutter_ssh_before_explicit_review')
-                    restored = observe(ui, approval, targets, 2)
-                    stop(ui, approval, 2)
-                    ui.close()
-                try:
-                    approval.keyring.verify_existing(request['public_key'])
-                except KeyringFailure as error:
-                    raise GuiFailure(str(error)) from None
-                if (bounded_wire(root / 'authorized_keys', 4096) != authorized or
-                        catalog_reference(catalog, config, request) != before):
-                    raise GuiFailure('stock_flutter_original_identity_changed')
+                if mode == 'off':
+                    restored = reopen(binary, root, env, atspi, glib, first, config, before, approval, targets)
+            if mode != 'off':
+                from linux_pairing_keyring import denied_service
+                original = bounded_wire(catalog, 262144)
+                with denied_service(approval.keyring, mode) as require_denied:
+                    with no_keyring_writes(approval, root, env, service_available=False):
+                        restored = reopen(binary, root, env, atspi, glib, first, config, before, approval, targets, mode=mode)
+                        require_denied()
+                if bounded_wire(catalog, 262144) != original:
+                    raise GuiFailure('stock_flutter_denial_catalog_changed')
+                if not require_peers(approval, 1, all_closed=True):
+                    raise GuiFailure('stock_flutter_denial_original_peer_unproven')
+            try:
+                approval.keyring.verify_existing(request['public_key'])
+            except KeyringFailure as error:
+                raise GuiFailure(str(error)) from None
+            if (bounded_wire(root / 'authorized_keys', 4096) != authorized or
+                    catalog_reference(catalog, config, request) != before):
+                raise GuiFailure('stock_flutter_original_identity_changed')
     if (root / 'received.bin').stat().st_size:
         raise GuiFailure('stock_flutter_peer_received_unexpected_input')
-    screens = {'stock-first-before.png': initial[0], 'stock-first-after.png': initial[1],
-               'stock-second-before.png': restored[0], 'stock-second-after.png': restored[1]}
+    screens = {'stock-first-before.png': initial[0], 'stock-first-after.png': initial[1], **restored}
     args.output.mkdir(exist_ok=True)
     for name, data in screens.items():
         (args.output / name).write_bytes(data)
     with binary.open('rb') as source:
         binary_sha = hashlib.file_digest(source, 'sha256').hexdigest()
-    return {'keyStore': 'private Linux Secret Service', 'paired': True, 'paneChosen': True,
-            'restart': {'independentAppProcesses': True, 'naturalWindowClose': True, 'sameSavedHostAndTarget': True,
-                        'sameDeviceKeyReauthenticated': True, 'exactPeerAuthentications': 2, 'bothPeersClosed': True,
-                        'originalKeyAndAuthorizationUnchanged': True, 'noKeyringWrites': True,
-                        'observedIncreasingTicksInBothWindows': True},
-            'nativeBundleExecutableSha256': binary_sha,
-            'originalX11WindowPngs': {name: hashlib.sha256(data).hexdigest() for name, data in screens.items()}}
+    result = {'keyStore': 'private Linux Secret Service', 'paired': True, 'paneChosen': True,
+              'nativeBundleExecutableSha256': binary_sha,
+              'originalX11WindowPngs': {name: hashlib.sha256(data).hexdigest() for name, data in screens.items()}}
+    if mode == 'off':
+        result['restart'] = {'independentAppProcesses': True, 'naturalWindowClose': True, 'sameSavedHostAndTarget': True,
+                             'sameDeviceKeyReauthenticated': True, 'exactPeerAuthentications': 2, 'bothPeersClosed': True,
+                             'originalKeyAndAuthorizationUnchanged': True, 'noKeyringWrites': True,
+                             'observedIncreasingTicksInBothWindows': True}
+    else:
+        result['keyringDenial'] = {'mode': mode, 'independentAppProcesses': True, 'noticeVisible': True,
+                                   'connectDisabled': True, 'originalHostAndIdentityRetained': True,
+                                   'authorizationUnchanged': True, 'exactPeerAuthentications': 1,
+                                   'firstPeerClosed': True, 'noKeyringWrites': True, 'receivedInputBytes': 0}
+    return result

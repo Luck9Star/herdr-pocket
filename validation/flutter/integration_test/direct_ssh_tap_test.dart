@@ -8,6 +8,7 @@ import 'package:herdr_flutter_probe/direct_ssh_page.dart';
 import '../integration_test/direct_ssh_ui_steps.dart' as steps;
 import '../integration_test/ios_direct_ssh_test.dart'
     show checkIosCredentialSwitches;
+import '../test/direct_ssh_widget_test.dart' show mockClipboard;
 
 void main() {
   testWidgets('one home tap waits for the delayed SSH route and form', (
@@ -229,6 +230,48 @@ void main() {
       expect(events, ['keyboard_open', 'done', 'keyboard_closed', 'tap']);
     },
     variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+  );
+
+  testWidgets(
+    'Android PEM summary reopens the exact draft and collapses again',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final tokens = (await tester.runAsync(DesignTokens.load))!;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: tokens.theme,
+          home: DirectSshPage(tokens: tokens),
+        ),
+      );
+      final dynamic state = tester.state(find.byType(DirectSshPage));
+      state.setState(() {
+        state.mobileAuth = true;
+        state.fingerprint = 'fixture-fingerprint';
+        state.checkedTarget = state.target;
+      });
+      await tester.pumpAndSettle();
+      const draft = 'synthetic PEM draft\nsecond line';
+      mockClipboard(tester, () async => {'text': draft});
+
+      await steps.tap(tester, 'direct-auth-key');
+      await steps.tap(tester, 'direct-paste-key');
+      await steps.reopenAndroidEncryptedPem(tester, draft);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      await tester.pumpAndSettle();
+      await steps.tap(tester, 'direct-passphrase');
+      await steps.verifyAndroidEncryptedPemCollapsed(tester);
+      final passphraseEditor = find.descendant(
+        of: steps.control('direct-passphrase'),
+        matching: find.byType(EditableText),
+      );
+      expect(
+        tester.widget<EditableText>(passphraseEditor).focusNode.hasPrimaryFocus,
+        isTrue,
+      );
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
   );
 
   testWidgets('Android entry leaves the edit for its existing keyboard step', (

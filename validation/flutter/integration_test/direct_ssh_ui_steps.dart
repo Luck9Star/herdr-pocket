@@ -670,6 +670,37 @@ Future<void> finishAndroidEncryptedPassphrase(WidgetTester tester) async {
   }, timeoutReason: 'direct_ssh_encrypted_passphrase_layout_timeout');
 }
 
+Future<void> verifyAndroidEncryptedPemCollapsed(WidgetTester tester) async {
+  final summary = control('direct-edit-pem');
+  final editor = control('direct-secret');
+  await until(
+    tester,
+    () => summary.evaluate().length == 1 && editor.evaluate().isEmpty,
+    timeoutReason: 'direct_ssh_android_encrypted_pem_collapse_timeout',
+  );
+}
+
+Future<void> reopenAndroidEncryptedPem(
+  WidgetTester tester,
+  String expectedDraft,
+) async {
+  await verifyAndroidEncryptedPemCollapsed(tester);
+  await tap(tester, 'direct-edit-pem');
+  final editor = control('direct-secret');
+  await until(
+    tester,
+    () =>
+        editor.evaluate().length == 1 &&
+        tester.widget<TextField>(editor).focusNode?.hasPrimaryFocus == true,
+    timeoutReason: 'direct_ssh_android_encrypted_pem_focus_timeout',
+  );
+  expect(
+    tester.widget<TextField>(editor).controller!.text == expectedDraft,
+    isTrue,
+    reason: 'direct_ssh_android_encrypted_pem_readback_mismatch',
+  );
+}
+
 const _rotationTrustEvidence = <String, bool>{
   'sameTarget': true,
   'oldFingerprintMatchedIndependentA': true,
@@ -696,6 +727,8 @@ Future<void> runEncryptedDirectSshUi(
   bool rotating = false,
   Future<void> Function(String)? captureRotationRejected,
 }) async {
+  final android = platform == 'android-api35-emulator';
+  final ios = platform == 'ios-simulator';
   final exchangeName = rotating && platform == 'ios-simulator'
       ? 'encrypted-rotation'
       : 'encrypted';
@@ -780,14 +813,18 @@ Future<void> runEncryptedDirectSshUi(
   }
 
   Future<void> pasteKey() async {
+    final key = config['privateKey'] as String;
     try {
-      await tester.runAsync(
-        () => Clipboard.setData(
-          ClipboardData(text: config['privateKey'] as String),
-        ),
-      );
+      await tester.runAsync(() => Clipboard.setData(ClipboardData(text: key)));
       await tap(tester, 'direct-paste-key');
-      await until(tester, () => control('direct-edit-pem').evaluate().isNotEmpty);
+      if (android) {
+        await reopenAndroidEncryptedPem(tester, key);
+        return;
+      }
+      await until(
+        tester,
+        () => control('direct-edit-pem').evaluate().isNotEmpty,
+      );
       await tap(tester, 'direct-edit-pem');
       await until(
         tester,
@@ -826,17 +863,21 @@ Future<void> runEncryptedDirectSshUi(
   }
 
   final passphrase = control('direct-passphrase');
-  final android = platform == 'android-api35-emulator';
-  final ios = platform == 'ios-simulator';
-  Future<void> fillEncryptedCredentials({String? incorrectPassphrase}) async {
-    await tap(tester, 'direct-auth-key');
-    await pasteKey();
+  Future<void> fillPassphrase(String value) async {
+    if (android) await tap(tester, 'direct-passphrase');
     await enterEncryptedPassphrase(
       tester,
       passphrase,
-      incorrectPassphrase ?? config['passphrase'] as String,
+      value,
       finishIosEditing: ios,
     );
+    if (android) await verifyAndroidEncryptedPemCollapsed(tester);
+  }
+
+  Future<void> fillEncryptedCredentials({String? incorrectPassphrase}) async {
+    await tap(tester, 'direct-auth-key');
+    await pasteKey();
+    await fillPassphrase(incorrectPassphrase ?? config['passphrase'] as String);
     await tester.pump();
   }
 
@@ -921,12 +962,7 @@ Future<void> runEncryptedDirectSshUi(
   } else {
     await pasteKey();
     if (ios) step('encrypted_connect');
-    await enterEncryptedPassphrase(
-      tester,
-      passphrase,
-      config['passphrase'] as String,
-      finishIosEditing: ios,
-    );
+    await fillPassphrase(config['passphrase'] as String);
   }
   config.remove('privateKey');
   config.remove('passphrase');
@@ -1065,6 +1101,11 @@ Future<void> runEncryptedDirectSshUi(
     'fingerprintMatched': true,
     'explicitTrustRequired': true,
     'privateKeyPasted': true,
+    if (android) ...{
+      'pemCollapsedBeforeReopen': true,
+      'pemReopenedFocusedAndExact': true,
+      'pemRecollapsedAfterBlur': true,
+    },
     'passphraseObscured': true,
     if (rotating)
       ..._rotationTrustEvidence

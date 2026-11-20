@@ -40,6 +40,7 @@ jobs:
           "$RUNNER_TEMP/direct-ssh-python/bin/pip" install -r validation/pairing/requirements.txt 'paramiko==4.0.0' 'pillow==12.2.0'
           HERDR_REQUIRE_PARAMIKO=1 "$RUNNER_TEMP/direct-ssh-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_direct_ssh_android.py' -v
           HERDR_REQUIRE_PARAMIKO=1 "$RUNNER_TEMP/direct-ssh-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_direct_ssh_rotation_fixture.py' -v
+          "$RUNNER_TEMP/direct-ssh-python/bin/python" -m unittest discover -s validation/remote-harness -p 'test_with_android_emulator.py' -v
       - name: Prepare pinned Flutter and Android build tools
         run: |
           python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/direct-ssh-sdk"
@@ -61,13 +62,24 @@ jobs:
           flutter pub get
           python3 "$GITHUB_WORKSPACE/validation/flutter/tool/android_device_test.py" verify-lock --destination "$RUNNER_TEMP/direct-ssh-app"
           flutter analyze lib integration_test test/android_connect_diagnostic_test.dart
-          flutter test --no-pub test/android_connect_diagnostic_test.dart
+          cp integration_test/direct_ssh_tap_test.dart test/direct_ssh_tap_test.dart
+          flutter test --no-pub test/android_connect_diagnostic_test.dart test/direct_ssh_tap_test.dart
       - name: Prebuild the encrypted-key integration target without a device
         if: ${{ inputs.auth_case == 'encrypted-key' || inputs.auth_case == 'encrypted-key-rotation' }}
         run: |
           export PATH="$RUNNER_TEMP/direct-ssh-sdk/bin:$PATH"
           cd "$RUNNER_TEMP/direct-ssh-app"
           flutter build apk --debug --target-platform android-x64 --no-pub -t integration_test/android_direct_ssh_test.dart
+      - name: Install the pinned emulator in the job's private directory
+        run: |
+          archive="$RUNNER_TEMP/direct-ssh-emulator-16740729.zip"
+          curl --fail --location --silent --show-error --max-time 600 \
+            'https://redirector.gvt1.com/edgedl/android/repository/emulator-linux_x64-16740729.zip' --output "$archive"
+          test "$(stat -c %s "$archive")" = 349658551
+          printf '%s  %s\n' cbc7c3cfb83220b8a0f9c513fdab557712e74d339ec19ddffa43f23350ae9bdd "$archive" | sha256sum --check --status
+          mkdir "$RUNNER_TEMP/direct-ssh-emulator" "$RUNNER_TEMP/direct-ssh-avd"
+          unzip -q "$archive" -d "$RUNNER_TEMP/direct-ssh-emulator"
+          printf '%s\n' cbc7c3cfb83220b8a0f9c513fdab557712e74d339ec19ddffa43f23350ae9bdd > "$RUNNER_TEMP/direct-ssh-avd/emulator-archive-sha256.txt"
       - name: Drive homepage, host key rotation, ordinary SSH input and disconnect on an owned API35 AVD
         env:
           AUTH_CASE: ${{ inputs.auth_case }}
@@ -79,6 +91,9 @@ jobs:
             encrypted-key-rotation) set -- --encrypted-key-rotation ;;
             *) echo 'unsupported SSH acceptance case' >&2; exit 1 ;;
           esac
+          AVD_EMULATOR_LAUNCHER="$RUNNER_TEMP/direct-ssh-emulator/emulator/emulator" \
+          AVD_EXPECTED_EMULATOR_VERSION='Android emulator version 37.2.13.0 (build_id 16740729) (CL:N/A)' \
+          AVD_EXPECTED_IMAGE_REVISION=9 \
           AVD_EVIDENCE_DIR="$RUNNER_TEMP/direct-ssh-avd" bash validation/remote-harness/with-android-emulator.sh \
             "$RUNNER_TEMP/direct-ssh-python/bin/python" validation/remote-harness/flutter_direct_ssh_android.py \
             --project "$RUNNER_TEMP/direct-ssh-app" --output "$RUNNER_TEMP/direct-ssh-public" "$@"

@@ -669,6 +669,8 @@ def run(args, env):
 ENCRYPTED_PUBLIC_FIELDS = {
     'schemaVersion', 'platform', 'homepageEntry', 'fingerprintMatched',
     'explicitTrustRequired', 'privateKeyPasted', 'passphraseObscured',
+    'pemCollapsedBeforeReopen', 'pemReopenedFocusedAndExact',
+    'pemRecollapsedAfterBlur',
     'wrongPassphraseRejectedLocally', 'realTerminalView', 'normalTextInputCommit',
     'remoteEchoVisible', 'disconnectUiConfirmed', 'credentialsCleared',
     'privateInputRemoved', 'clipboardCleared', 'physicalImeVerified',

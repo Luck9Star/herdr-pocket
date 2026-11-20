@@ -326,6 +326,68 @@ return {originalTargetsActive, selectedB, directXterm, bReceiptMatched, aFocusBu
 """
 
 
+INPUT_FOCUS_CLICK_SCRIPT = r"""
+const [action, panels, targets, side, selected, kind] = arguments;
+const events = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
+if (action === 'receipt') {
+    const record = window.__s06InputFocusClick;
+    if (!record) return null;
+    for (const event of events) window.removeEventListener(event, record.observe, true);
+    delete window.__s06InputFocusClick;
+    return record.receipt;
+}
+const one = (root, selector) => {
+    const matches = root?.querySelectorAll(selector);
+    return matches?.length === 1 ? matches[0] : null;
+};
+const visible = element => !!element && !element.closest('[hidden]') &&
+    !!element.getClientRects().length && getComputedStyle(element).visibility === 'visible';
+const page = one(document, '#remote-page');
+const root = one(page, '#tab-workspace #view-content[data-split="2"]');
+const views = panels.map(selector => one(root, ':scope > ' + selector));
+const next = action === 'confirm' && kind === 'select' ? side : selected;
+if (document.hidden || !document.hasFocus() || document.querySelector('dialog[open]') ||
+    !visible(root) || views[0] === views[1] ||
+    root.querySelectorAll(':scope > [data-role="workbench-panel"]').length !== 2 ||
+    !views.every((view, index) => visible(view) && view.dataset.focus === String(index === next) &&
+        one(view, ':scope > .panel-head + p')?.textContent.split(' · ').slice(-2)
+            .join(' · ') === targets[index].join(' · ') &&
+        one(view, ':scope > .tab-connection-actions')?.dataset.state === 'active')) return null;
+
+const view = views[side];
+const host = one(view, ':scope > .term-scroll > .terminal-host');
+if (action === 'confirm') {
+    if (kind === 'select') return true;
+    const editor = one(host, 'textarea.xterm-helper-textarea');
+    return visible(host) && !!editor && document.activeElement === editor &&
+        editor.readOnly && editor.getAttribute('inputmode') === 'none';
+}
+if (window.__s06InputFocusClick) return null;
+const control = kind === 'select' ? one(view, ':scope > .panel-head > button[data-role="panel-focus"]') :
+    one(host, '.xterm-screen');
+if (!visible(control) || (kind === 'select' && (control.disabled ||
+    control.getAttribute('aria-pressed') !== 'false' || control.textContent.trim() !== '设为输入焦点'))) return null;
+control.scrollIntoView({block: 'center', inline: 'center', behavior: 'instant'});
+const r = control.getClientRects()[0];
+const x = Math.floor((Math.max(0, r.left) + Math.min(innerWidth, r.right)) / 2);
+const y = Math.floor((Math.max(0, r.top) + Math.min(innerHeight, r.bottom)) / 2);
+if (!control.isConnected || !control.contains(document.elementFromPoint(x, y))) return null;
+
+// Observe from the same document, without handling any native event or changing focus.
+const receipt = {pointerSeen: false, clicks: 0, trustedClick: false};
+const observe = event => {
+    receipt.pointerSeen = true;
+    if (event.type === 'click') {
+        receipt.clicks++;
+        receipt.trustedClick = event.isTrusted && control.contains(event.target);
+    }
+};
+for (const event of events) window.addEventListener(event, observe, {capture: true, passive: true});
+window.__s06InputFocusClick = {receipt, observe};
+return control;
+"""
+
+
 DIRECT_RESIZE_SCRIPT = r"""
 const [panels, targets, action] = arguments;
 const one = (root, selector) => {
@@ -784,6 +846,38 @@ class SplitDriver:
             self.driver.click(panel + ' [data-role="panel-focus"]')
         wait_for(lambda: self.read('return document.querySelector(arguments[0])?.dataset.focus;', panel) == 'true',
                  's06_tauri_focus_not_selected')
+
+    def input_focus_click(self, panels, targets, side, selected, kind):
+        def observe(action):
+            return self.read(INPUT_FOCUS_CLICK_SCRIPT, action, panels, targets, side, selected, kind)
+
+        for attempt in range(2):
+            element = wait_for(lambda: observe('prepare'), 's06_tauri_input_control_not_ready')
+            key = element.get('element-6066-11e4-a52e-4f735466cecf') if isinstance(element, dict) else None
+            if not isinstance(key, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', key):
+                raise GuiFailure('s06_tauri_input_control_reference_invalid')
+            try:
+                self.driver.call('POST', self.driver.session + '/element/' + key + '/click', {})
+            except (GuiFailure, OSError) as error:
+                try:
+                    receipt = observe('receipt')
+                except (GuiFailure, OSError, ValueError):
+                    receipt = None
+                # A W3C stale element reference rejects the node before pointer
+                # dispatch. Also require live evidence that this document saw no event.
+                if (attempt == 0 and isinstance(error, GuiFailure) and
+                        str(error) == 'webdriver_click_stale_element_reference' and isinstance(receipt, dict) and
+                        receipt.get('pointerSeen') is False and type(receipt.get('clicks')) is int and
+                        receipt['clicks'] == 0 and receipt.get('trustedClick') is False):
+                    continue
+                raise
+            receipt = observe('receipt')
+            if (not isinstance(receipt, dict) or receipt.get('pointerSeen') is not True or
+                    type(receipt.get('clicks')) is not int or receipt['clicks'] != 1 or
+                    receipt.get('trustedClick') is not True):
+                raise GuiFailure('s06_tauri_input_click_unconfirmed')
+            wait_for(lambda: observe('confirm') is True, 's06_tauri_input_focus_not_confirmed')
+            return
 
     def layout_evidence(self, panel, side, phase):
         if self.output is None:
@@ -1574,13 +1668,13 @@ def exercise(args, root, env, configs, approvals, expected, *, import_replace=Fa
                         {'observation': escape_observation, 'originalPeersPreserved': True, 'noExtraInputBytes': True},
                         sort_keys=True))
                     stage = 'input_focus'
-                ui.focus(panels[0])
-                driver.click(panels[1] + ' .terminal-host')
+                ui.input_focus_click(panels, targets, 0, 1, 'select')
+                ui.input_focus_click(panels, targets, 1, 0, 'terminal')
                 ui.keyboard('x')  # Late key on the old panel, without selecting its header.
                 time.sleep(.25)
                 check_bytes((b'', expected[1]))
                 if guarded:
-                    ui.focus(panels[0]); ui.named('启用草稿输入', panels[0] + ' .tab-mode-actions')
+                    ui.named('启用草稿输入', panels[0] + ' .tab-mode-actions')
                     wait_for(lambda: ui.read('return document.querySelector(arguments[0]+" .tab-mobile-controls")?.dataset.mode;', panels[0]) == 'draft',
                              's06_tauri_draft_mode_not_ready')
                     driver.fill(panels[0] + ' .tab-draft-field', 'Pocket测')
@@ -1590,11 +1684,11 @@ def exercise(args, root, env, configs, approvals, expected, *, import_replace=Fa
                         raise GuiFailure('s06_tauri_draft_preview_mismatch')
                     driver.call('POST', driver.session + '/alert/accept', {})
                     wait_for(lambda: bounded_wire(root / 'received.bin', 4096) == expected[0], 's06_tauri_draft_input_missing')
-                ui.focus(panels[1])
+                ui.input_focus_click(panels, targets, 1, 0, 'select')
                 if guarded and ui.read('return document.querySelector(arguments[0]+" .tab-mobile-controls")?.dataset.mode;', panels[1]) != 'observe':
                     raise GuiFailure('s06_tauri_input_mode_restored_automatically')
-                driver.click(panels[0] + ' .terminal-host'); ui.keyboard('y')
-                driver.click(panels[1] + ' .terminal-host'); ui.keyboard('z')
+                ui.input_focus_click(panels, targets, 0, 1, 'terminal'); ui.keyboard('y')
+                ui.input_focus_click(panels, targets, 1, 1, 'terminal'); ui.keyboard('z')
                 time.sleep(.25); check_bytes(expected)
                 resize_evidence = None
                 if not guarded:

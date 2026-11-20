@@ -17,7 +17,7 @@
 | Flutter Linux ARM64 原生桥 | `0d5e74d2` 的生成 GTK runner 在隔离 Ubuntu ARM64 用 CMake 3.28.3、Ninja、Flutter 3.47.9 与真实 Rust 静态库链接。私有 GNOME 服务上验证跨进程原句柄复用、签名和锁定后的拒绝，目录摘要保持一致。 | 临时入口操作实际原生通道。早轮构建用来证明桥接，不给最终软件包或完整首页配对与 SSH 作结论。 |
 | 共享 Secret Service，`2a89f0e9` | Linux ARM64、Rust 1.96.0。专用 GNOME Keyring 主程序 2 项通过，内部再启动 1 个子进程用原句柄验签。真实测试还验证客户端命名空间、默认别名切换后查找与删除、临时集合拒绝新建、锁定时读取和删除失败。无服务另跑 4 项库测试。 | 子进程是共享库验签见证，已包含在私有服务测试内。GNOME 服务和总线均为一次性。四份源码摘要与下方回执可逐一复核。 |
 | 客户端回归 | `e5c3baf2` 的 Flutter 22 项通过，Tauri Linux 的 JS 套件 734 项通过，Flutter 打包脚本 11 项通过，Debian 夹具两项通过。另在 Linux ARM64 执行 Flutter 的 C++ 目录文件和进程锁测试，两项通过。 | Widget／JS 使用模拟通道和公开夹具。C++ 测试验证子进程竞争同一目录文件锁。Linux 两壳的许可与修改声明已用实际 CMake 安装和 Tauri Debian 打包器做字节比对，使用最小夹具。完整 Flutter 产品重启、签名软件包和桌面布局另验。 |
-| Tauri ARM64 R8 定位记录 | 产品 `59892bac`，驱动 `4b15cb63`。正常、锁定、服务消失三份原报告已按归档 SHA-256 回查。本机包装器调用仅供 CI 的入口，填入仿形 GitHub 运行信息。报告宣称 x86_64，容器实际为 ARM64。 | 保留原脱敏记录，三轮只供定位。正常双进程以本页官方单主机作业为准，锁定与服务消失的桌面双进程正式负例待验。 |
+| Tauri ARM64 R8 定位记录 | 产品 `59892bac`，驱动 `4b15cb63`。正常、锁定、服务消失三份原报告已按归档 SHA-256 回查。本机包装器调用仅供 CI 的入口，填入仿形 GitHub 运行信息。报告宣称 x86_64，容器实际为 ARM64。 | 保留原脱敏记录，三轮只供定位。正式正常双进程见 R1，锁定与服务停止的正式拒绝见 R3。 |
 
 [GNOME 脱敏回执](private-service-receipt.json) · [Tauri R8 脱敏回执](tauri-stock-restart-receipt.json) · [随包署名](../../../THIRD_PARTY_NOTICES.md) · [归档校验和](SHA256SUMS)
 
@@ -75,6 +75,31 @@ Ubuntu 24.04 x86_64，两端私有 Secret Service 的两把设备公钥均与各
 ### Linux 测试包定向复验
 
 Flutter 实验候选通过 Ubuntu 补丁与锁定检查，安全测试 696 通过、43 跳过，渲染回归 10 通过，随后生成 Linux debug tar。Tauri 生成 Linux amd64 Debian 测试包。两个包内的两份许可与 `UPSTREAM` 均与同一源码逐字节一致。两份外侧 `shared/` 和 Tauri 浏览器预览的 59 个共享资产均与源码一致，且无迁走的校验脚本、`__pycache__` 或 `.pyc`。R2 只复验 Linux 构建产物，R1 记录原五端矩阵。 [Flutter 候选 Linux job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44677046405/job/136092777380) · [Flutter 候选检查](https://github.com/Luck9Star/herdr-pocket/actions/runs/44677046405/job/136091246849) · [Tauri Linux job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44677046240/job/136091246844)
+
+### Tauri guarded S06 夹具
+
+**未验证 — 环境受限。** `1abdfe44` 的受保护输入作业没有可用依赖缓存。固定版本的 `vancluever/translate-c` 在 Codeberg 五次取件超时，预取达到 8 分钟上限，随后原子输入保护及服务端夹具构建达到 40 分钟上限。GUI job 跳过，运行没有上传工件，当前版本的受保护 S06 未执行。旧夹具绑定 `c5aa64a0`，入口逐次检查工件 `sourceSHA` 和当前源码一致，未复用旧构建。 [夹具 job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44677046426/job/136091247764) · [跳过的 GUI job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44677046426/job/136108890815) · [历史夹具](https://github.com/Luck9Star/herdr-pocket/actions/runs/44583986909/artifacts/14561610690) · [脱敏回执](guarded-s06-r2-blocker.json)
+
+## 官方运行 R3
+
+三次运行均采用 `ab54797cd86608f7a1e06f24faa4cf4057a45a00`，均为首次尝试。五份 ZIP 的官方 SHA-256、CRC、全部内附校验表与清单已核。运行环境为 Ubuntu 24.04 x86_64、专用 GNOME Secret Service、普通桌面应用及隔离回环 OpenSSH。 [R3 脱敏回执](official-r3-receipt.json) · [归档校验和](SHA256SUMS)
+
+### 锁定与服务停止
+
+四个拒绝作业均通过。第一进程在隔离服务可用时经用户流程配对，独立比对密钥环公钥与 SSH 认证，再确认连接已关闭和第一进程退出。第二个独立进程打开同一已存主机，出现对应提示且连接入口禁用。原主机目录、密钥句柄和远端授权保留，复查原公钥一致，密钥环无写入。对端仅一次认证成功、终端输入 0 字节。随后撤销夹具授权，清理自有进程与密钥。 [锁定运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/44679366150) · [无服务运行](https://github.com/Luck9Star/herdr-pocket/actions/runs/44679366271)
+
+| 场景 | Flutter 原生 GTK / AT-SPI | Tauri 原生 GTK / WebDriver |
+| --- | --- | --- |
+| 锁定默认集合 | [Flutter job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44679366150/job/136098811515) · [提示原图](flutter-r3-locked-notice.png) | [Tauri job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44679366150/job/136098811317) · 界面读回 |
+| 停止专用 Secret Service | [Flutter job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44679366271/job/136098812479) · [提示原图](flutter-r3-unavailable-notice.png) | [Tauri job](https://github.com/Luck9Star/herdr-pocket/actions/runs/44679366271/job/136098812630) · 界面读回 |
+
+Flutter 的两张提示与 [连接禁用原图](flutter-r3-connect-disabled.png) 均为 1280 × 720 的 X11 窗口截图，画面内只有回环夹具资料和公开指纹。两模式的连接禁用图字节一致，归档一份。Tauri 作业由实际 WebDriver 点击与读回控件，工件没有截图。
+
+### Flutter 解锁对照的取像断点
+
+解锁对照停在第二进程的 `stock_flutter_observation_pixels_missing`。作业已报告同钥 SSH 认证及清理。第二进程诊断共采样 62 次，选定窗格、会话标题、终端标题及观察模式均可见，但 OCR 未取得精确标记和计数。工件只保留原始 672 × 124 裁片 [第二进程裁片](flutter-r3-peer-2-terminal-crop.png)，未留第二进程完整窗口，也未完成重启验收。 [解锁作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44679366114/job/136098811743) · [原始工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44679366114/artifacts/14603289040)
+
+用两种拒绝工件的第一进程原图构造独立对照。将图像转换成 RGB 后放入同尺寸白底，右移 112 像素、上移 100 像素。旧算法在无服务场景的第二张图上返回与 R3 失败报告一致的裁剪框 `[416,429,1088,553]`。`5ca40f88` 的算法在四张平移样本均得到完整 672 × 360 区域 `[416,235,1088,595]`。独立 Ubuntu OCR 读回锁定样本推进 95→99、无服务样本推进 96→101。此处的源图来自第一进程，平移用于复现裁剪缺陷。 [裁剪修正](https://github.com/Luck9Star/herdr-pocket/commit/5ca40f88cf48bfc02001250c8e29d7cb79619a3d) · [对照图源、位移与范围](official-r3-receipt.json)
 
 ## 复跑与回滚依据
 

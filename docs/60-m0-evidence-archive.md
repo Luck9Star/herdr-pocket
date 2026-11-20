@@ -216,5 +216,5 @@ Linux 历史探针曾禁用 Flutter 设备配对，Tauri 则使用明确标示�
 2. **后续 CI sshd 版本**：四个已核查作业的版本见[批次记录](#ci-sshd-批次记录)。APT 未锁定版本，新增批次须以届时日志及可用的运行 manifest 为准。
 3. **native/tool 全目录 unittest discover**（`-p 'test_*.py'`）：CI 只按单文件形态跑（android-network-experiment.yml:140,336）；全目录形式未核实，文中已标注为同约定外推。
 4. **docs/17 的核查日期**：文内无显式日期字段，取 git 最后提交日 2026-11-07。
-5. **Linux Secret Service 桌面覆盖**已有独立 GNOME Keyring、无服务拒绝对照、两壳官方单主机配对 SSH 与 Linux 测试包声明比对。双主机 S06 R1 两端均未完成，R2 两端只读回环通过。桌面双进程拒绝、其他密钥环与实际跨网待验。 [Linux 本批证据](evidence/linux-pairing-secret-service-20261120/README.md)
+5. **Linux Secret Service 桌面覆盖**已有独立 GNOME Keyring、两壳官方单主机和 S06 双主机只读回环、Linux 测试包声明比对。两壳桌面第二进程在锁定、服务停止时均拒绝连接并保留原身份。其他密钥环与实际跨网待验。 [Linux 本批证据](evidence/linux-pairing-secret-service-20261120/README.md)
 6. **Mac17,3 / macOS 26.6.2**：为 2026-10-30 批次记录（docs/09:26），当前 runner 版本未复核。

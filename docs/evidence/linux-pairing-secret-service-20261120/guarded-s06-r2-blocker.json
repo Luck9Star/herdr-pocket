@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "1abdfe4425b667dbb23311870338df9b299d91fb",
+  "run": 44677046426,
+  "attempt": 1,
+  "runConclusion": "failure",
+  "fixtureJob": 136091247764,
+  "guiJob": 136108890815,
+  "guiConclusion": "skipped",
+  "artifactCount": 0,
+  "cacheHit": false,
+  "prefetch": {
+    "dependency": "vancluever/translate-c",
+    "provider": "Codeberg",
+    "fetchAttemptsObserved": 5,
+    "timeoutMinutes": 8
+  },
+  "fixtureBuild": {
+    "step": "Check atomic input guard and build the fixture server",
+    "startUtc": "2026-11-20T04:59:12Z",
+    "endUtc": "2026-11-20T05:39:25Z",
+    "timeoutMinutes": 40
+  },
+  "historicalFixture": {
+    "run": 44583986909,
+    "artifact": 14561610690,
+    "artifactZipSha256": "2a3de23253710f0ba0625369dc41c4380c751c7ec17abf8dc5bed5aa24d886e9",
+    "sourceSHA": "c5aa64a0c9703d0494f5694ec0028018f7f2a0b8",
+    "usedForThisRun": false
+  },
+  "coverage": "not_verified_environment_blocked"
+}

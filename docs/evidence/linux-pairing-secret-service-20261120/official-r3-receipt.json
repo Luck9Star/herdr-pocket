@@ -1,0 +1,239 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "ab54797cd86608f7a1e06f24faa4cf4057a45a00",
+  "attempt": 1,
+  "environment": "Ubuntu 24.04 x86_64, private GNOME Secret Service and loopback OpenSSH",
+  "denialResults": {
+    "locked": {
+      "tauri": {
+        "run": 44679366150,
+        "job": 136098811317,
+        "artifact": 14604080874,
+        "zipSha256": "5f3201ef2970c1d4ec4f52c53f864f6ef4bdbb98d19b2fd9b6aa0b3a1f94326d",
+        "checkedInnerSHA256SUMSEntries": 3,
+        "uiEvidence": "native GTK/WebView WebDriver, no screenshot"
+      },
+      "flutter": {
+        "run": 44679366150,
+        "job": 136098811515,
+        "artifact": 14603753425,
+        "zipSha256": "6835c8dd6556bfc689ef0ee8e98281c25393754e2c70343b2b195101190e4120",
+        "checkedInnerSHA256SUMSEntries": 8,
+        "uiEvidence": "original X11 window captures and normal GTK app driven by AT-SPI",
+        "nativeBundleExecutableSha256": "239e5f4aabf0509953c2ebb777c8ef850408ad28945b29b4e3cd03ef2c517f46",
+        "publishedConnectDisabledPng": "flutter-r3-connect-disabled.png"
+      }
+    },
+    "unavailable": {
+      "tauri": {
+        "run": 44679366271,
+        "job": 136098812630,
+        "artifact": 14604027748,
+        "zipSha256": "90b50eb0ede96b20142fc775a9fa32c3687b8ce948ae0d1f253993995e3f0280",
+        "checkedInnerSHA256SUMSEntries": 3,
+        "uiEvidence": "native GTK/WebView WebDriver, no screenshot"
+      },
+      "flutter": {
+        "run": 44679366271,
+        "job": 136098812479,
+        "artifact": 14603413602,
+        "zipSha256": "3b4e601690b2b94cd8c801ce769e1d5072ab080649ce2e1ec7ba6c5e44a34873",
+        "checkedInnerSHA256SUMSEntries": 8,
+        "uiEvidence": "original X11 window captures and normal GTK app driven by AT-SPI",
+        "nativeBundleExecutableSha256": "239e5f4aabf0509953c2ebb777c8ef850408ad28945b29b4e3cd03ef2c517f46",
+        "publishedConnectDisabledPng": "flutter-r3-connect-disabled.png"
+      }
+    }
+  },
+  "proofVerifiedForEachDenial": {
+    "independentAppProcesses": true,
+    "noticeVisible": true,
+    "connectDisabled": true,
+    "originalHostAndIdentityRetained": true,
+    "authorizationUnchanged": true,
+    "exactPeerAuthentications": 1,
+    "firstPeerClosed": true,
+    "noKeyringWrites": true,
+    "receivedInputBytes": 0
+  },
+  "publicKeyVerifiedForEachDenial": {
+    "publicKeysMatched": 1,
+    "sameKeyAuthenticated": true
+  },
+  "cleanupVerifiedForAllFive": {
+    "ownedProcessesStopped": true,
+    "ephemeralKeysRemoved": true,
+    "userAuthorizationFilesTouched": false,
+    "rawLogsUploaded": false
+  },
+  "unlockedFlutterControl": {
+    "run": 44679366114,
+    "job": 136098811743,
+    "artifact": 14603289040,
+    "zipSha256": "700e23584ac6a33a5ef730c57e2fa2380cc964882e961d0868da62e2f631eca6",
+    "checkedInnerSHA256SUMSEntries": 6,
+    "errorCode": "stock_flutter_observation_pixels_missing",
+    "diagnostic": {
+      "schemaVersion": 1,
+      "peer": 2,
+      "samples": 62,
+      "selectedPaneVisible": true,
+      "sessionTitleVisible": true,
+      "terminalHeaderVisible": true,
+      "readOnlyModeVisible": true,
+      "terminalRegion": [
+        416,
+        429,
+        1088,
+        553
+      ],
+      "windowSize": [
+        1280,
+        720
+      ],
+      "exactMarkerSeen": false,
+      "exactTickSeen": false
+    },
+    "archivedPng": "flutter-r3-peer-2-terminal-crop.png",
+    "allCleanupChecksMatched": true,
+    "temporaryAuthorizationAppliedAndRevoked": true,
+    "sameKeyAuthenticationReported": true
+  },
+  "translatedDiagnosticFixture": {
+    "sourcePhase": "first process full window",
+    "fillRgb": [
+      255,
+      255,
+      255
+    ],
+    "translationPixels": [
+      112,
+      -100
+    ],
+    "oldSourceSHA": "ab54797cd86608f7a1e06f24faa4cf4057a45a00",
+    "fixedSourceSHA": "5ca40f88cf48bfc02001250c8e29d7cb79619a3d",
+    "fixtures": {
+      "locked": {
+        "artifact": 14603753425,
+        "images": {
+          "before": {
+            "member": "stock-first-before.png",
+            "memberSha256": "97e4a089f06fdfad230521c18c1189c1820c97ac5d5cdc93f7414fd8ea29d017",
+            "oldRegionAfterTranslation": null,
+            "fixedOriginalRegion": [
+              304,
+              335,
+              976,
+              695
+            ],
+            "fixedRegionAfterTranslation": [
+              416,
+              235,
+              1088,
+              595
+            ]
+          },
+          "after": {
+            "member": "stock-first-after.png",
+            "memberSha256": "00c18d813e71cdaac07428a9376a3ce2f575728ea7818ce16a438f1bbe38f5b4",
+            "oldRegionAfterTranslation": null,
+            "fixedOriginalRegion": [
+              304,
+              335,
+              976,
+              695
+            ],
+            "fixedRegionAfterTranslation": [
+              416,
+              235,
+              1088,
+              595
+            ]
+          }
+        }
+      },
+      "unavailable": {
+        "artifact": 14603413602,
+        "images": {
+          "before": {
+            "member": "stock-first-before.png",
+            "memberSha256": "c5077197eea633f99535e1b7f852428fb3eed612e8bfc2fa4237947baccbc4a2",
+            "oldRegionAfterTranslation": null,
+            "fixedOriginalRegion": [
+              304,
+              335,
+              976,
+              695
+            ],
+            "fixedRegionAfterTranslation": [
+              416,
+              235,
+              1088,
+              595
+            ]
+          },
+          "after": {
+            "member": "stock-first-after.png",
+            "memberSha256": "0b5645f75745d4f626728b8dbb7401e86b7f25f32a08af9407b858b7145f759e",
+            "oldRegionAfterTranslation": [
+              416,
+              429,
+              1088,
+              553
+            ],
+            "fixedOriginalRegion": [
+              304,
+              335,
+              976,
+              695
+            ],
+            "fixedRegionAfterTranslation": [
+              416,
+              235,
+              1088,
+              595
+            ]
+          }
+        }
+      }
+    }
+  },
+  "archivedPngs": {
+    "flutter-r3-peer-2-terminal-crop.png": {
+      "artifact": 14603289040,
+      "member": "stock-peer-2-terminal-crop.png",
+      "sha256": "d4bf28d78acdd6dbdacb33642c320b9e380b7c74900bc4b6f99f82992ca7716b",
+      "pixels": [
+        672,
+        124
+      ]
+    },
+    "flutter-r3-locked-notice.png": {
+      "artifact": 14603753425,
+      "member": "stock-second-denial-notice.png",
+      "sha256": "84901724031e5f68d8944d5e2e067baeba6ab6632df49f963a35826dccfb6f62",
+      "pixels": [
+        1280,
+        720
+      ]
+    },
+    "flutter-r3-connect-disabled.png": {
+      "artifact": 14603753425,
+      "member": "stock-second-denial-connect.png",
+      "sha256": "f06f84c0ae8ffb0437c60896e8c80ee926c7edc97de5288ded68c0169c775fbc",
+      "pixels": [
+        1280,
+        720
+      ]
+    },
+    "flutter-r3-unavailable-notice.png": {
+      "artifact": 14603413602,
+      "member": "stock-second-denial-notice.png",
+      "sha256": "bec0b9e484522fb10f120193889c9998ac67e10bd39748c0469896dd8f8de02a",
+      "pixels": [
+        1280,
+        720
+      ]
+    }
+  }
+}

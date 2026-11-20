@@ -115,12 +115,47 @@ pub fn remote_tab_ack(tab_id:String,client_generation:u64,generation:u64,epoch:u
 
 #[tauri::command]
 pub async fn remote_tab_control(tab_id:String,client_generation:u64,generation:u64,action:String,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<ObservationSnapshot,String> {
-    let control={let f=flow.lock().map_err(|_|"state_unavailable")?;if f.tabs.get(&tab_id).and_then(|s|s.node_binding.as_ref()).is_some_and(|b|f.tabs.is_stopping(b)) {return Err("mobile_node_stop_pending".into());}if action=="resume" && !f.tabs.is_visible(&tab_id,client_generation,generation){return Err("tab_stale".into());}f.tabs.get(&tab_id).filter(|s|s.owner==client_generation && s.generation==generation).and_then(|s|s.control.clone()).ok_or("tab_stale")?};
+    let control={let f=flow.lock().map_err(|_|"state_unavailable")?;if f.tabs.get(&tab_id).and_then(|s|s.node_binding.as_ref()).is_some_and(|b|f.tabs.is_stopping(b)) {return Err("mobile_node_stop_pending".into());}if action=="resume" && !f.tabs.is_visible(&tab_id,client_generation,generation){return Err("tab_stale".into());}f.tabs.get(&tab_id).filter(|s|s.owner==client_generation && s.generation==generation && !s.closing).and_then(|s|s.control.clone()).ok_or("tab_stale")?};
     // Pause retires the input inside the shared control before local handles are dropped.
     let ack=match action.as_str() {"pause"=>control.pause(),"resume"=>control.resume(),_=>return Err("invalid_control".into())};
-    let ack=match ack {Ok(ack)=>ack,Err(error)=>{flow.lock().map_err(|_|"state_unavailable")?.tabs.cancel(&tab_id,client_generation,generation);return Err(error.into());}};
-    if action=="pause" {let mut f=flow.lock().map_err(|_|"state_unavailable")?;if f.tabs.clear_visible(&tab_id,client_generation,generation) {if let Some(s)=f.tabs.get_mut(&tab_id).filter(|s|s.owner==client_generation && s.generation==generation) {s.input.take();s.ack.take();}}}
+    let ack=match ack {Ok(ack)=>ack,Err(error)=>{
+        let mut f=flow.lock().map_err(|_|"state_unavailable")?;
+        if !f.tabs.get(&tab_id).is_some_and(|s|s.owner==client_generation && s.generation==generation && s.closing) {
+            f.tabs.cancel(&tab_id,client_generation,generation);
+        }
+        return Err(error.into());
+    }};
+    if action=="pause" {let mut f=flow.lock().map_err(|_|"state_unavailable")?;if f.tabs.clear_visible(&tab_id,client_generation,generation) {if let Some(s)=f.tabs.get_mut(&tab_id).filter(|s|!s.closing) {s.input.take();s.ack.take();}}}
     ack.await.map_err(str::to_string)
+}
+
+#[tauri::command]
+pub async fn remote_tab_close(tab_id:String,client_generation:u64,generation:u64,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<(),String> {
+    let control=flow.lock().map_err(|_|"state_unavailable")?.tabs
+        .prepare_close(&tab_id,client_generation,generation).map_err(str::to_string)?;
+    let Some(control)=control else {return Ok(());};
+    // The control's state callback may take the flow lock.
+    control.stop_gracefully();
+    let target=(tab_id,client_generation,generation);
+    let settled=tokio::time::timeout(std::time::Duration::from_secs(12),async {
+        loop {
+            if flow.lock().map_err(|_|"state_unavailable")?.tabs.stop_settled(std::slice::from_ref(&target)) {
+                return Ok::<(),&str>(());
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    }).await;
+    match settled {
+        Ok(Ok(())) if control.graceful_peer_eof()=>Ok(()),
+        Ok(Ok(()))=>Err("tab_close_unconfirmed".into()),
+        Ok(Err(error))=>Err(error.into()),
+        Err(_)=>{
+            // Keep the old slot pinned to its task even after issuing the
+            // fallback. Timing out only proves the command's local deadline.
+            flow.lock().map_err(|_|"state_unavailable")?.tabs.cancel(&target.0,target.1,target.2);
+            Err("tab_close_unconfirmed".into())
+        }
+    }
 }
 
 // Review focus permits only explicit observation-mode journal confirmation.

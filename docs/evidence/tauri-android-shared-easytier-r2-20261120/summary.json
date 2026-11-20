@@ -1,0 +1,234 @@
+{
+  "schemaVersion": 1,
+  "scope": {
+    "platform": "Android API 35 x86_64 emulator",
+    "application": "Tauri normal APK with native EasyTier",
+    "network": "two controlled EasyTier peers with independent OpenSSH/herdr",
+    "physicalDevice": false,
+    "crossNetworkVerified": false,
+    "interactiveInputExercised": false
+  },
+  "runs": {
+    "r1": {
+      "runId": 44644770400,
+      "deviceJobId": 135987829934,
+      "artifactId": 14589520203,
+      "artifactExpiresAtUtc": "2026-12-04T00:30:28Z",
+      "zip": "r1-actions-14589520203.zip",
+      "zipSha256": "b2175d9f8840348b5b59d58ef229d3cd7aef769b219f007481665e774445b2df",
+      "memberSha256": {
+        "tauri-dual-avd/lifecycle.txt": "110889bf8fe00f4b66566469ab56cf0a5fcd6bca5dc3567774a6fb8ea87b967c",
+        "tauri-dual-result/result.json": "4b12aa6d8ff8a8121c102071a4710d2345eb311121ed40002f84af6d33b82906"
+      },
+      "sourceSHA": "c71ae7ef81afcb486cb7a39bc8ba54b06c27bc46",
+      "apkSourceSHA": "c71ae7ef81afcb486cb7a39bc8ba54b06c27bc46",
+      "nativeSourceSHA": "547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8",
+      "hostSourceSHA": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
+      "normalApkSha256": "fa02268fb25f03b877627e83e5524fad52d9f94398453ed55f1aabc0987cbb8f",
+      "installedApkMatched": true,
+      "status": "failed",
+      "errorCode": "dual_shared_peer_still_active",
+      "lastStage": "shared_stop_node",
+      "approvedSshSessionsPerPeer": 1,
+      "overlayStreamsPerPeer": 1,
+      "loopbackTcpConnectionsPerPeer": 1,
+      "capturedInputBytesPerPeer": 0,
+      "peerCheckpoints": {
+        "both_open": {
+          "a": {
+            "active": true,
+            "peerClose": "unconfirmed"
+          },
+          "b": {
+            "active": true,
+            "peerClose": "unconfirmed"
+          }
+        },
+        "after_a_close": {
+          "a": {
+            "active": true,
+            "peerClose": "unconfirmed"
+          },
+          "b": {
+            "active": true,
+            "peerClose": "unconfirmed"
+          }
+        },
+        "b_resumed": {
+          "a": {
+            "active": true,
+            "peerClose": "unconfirmed"
+          },
+          "b": {
+            "active": true,
+            "peerClose": "unconfirmed"
+          }
+        },
+        "after_b_close": {
+          "a": {
+            "active": true,
+            "peerClose": "unconfirmed"
+          },
+          "b": {
+            "active": true,
+            "peerClose": "unconfirmed"
+          }
+        },
+        "after_node_stop": {
+          "a": {
+            "active": true,
+            "peerClose": "unconfirmed"
+          },
+          "b": {
+            "active": true,
+            "peerClose": "unconfirmed"
+          }
+        }
+      },
+      "bExplicitlyResumedSameTab": {
+        "firstTick": 523,
+        "nextTick": 525
+      },
+      "nativeBindingStayedSameUntilExplicitStop": true,
+      "nativeProviderFieldPresent": false,
+      "explicitNodeStop": {
+        "sent": 1,
+        "resolved": 1,
+        "rejected": 0
+      },
+      "relayCheckpoints": {
+        "both_open": {
+          "a": 1,
+          "b": 1
+        },
+        "after_a_close": {
+          "a": 1,
+          "b": 1
+        },
+        "after_b_close": {
+          "a": 1,
+          "b": 1
+        },
+        "after_node_stop": {
+          "a": 0,
+          "b": 0
+        }
+      },
+      "appAndEnvironmentCleanupPassed": true,
+      "ownedSerialAbsentOnAttempt": 1
+    },
+    "r2": {
+      "runId": 44649139908,
+      "deviceJobId": 136002818212,
+      "artifactId": 14590497135,
+      "artifactExpiresAtUtc": "2026-12-04T01:03:56Z",
+      "zip": "r2-actions-14590497135.zip",
+      "zipSha256": "1b50cf854aefad2a91ed2d02f3fd1d47824764d609d57de90d05761837782bd2",
+      "memberSha256": {
+        "tauri-dual-avd/lifecycle.txt": "4382732c658b78c67d310b55b97b392cb5ba40328ced42755e6b6a43514cf003",
+        "tauri-dual-result/result.json": "b97db7800d7c81418057e17dd810c57dc57eb860357d358d1197fc6328495a50"
+      },
+      "sourceSHA": "9916e5a2de80c040cfc656ef4f21280e5a1fb996",
+      "apkSourceSHA": "9916e5a2de80c040cfc656ef4f21280e5a1fb996",
+      "nativeSourceSHA": "547106ea172dfd055c3bf9fdb2f4e2a27c9ff2f8",
+      "hostSourceSHA": "5404adfb3c86f5174edda38f1d0c63c8d81996c5",
+      "normalApkSha256": "365f7f1bdd0a8b00f9987f9e8eedd6ecc4ef05517b9018f1d02f42cbed87dece",
+      "installedApkMatched": true,
+      "status": "passed",
+      "errorCode": null,
+      "lastStage": "complete",
+      "approvedSshSessionsPerPeer": 1,
+      "overlayStreamsPerPeer": 1,
+      "loopbackTcpConnectionsPerPeer": 1,
+      "capturedInputBytesPerPeer": 0,
+      "peerCheckpoints": {
+        "both_open": {
+          "a": {
+            "active": true,
+            "peerClose": "unconfirmed"
+          },
+          "b": {
+            "active": true,
+            "peerClose": "unconfirmed"
+          }
+        },
+        "after_a_close": {
+          "a": {
+            "active": false,
+            "peerClose": "client_disconnect"
+          },
+          "b": {
+            "active": true,
+            "peerClose": "unconfirmed"
+          }
+        },
+        "b_resumed": {
+          "a": {
+            "active": false,
+            "peerClose": "client_disconnect"
+          },
+          "b": {
+            "active": true,
+            "peerClose": "unconfirmed"
+          }
+        },
+        "after_b_close": {
+          "a": {
+            "active": false,
+            "peerClose": "client_disconnect"
+          },
+          "b": {
+            "active": false,
+            "peerClose": "client_disconnect"
+          }
+        },
+        "after_node_stop": {
+          "a": {
+            "active": false,
+            "peerClose": "client_disconnect"
+          },
+          "b": {
+            "active": false,
+            "peerClose": "client_disconnect"
+          }
+        }
+      },
+      "bExplicitlyResumedSameTab": {
+        "firstTick": 580,
+        "nextTick": 581
+      },
+      "nativeBindingStayedSameUntilExplicitStop": true,
+      "nativeProviderFieldPresent": false,
+      "explicitNodeStop": {
+        "sent": 1,
+        "resolved": 1,
+        "rejected": 0
+      },
+      "relayCheckpoints": {
+        "both_open": {
+          "a": 1,
+          "b": 1
+        },
+        "after_a_close": {
+          "a": 1,
+          "b": 1
+        },
+        "after_b_close": {
+          "a": 1,
+          "b": 1
+        },
+        "after_node_stop": {
+          "a": 0,
+          "b": 0
+        }
+      },
+      "appAndEnvironmentCleanupPassed": true,
+      "ownedSerialAbsentOnAttempt": 1
+    }
+  },
+  "macosTwoOpenSsh": {
+    "file": "macos-two-openssh.json",
+    "sha256": "cab073b8a090e151b9e2dfcd7d65a54a71c8a270ddb5e21f03eb91691084615b",
+    "sourceSHA": "9916e5a2de80c040cfc656ef4f21280e5a1fb996"
+  }
+}

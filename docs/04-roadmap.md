@@ -151,7 +151,7 @@ Tailscale、EasyTier 和 ZeroTier 分别推进，共用 M1 的可信连接与输
 - [ ] **M2-01** 手工创建各类型网络配置、接入、身份保存、重启/退出与分层状态提示；敏感配置不进入普通诊断。
   **待验证。** Android 两壳已有 TS/ET 配置与授权后并发，TS normal／QA 启停另经复验。ZeroTier 已有身份托管和 Android ABI 链，实机拨号、重启/退出仍待各组合验证。[双网](67-android-dual-network-startup.md) · [启动层](71-validation-branch-archive.md) · [ZeroTier S1–S4](58-session-handoff-2026-11-09-r2.md)
 - [ ] **M2-02** Host 候选路径引用网络配置，同一配置供多主机复用；停止单个主机不停止共享节点。
-  **Flutter Android 隔离验收通过。** API 35 x86_64 模拟器通过测试转发，以同一 EasyTier 节点连接两个实际 SSH 对端。关闭 A 后，B 在原会话继续显示新帧。两端先后确认 EOF，随后主动停止原节点。Tauri 的八组对照覆盖浏览器界面与模拟 IPC；共享节点上的实际续输、实体设备和真实跨网仍待验证。[Flutter R5](evidence/flutter-android-shared-easytier-r5-20261120/README.md) · [主机绑定](18-mobile-network-profiles.md) · [共享设备审查](55-mobile-shared-network-device.md) · [Tauri 浏览器证据](evidence/tauri-shared-node-20261119/README.md)
+  **Flutter 与 Tauri 均通过 Android 隔离只读验收。** 两壳分别在 API 35 x86_64 模拟器上以同一 EasyTier 节点连接两个实际 SSH 对端。关闭 A 后，Flutter 的 B 继续显示新帧，Tauri 的 B 经显式恢复后在原会话显示新帧。两端依次确认正常断开，随后显式停止原节点并释放转发。共享节点上的实际输入、其他 provider、实体设备和真实跨网仍待分别验证。[Flutter R5](evidence/flutter-android-shared-easytier-r5-20261120/README.md) · [Tauri R2](evidence/tauri-android-shared-easytier-r2-20261120/README.md) · [主机绑定](18-mobile-network-profiles.md) · [共享设备审查](55-mobile-shared-network-device.md)
 - [ ] **M2-03** 仅用已配置/可用网络发起有界连接尝试，待认证配置显示需操作；验证可信主机选择、重叠地址隔离与落败连接清理。
   **待验证。** Linux 封闭配置有失败拨号和跨 provider 反例。同址路由、真实可信主机选择与落败连接清理待逐平台验证。[Linux 正负对照](65-dual-overlay-validation.md)
 - [ ] **M2-04** 验证显式切换、停用配置、节点退出与认证失效；展示受影响主机，恢复前关闭输入，退出后不静默重试。

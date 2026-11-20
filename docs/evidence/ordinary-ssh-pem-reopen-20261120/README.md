@@ -53,7 +53,10 @@ Flutter 在 Android API 35 与 iPhone 11／iOS 26.2 模拟器的加密案直接�
 | Flutter Android 独立加密，`2720e2f5`，第 2 次尝试 | 错口令本地拒绝。当时仅 A 探测，认证、PTY、shell 和收发均为零。第二条 A 连接一次公钥认证、一次 PTY 和 shell，输入 9 字节、累计输出 144 字节。Flutter 画面与 ADB 系统原屏均通过终端 OCR。两条连接均在驱动退出前关闭，凭据、剪贴板与测试资源已清理。 | [作业 136053359719](https://github.com/Luck9Star/herdr-pocket/actions/runs/44664325627/job/136053359719) · [工件 14597538810](https://github.com/Luck9Star/herdr-pocket/actions/runs/44664325627/artifacts/14597538810) |
 | Flutter iOS 独立加密 R4，`9865dafa` | 本作业的普通密码、密码换钥和独立加密三案均通过终端 OCR。独立加密案错口令在本地被拒，第一条 A 探测零认证。第二条 A 连接一次公钥认证、一次 PTY 和 shell，精确输入 9 字节、累计输出 102 字节。主动断开、返回首页并清理，连接均在驱动退出前关闭。 | [作业 136061669086](https://github.com/Luck9Star/herdr-pocket/actions/runs/44667921130/job/136061669086) · [工件 14598134983](https://github.com/Luck9Star/herdr-pocket/actions/runs/44667921130/artifacts/14598134983) |
 | Flutter Android 与 iOS 加密换钥，同源码 `9865dafa` | 两端均观察 A → B → B → B。拒绝 B，取消保留旧信任，重探并显式确认 B 后才认证。前三条零认证、PTY、shell 与收发。两端末条各一次公钥认证、一次 PTY 和 shell，输入 9 字节、累计输出 102 字节。系统原屏通过终端 OCR，主动断开、对端均提前关闭，凭据、剪贴板与测试资源已清理。 | Android [作业 136061803542](https://github.com/Luck9Star/herdr-pocket/actions/runs/44667958941/job/136061803542) · [工件 14599262098](https://github.com/Luck9Star/herdr-pocket/actions/runs/44667958941/artifacts/14599262098)；iOS [作业 136061804279](https://github.com/Luck9Star/herdr-pocket/actions/runs/44667959004/job/136061804279) · [工件 14599441889](https://github.com/Luck9Star/herdr-pocket/actions/runs/44667959004/artifacts/14599441889) |
+| Tauri iOS 原生手填 R15，`9865dafa`，iPhone 17 Pro Max／iOS 26.2 | 两轮均用原生 `typeText`，完整读回 PEM、摘要重开及口令遮罩已有布尔回执。初探与错口令连接均关闭、零认证；第三条两次认证尝试、一次公钥认证成功，一次 PTY 和 shell，输入 9 字节、累计输出 102 字节。终端及目标通过系统原屏 OCR，主动断开、清凭据、返回首页和四项清理通过。普通密码与换钥标为 `not_run`。 | [作业 136061802281](https://github.com/Luck9Star/herdr-pocket/actions/runs/44667958504/job/136061802281) · [工件 14599388404](https://github.com/Luck9Star/herdr-pocket/actions/runs/44667958504/artifacts/14599388404) |
 | Flutter macOS R4，`55edd094` | 系统遮罩、密码 SSH、返回后重开通过。加密案完成四次收起状态核验与两次摘要重开；各阶段均有可命中摘要，未见私钥标头或正文。第二次点击原生口令后，Swift 第 883 行的单次键入读回失败，未完成加密认证。整项 3/4，无截图。 | [作业 136054326156](https://github.com/Luck9Star/herdr-pocket/actions/runs/44665701940/job/136054326156) · [工件 14597913708](https://github.com/Luck9Star/herdr-pocket/actions/runs/44665701940/artifacts/14597913708) |
+
+Tauri R15 的再次收起由同源码驱动和成功作业共同证明。错／对口令两轮都必须点击唯一摘要并逐字读回，再点击口令字段，验证无凭据泄露且摘要重新可用，随后才提交。R14 已真点首页快捷按钮并读回首轮 PEM，但首次失焦止于 `native_encrypted_key_summary_identifier_unproven`，仅一条已关闭探测，零认证。 [R15 同源驱动](https://github.com/Luck9Star/herdr-pocket/blob/9865dafa176fb8030f698ab48487b6e75c77634e/validation/remote-harness/tauri_ios_direct_ssh.swift#L3468-L3520) · [R14 作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44664325392/job/136049823055) · [R14 工件](https://github.com/Luck9Star/herdr-pocket/actions/runs/44664325392/artifacts/14596994437)
 
 Android 两次通过作业使用 Emulator 37.2.13（build 16740729）与 API 35 x86_64 rev 9。两次均记录验收正常结束、独占模拟器序列已移除。手机作业使用模拟器、受控回环和自动化输入。实体手机、物理输入法组字和真实外网未验证。 [作业版本、计数与清理索引](official-device-index.json)
 
@@ -65,8 +68,9 @@ macOS 本机用 Flutter 3.47.9 与可见 AppKit 窗口复现焦点被渲染视�
 | --- | --- |
 | Flutter Android 独立加密／加密换钥 | [独立加密回显](device-receipts/android-ordinary-terminal.png) · [换钥后回显](device-receipts/android-rotation-terminal.png)，均为 1080 × 2340 ADB 系统原屏。 |
 | Flutter iOS 独立加密／加密换钥 | [独立加密回显](device-receipts/ios-ordinary-terminal.png) · [换钥审查](device-receipts/ios-rotation-review.png) · [换钥后回显](device-receipts/ios-rotation-terminal.png)，均为 828 × 1792 模拟器系统原屏。 |
+| Tauri iOS 原生手填 | [空首页快捷入口](device-receipts/ios-tauri-home.png) · [加密认证后回显](device-receipts/ios-tauri-terminal.png)，均为 1320 × 2868 XCUIScreen 原屏。 |
 
-五张归档图经 Vision OCR 与目检，未发现私钥正文或可读口令。iOS 换钥审查图可见公开主机指纹。Android 两张 PNG 保留原字节，三张 iOS 图只移除 EXIF，解码像素与原件逐字节一致。其余图像保留原成员摘要，可按官方工件取回。 [第三批工件索引](official-device-index.json) · [归档文件校验](SHA256SUMS)
+七张归档图经 Vision OCR 与目检，未发现私钥正文或可读口令。iOS 换钥审查图可见公开主机指纹。Android 两张 PNG 保留原字节，Flutter iOS 三张图移除 EXIF，Tauri iOS 两张图移除 EXIF 和 iTXt。解码像素均与原件逐字节一致。其余图像保留原成员摘要，可按官方工件取回。 [第三批工件索引](official-device-index.json) · [归档文件校验](SHA256SUMS)
 
 ## 截图和源码
 

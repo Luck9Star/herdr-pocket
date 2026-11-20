@@ -665,6 +665,226 @@
         "encryptedTargetVisible": true
       }
     },
+    "tauri-ios-manual-encrypted-r14": {
+      "runId": 44664325392,
+      "jobId": 136049823055,
+      "jobConclusion": "failure",
+      "artifactId": 14596994437,
+      "artifactExpiresAt": "2027-02-18T02:56:54Z",
+      "sourceSha": "2720e2f536c69adbed9ce3f91d70e0466114af0d",
+      "zipBytes": 96172,
+      "zipSha256": "cd363257ff44d63728d01231d2c24192111497e14cfd6c96d9749659b18b7dc7",
+      "runAttempt": 1,
+      "manifestStatus": "failed",
+      "manifestFile": "result.json",
+      "manifestSha256": "642f93771617b401211ba01ec243aa4a51fdc61e417d96c76c8ac45a29080be6",
+      "png": {
+        "tauri-manual-key-empty-home.png": {
+          "memberSha256": "ed03b17ff70b69ba3ca731ff598f44c353f504d0f5262da2751dd77654b0301f"
+        }
+      },
+      "lastCompletedStage": "encrypted_key_wrong_pem_verified",
+      "nativeCheckpoint": "encrypted_key_pem_collapse",
+      "nativeFailureCode": "native_encrypted_key_summary_identifier_unproven",
+      "homeEntry": {
+        "member": "ordinaryShortcut",
+        "selection": "buttonRole",
+        "role": "button",
+        "enteredAddPage": false,
+        "enteredSSHForm": true,
+        "route": "directSSH"
+      },
+      "firstPemExact": true,
+      "initialProbe": {
+        "id": 1,
+        "hostKey": "A",
+        "closed": true,
+        "handshakeCompleted": false,
+        "authAccepted": false,
+        "authAttempts": 0,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "sessionClosed": false,
+        "markerReceived": false,
+        "singleMarkerLineExact": false
+      },
+      "cleanup": {
+        "simulatorDeleted": true,
+        "fixturesClosed": true,
+        "privateFilesRemoved": true,
+        "encryptedSecretsCleared": true,
+        "rawLogsUploaded": false
+      }
+    },
+    "tauri-ios-manual-encrypted-r15": {
+      "runId": 44667958504,
+      "jobId": 136061802281,
+      "jobConclusion": "success",
+      "artifactId": 14599388404,
+      "artifactExpiresAt": "2027-02-18T03:28:31Z",
+      "sourceSha": "9865dafa176fb8030f698ab48487b6e75c77634e",
+      "zipBytes": 196268,
+      "zipSha256": "fa124c7654a74978dc4786b4419bba6b526c5cdbd8d9000f99d2f3168be266ea",
+      "runAttempt": 1,
+      "manifestStatus": "passed",
+      "manifestFile": "result.json",
+      "manifestSha256": "dce476913a36aa0ec553fb87ed45c27a23c157daf042ec915d7533193c1f8e4a",
+      "png": {
+        "tauri-manual-key-empty-home.png": {
+          "memberSha256": "ee3d03cd288cf649ee28eb97f8f106f4b7b31a79171ee62b4469621e6718298c",
+          "decodedSizePx": [
+            1320,
+            2868
+          ],
+          "archivePath": "device-receipts/ios-tauri-home.png",
+          "archiveSha256": "eb04777dae9ef262bb9fd4a09f263a5799e52e610f7e177eed114e61f61804ff",
+          "removedPngChunks": [
+            "eXIf",
+            "iTXt"
+          ]
+        },
+        "tauri-manual-key-terminal.png": {
+          "memberSha256": "620e5c9587a8e4fab8d1b7c3d4b6356c05d08576924f679361c95c715ab5a263",
+          "decodedSizePx": [
+            1320,
+            2868
+          ],
+          "archivePath": "device-receipts/ios-tauri-terminal.png",
+          "archiveSha256": "6e16cb13a9754948491d1c1e77dc2bcbae39a16f1d2519a63c709fcd4541ecbd",
+          "removedPngChunks": [
+            "eXIf",
+            "iTXt"
+          ]
+        }
+      },
+      "cases": {
+        "ordinary": "not_run",
+        "keyChange": "not_run",
+        "encryptedKey": "passed"
+      },
+      "lastCompletedStage": "encrypted_key_returned_home",
+      "device": {
+        "credentialEntry": "nativeTypeText",
+        "fingerprintReviewed": true,
+        "wrongPemExact": true,
+        "correctPemExact": true,
+        "wrongPemReopened": true,
+        "correctPemReopened": true,
+        "wrongPassphraseObscured": true,
+        "correctPassphraseObscured": true,
+        "terminalInputReceived": true,
+        "disconnected": true,
+        "credentialsCleared": true,
+        "peerClosedBeforeDriverExit": true,
+        "returnedHome": true,
+        "wrongPassphraseRejected": true,
+        "wrongCredentialsCleared": true
+      },
+      "peer": {
+        "connectionEvents": [
+          {
+            "id": 1,
+            "hostKey": "A",
+            "closed": true,
+            "handshakeCompleted": false,
+            "authAccepted": false,
+            "authAttempts": 0,
+            "authSuccesses": 0,
+            "ptyRequests": 0,
+            "shellRequests": 0,
+            "inputBytes": 0,
+            "outputBytes": 0,
+            "sessionClosed": false,
+            "markerReceived": false,
+            "singleMarkerLineExact": false
+          },
+          {
+            "id": 2,
+            "hostKey": "A",
+            "closed": true,
+            "handshakeCompleted": true,
+            "authAccepted": false,
+            "authAttempts": 0,
+            "authSuccesses": 0,
+            "ptyRequests": 0,
+            "shellRequests": 0,
+            "inputBytes": 0,
+            "outputBytes": 0,
+            "sessionClosed": false,
+            "markerReceived": false,
+            "singleMarkerLineExact": false
+          },
+          {
+            "id": 3,
+            "hostKey": "A",
+            "closed": true,
+            "handshakeCompleted": true,
+            "authAccepted": true,
+            "authAttempts": 2,
+            "authSuccesses": 1,
+            "ptyRequests": 1,
+            "shellRequests": 1,
+            "inputBytes": 9,
+            "outputBytes": 102,
+            "sessionClosed": true,
+            "markerReceived": true,
+            "singleMarkerLineExact": true
+          }
+        ],
+        "connectionsClosed": true
+      },
+      "ocrCriteria": {
+        "memberFile": "tauri-manual-key-terminal-ocr.json",
+        "memberSha256": "6dd08be02b77b2f476e353c33a48b3c06c116705e76293187394da46e226b0af",
+        "device": {
+          "imageSha256": "620e5c9587a8e4fab8d1b7c3d4b6356c05d08576924f679361c95c715ab5a263",
+          "imageSize": [
+            1320,
+            2868
+          ],
+          "ocrEngine": "tesseract 5.5.4",
+          "ocrAttempts": 1,
+          "markerVisible": true,
+          "tokenVisible": true,
+          "proofSequenceVisible": true
+        },
+        "targetVisible": true,
+        "noCredentialsVisible": true
+      },
+      "home": {
+        "systemCapture": "XCUIScreen.main",
+        "peerConnections": 0,
+        "visualTargetReady": true,
+        "buttonFramePt": [
+          40,
+          354,
+          360,
+          48
+        ],
+        "entry": {
+          "member": "ordinaryShortcut",
+          "selection": "buttonRole",
+          "role": "button",
+          "enteredAddPage": false,
+          "enteredSSHForm": true,
+          "route": "directSSH"
+        }
+      },
+      "cleanup": {
+        "simulatorDeleted": true,
+        "fixturesClosed": true,
+        "privateFilesRemoved": true,
+        "encryptedSecretsCleared": true,
+        "rawLogsUploaded": false
+      },
+      "simulator": {
+        "deviceType": "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max",
+        "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-26-2"
+      }
+    },
     "flutter-macos-r4": {
       "runId": 44665701940,
       "jobId": 136054326156,

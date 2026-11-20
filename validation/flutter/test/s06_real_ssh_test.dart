@@ -39,7 +39,13 @@ class SplitDeviceKeys implements DeviceKeys {
 }
 
 void main() {
-  final env = Platform.environment;
+  const native = bool.fromEnvironment('HERDR_LINUX_NATIVE_PAIRING');
+  const exchangePath = String.fromEnvironment('HERDR_LINUX_PAIRING_EXCHANGE');
+  final env = { ...Platform.environment,
+    if (native) ...{
+      'HERDR_S06_DIR': exchangePath, 'HERDR_S06_CONFIG': '$exchangePath/config.json',
+    },
+  };
   final enabled = env.containsKey('HERDR_S06_CONFIG');
   if (enabled) {
     LiveTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
@@ -57,11 +63,12 @@ void main() {
     final guarded = env['HERDR_S06_GUARDED'] == '1';
     final importReplace = env['HERDR_S06_IMPORT_REPLACE'] == '1';
     final captureKey = GlobalKey();
-    final keys = SplitDeviceKeys([for (final name in ['HERDR_S06_KEY_A', 'HERDR_S06_KEY_B'])
+    if (native) expect(Platform.isLinux && NativeDeviceKeys.linuxStore && !guarded && !importReplace, isTrue);
+    final keys = native ? null : SplitDeviceKeys([for (final name in ['HERDR_S06_KEY_A', 'HERDR_S06_KEY_B'])
       File(env[name]!).readAsStringSync()]);
     final journals = [GuiSshMemoryInputJournal(), GuiSshMemoryInputJournal()];
     final adapters = [for (final journal in journals) RemoteReadOnlyAdapter(inputJournal: journal)];
-    final catalog = HostCatalog(storage: MemoryCatalogStorage()), tabs = HostTabs();
+    final catalog = HostCatalog(storage: native ? null : MemoryCatalogStorage()), tabs = HostTabs();
     traceAdapters.addAll(adapters); traceTabs = tabs;
     final tokens = (await tester.runAsync(DesignTokens.load))!;
     final theme = importReplace
@@ -122,6 +129,7 @@ void main() {
       adapterFactory: (profile) => adapters[profile.target['session'] == configs[0]['session'] ? 0 : 1],
       offlineBuilder: (_) => const SizedBox()))));
     await tester.pumpAndSettle();
+    if (native) await until(() => catalog.ready);
     expect(tester.getSize(find.byType(HostCatalogPage)), const Size(1440, 1000));
     final tabIds = <String>[];
     final chooser = find.byKey(const ValueKey('choose-header'));
@@ -149,10 +157,16 @@ void main() {
       pending.renameSync('${exchange.path}/request-$i.json');
       final response = File('${exchange.path}/response-$i.json');
       await until(response.existsSync);
+      if (i == 1) {
+        expect(tabs.find(tabIds.first), isNotNull, reason:'creating B must retain A through the catalog read');
+        expect(adapters.first.evidence.observationPhase, 'paused');
+      }
       final profile = catalog.profiles.singleWhere((p) => p.target['session'] == configs[i]['session']);
       await tester.pageBack(); await tester.pumpAndSettle();
       await tap('host-open-${profile.id}'); await tester.pumpAndSettle();
+      if (native) await until(() => request.evaluate().isNotEmpty);
       await pairing.acceptResponse(tester, jsonDecode(response.readAsStringSync()) as Map<String, dynamic>);
+      if (native) await until(() => find.textContaining('authorized-unverified').evaluate().isNotEmpty);
       await tap('pair-connect'); await tester.pumpAndSettle();
       stage('s06_connect_$i');
       await tap('remote-review'); await tap('remote-connect');
@@ -171,7 +185,20 @@ void main() {
       tabIds.add(tabs.active!.id);
       if (i == 0) { await tap('hosts-board-tab'); await tester.pump(); }
     }
-    expect(keys.creates, 2); expect(keys.signs.every((n) => n > 0), isTrue);
+    if (keys != null) {
+      expect(keys.creates, 2); expect(keys.signs.every((n) => n > 0), isTrue);
+    } else {
+      final reopened = HostCatalog();
+      try {
+        await reopened.load();
+        expect(reopened.ready, isTrue);
+        expect(reopened.profiles.length, 2);
+        for (final profile in reopened.profiles) {
+          final request = profile.pairingRecord['request'] as Map<String,dynamic>;
+          expect(await NativeDeviceKeys().public(profile.pairingRecord['handle'] as String), request['public_key']);
+        }
+      } finally { reopened.dispose(); }
+    }
     expect(configs[0]['paneId'], configs[1]['paneId']);
     expect(adapters[0].inputTarget, isNull); // Hidden A is paused, not reconnected.
     stage('s06_split_resume');
@@ -412,6 +439,7 @@ void main() {
       if (!guarded && !importReplace) 'focusedTabClosedPeerAdvanced': true,
       if (!guarded && !importReplace) 'stockPeersClosedBeforeDriverExit': true,
       if (importReplace) 'replacedTabRetainedAndPeerAdvanced': true,
+      'nativeCatalogAndKeys': native,
       'sides': [for (final adapter in adapters) {'connectionCount': adapter.evidence.connectionCount,
         'frameCount': adapter.evidence.frameCount, 'deltaFrames': adapter.evidence.deltaFrames,
         'inputAccepted': guarded}],

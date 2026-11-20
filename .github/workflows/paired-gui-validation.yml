@@ -2,6 +2,9 @@ name: Paired GUI to isolated SSH
 on:
   workflow_call:
     inputs:
+      linux_keyring:
+        type: boolean
+        default: false
       flutter_only:
         type: boolean
         default: false
@@ -22,13 +25,26 @@ on:
         default: false
   workflow_dispatch:
     inputs:
+      linux_keyring:
+        description: Use the native Linux app and a private Secret Service for reviewed pairing
+        type: boolean
+        default: false
+      linux_flutter_stock_restart:
+        description: Drive only the normal Flutter Linux app through a private-keyring restart
+        type: boolean
+        default: false
+      linux_keyring_denial:
+        description: Check both stock Linux apps after locking or stopping the private Secret Service
+        type: choice
+        options: ['off', locked, unavailable]
+        default: 'off'
       linux_direct_ssh:
         description: Run only Linux ordinary SSH (password selects Tauri)
         type: choice
         options: ['off', password, tauri-key, tauri-key-rotation, flutter-password, flutter-key, flutter-key-rotation]
         default: 'off'
       s06_split:
-        description: Run two real SSH/herdr targets through the Flutter split UI
+        description: Run two real SSH/herdr targets through the chosen desktop split UI
         type: boolean
         default: false
       s06_guarded:
@@ -47,11 +63,11 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: paired-gui-${{ github.ref }}-${{ inputs.input_fixture }}-${{ inputs.s06_split }}-${{ inputs.s06_guarded }}-${{ inputs.s06_route }}-${{ inputs.s06_import_replace }}${{ contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) && format('-linux-direct-{0}', inputs.linux_direct_ssh) || '' }}
+  group: paired-gui-${{ github.ref }}-${{ inputs.linux_keyring }}-${{ inputs.linux_flutter_stock_restart }}-${{ inputs.input_fixture }}-${{ inputs.s06_split }}-${{ inputs.s06_guarded }}-${{ inputs.s06_route }}-${{ inputs.s06_import_replace }}${{ contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) && format('-linux-direct-{0}', inputs.linux_direct_ssh) || '' }}${{ contains(fromJSON('["locked","unavailable"]'), inputs.linux_keyring_denial) && format('-keyring-{0}', inputs.linux_keyring_denial) || '' }}
   cancel-in-progress: true
 jobs:
   s06-input-fixture:
-    if: ${{ !contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) && inputs.s06_split && inputs.s06_guarded }}
+    if: ${{ !contains(fromJSON('["locked","unavailable"]'), inputs.linux_keyring_denial) && !contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) && inputs.s06_split && inputs.s06_guarded }}
     uses: ./.github/workflows/input-extension-validation.yml
   paired-observe:
     needs: s06-input-fixture
@@ -59,11 +75,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        route: ${{ fromJSON(contains(fromJSON('["flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) && '["flutter"]' || contains(fromJSON('["password","tauri-key","tauri-key-rotation"]'), inputs.linux_direct_ssh) && '["tauri"]' || inputs.s06_split && (inputs.s06_route == 'tauri' && '["tauri"]' || inputs.s06_route == 'both' && '["flutter","tauri"]' || '["flutter"]') || inputs.flutter_only && '["flutter"]' || '["flutter","tauri"]') }}
+        route: ${{ fromJSON(contains(fromJSON('["locked","unavailable"]'), inputs.linux_keyring_denial) && '["flutter","tauri"]' || inputs.linux_flutter_stock_restart && '["flutter"]' || contains(fromJSON('["flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) && '["flutter"]' || contains(fromJSON('["password","tauri-key","tauri-key-rotation"]'), inputs.linux_direct_ssh) && '["tauri"]' || inputs.s06_split && (inputs.s06_route == 'tauri' && '["tauri"]' || inputs.s06_route == 'both' && '["flutter","tauri"]' || '["flutter"]') || inputs.flutter_only && '["flutter"]' || '["flutter","tauri"]') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: ${{ matrix.route == 'tauri' && inputs.s06_split && 65 || 45 }}
+    timeout-minutes: ${{ (inputs.linux_keyring || contains(fromJSON('["locked","unavailable"]'), inputs.linux_keyring_denial)) && 75 || matrix.route == 'tauri' && 65 || 45 }}
     env:
       CARGO_TERM_COLOR: never
+      LINUX_KEYRING: ${{ inputs.linux_keyring || contains(fromJSON('["locked","unavailable"]'), inputs.linux_keyring_denial) }}
+      LINUX_KEYRING_DENIAL: ${{ inputs.linux_keyring_denial || 'off' }}
+      FLUTTER_STOCK: ${{ matrix.route == 'flutter' && (inputs.linux_flutter_stock_restart || contains(fromJSON('["locked","unavailable"]'), inputs.linux_keyring_denial)) }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -76,9 +95,34 @@ jobs:
           S06_IMPORT_REPLACE: ${{ inputs.s06_import_replace }}
           LINUX_DIRECT_SSH: ${{ inputs.linux_direct_ssh || 'off' }}
           INPUT_FIXTURE: ${{ inputs.input_fixture }}
+          FLUTTER_ONLY_RESTART: ${{ inputs.linux_flutter_stock_restart }}
         run: |
+          case "$LINUX_KEYRING_DENIAL" in
+            off) ;;
+            locked|unavailable)
+              if [ "$LINUX_KEYRING" != true ] || [ "$LINUX_DIRECT_SSH" != off ] ||
+                 [ "$S06_SPLIT" = true ] || [ "$S06_GUARDED" = true ] || [ "$S06_IMPORT_REPLACE" = true ] ||
+                 [ "$INPUT_FIXTURE" = true ] || [ "$FLUTTER_ONLY_RESTART" = true ]; then
+                echo 'linux_keyring_denial requires both stock single-host Linux apps and no input fixture' >&2
+                exit 1
+              fi ;;
+            *) echo 'invalid linux_keyring_denial' >&2; exit 1 ;;
+          esac
           if { [ "$LINUX_DIRECT_SSH" = password ] || [ "$LINUX_DIRECT_SSH" = tauri-key ] || [ "$LINUX_DIRECT_SSH" = tauri-key-rotation ] || [ "$LINUX_DIRECT_SSH" = flutter-password ] || [ "$LINUX_DIRECT_SSH" = flutter-key ] || [ "$LINUX_DIRECT_SSH" = flutter-key-rotation ]; } && { [ "$S06_SPLIT" = true ] || [ "$S06_GUARDED" = true ]; }; then
             echo 'linux_direct_ssh requires both S06 options to be disabled' >&2
+            exit 1
+          fi
+          if [ "$FLUTTER_STOCK" = true ] && { [ "$LINUX_KEYRING" != true ] || [ "$S06_SPLIT" = true ]; }; then
+            echo 'linux_flutter_stock_restart requires linux_keyring and the single-host route' >&2
+            exit 1
+          fi
+          if [ "$LINUX_KEYRING" = true ] && { [ "$LINUX_DIRECT_SSH" != off ] || [ "$INPUT_FIXTURE" = true ]; }; then
+            echo 'linux_keyring excludes ordinary SSH and the standalone input fixture' >&2
+            exit 1
+          fi
+          if [ "$LINUX_KEYRING" = true ] && [ "$S06_GUARDED" = true ] &&
+             { [ "$S06_SPLIT" != true ] || [ "$S06_ROUTE" != tauri ]; }; then
+            echo 'guarded linux_keyring requires s06_split and s06_route=tauri' >&2
             exit 1
           fi
           if [ "$S06_GUARDED" = true ] && [ "$S06_SPLIT" != true ]; then
@@ -92,10 +136,20 @@ jobs:
       - name: Install isolated helper and loopback sshd dependencies
         if: ${{ !contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) }}
         run: |
-          python3 -m venv "$RUNNER_TEMP/pairing-venv"
+          if [ "$FLUTTER_STOCK" = true ]; then
+            sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+            sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120 install -y \
+              python3-venv python3-gi at-spi2-core gir1.2-atspi-2.0 xdotool xclip fonts-noto-cjk \
+              tesseract-ocr=5.3.4-1build5 tesseract-ocr-eng=1:4.1.0-2
+            /usr/bin/python3 -m venv --system-site-packages "$RUNNER_TEMP/pairing-venv"
+          else
+            python3 -m venv "$RUNNER_TEMP/pairing-venv"
+          fi
           "$RUNNER_TEMP/pairing-venv/bin/pip" install -r validation/pairing/requirements.txt 'paramiko==4.0.0' 'pillow==12.2.0'
           PYTHONDONTWRITEBYTECODE=1 "$RUNNER_TEMP/pairing-venv/bin/python" -m unittest discover -s validation/remote-harness -q
-          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          if [ "$FLUTTER_STOCK" != true ]; then
+            sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          fi
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120 install -y openssh-server
       - name: Prepare the ordinary SSH peer and check its evidence gates
         if: contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh)
@@ -106,7 +160,10 @@ jobs:
           "$RUNNER_TEMP/direct-ssh-venv/bin/pip" install -r validation/pairing/requirements.txt 'paramiko==4.0.0' 'pillow==12.2.0'
           PYTHONDONTWRITEBYTECODE=1 "$RUNNER_TEMP/direct-ssh-venv/bin/python" -m unittest discover \
             -s validation/remote-harness -p "$PY_TEST" -v
-      - name: Prepare the Flutter candidate used by the Android package
+      - name: Install Rust for the Flutter Linux runner
+        if: ${{ matrix.route == 'flutter' && (env.LINUX_KEYRING == 'true' || contains(fromJSON('["flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh)) }}
+        run: rustup toolchain install 1.96.0 --profile minimal
+      - name: Prepare the verified Flutter candidate
         if: matrix.route == 'flutter'
         run: |
           python3 validation/flutter/tool/ci.py bootstrap --destination "$RUNNER_TEMP/flutter-sdk"
@@ -214,6 +271,31 @@ jobs:
         with:
           name: input-fixture-${{ github.sha }}
           path: ${{ runner.temp }}/input-fixture
+      - name: Prepare the private Linux Secret Service and public-key verifier
+        if: ${{ env.LINUX_KEYRING == 'true' || (matrix.route == 'tauri' && !contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh)) }}
+        env:
+          GUI_ROUTE: ${{ matrix.route }}
+        run: |
+          packages=(gnome-keyring dbus-x11 xvfb xauth)
+          if [ "$GUI_ROUTE" = flutter ]; then
+            packages+=(clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev)
+          fi
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120 install -y "${packages[@]}"
+          if [ "$LINUX_KEYRING" = true ]; then
+            identity=validation/linux-secure-identity
+            target="$RUNNER_TEMP/linux-pairing-public-target"
+            cargo +1.96.0 build --locked --release --manifest-path "$identity/Cargo.toml" --target-dir "$target"
+            cc -Wall -Werror -I"$identity" validation/remote-harness/linux_pairing_public.c \
+              "$target/release/libherdr_linux_secure_identity.a" -lutil -lrt -pthread -lm -ldl \
+              -o "$RUNNER_TEMP/linux-pairing-public"
+          fi
+      - name: Build the normal Flutter GTK application
+        if: env.FLUTTER_STOCK == 'true'
+        working-directory: ${{ runner.temp }}/flutter-gui
+        run: |
+          export PATH="$RUNNER_TEMP/flutter-sdk/bin:$PATH"
+          flutter build linux --debug --no-pub
+          python3 "$GITHUB_WORKSPACE/validation/flutter/tool/candidate.py" verify-lock --destination "$RUNNER_TEMP/flutter-gui"
       - name: Review pairing, authorize the displayed key, choose pane and observe updates
         if: ${{ !contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh) }}
         env:
@@ -225,14 +307,41 @@ jobs:
           LIBGL_ALWAYS_SOFTWARE: '1'
         run: |
           args=()
+          keyring_args=()
+          if [ "$LINUX_KEYRING_DENIAL" != off ]; then
+            args+=(--linux-keyring-denial "$LINUX_KEYRING_DENIAL")
+            keyring_args+=(--denial-mode "$LINUX_KEYRING_DENIAL")
+          fi
           if [ "$INPUT_FIXTURE" = true ]; then args+=(--input-fixture "$RUNNER_TEMP/input-fixture"); fi
           if [ "$S06_SPLIT" = true ]; then args+=(--s06-split); fi
+          python="$RUNNER_TEMP/pairing-venv/bin/python"
+          harness=validation/remote-harness/run-ci.py
           if [ "$GUI_ROUTE" = flutter ]; then
-            "$RUNNER_TEMP/pairing-venv/bin/python" validation/remote-harness/run-ci.py --paired-gui flutter --flutter-app "$RUNNER_TEMP/flutter-gui" --output "$RUNNER_TEMP/paired-evidence" "${args[@]}"
+            app=(--flutter-app "$RUNNER_TEMP/flutter-gui")
+            if [ "$FLUTTER_STOCK" = true ]; then
+              app+=(--flutter-stock-app "$RUNNER_TEMP/flutter-gui/build/linux/x64/debug/bundle/herdr_flutter_probe")
+            fi
+          else
+            app=(--tauri-app "$GITHUB_WORKSPACE/validation/tauri/src-tauri/target/debug/herdr-pocket-tauri-probe")
+          fi
+          command=("$python" "$harness" --paired-gui "$GUI_ROUTE" "${app[@]}" --output "$RUNNER_TEMP/paired-evidence" "${args[@]}")
+          if [ "$LINUX_KEYRING" = true ]; then
+            export GDK_BACKEND=x11
+            export PATH="$RUNNER_TEMP/flutter-sdk/bin:$PATH"
+            export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}" RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}" PUB_CACHE="${PUB_CACHE:-$HOME/.pub-cache}"
+            xvfb-run -a -s '-screen 0 1920x1400x24' "$python" validation/remote-harness/linux_pairing_keyring.py "${keyring_args[@]}" -- \
+              "${command[@]}" --linux-keyring-probe "$RUNNER_TEMP/linux-pairing-public"
+          elif [ "$GUI_ROUTE" = flutter ]; then
+            "${command[@]}"
           else
             screen_args=()
             if [ "$S06_SPLIT" = true ]; then screen_args=(-s '-screen 0 1920x1400x24'); fi
-            xvfb-run -a "${screen_args[@]}" dbus-run-session -- "$RUNNER_TEMP/pairing-venv/bin/python" validation/remote-harness/run-ci.py --paired-gui tauri --tauri-app "$GITHUB_WORKSPACE/validation/tauri/src-tauri/target/debug/herdr-pocket-tauri-probe" --output "$RUNNER_TEMP/paired-evidence" "${args[@]}"
+            # Production Tauri pairing always uses Secret Service, including
+            # guarded and S06 routes. This supplies isolation, not the extra
+            # public-key/restart proof selected by --linux-keyring-probe.
+            export GDK_BACKEND=x11
+            xvfb-run -a "${screen_args[@]}" "$python" validation/remote-harness/linux_pairing_keyring.py -- \
+              "${command[@]}"
           fi
       - name: Record the S06 GTK typography environment
         if: always() && matrix.route == 'tauri' && inputs.s06_split
@@ -243,7 +352,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always() && !contains(fromJSON('["password","tauri-key","tauri-key-rotation","flutter-password","flutter-key","flutter-key-rotation"]'), inputs.linux_direct_ssh)
         with:
-          name: paired-gui-${{ matrix.route }}-${{ inputs.s06_split && 's06-' || '' }}${{ (inputs.input_fixture || inputs.s06_guarded) && 'guarded-input' || 'stock-observe' }}-${{ github.sha }}
+          name: paired-gui-${{ matrix.route }}-${{ env.LINUX_KEYRING == 'true' && 'system-store-' || matrix.route == 'tauri' && 'private-keyring-session-' || '' }}${{ env.FLUTTER_STOCK == 'true' && 'external-restart-' || '' }}${{ env.LINUX_KEYRING_DENIAL != 'off' && format('denial-{0}-', env.LINUX_KEYRING_DENIAL) || '' }}${{ inputs.s06_split && 's06-' || '' }}${{ (inputs.input_fixture || inputs.s06_guarded) && 'guarded-input' || 'stock-observe' }}-${{ github.sha }}
           path: ${{ runner.temp }}/paired-evidence/
           retention-days: 14
           if-no-files-found: warn

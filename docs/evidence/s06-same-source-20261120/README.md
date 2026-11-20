@@ -12,19 +12,20 @@
 - 首页正常、两条已审查身份、相同 pane ID 解析为不同终端（`samePaneDifferentTerminal`）、两侧均可见且帧独立推进。
 - 单一输入焦点；切走焦点不恢复旧输入模式；迟到输入被拒（`lateInputRejected`）。
 - 服务端实际收字节两端一致：A 侧 9 字节、B 侧 1 字节（`peerInputBytes [9,1]`，`exactRemoteBytes=true`）。
-- 每侧恰好 1 次连接、1 次设备公钥认证（`peerAuthenticationCounts [1,1]`、`matchedDeviceKeyInSshd`、`distinctAuthenticatedDeviceKeys`）；目标绑定保持。
-- 驱动退出前两侧 peer 均确认关闭（tauri `peersClosedBeforeDriverExit`；`s06-tauri-peer-close.json` 记录 before/final/steps 三段，final 两条 `recognizedCloseCount=1`、socket `absent`、0 reset）。
+- 两端均独立确认已审查且互异的设备公钥实际用于 SSH 认证（`matchedDeviceKeyInSshd`、`distinctAuthenticatedDeviceKeys`），并核对目标绑定。逐侧认证次数、关闭与连接计数的来源见下文。
 - 共享 PTY 数值记录：0 次尺寸变化（119×40 保持）、0 读错/捕获错、`winchHandlers=0`；Flutter 采样 630 次/31.6 s，Tauri 1719 次/86.3 s（`maxSampleGapMs` 61/85）。
 - 清理四项全真：owned 进程停止、临时密钥移除、未触碰用户授权文件、无原始日志上传；`revokedFixtureKeys=true`。
 - `physicalImeVerified=false`；`unverified` 明确列出：物理手机、摄像头、真实输入法、overlay 网络、像素渲染、硬件密钥保护、生产部署、受保护系统密钥库运行时。
 
 ## Flutter 侧（Widget）
 
-帧证据为 `Terminal.write` 后的 Widget 状态：A 12 帧（增量 10）、B 16 帧（增量 15），两侧各 1 次连接并接受输入。第二条共享 PTY 数值记录同样 0 resize（623 样本/31.3 s）。
+帧证据为 `Terminal.write` 后的 Widget 状态：A 12 帧（增量 10）、B 16 帧（增量 15），两侧的客户端 `connectionCount` 均为 1，并接受输入。原件记录两视图主动停止，未提供 sshd 逐侧认证次数或退出前逐侧关闭记录。第二条共享 PTY 记录 0 次尺寸变化（623 样本／31.3 秒）。
 
 ## Tauri 侧（原生 Linux GTK）
 
-帧证据为公开可见终端文本 UI 快照 + 原生 WebDriver 动作。另含三项 guarded 直接输入探针（`frameEvidence: xterm parser callback after consuming a frame`）：
+原件的 `peerAuthenticationCounts=[1,1]` 来自 sshd。驱动退出前两侧均确认关闭，`s06-tauri-peer-close.json` 的最终记录各有一次合格关闭，两个原 socket 均不存在，未观察到 reset。
+
+S06 检查项的帧证据为公开可见终端文本 UI 快照与原生 WebDriver 动作。另有三项 guarded 直接输入探针。
 
 - `s06-tauri-first-direct-key.json`：首枚受保护真实按键前/后状态——B 处于 direct 模式、编辑器聚焦可写，A 只读；`keydown` 事件 `trustedOriginal=1`、`preventedAtEditor=1`、无合成输入（`beforeinput/composition` 全 0），按键落在原 B 编辑器。
 - `s06-tauri-direct-escape.json`：受信任 Esc 组合键被消费、DOM 焦点移到 A、选中目标仍为 B、原目标与 peer 保持、双端只读、无额外输入字节。
@@ -55,4 +56,4 @@ unzip -t s06-same-source-tauri.zip
 
 - 真机、真实跨网、系统输入法、物理键盘、像素级渲染、平台密钥库与生产部署均未验证（`physicalImeVerified=false` 及 `unverified` 列表）。
 - Flutter 帧证据是 Widget 状态（`Terminal.write` 后），非像素渲染；Tauri 帧证据是公开可见终端文本快照 + 原生 WebDriver。
-- 本归档只记录该同源双端通过事实，不改写此前分源 stock/guarded 结论；历史 S06 运行范围见 [docs/74 运行表](../../74-desktop-split-resize.md)。
+- 本归档对应 `c5aa64a` 的同源双端运行。随后使用真实 Linux 配对密钥环的证据另见 [Linux Secret Service](../linux-pairing-secret-service-20261120/README.md)。 [其他 S06 运行](../../74-desktop-split-resize.md#已有-s06-运行范围)

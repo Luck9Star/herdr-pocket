@@ -1,4 +1,7 @@
 fn main() {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
+        build_linux_identity();
+    }
     #[cfg(target_os = "macos")]
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("ios") {
         build_ios_plugin();
@@ -114,4 +117,21 @@ let package = Package(name: "HerdrPocketIOS", platforms: [.iOS(.v15)],
     );
     fs::write(out.join("Package.swift"), manifest).expect("write iOS package manifest");
     tauri_utils::build::link_apple_library("HerdrPocketIOS", out);
+}
+
+fn build_linux_identity() {
+    use std::{env, path::PathBuf, process::Command};
+    let root = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("manifest"));
+    let manifest = root.join("../../linux-secure-identity/Cargo.toml");
+    let out = PathBuf::from(env::var_os("OUT_DIR").expect("out"));
+    let target = env::var("TARGET").expect("target");
+    println!("cargo:rerun-if-changed={}", root.join("../../linux-secure-identity").display());
+    let status = Command::new(env::var_os("CARGO").expect("cargo"))
+        .args(["build", "--release", "--locked", "--target", &target, "--manifest-path"])
+        .arg(manifest).env("CARGO_TARGET_DIR", out.join("identity-target"))
+        .status().expect("linux identity build unavailable");
+    assert!(status.success(), "linux identity build failed");
+    println!("cargo:rustc-link-search=native={}", out.join("identity-target").join(target).join("release").display());
+    println!("cargo:rustc-link-lib=static=herdr_linux_secure_identity");
+    for lib in ["gcc_s", "util", "rt", "pthread", "m", "dl", "c"] { println!("cargo:rustc-link-lib={lib}"); }
 }

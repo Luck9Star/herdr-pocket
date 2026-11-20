@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Cloud-only SDK setup and isolated scaffold; never writes platform files in repo."""
 import argparse
+from contextlib import nullcontext
 import hashlib
 import json
 import os
@@ -11,11 +12,15 @@ import shutil
 import subprocess
 import sys
 import tarfile
+from tempfile import TemporaryDirectory
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[3]
+SHARED_ASSET_IGNORE = shutil.ignore_patterns('__pycache__', '*.pyc')
 sys.path.insert(0, str(ROOT / 'validation/shared'))
 from android_notices import verify as verify_packaged_notices
+sys.path.insert(0, str(ROOT / 'validation/pairing'))
+from linux_pairing_notices import FLUTTER_NOTICE_DIR, NOTICE_FILES, verify_tar as verify_linux_notices
 VERSION = '3.47.9'
 COMMIT = 'c197ca5199e9ee5661e865596c9c07294dfab51c'
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -32,11 +37,44 @@ def flutter():
     return 'flutter.bat' if os.name == 'nt' else 'flutter'
 
 
+def prepare_linux_pairing(destination):
+    runner = destination / 'linux/runner'
+    sources = ROOT / 'validation/flutter/native/linux'
+    shared = ROOT / 'validation/linux-secure-identity'
+    # This sets up sources only. Non-Linux builds never invoke this CMake file.
+    # The Linux build fails if the shared crate or its locked dependencies are missing.
+    if shared.is_dir():
+        shutil.copytree(shared, destination / 'linux/herdr-secure-identity',
+                        ignore=shutil.ignore_patterns('target', '.git'))
+    for name in ('pairing_channels.h', 'pairing_channels.cc', 'host_catalog_file.h',
+                 'host_catalog_file.cc', 'herdr_pairing.cmake'):
+        shutil.copy2(sources / name, runner / name)
+    application = runner / 'my_application.cc'
+    include = '#include "my_application.h"'
+    plugin_marker = '  fl_register_plugins(FL_PLUGIN_REGISTRY(view));'
+    text = application.read_text(encoding='utf-8')
+    if text.count(include) != 1 or text.count(plugin_marker) != 1:
+        raise ValueError('Unexpected Flutter Linux runner template')
+    application.write_text(text.replace(include, include + '\n#include "pairing_channels.h"').replace(
+        plugin_marker, '  RegisterHerdrLinuxPairingChannels(fl_engine_get_binary_messenger(fl_view_get_engine(view)));\n'
+        + plugin_marker), encoding='utf-8')
+    with (runner / 'CMakeLists.txt').open('a', encoding='utf-8') as cmake:
+        cmake.write('\ninclude("${CMAKE_CURRENT_LIST_DIR}/herdr_pairing.cmake")\n')
+    # The generated top-level install clears the bundle after runner install
+    # rules; append these files after that cleanup.
+    with (destination / 'linux/CMakeLists.txt').open('a', encoding='utf-8') as cmake:
+        cmake.write('\ninstall(FILES\n' + ''.join(
+            '  "${CMAKE_CURRENT_SOURCE_DIR}/herdr-secure-identity/vendor/secret-service/' + name + '"\n'
+            for name in NOTICE_FILES
+        ) + '  DESTINATION "' + FLUTTER_NOTICE_DIR.removeprefix('bundle/') + '" COMPONENT Runtime)\n')
+
+
 def prepare(destination):
     if destination.exists():
         raise SystemExit('Refusing to overwrite existing scaffold: ' + str(destination))
     run([flutter(), 'create', '--platforms=android,ios,macos,windows,linux',
          '--project-name=herdr_flutter_probe', '--org=dev.herdr', '--empty', '--no-pub', destination])
+    prepare_linux_pairing(destination)
     source = ROOT / 'validation/flutter'
     shutil.copy2(source / 'pubspec.yaml', destination / 'pubspec.yaml')
     if (source / 'pubspec.lock').exists():
@@ -149,7 +187,7 @@ def prepare(destination):
     font = shared / fixture['font']['file']
     if hashlib.sha256(font.read_bytes()).hexdigest() != fixture['font']['sha256']:
         raise SystemExit('Shared font checksum mismatch')
-    shutil.copytree(shared, destination / 'assets/shared', ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+    shutil.copytree(shared, destination / 'assets/shared', ignore=SHARED_ASSET_IGNORE)
     notices = destination / 'assets/rust-notices'
     notices.mkdir(parents=True, exist_ok=True)
     for name in ['RUSSH-NOTICE.md', 'russh-0.65.0-source.json', 'russh-0.65.0-local-close.patch']:
@@ -214,7 +252,13 @@ def pairing_provenance(platform, android_notice):
         'deviceRuntime': 'NOT RUN by application build/package workflow',
         'androidStorageBaseline': 'API 35 native prototype; unsupported native storage fails closed',
         'appleStorage': 'ThisDeviceOnly non-synchronizing Keychain seed; CryptoKit Ed25519 software signing; not Secure Enclave Ed25519',
-        'otherPlatforms': 'Windows/Linux device bridge unavailable; explicit manual PEM experiment remains separate',
+        'linuxStorage': 'Linux runner links the locked Secret Service Ed25519 bridge and public catalog store statically; runtime NOT RUN by packaging',
+        'linuxSources': [source_record(relative) for relative in (
+            'validation/flutter/native/linux/pairing_channels.cc', 'validation/flutter/native/linux/host_catalog_file.cc',
+            'validation/flutter/native/linux/herdr_pairing.cmake', 'validation/linux-secure-identity/Cargo.lock',
+            'validation/linux-secure-identity/identity.h', 'validation/linux-secure-identity/src/lib.rs')
+            ] if platform == 'linux' else [],
+        'otherPlatforms': 'Windows device bridge unavailable; explicit manual PEM experiment remains separate',
         'recovery': 'versioned public host catalog with device handles, pending creation intent and native CAS; restart requires original-key verification and manual target review; phone runtime NOT RUN',
         'hostCatalogSources': [source_record('validation/flutter/' + name) for name in
                                ['lib/host_catalog.dart', 'lib/host_catalog_page.dart', 'native/android/HostCatalogFile.kt', 'native/apple/HostCatalogFile.swift']],
@@ -269,10 +313,17 @@ def package(destination, platform, output):
     unix_bundle = platform in ['ios', 'macos', 'linux']
     archive = output / ('flutter-' + platform + '-debug' + ('.tar.gz' if unix_bundle else '.zip'))
     if unix_bundle:
-        with tarfile.open(archive, 'w:gz', dereference=False) as bundle:
-            for path in paths:
-                bundle.add(path, arcname=path.name)
-            bundle.add(destination / 'pubspec.lock', arcname='pubspec.lock')
+        # Validate the Linux payload before making the archive available.
+        with (TemporaryDirectory(dir=output) if platform == 'linux' else nullcontext(output)) as staging:
+            staged = Path(staging) / archive.name
+            with tarfile.open(staged, 'w:gz', dereference=False) as bundle:
+                for path in paths:
+                    bundle.add(path, arcname=path.name)
+                bundle.add(destination / 'pubspec.lock', arcname='pubspec.lock')
+            if platform == 'linux':
+                with tarfile.open(staged, 'r:gz') as bundle:
+                    linux_notices = verify_linux_notices(bundle, FLUTTER_NOTICE_DIR)
+                staged.replace(archive)
     else:
         with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as bundle:
             for path in paths:
@@ -297,7 +348,7 @@ def package(destination, platform, output):
         if digest + '  ' + filename not in fixture_checksums:
             raise SystemExit('Shared fixture checksum mismatch: ' + filename)
         fixture_provenance[field] = digest
-    shutil.copytree(shared, output / 'shared', dirs_exist_ok=True)
+    shutil.copytree(shared, output / 'shared', dirs_exist_ok=True, ignore=SHARED_ASSET_IGNORE)
     shutil.copytree(ROOT / 'validation/flutter/licenses', output / 'remote-dependency-licenses', dirs_exist_ok=True)
     shutil.copy2(ROOT / 'validation/flutter/remote-dependencies.json', output / 'remote-dependencies.json')
     sdk = os.environ.get('ANDROID_HOME', '')
@@ -321,6 +372,8 @@ def package(destination, platform, output):
         'pairingDeviceKeys': pairing_provenance(platform, android_notice),
         'signing': 'iOS unsigned, not installable on device' if platform == 'ios' else 'development test build; no production signing/notarization',
     }
+    if platform == 'linux':
+        manifest['linuxPackagedNotices'] = linux_notices
     if platform == 'android':
         manifest['androidApkSha256'] = hashlib.sha256(paths[0].read_bytes()).hexdigest()
         shutil.copy2(paths[0], output / 'flutter-android-debug.apk')

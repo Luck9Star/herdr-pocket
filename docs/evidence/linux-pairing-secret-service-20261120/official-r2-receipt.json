@@ -1,0 +1,323 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "1abdfe4425b667dbb23311870338df9b299d91fb",
+  "attempt": 1,
+  "runs": {
+    "44677046240": {
+      "conclusion": "success",
+      "jobs": [
+        {
+          "conclusion": "success",
+          "id": 136091246844,
+          "name": "build (linux, ubuntu-24.04)"
+        }
+      ],
+      "verifiedArtifacts": [
+        {
+          "id": 14602389489,
+          "zipSha256": "10daf56a78ea9d3e6c3133f25658a450d111242db0106133c0f63dc1527baf99",
+          "checkedInnerSHA256SUMSEntries": 68
+        }
+      ]
+    },
+    "44677046387": {
+      "conclusion": "failure",
+      "jobs": [
+        {
+          "conclusion": "failure",
+          "id": 136091247782,
+          "name": "paired-observe (flutter)"
+        },
+        {
+          "conclusion": "skipped",
+          "id": 136091249547,
+          "name": "s06-input-fixture"
+        }
+      ],
+      "verifiedArtifacts": [
+        {
+          "id": 14603410208,
+          "zipSha256": "70077bf607d021926643225daed8808cb3db9c391419177ded93c6307e41cc7e",
+          "checkedInnerSHA256SUMSEntries": 4
+        }
+      ]
+    },
+    "44677046405": {
+      "conclusion": "success",
+      "jobs": [
+        {
+          "conclusion": "success",
+          "id": 136091246849,
+          "name": "patch-and-test"
+        },
+        {
+          "conclusion": "success",
+          "id": 136092777380,
+          "name": "build (linux, ubuntu-24.04)"
+        },
+        {
+          "conclusion": "skipped",
+          "id": 136092778960,
+          "name": "macos-render-check"
+        }
+      ],
+      "verifiedArtifacts": [
+        {
+          "id": 14602806252,
+          "zipSha256": "320a68dae9e8e54c7d1756539302d634986e8bd2e1939ae04bcae048bb929c42",
+          "checkedInnerSHA256SUMSEntries": 0
+        },
+        {
+          "id": 14602529141,
+          "zipSha256": "2be327ffca3e67b74598fac6515718e9b8c6b6df7dbadd478f12cfa7a19c8306",
+          "checkedInnerSHA256SUMSEntries": 1
+        }
+      ]
+    },
+    "44677046419": {
+      "conclusion": "success",
+      "jobs": [
+        {
+          "conclusion": "success",
+          "id": 136091248572,
+          "name": "paired-observe (flutter)"
+        },
+        {
+          "conclusion": "success",
+          "id": 136091248786,
+          "name": "paired-observe (tauri)"
+        },
+        {
+          "conclusion": "skipped",
+          "id": 136091250437,
+          "name": "s06-input-fixture"
+        }
+      ],
+      "verifiedArtifacts": [
+        {
+          "id": 14602811287,
+          "zipSha256": "b5a4d4eb71501600d6a7022498f7abae3f1dbcda9007c6299d56dcf28e0297fb",
+          "checkedInnerSHA256SUMSEntries": 12
+        },
+        {
+          "id": 14602429655,
+          "zipSha256": "fc2c60439b9a450961053ed324f83ba65df570b4d0dd9b75e216e83be1be6c13",
+          "checkedInnerSHA256SUMSEntries": 4
+        }
+      ]
+    }
+  },
+  "cleanup": {
+    "ownedProcessesStopped": true,
+    "ephemeralKeysRemoved": true,
+    "userAuthorizationFilesTouched": false,
+    "rawLogsUploaded": false
+  },
+  "s06": {
+    "platform": "Ubuntu 24.04 x86_64 loopback OpenSSH",
+    "flutter": {
+      "twoReviewedKeysAuthenticated": true,
+      "samePaneDifferentTerminal": true,
+      "bothAdvanced": true,
+      "singleInputFocus": true,
+      "lateInputRejected": true,
+      "peerInputBytes": [
+        0,
+        0
+      ],
+      "bothPtysUnchanged": true,
+      "revokedFixtureKeys": true,
+      "driver": "GTK integration_test",
+      "sides": [
+        {
+          "connectionCount": 1,
+          "frameCount": 10,
+          "deltaFrames": 8,
+          "inputAccepted": false
+        },
+        {
+          "connectionCount": 1,
+          "frameCount": 14,
+          "deltaFrames": 13,
+          "inputAccepted": false
+        }
+      ],
+      "nativeCatalogReadback": true,
+      "focusedTabClosedPeerAdvanced": true,
+      "peersClosedBeforeDriverExit": true,
+      "stockStopEvidence": {
+        "focusedPeerStates": [
+          "closed",
+          "close_unconfirmed"
+        ],
+        "survivorStopRequested": true,
+        "finalPeerStates": [
+          "closed",
+          "closed"
+        ],
+        "postDriverPeerStates": [
+          "closed",
+          "closed"
+        ]
+      }
+    },
+    "tauri": {
+      "twoReviewedKeysAuthenticated": true,
+      "samePaneDifferentTerminal": true,
+      "bothAdvanced": true,
+      "singleInputFocus": true,
+      "lateInputRejected": true,
+      "peerInputBytes": [
+        0,
+        0
+      ],
+      "bothPtysUnchanged": true,
+      "revokedFixtureKeys": true,
+      "driver": "native GTK/WebView WebDriver",
+      "peerAuthenticationCounts": [
+        1,
+        1
+      ],
+      "peersClosedBeforeDriverExit": true,
+      "peerBEstablishedAfterClosingA": true,
+      "finalPeers": [
+        {
+          "authenticationCount": 1,
+          "recognizedCloseCount": 1,
+          "resetCount": 0,
+          "socketState": "absent"
+        },
+        {
+          "authenticationCount": 1,
+          "recognizedCloseCount": 1,
+          "resetCount": 0,
+          "socketState": "absent"
+        }
+      ],
+      "resize": {
+        "sizes": [
+          {
+            "window": {
+              "width": 1440,
+              "height": 1200
+            },
+            "viewport": {
+              "width": 1440,
+              "height": 1200
+            }
+          },
+          {
+            "window": {
+              "width": 700,
+              "height": 1200
+            },
+            "viewport": {
+              "width": 700,
+              "height": 1200
+            }
+          },
+          {
+            "window": {
+              "width": 1440,
+              "height": 1200
+            },
+            "viewport": {
+              "width": 1440,
+              "height": 1200
+            }
+          }
+        ],
+        "originalTargetsAndPositions": true,
+        "originalSelectedInputTargetPreserved": true,
+        "domFocusOwnerSamples": [
+          "panel-b",
+          "outside-panels",
+          "outside-panels"
+        ],
+        "layoutPauseAcknowledged": true,
+        "newFullAndAdvancingTicks": true,
+        "fixtureTicks": {
+          "wideBefore": [
+            286,
+            285
+          ],
+          "narrowPrimary": 287,
+          "wideRestored": [
+            296,
+            296
+          ],
+          "manualPaused": [
+            300,
+            298
+          ],
+          "manualSecondaryAfterResume": 310
+        },
+        "manualPauseEntry": "返回主机看板",
+        "manualPauseSurvivedRoundTrip": true,
+        "manualResumeOnlySelected": true
+      },
+      "originalScreenshots": {
+        "s06-tauri-resize-narrow.png": {
+          "sha256": "41ca801a499fb96c20b059ce2180609a33921a70f2ae34043c72e2fcee0e755a",
+          "pixels": [
+            700,
+            1200
+          ]
+        },
+        "s06-tauri-resize-wide-restored.png": {
+          "sha256": "dcc63997d525d6e991e0825fe3f1901162d550237160fd3546fd2dc0c8ae4407",
+          "pixels": [
+            1440,
+            1200
+          ]
+        },
+        "s06-tauri-resize-manual-paused.png": {
+          "sha256": "7c689f2e638e7a1c381b399785b16dd95f7f443ac2faaa0b16394f75c4b277bc",
+          "pixels": [
+            1440,
+            1200
+          ]
+        }
+      }
+    }
+  },
+  "flutterStockRestartFailure": {
+    "errorCode": "stock_flutter_observation_pixels_missing",
+    "temporaryHostApprovedRequest": true,
+    "matchedDeviceKeyInSshd": true,
+    "revokedFixtureKey": true
+  },
+  "linuxPackages": {
+    "tauri": {
+      "artifact": 14602389489,
+      "packageName": "herdr-pocket-tauri-probe_0.1.0_amd64.deb",
+      "packageSha256": "dc1920b5b3afe24af91d3b1453575841211bac8e58ed8b55200aeb4701ec9991",
+      "noticesDirectory": "usr/share/doc/herdr-pocket-tauri-probe/secret-service-5.1.0",
+      "outerSharedAssetsMatched": 59,
+      "browserPreviewSha256": "07691b5d2b0c70f1a2e9527bac9d917acd2dc370889cde623fed298580a699a3",
+      "browserPreviewSharedAssetsMatched": 59
+    },
+    "flutter": {
+      "artifact": 14602529141,
+      "packageName": "flutter-linux-debug.tar.gz",
+      "packageSha256": "7c8161107883e3b3775dc4b859463128bd89fbf0259f7c71a78cbc0ef646144b",
+      "noticesDirectory": "bundle/data/third-party/secret-service-5.1.0",
+      "outerSharedAssetsMatched": 59
+    }
+  },
+  "noticesSha256": {
+    "LICENSE-APACHE": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "LICENSE-MIT": "074585dbaf488db540c26f7b20f36053a157d7580bb1c390dc9f6afdb017c83a",
+    "UPSTREAM": "bb87a220fbab51115ae5b36e920fe01dfd48de7ea207a18245be0e6355d480b5"
+  },
+  "flutterCandidateTests": {
+    "safetyPassed": 696,
+    "safetySkipped": 43,
+    "rendererPassed": 10,
+    "combiningPixels": [
+      138,
+      169
+    ],
+    "evidenceArtifact": 14602806252
+  }
+}

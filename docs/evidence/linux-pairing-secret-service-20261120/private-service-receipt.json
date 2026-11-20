@@ -1,0 +1,33 @@
+{
+  "sourceSHA": "2a89f0e9c8c06b6dd96a525dd96d5850c4ea8683",
+  "environment": "Linux aarch64",
+  "toolchain": "Rust 1.96.0",
+  "testIdentity": "disposable HOME, per-run non-activating session bus and GNOME Keyring",
+  "actualService": {
+    "requiredEnvironmentEnabled": true,
+    "passingTests": 2,
+    "verifiedChildProcessTests": 1
+  },
+  "serviceUnavailable": {
+    "explicitMissingBus": true,
+    "passingUnitTests": 4
+  },
+  "sourceSHA256": {
+    "validation/linux-secure-identity/src/lib.rs": "58b8581cba6f99ef8d433731a8388eb9c552092abdc16784f1706e216843108a",
+    "validation/linux-secure-identity/tests/private_service.rs": "98465a2cec5f21da63df6b4babf984c9a204dcc0538d1f227d169c3f9fec6c99",
+    "validation/linux-secure-identity/Cargo.lock": "dff69852ca4f9219bd6ebd4d134d0cc406c79641d016f0e81d5b71060b0b3322",
+    "validation/remote-harness/linux_pairing_keyring.py": "1a3a1d5f61d74fa37cbc734f8ea7daf0fb8ed830e8f8c150982117447bf4a19d"
+  },
+  "covers": [
+    "private key remained in project-owned test keyring across client processes",
+    "verified Ed25519 signature",
+    "separate client namespace and handle",
+    "changing default alias retains original read/delete",
+    "known session-only collection rejects new persistent identity",
+    "locking an existing keyring refuses read and delete"
+  ],
+  "notCovered": [
+    "stock application restart and SSH session",
+    "real device or cross-network operation"
+  ]
+}

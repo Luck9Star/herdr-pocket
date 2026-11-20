@@ -558,6 +558,62 @@ class TauriSplitEvidenceTests(unittest.TestCase):
             SplitDriver(SimpleNamespace(session='/session/test', call=call)).named('管理')
         self.assertEqual(len(clicks), 1)
 
+    def test_input_focus_relocates_only_a_proven_undelivered_native_click(self):
+        untouched = {'pointerSeen': False, 'clicks': 0, 'trustedClick': False}
+        delivered = {'pointerSeen': True, 'clicks': 1, 'trustedClick': True}
+        panels = ['panel-a', 'panel-b']
+        targets = [('same-pane', 'terminal-a'), ('same-pane', 'terminal-b')]
+        stale = 'webdriver_click_stale_element_reference'
+        for errors, receipts, focus, expected_clicks, failure in (
+            ([stale, None], [untouched, delivered], True, 2, None),
+            ([stale, stale], [untouched, untouched], True, 2, stale),
+            ([stale], [dict(untouched, pointerSeen=True)], True, 1, stale),
+            ([stale], [delivered], True, 1, stale),
+            ([stale], [None], True, 1, stale),
+            ([stale], [{'pointerSeen': False}], True, 1, stale),
+            (['webdriver_click_element_click_intercepted'], [untouched], True, 1,
+             'webdriver_click_element_click_intercepted'),
+            ([None], [dict(delivered, trustedClick=False)], True, 1, 's06_tauri_input_click_unconfirmed'),
+            ([None], [dict(delivered, clicks=2)], True, 1, 's06_tauri_input_click_unconfirmed'),
+            ([None], [delivered], False, 1, 's06_tauri_input_focus_not_confirmed'),
+        ):
+            with self.subTest(errors=errors, receipts=receipts, focus=focus):
+                clicks, preparations = [], []
+
+                def call(method, path, data):
+                    if path.endswith('/click'):
+                        clicks.append(path)
+                        if error := errors[len(clicks) - 1]:
+                            raise GuiFailure(error)
+                        return None
+                    self.assertEqual(method, 'POST')
+                    self.assertEqual(path, '/session/test/execute/sync')
+                    action, *binding = data['args']
+                    self.assertEqual(binding, [panels, targets, 0, 1, 'select'])
+                    if action == 'prepare':
+                        preparations.append('node-' + str(len(preparations)))
+                        return {'element-6066-11e4-a52e-4f735466cecf': preparations[-1]}
+                    if action == 'receipt':
+                        return receipts[len(clicks) - 1]
+                    self.assertEqual(action, 'confirm')
+                    return focus
+
+                def one_poll(probe, code):
+                    value = probe()
+                    if not value:
+                        raise GuiFailure(code)
+                    return value
+
+                ui = SplitDriver(SimpleNamespace(session='/session/test', call=call))
+                with patch('s06_tauri_gui.wait_for', side_effect=one_poll):
+                    if failure:
+                        with self.assertRaisesRegex(GuiFailure, '^' + failure + '$'):
+                            ui.input_focus_click(panels, targets, 0, 1, 'select')
+                    else:
+                        ui.input_focus_click(panels, targets, 0, 1, 'select')
+                self.assertEqual(clicks, ['/session/test/element/node-' + str(index) + '/click'
+                                          for index in range(expected_clicks)])
+
     def test_manual_pause_requires_the_real_board_and_both_original_paused_panels(self):
         for route, phases, count, accepted in (
             ('dashboard', ['paused', 'paused'], 2, True),

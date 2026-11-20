@@ -8,6 +8,7 @@ from pathlib import Path
 import plistlib
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -60,9 +61,65 @@ class AndroidNoticeTests(unittest.TestCase):
             self.assertEqual(len(entry['sha256']), 64)
 
 
+class LinuxNoticeTests(unittest.TestCase):
+    notice_names = ('LICENSE-APACHE', 'LICENSE-MIT', 'UPSTREAM')
+    source = ci.ROOT / 'validation/linux-secure-identity/vendor/secret-service'
+
+    def test_linux_package_requires_exact_secret_service_notices(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            app, output = root / 'app', root / 'output'
+            destination = app / 'build/linux/x64/debug/bundle/data/third-party/secret-service-5.1.0'
+            destination.mkdir(parents=True)
+            (app / 'pubspec.lock').write_text('fixture')
+            with patch.dict(os.environ, {'GITHUB_SHA': 'a' * 40}), \
+                    patch.object(ci.host_platform, 'platform', return_value='Linux fixture'), \
+                    patch.object(ci.subprocess, 'check_output', return_value='fixture'):
+                with self.assertRaisesRegex(ValueError, 'Linux pairing notices missing'):
+                    ci.package(app, 'linux', output)
+                archive = output / 'flutter-linux-debug.tar.gz'
+                self.assertFalse(archive.exists())
+                for filename in self.notice_names:
+                    shutil.copy2(self.source / filename, destination / filename)
+                ci.package(app, 'linux', output)
+                manifest = json.loads((output / 'manifest.json').read_text())
+                self.assertEqual(list((output / 'shared').rglob('linux_pairing_notices.*')), [])
+                self.assertEqual(manifest['linuxPackagedNotices'], {
+                    f'bundle/data/third-party/secret-service-5.1.0/{name}':
+                        hashlib.sha256((self.source / name).read_bytes()).hexdigest() for name in self.notice_names})
+                original = archive.read_bytes()
+                (destination / 'UPSTREAM').write_text('tampered')
+                with self.assertRaisesRegex(ValueError, 'Linux pairing notice mismatch'):
+                    ci.package(app, 'linux', output)
+                self.assertEqual(archive.read_bytes(), original)
+
+    def test_tauri_deb_notice_mapping_uses_only_vendored_licenses_and_provenance(self):
+        config = ci.ROOT / 'validation/tauri/src-tauri/tauri.conf.json'
+        bundle = json.loads(config.read_text())['bundle']
+        files = bundle['linux']['deb']['files']
+        prefix = '/usr/share/doc/herdr-pocket-tauri-probe/secret-service-5.1.0'
+        expected = {f'{prefix}/{name}': self.source / name for name in self.notice_names}
+        self.assertEqual({target: (config.parent / source).resolve() for target, source in files.items()}, expected)
+        self.assertNotIn('resources', bundle)
+
+
 class SharedDiagnosticAssetsTests(unittest.TestCase):
     diagnostic = 'terminal-font-diagnostics-v1.json'
     theme_prompts = 'theme-prompt-samples-v1.json'
+
+    def test_linux_pairing_sources_are_staged_without_invoking_cargo(self):
+        app = self.flutter_scaffold()
+        runner = app / 'linux/runner'
+        registration = (runner / 'my_application.cc').read_text()
+        self.assertEqual(registration.count('RegisterHerdrLinuxPairingChannels('), 1)
+        self.assertIn('fl_engine_get_binary_messenger(fl_view_get_engine(view))', registration)
+        self.assertIn('herdr_pairing.cmake', (runner / 'CMakeLists.txt').read_text())
+        self.assertIn('+1.96.0 build --locked', (runner / 'herdr_pairing.cmake').read_text())
+        install = (app / 'linux/CMakeLists.txt').read_text()
+        self.assertLess(install.index('file(REMOVE_RECURSE'), install.index('install(FILES'))
+        for name in LinuxNoticeTests.notice_names:
+            self.assertIn('/herdr-secure-identity/vendor/secret-service/' + name, install)
+        self.assertEqual(ci.pairing_provenance('macos', None)['linuxSources'], [])
 
     def test_secure_appkit_factory_is_included_only_in_generated_macos_runner(self):
         app = self.flutter_scaffold()
@@ -99,6 +156,9 @@ class SharedDiagnosticAssetsTests(unittest.TestCase):
                 'ios/Runner/AppDelegate.swift': 'GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)',
                 'android/app/src/main/AndroidManifest.xml': '<manifest><application /></manifest>',
                 'android/app/build.gradle.kts': 'namespace = "dev.herdr.herdr_flutter_probe"\napplicationId = "dev.herdr.herdr_flutter_probe"\n',
+                'linux/runner/my_application.cc': '#include "my_application.h"\n  fl_register_plugins(FL_PLUGIN_REGISTRY(view));\n',
+                'linux/runner/CMakeLists.txt': 'target_link_libraries(herdr_flutter_probe PRIVATE flutter)\n',
+                'linux/CMakeLists.txt': 'install(CODE "file(REMOVE_RECURSE fixture)" COMPONENT Runtime)\n',
             }
             for name, text in files.items():
                 target = app / name
@@ -169,6 +229,10 @@ class SharedDiagnosticAssetsTests(unittest.TestCase):
         root = self.tauri_source()
         subprocess.run([shutil.which('node'), root / 'scripts/prepare-fixtures.mjs'], cwd=root,
                        check=True, capture_output=True, text=True)
+        for assets in (app / 'assets/shared', root / 'public/shared'):
+            self.assertEqual(list(assets.glob('linux_pairing_notices.*')), [])
+            self.assertEqual((assets / 'android_notices.py').read_bytes(),
+                             (self.shared / 'android_notices.py').read_bytes())
         for name in (self.diagnostic, self.theme_prompts):
             with self.subTest(asset=name):
                 source = (self.shared / name).read_bytes()
@@ -181,6 +245,59 @@ class SharedDiagnosticAssetsTests(unittest.TestCase):
         self.assertEqual(hashlib.sha256(expected).hexdigest(), font['sha256'])
         self.assertEqual((app / 'assets/shared' / font['file']).read_bytes(), expected)
         self.assertEqual((root / 'public/shared' / font['file']).read_bytes(), expected)
+
+    @unittest.skipUnless(shutil.which('node'), 'real Tauri resource copier requires an existing Node executable')
+    def test_all_shared_copy_paths_exclude_preexisting_python_caches(self):
+        tauri = self.tauri_source()
+        validation = tauri.parent
+        for name in ('flutter', 'pairing', 'network-profiles', 'config-transfer', 'linux-secure-identity'):
+            shutil.copytree(ci.ROOT / 'validation' / name, validation / name,
+                            ignore=shutil.ignore_patterns('__pycache__', '*.pyc', 'target'))
+        for name in ('tauri/package.json', 'tauri/package-lock.json', 'tauri/scripts/package-artifacts.py',
+                     'tauri/scripts/js_notices.py', 'transport-rust/src/lib.rs'):
+            target = validation / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ci.ROOT / 'validation' / name, target)
+        locks = json.loads((tauri / 'package-lock.json').read_text())['packages']
+        for name in ('@xterm/xterm', '@xterm/addon-unicode-graphemes'):
+            locked = locks['node_modules/' + name]
+            (tauri / 'node_modules' / name / 'package.json').write_text(json.dumps(
+                {'name': name, 'version': locked['version'], 'license': locked['license']}))
+
+        shared = validation / 'shared'
+        assets = {path.relative_to(shared): path.read_bytes() for path in shared.rglob('*') if path.is_file()}
+        caches = ('__pycache__/linux_pairing_notices.cpython-315.pyc',
+                  'fonts/loose.pyc', 'fonts/__pycache__/python-cache-marker.txt')
+        for name in caches:
+            path = shared / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'synthetic local cache')
+
+        output = self.root / 'flutter-artifacts'
+        env = dict(os.environ, GITHUB_SHA='a' * 40, PROBE_PLATFORM='linux', BUILD_OUTCOME='not-run',
+                   PYTHONDONTWRITEBYTECODE='1')
+        with patch.object(ci, 'ROOT', validation.parent), patch.dict(os.environ, env), \
+                patch.object(ci.host_platform, 'platform', return_value='fixture'), \
+                patch.object(ci.subprocess, 'check_output', return_value='fixture'):
+            app = self.flutter_scaffold()
+            (app / 'build/windows/x64/runner/Debug').mkdir(parents=True)
+            ci.package(app, 'windows', output)
+        subprocess.run([shutil.which('node'), tauri / 'scripts/prepare-fixtures.mjs'], cwd=tauri,
+                       check=True, capture_output=True)
+        subprocess.run([sys.executable, tauri / 'scripts/package-artifacts.py'], cwd=tauri,
+                       env=env, check=True, capture_output=True)
+
+        for destination in (app / 'assets/shared', output / 'shared',
+                            tauri / 'public/shared', tauri / 'artifacts/shared'):
+            with self.subTest(destination=destination):
+                self.assertFalse(list(destination.rglob('__pycache__')))
+                self.assertFalse(list(destination.rglob('*.pyc')))
+                expected = {path: value for path, value in assets.items()
+                            if destination != tauri / 'artifacts/shared' or path.name != '.gitattributes'}
+                self.assertEqual({path.relative_to(destination): path.read_bytes()
+                                  for path in destination.rglob('*') if path.is_file()}, expected)
+        for name in caches:
+            self.assertEqual((shared / name).read_bytes(), b'synthetic local cache')
 
     @unittest.skipUnless(shutil.which('node'), 'real Tauri resource copier requires an existing Node executable')
     def test_tampered_diagnostic_cannot_reach_tauri_public_assets(self):

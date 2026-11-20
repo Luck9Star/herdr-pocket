@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:dartssh2/dartssh2.dart';
 import 'pairing.dart';
 import 'remote_adapter.dart';
@@ -13,12 +14,28 @@ abstract interface class DeviceKeys {
 
 class NativeDeviceKeys implements DeviceKeys {
   static const channel = MethodChannel('dev.herdr/device-keys');
+  static bool get linuxStore => !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
   Future<T> _call<T>(String method, [Map<String,Object?>? args]) async {
     try {
       final value = await channel.invokeMethod<T>(method,args);
       if (value == null) throw const RemoteFailure('device_key_unavailable');
       return value;
-    } catch (_) { throw const RemoteFailure('device_key_unavailable'); }
+    } catch (error) { throw _nativeFailure(error); }
+  }
+  RemoteFailure _nativeFailure(Object error) {
+    if (linuxStore && error is PlatformException && const {
+      'device_key_missing','device_key_locked','device_key_store_unavailable',
+      'device_key_write_unknown','device_key_handle_exists',
+    }.contains(error.code)) return RemoteFailure(error.code);
+    return const RemoteFailure('device_key_unavailable');
+  }
+  Future<String> reserve() async {
+    final handle = await _call<String>('reserve');
+    if (!RegExp(r'^[0-9a-f]{32}$').hasMatch(handle)) throw const RemoteFailure('device_key_unavailable');
+    return handle;
+  }
+  Future<void> createReserved(String handle) async {
+    await _call<String>('createReserved',{'handle':handle});
   }
   @override
   Future<String> create() => _call<String>('create');
@@ -34,9 +51,38 @@ class NativeDeviceKeys implements DeviceKeys {
   @override
   Future<void> delete(String handle) async {
     try { await channel.invokeMethod<void>('delete',{'handle':handle}); }
-    catch (_) { throw const RemoteFailure('device_key_unavailable'); }
+    catch (error) { throw _nativeFailure(error); }
   }
 }
+
+/// Serializes Linux pairing transactions across app processes sharing XDG data.
+class LinuxPairingOperationLease {
+  LinuxPairingOperationLease._(this.token);
+  static const _channel = MethodChannel('dev.herdr/host-catalog');
+  final String token;
+  bool _held = true;
+  bool get held => _held;
+  static Future<LinuxPairingOperationLease> acquire() async {
+    try {
+      final token = await _channel.invokeMethod<String>('acquirePairingLease');
+      if (token == null || token.isEmpty) throw const RemoteFailure('pairing_operation_busy');
+      return LinuxPairingOperationLease._(token);
+    } catch (_) { throw const RemoteFailure('pairing_operation_busy'); }
+  }
+  Future<void> release() async {
+    _held = false;
+    await _channel.invokeMethod<void>('releasePairingLease',{'token':token});
+  }
+}
+
+String? linuxDeviceKeyNotice(Object error) => switch (error is RemoteFailure ? error.code : '') {
+  'pairing_operation_busy' => '另一进程正在处理设备身份 · 请稍后重新读取核验',
+  'device_key_locked' => '系统密钥环已锁定 · 请解锁后核验原设备身份',
+  'device_key_missing' => '系统密钥环中未找到原设备密钥 · 请检查原密钥环和身份引用',
+  'device_key_store_unavailable' => '系统密钥环服务不可用 · 请配置 Secret Service 后核验原设备身份',
+  'device_key_write_unknown' || 'device_key_handle_exists' => '设备密钥写入结果待核验 · 请核验已保存的原身份引用',
+  _ => null,
+};
 
 /// Each connection gets a revocable identity lease. A late native completion
 /// cannot authenticate a cancelled attempt. SSHRawSignature needs the complete
@@ -54,7 +100,10 @@ class DeviceIdentityLease {
         if (!active) throw const RemoteFailure('cancelled');
         Uint8List signature;
         try { signature = await store.sign(handle,Uint8List.fromList(payload)); }
-        catch (_) { throw const RemoteFailure('device_key_unavailable'); }
+        catch (error) {
+          if (linuxDeviceKeyNotice(error) != null) rethrow;
+          throw const RemoteFailure('device_key_unavailable');
+        }
         if (!active) throw const RemoteFailure('cancelled');
         if (signature.length != 64) throw const RemoteFailure('invalid_signature');
         final blob = Uint8List(4 + 11 + 4 + 64);

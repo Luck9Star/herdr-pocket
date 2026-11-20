@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:terminal_view/terminal_view.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
+import 'package:herdr_flutter_probe/device_keys.dart';
 import 'package:herdr_flutter_probe/host_catalog.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
 import 'package:herdr_flutter_probe/host_tabs.dart';
@@ -32,10 +33,16 @@ class GuiSshMemoryInputJournal extends MemoryTargetInputJournal {
 }
 
 /// Opt-in only: helper authorizes the public request after the real widget emits
-/// it. PEM lives exclusively in this explicit test signer; production has no
-/// PEM-to-device-key import. No production Keychain/Keystore claim is made.
+/// it. The Linux runner uses the native catalog and signer. The separate
+/// headless variant uses an explicitly injected disposable test signer.
 void main() {
-  final env = Platform.environment;
+  const native = bool.fromEnvironment('HERDR_LINUX_NATIVE_PAIRING');
+  const exchangePath = String.fromEnvironment('HERDR_LINUX_PAIRING_EXCHANGE');
+  final env = { ...Platform.environment,
+    if (native) ...{
+      'HERDR_PAIRING_GUI_DIR': exchangePath, 'HERDR_PAIRING_GUI_CONFIG': '$exchangePath/target.json',
+    },
+  };
   final expectInput = env['HERDR_PAIRING_GUI_EXPECT_INPUT'] == '1';
   // The external sshd, helper and device-signing callbacks operate in real
   // time. Keep ordinary deterministic widget fixtures on their usual binding.
@@ -49,20 +56,25 @@ void main() {
     : 'isolated real SSH GUI pairing and continuous observe',(tester) async {
     final config = jsonDecode(File(env['HERDR_PAIRING_GUI_CONFIG']!).readAsStringSync()) as Map<String,dynamic>;
     final dir = Directory(env['HERDR_PAIRING_GUI_DIR']!);
-    final keys = helpers.TestDeviceKeys(File(env['HERDR_PAIRING_GUI_TEST_KEY']!).readAsStringSync());
+    if (native) expect(Platform.isLinux && NativeDeviceKeys.linuxStore && !expectInput, isTrue);
+    final keys = native ? null : helpers.TestDeviceKeys(File(env['HERDR_PAIRING_GUI_TEST_KEY']!).readAsStringSync());
     final inputJournal = GuiSshMemoryInputJournal();
     // Timestamp evidence comes from the real adapter's validated snapshot path,
     // rather than assigning a time to the widget's dashboard double.
     var snapshotClock = DateTime.utc(2026,11,7,12,30);
     var snapshotClockReads = 0;
     final adapter = RemoteReadOnlyAdapter(inputJournal:inputJournal,clock:() { snapshotClockReads++; return snapshotClock; });
-    final catalog = HostCatalog(storage:MemoryCatalogStorage());
+    final catalog = HostCatalog(storage:native ? null : MemoryCatalogStorage());
     final tabs = HostTabs();
     addTearDown(catalog.dispose);
     addTearDown(tabs.dispose);
     void stage(String name) => File('${dir.path}/stage').writeAsStringSync(name,flush:true);
     final tokens = (await tester.runAsync(DesignTokens.load))!;
     tester.view.devicePixelRatio = 1; tester.view.physicalSize = const Size(390,844);
+    if (native) {
+      await tester.binding.setSurfaceSize(const Size(390,844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+    }
     addTearDown(tester.view.resetDevicePixelRatio); addTearDown(tester.view.resetPhysicalSize);
     Future<void> until(bool Function() predicate) async {
       final deadline = DateTime.now().add(const Duration(seconds:25));
@@ -109,6 +121,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(theme:tokens.theme,home:HostCatalogPage(tokens:tokens,
       catalog:catalog,keys:keys,tabs:tabs,adapterFactory:(_) => adapter,offlineBuilder:(_) => const SizedBox())));
     await tester.pumpAndSettle();
+    if (native) await until(() => catalog.ready);
     await tapControl('hosts-add'); await tester.pumpAndSettle();
     if (find.byKey(const ValueKey('choose-herdr')).evaluate().isNotEmpty) { await tapControl('choose-herdr'); await tester.pumpAndSettle(); }
     stage('public_request');
@@ -128,12 +141,27 @@ void main() {
     await tester.pageBack(); await tester.pumpAndSettle();
     stage('restore_pending');
     await tapControl('host-open-$id'); await tester.pumpAndSettle();
+    if (native) await until(() => wire.evaluate().isNotEmpty);
     expect(find.textContaining('awaiting-host'),findsOneWidget);
-    expect(keys.creates,1); expect(keys.signCalls,0);
+    if (keys != null) {
+      expect(keys.creates,1); expect(keys.signCalls,0);
+    } else {
+      final reopened = HostCatalog();
+      try {
+        await reopened.load();
+        expect(reopened.ready, isTrue);
+        final saved = reopened.profiles.single;
+        final request = jsonDecode(tester.widget<SelectableText>(wire).data!) as Map<String,dynamic>;
+        expect(saved.id, id);
+        expect(await NativeDeviceKeys().public(saved.pairingRecord['handle'] as String), request['public_key']);
+      } finally { reopened.dispose(); }
+    }
     expect(tester.widget<SelectableText>(wire).data,File('${dir.path}/request.json').readAsStringSync());
     stage('response_review');
     await helpers.acceptResponse(tester,response);
-    expect(find.textContaining('authorized-unverified'),findsOneWidget);
+    final authorized = find.textContaining('authorized-unverified');
+    if (native) await until(() => authorized.evaluate().isNotEmpty);
+    expect(authorized,findsOneWidget);
     await tapControl('pair-connect'); await tester.pumpAndSettle();
     stage('ssh_and_dashboard');
     await tapControl('remote-review'); await tapControl('remote-connect');
@@ -143,7 +171,7 @@ void main() {
       return row.evaluate().isNotEmpty && tester.widget<FilledButton>(row).onPressed != null;
     });
     expect(adapter.evidence.hostKeyMatched,isTrue); expect(adapter.evidence.authStarted,isTrue);
-    expect(keys.signCalls,greaterThan(0));
+    if (keys != null) expect(keys.signCalls,greaterThan(0));
     expect(snapshotClockReads,greaterThan(0));
     expect(adapter.currentDashboard!.syncedAt,snapshotClock);
     expect(tester.widget<Text>(find.byKey(const ValueKey('remote-dashboard-sync'))).data,
@@ -262,8 +290,8 @@ void main() {
     await expectHostSummary(workspaceSummary,beforeStop,retained:true);
     expect(adapter.evidence.connectionCount,1);
     final report = {'paired':adapter.evidence.hostKeyMatched && adapter.evidence.authStarted,
-      'paneChosen':true,'fullRendered':true,'deltaRendered':true,'stoppedStale':true,'signCalls':keys.signCalls,
-      'reopenedPendingRequest':true,'identityCreations':keys.creates,'localViewportChanges':2,
+      'paneChosen':true,'fullRendered':true,'deltaRendered':true,'stoppedStale':true,'signCalls':keys?.signCalls,
+      'reopenedPendingRequest':true,'identityCreations':keys?.creates,'nativeCatalogAndKeys':native,'localViewportChanges':2,
       'pauseResumeSameConnection':true,'hostSummaryActive':true,'hostSummaryRetained':true,
       'hostSummaryResumed':true,'hostSummaryStopped':true,
       'frameCount':adapter.evidence.frameCount,'deltaFrames':adapter.evidence.deltaFrames,
@@ -272,9 +300,10 @@ void main() {
       'stockReadOnlyConfirmed':!expectInput,'inputExpectedBytes':expectInput ? utf8.encode('Pocket测').length : 0,
       'inputJournal':{'backend':'explicit public-marker memory test double','reads':inputJournal.reads,
         'prepares':inputJournal.prepares,'clears':inputJournal.clears,'pending':inputJournal.marker != null},
-      'scope':'real widget and isolated SSH; explicit memory test signer and public-marker journal double; '
-        'system storage and journal durability NOT RUN; input acknowledgement means runtime queue acceptance, '
-        'raw PTY bytes are checked separately by the runner'};
+      'scope':native ? 'native Flutter Linux runner test with production catalog and key channels'
+        : 'real widget and isolated SSH; explicit memory test signer and public-marker journal double; '
+          'system storage and journal durability NOT RUN; input acknowledgement means runtime queue acceptance, '
+          'raw PTY bytes are checked separately by the runner'};
     File('${dir.path}/result.json').writeAsStringSync(jsonEncode(report),flush:true);
     await tester.pumpWidget(const SizedBox());
     await tester.runAsync(adapter.cancel);

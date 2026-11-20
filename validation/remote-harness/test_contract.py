@@ -3,6 +3,7 @@ import importlib.util
 import io
 from contextlib import redirect_stderr
 from pathlib import Path
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -40,6 +41,45 @@ class HarnessGuards(unittest.TestCase):
                 harness.require_runner(env)
         harness.require_runner({'GITHUB_ACTIONS': 'true', 'GITHUB_RUN_ID': '123', 'GITHUB_REF': 'refs/heads/codex/test'})
 
+    def test_keyring_denial_requires_the_hosted_single_host_stock_entry(self):
+        args = {'linux_keyring_denial': 'locked', 'linux_keyring_probe': Path('public-probe'), 's06_split': False,
+                'input_fixture': None, 'android_guarded_input': False, 'android_tui': False,
+                'paired_gui': 'tauri', 'flutter_stock_app': None}
+        for mode in ('locked', 'unavailable'):
+            for route, stock in (('tauri', None), ('flutter', Path('normal-app'))):
+                harness.validate_linux_keyring_denial(
+                    SimpleNamespace(**dict(args, linux_keyring_denial=mode, paired_gui=route, flutter_stock_app=stock)),
+                    import_replace=False, hosted_linux=True)
+        for changes in ({'paired_gui': 'flutter'}, {'paired_gui': 'tauri-android'}, {'input_fixture': Path('guarded')},
+                        {'s06_split': True}, {'linux_keyring_probe': None}, {'android_guarded_input': True}):
+            with self.subTest(changes=changes), self.assertRaisesRegex(harness.ProbeFailure, 'keyring_denial_requires'):
+                harness.validate_linux_keyring_denial(SimpleNamespace(**dict(args, **changes)),
+                                                     import_replace=False, hosted_linux=True)
+        for import_replace, hosted in ((True, True), (False, False)):
+            with self.assertRaisesRegex(harness.ProbeFailure, 'keyring_denial_requires'):
+                harness.validate_linux_keyring_denial(SimpleNamespace(**args), import_replace=import_replace,
+                                                     hosted_linux=hosted)
+
+    def test_guarded_keyring_probe_requires_tauri_s06_before_fixture_setup(self):
+        env = {'GITHUB_ACTIONS': 'true', 'GITHUB_RUN_ID': '123', 'GITHUB_REF': 'refs/heads/codex/test',
+               'HERDR_S06_IMPORT_REPLACE': '0'}
+        base = ['run-ci.py', '--output', str(Path(__file__).parent), '--linux-keyring-probe', 'verifier',
+                '--input-fixture', 'fixture']
+        invalid = (['--paired-gui', 'tauri'], ['--paired-gui', 'flutter', '--s06-split'],
+                   ['--paired-gui', 'tauri-android', '--s06-split'], [])
+        for flags in invalid:
+            with self.subTest(flags=flags), patch.dict(harness.os.environ, env), \
+                 patch('sys.argv', base + flags), redirect_stderr(io.StringIO()) as stderr:
+                with self.assertRaises(SystemExit) as error:
+                    harness.main()
+                self.assertEqual(error.exception.code, 2)
+                self.assertIn('--linux-keyring-probe requires', stderr.getvalue())
+        split = SimpleNamespace(IMPORT_REPLACE_TEST_ID='import', S06_TEST_ID='split', run_gui=None)
+        with patch.dict(harness.os.environ, env), patch.dict(harness.sys.modules, {'s06_split_gui': split}), \
+             patch('sys.argv', base + ['--paired-gui', 'tauri', '--s06-split', '--tauri-app', 'app']):
+            with self.assertRaisesRegex(harness.ProbeFailure, '^output_already_exists$'):
+                harness.main()
+
     def test_import_route_requires_stock_desktop_tauri_before_fixture_setup(self):
         env = {'GITHUB_ACTIONS': 'true', 'GITHUB_RUN_ID': '123', 'GITHUB_REF': 'refs/heads/codex/test',
                'HERDR_S06_IMPORT_REPLACE': '1'}
@@ -64,6 +104,35 @@ class HarnessGuards(unittest.TestCase):
                 normal = harness.gui_report_fields('tauri', {'status': status}, input_fixture=True)
                 if item != 'remote input from this GUI':
                     self.assertNotIn(item, normal['unverified'])
+
+    def test_tauri_private_session_scope_never_claims_independent_keyring_proof(self):
+        for guarded in (False, True):
+            for status in ('failed', 'passed'):
+                report = harness.gui_report_fields('tauri', {'status': status}, input_fixture=guarded,
+                                                   private_keyring_session=True)
+                self.assertIn('isolated Secret Service', report['scope'])
+                self.assertIn('not independently verified', report['scope'])
+                self.assertIn('protected system-store runtime', report['unverified'])
+                self.assertEqual('remote input from this GUI' in report['unverified'], not (status == 'passed' and guarded))
+        stock = harness.gui_report_fields('tauri', {'status':'passed'}, private_keyring_session=True, import_replace=True)
+        self.assertIn('config replacement', stock['scope'])
+        self.assertIn('not independently verified', stock['scope'])
+        self.assertIn('protected system-store runtime', stock['unverified'])
+        strong = harness.gui_report_fields('tauri', {'status':'passed', 'linuxKeyring': {
+            'publicKeysMatched':1, 'sameKeyAuthenticated':True}}, linux_keyring=True, private_keyring_session=True)
+        self.assertEqual(strong['scope'], 'stock Linux GTK WebView with private Secret Service')
+        self.assertNotIn('protected system-store runtime', strong['unverified'])
+
+    def test_guarded_tauri_report_requires_two_independent_keyring_matches(self):
+        for count, matched in ((2, True), (1, True), (2, False)):
+            with self.subTest(count=count, matched=matched):
+                report = harness.gui_report_fields('tauri', {'status': 'passed', 'linuxKeyring': {
+                    'publicKeysMatched': count, 'sameKeyAuthenticated': matched}}, input_fixture=True,
+                    linux_keyring=True, private_keyring_session=True)
+                self.assertIn('guarded input fixture', report['scope'])
+                self.assertEqual('protected system-store runtime' in report['unverified'],
+                                 (count, matched) != (2, True))
+                self.assertIn('stock second-process identity restore', report['unverified'])
 
     def test_report_allowlist_drops_config_and_remote_output(self):
         raw = result(privateKeyPem='PRIVATE FIXTURE', stdout='REMOTE DATA', config={'password': 'never-copy'})

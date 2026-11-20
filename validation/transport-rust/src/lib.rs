@@ -913,6 +913,15 @@ where Select: Fn(Vec<Pane>) -> SelectFuture, SelectFuture: Future<Output=Result<
 /// A device signer has no private-key export. The implementation owns its local handle.
 pub trait DeviceSigner: Send + Sync {
     fn sign(&self, payload: &[u8]) -> std::result::Result<Vec<u8>, ()>;
+    /// Failure belongs to this signer/connection, never a process-wide status.
+    fn failure(&self) -> Option<&'static str> { None }
+}
+
+fn device_auth_outcome(result: Result<bool>, signer: &dyn DeviceSigner) -> Result<bool> {
+    match result {
+        Err("authentication_failed") => Err(signer.failure().unwrap_or("authentication_failed")),
+        other => other,
+    }
 }
 
 struct ExternalSigner { key: PublicKey, signer: Arc<dyn DeviceSigner> }
@@ -1114,8 +1123,9 @@ async fn authenticate_observer(
     progress("host-key-verified");
     audit.auth_started.store(true, Ordering::SeqCst);
     let authenticated = if let Some(ref mut signer) = external {
-        bounded(cancel, 8, "authentication_failed", ssh.authenticate_publickey_with(
-            &config.username, signer.key.clone(), None, signer)).await?.success()
+        let result = bounded(cancel, 8, "authentication_failed", ssh.authenticate_publickey_with(
+            &config.username, signer.key.clone(), None, &mut *signer)).await;
+        device_auth_outcome(result.map(|value| value.success()), signer.signer.as_ref())?
     } else {
         bounded(cancel, 8, "authentication_failed", ssh.authenticate_publickey(
             &config.username, PrivateKeyWithHashAlg::new(Arc::new(private.ok_or("invalid_private_key")?), None))).await?.success()

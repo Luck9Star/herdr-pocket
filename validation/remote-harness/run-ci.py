@@ -15,11 +15,13 @@ import shlex
 import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.request
 from guarded_input import EvidenceError, expected_bytes, validate_mode
 from blocked_fixture import BlockedFixtureFailure, BlockedTargets
+from linux_pairing_keyring import DENIAL_MODES
 
 REPO = Path(__file__).resolve().parents[2]
 HERDR_SHA = '14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d'
@@ -154,11 +156,12 @@ def snapshot_diagnostics(result):
             'nestedKnownFields': protocol_diagnostics(snapshot) if isinstance(snapshot, dict) else None}
 
 
-def gui_report_fields(route, result, input_fixture=False, *, import_replace=False):
+def gui_report_fields(route, result, input_fixture=False, *, import_replace=False, linux_keyring=False,
+                      private_keyring_session=False, flutter_stock=False, keyring_denial='off'):
     """Keep test route, required frame evidence and runtime limits distinct."""
     scopes = {
         'tauri-android': 'API35 emulator WebView and AndroidKeyStore-wrapped identity',
-        'tauri': 'Linux GTK WebView with native process-memory test identity',
+        'tauri': 'Linux GTK WebView; identity storage not independently verified',
         'flutter': 'Flutter widget with explicit test signer, catalog and input journal',
         'flutter-android': 'API35 Flutter debug app with production HostCatalogPage and native AndroidKeyStore-wrapped identity',
     }
@@ -179,11 +182,42 @@ def gui_report_fields(route, result, input_fixture=False, *, import_replace=Fals
                         all(result.get(name) is False for name in
                             ('storageMocked', 'signerInjected', 'framesInjected')))
         unverified.append('Flutter release/profile application runtime')
+    if private_keyring_session and route == 'tauri' and not linux_keyring:
+        scopes[route] = 'Linux GTK WebView in an isolated Secret Service session; keyring binding not independently verified'
+    if linux_keyring:
+        scopes[route] = ('Linux GTK integration_test driving the real Flutter pairing widgets and native channels'
+                         if route == 'flutter' else 'stock Linux GTK WebView with private Secret Service')
+        if route == 'tauri' and input_fixture:
+            scopes[route] = 'Linux GTK WebView with private Secret Service and guarded input fixture'
+        proof = result.get('linuxKeyring', {})
+        public_keys_matched = proof.get('publicKeysMatched')
+        native_store = ((public_keys_matched == 2 if input_fixture else public_keys_matched in (1, 2)) and
+                        proof.get('sameKeyAuthenticated') is True)
+        if not ((route == 'tauri' or flutter_stock) and passed and
+                result.get('restart', {}).get('sameDeviceKeyReauthenticated') is True):
+            unverified.append('stock second-process identity restore')
+        unverified.append('other Linux keyring implementations')
+        if route == 'flutter':
+            if flutter_stock:
+                scopes[route] = 'Stock Flutter GTK debug application driven by AT-SPI and X11 input'
+                frames[route] = 'Original X11 window captures of advancing synthetic remote ticks in both app processes'
+                if passed and result.get('restart', {}).get('observedIncreasingTicksInBothWindows') is True:
+                    unverified.remove('pixel rendering')
+                unverified.append('Flutter release package installation')
+            else:
+                unverified.append('unmodified Flutter release app with external user input')
     if not passed or not native_store:
         unverified.append('protected system-store runtime')
+    if keyring_denial in DENIAL_MODES:
+        scopes[route] += '; private Secret Service denial on second app start'
+        if flutter_stock:
+            frames[route] = 'Original X11 captures of first-process observation and second-process refusal'
+        unverified.append('other private Secret Service denial modes')
     fields = {'scope': scopes[route], 'frameEvidence': frames[route], 'unverified': unverified}
     if import_replace:
-        fields.update(scope='Linux GTK WebView config replacement with native process-memory test identities',
+        fields.update(scope=('Linux GTK WebView config replacement with private Secret Service' if linux_keyring
+                             else 'Linux GTK WebView config replacement in an isolated Secret Service session; keyring binding not independently verified' if private_keyring_session
+                             else 'Linux GTK WebView config replacement; identity storage not independently verified'),
                       frameEvidence='public visible-terminal-text UI snapshots; native WebDriver actions')
         unverified.extend(['desktop window resize', 'desktop keyboard focus and routing',
                            'non-BMP import password entry'])
@@ -292,12 +326,27 @@ def final_pty_evidence(root):
     return {'noObservedResize':False, 'errorCode':'owned_pty_final_record_unavailable'}
 
 
+def validate_linux_keyring_denial(args, *, import_replace, hosted_linux):
+    if args.linux_keyring_denial == 'off':
+        return
+    if (args.linux_keyring_denial not in DENIAL_MODES or not hosted_linux or
+            not args.linux_keyring_probe or args.s06_split or import_replace or args.input_fixture or
+            args.android_guarded_input or args.android_tui or
+            not (args.paired_gui == 'tauri' or (args.paired_gui == 'flutter' and args.flutter_stock_app))):
+        raise ProbeFailure('keyring_denial_requires_hosted_stock_single_host')
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--flutter-app', type=Path)
+    parser.add_argument('--flutter-stock-app', type=Path, help='drive the normal Linux GTK build externally')
     parser.add_argument('--paired-gui', choices=('flutter', 'tauri', 'tauri-android', 'flutter-android'))
     parser.add_argument('--tauri-app', type=Path)
     parser.add_argument('--input-fixture', type=Path)
+    parser.add_argument('--linux-keyring-probe', type=Path,
+                        help='require the approved key to match the private Linux Secret Service')
+    parser.add_argument('--linux-keyring-denial', choices=('off', *DENIAL_MODES), default='off',
+                        help='exercise second-process refusal on a locked or unavailable private Secret Service')
     parser.add_argument('--s06-split', action='store_true',
                         help='opt-in two real SSH/herdr targets through the desktop split UI')
     parser.add_argument('--android-guarded-input', action='store_true')
@@ -307,6 +356,16 @@ def main():
     args = parser.parse_args()
     require_runner(os.environ)
     import_replace = os.environ.get('HERDR_S06_IMPORT_REPLACE') == '1'
+    validate_linux_keyring_denial(
+        args, import_replace=import_replace,
+        hosted_linux=sys.platform == 'linux' and os.environ.get('RUNNER_ENVIRONMENT') == 'github-hosted')
+    if args.flutter_stock_app and (args.paired_gui != 'flutter' or args.s06_split or args.input_fixture or
+                                   not args.linux_keyring_probe):
+        parser.error('--flutter-stock-app requires the single-host Flutter Linux private keyring route')
+    tauri_split = args.paired_gui == 'tauri' and args.s06_split
+    if args.linux_keyring_probe and (args.paired_gui not in ('flutter', 'tauri') or
+                                    (args.input_fixture and not tauri_split)):
+        parser.error('--linux-keyring-probe requires a stock desktop paired route or guarded Tauri --s06-split')
     if import_replace and (not args.s06_split or args.paired_gui != 'tauri' or args.input_fixture):
         parser.error('S06 import replacement requires stock Tauri --s06-split')
     if args.s06_split and args.paired_gui not in ('flutter', 'tauri'):
@@ -333,6 +392,8 @@ def main():
     processes = []
     blocked_fixture = None
     args.blocked_targets = []
+    args.linux_keyring = None
+    args.private_keyring_session = False
     env = {k: v for k, v in os.environ.items()
            if not k.startswith('HERDR_') and k not in ('SSH_AUTH_SOCK', 'SSH_AGENT_PID', 'BASH_ENV')}
     env.update(XDG_CONFIG_HOME=str(root / 'config'), XDG_STATE_HOME=str(root / 'state'),
@@ -408,6 +469,14 @@ def main():
             time.sleep(0.1)
 
     try:
+        if args.paired_gui == 'tauri':
+            from linux_pairing_keyring import MARKER, KeyringFailure, private_home
+            if os.environ.get(MARKER):
+                try:
+                    private_home()
+                    args.private_keyring_session = True
+                except KeyringFailure as error:
+                    raise ProbeFailure(str(error)) from None
         version = subprocess.run(['/usr/sbin/sshd', '-V'], env=env, stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE, timeout=5)
         version_text = (version.stdout + version.stderr).decode('ascii', errors='replace').strip()
@@ -429,7 +498,13 @@ def main():
         herdr = root / 'herdr'
         herdr.write_bytes(binary)
         herdr.chmod(0o700)
-        for name in ('host', 'wrong', 'client'):
+        if args.linux_keyring_probe:
+            from linux_pairing_keyring import KeyringEvidence, KeyringFailure
+            try:
+                args.linux_keyring = KeyringEvidence(args.paired_gui, args.linux_keyring_probe)
+            except KeyringFailure as error:
+                raise ProbeFailure(str(error)) from None
+        for name in (('host', 'wrong') if args.linux_keyring else ('host', 'wrong', 'client')):
             command(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-C',
                      'ephemeral-herdr-pocket-mobile', '-f', root / name])
         authorized = root / 'authorized_keys'
@@ -514,9 +589,17 @@ LogLevel VERBOSE
             milestone = 'M1d-mobile-guarded-input' if args.android_guarded_input else 'M1c-pairing-dashboard-observe'
             if args.android_tui:
                 milestone = 'android-paired-interactive-tui'
+            if args.flutter_stock_app:
+                milestone = 'linux-flutter-stock-pairing-restart'
+            if args.linux_keyring_denial != 'off':
+                milestone = 'linux-stock-pairing-keyring-denial'
+                report['linuxKeyringDenialMode'] = args.linux_keyring_denial
             report.update(milestone=milestone,
                           **gui_report_fields(args.paired_gui, {'status': 'failed'}, bool(args.input_fixture),
-                                              import_replace=import_replace))
+                                              import_replace=import_replace, linux_keyring=bool(args.linux_keyring),
+                                              private_keyring_session=args.private_keyring_session,
+                                              flutter_stock=bool(args.flutter_stock_app),
+                                              keyring_denial=args.linux_keyring_denial))
             report.pop('cancelScope', None)
             if args.s06_split:
                 report['milestone'] = split_test_id
@@ -525,7 +608,10 @@ LogLevel VERBOSE
             else:
                 result = run_gui(args, root, env, config)
             report.update(gui_report_fields(args.paired_gui, result, bool(args.input_fixture),
-                                            import_replace=import_replace))
+                                            import_replace=import_replace, linux_keyring=bool(args.linux_keyring),
+                                            private_keyring_session=args.private_keyring_session,
+                                            flutter_stock=bool(args.flutter_stock_app),
+                                            keyring_denial=args.linux_keyring_denial))
             report['checks'].append(result)
             publish()
         else:

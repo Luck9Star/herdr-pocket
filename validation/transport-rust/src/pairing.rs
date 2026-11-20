@@ -6,6 +6,20 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 pub trait KeyStore: Send + Sync {
+    fn transaction(&self) -> Result<Box<dyn Send>> { Ok(Box::new(())) }
+    /// Reserve any durable creation intent before create; default stores need none.
+    fn begin_create(&self, _host_id: &str, _target: &str) -> Result<()> { Ok(()) }
+    /// An unfinished write is queried only by its original host and handle.
+    fn pending_create(&self, _host_id: &str, _target: &str) -> Result<Option<String>> { Ok(None) }
+    /// Read the handle reserved for this host while holding the store transaction.
+    /// Protect the original host record even if its current target cannot recover the write.
+    fn pending_create_handle(&self, _host_id: &str) -> Result<Option<String>> { Ok(None) }
+    /// Clear a durable intent only after the matching public reference is stored.
+    fn finish_create(&self, _handle: &str) -> Result<()> { Ok(()) }
+    /// After explicit confirmed deletion, clear only a matching creation intent.
+    fn clear_deleted_create(&self, _handle: &str) -> Result<()> { Ok(()) }
+    /// A native persistent store may retain uncertain work for explicit review.
+    fn failed_create_cleanup(&self, handle: &str) -> Result<()> { self.delete(handle) }
     fn create(&self) -> Result<(String, String)>;
     fn public(&self, handle: &str) -> Result<String>;
     fn sign(&self, handle: &str, data: &[u8]) -> Result<Vec<u8>>;
@@ -145,10 +159,12 @@ impl Pairing {
         let request_id = random_id()?;
         let expires_at = now.checked_add(600).ok_or("invalid_time")?;
         let (handle, public_key) = store.create()?;
-        if store.public(&handle).ok().as_deref() != Some(public_key.as_str())
-            || fingerprint(&public_key).is_err()
-        {
-            let _ = store.delete(&handle);
+        let checked = match store.public(&handle) {
+            Ok(key) => key,
+            Err(error) => { let _ = store.failed_create_cleanup(&handle); return Err(error); }
+        };
+        if checked != public_key || fingerprint(&public_key).is_err() {
+            let _ = store.failed_create_cleanup(&handle);
             return Err("invalid_device_key");
         }
         Ok(Self {
@@ -383,6 +399,7 @@ impl Pairing {
             Arc::new(HandleSigner {
                 store: self.store.clone(),
                 handle: self.handle.clone(),
+                failure: std::sync::Mutex::new(None),
             }),
         ))
     }
@@ -399,14 +416,19 @@ impl Pairing {
 struct HandleSigner {
     store: Arc<dyn KeyStore>,
     handle: String,
+    failure: std::sync::Mutex<Option<&'static str>>,
 }
 impl DeviceSigner for HandleSigner {
     fn sign(&self, data: &[u8]) -> std::result::Result<Vec<u8>, ()> {
         if data.len() > 65536 {
             return Err(());
         }
-        self.store.sign(&self.handle, data).map_err(|_| ())
+        self.store.sign(&self.handle, data).map_err(|error| {
+            let public = match error { "key_locked" | "key_missing" | "key_unavailable" => error, _ => "key_unavailable" };
+            if let Ok(mut failure) = self.failure.lock() { *failure = Some(public); }
+        })
     }
+    fn failure(&self) -> Option<&'static str> { self.failure.lock().ok().and_then(|value| *value) }
 }
 
 /// Explicitly volatile test identity, never persisted or exported. Not device security.
@@ -469,6 +491,26 @@ impl KeyStore for VolatileKeyStore {
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 mod tests {
     use super::*;
+    #[test]
+    fn signer_failure_is_per_connection_and_preserves_bounded_key_errors() {
+        struct FailureStore(&'static str);
+        impl KeyStore for FailureStore {
+            fn create(&self)->Result<(String,String)>{Err("key_unavailable")}
+            fn public(&self,_:&str)->Result<String>{Err("key_unavailable")}
+            fn sign(&self,_:&str,_:&[u8])->Result<Vec<u8>>{Err(self.0)}
+            fn delete(&self,_:&str)->Result<()>{Err("key_unavailable")}
+        }
+        for code in ["key_locked", "key_unavailable", "key_missing"] {
+            let first=HandleSigner{store:Arc::new(FailureStore(code)),handle:"one".into(),failure:std::sync::Mutex::new(None)};
+            let second=HandleSigner{store:Arc::new(FailureStore("key_missing")),handle:"two".into(),failure:std::sync::Mutex::new(None)};
+            assert!(first.sign(b"fixture").is_err()); assert_eq!(first.failure(),Some(code));
+            assert_eq!(second.failure(),None);
+            assert_eq!(crate::device_auth_outcome(Err("authentication_failed"),&first),Err(code));
+            assert_eq!(crate::device_auth_outcome(Err("authentication_failed"),&second),Err("authentication_failed"));
+            assert_eq!(crate::device_auth_outcome(Ok(false),&second),Ok(false));
+            assert_eq!(crate::device_auth_outcome(Err("cancelled"),&first),Err("cancelled"));
+        }
+    }
     fn new_host() -> String {
         VolatileKeyStore::default().create().unwrap().1
     }

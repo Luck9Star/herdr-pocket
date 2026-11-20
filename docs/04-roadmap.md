@@ -97,7 +97,7 @@ Flutter 平台流与节点 GUI 随后在 `d6c4285` 接入，两套当前源码�
 - [ ] **M0.5-07** 分清断开主机、离开网络/停用配置、删除身份的实际效果，不将停用统一解释为销毁原生节点；重叠地址须证明底层可定向到选定网络，否则拒绝该并发组合并改用显式切换。
   **待验证。** Android 受检会话在停用本网络后关闭，另一网沿原会话续输。物理网络下共享节点、删除身份与同址路由仍须分别取证，见 M2-02 至 M2-05。[隔离验收](65-dual-overlay-validation.md) · [Android 双网](67-android-dual-network-startup.md)
 - [ ] **M0.5-08** 与手机 A/B 并行做 Windows overlay 原生桥最小验证：当前 Dart 候选 `tailscale` 0.9.0 不支持 Windows，不能靠 UI 框架可构建跳过；Linux 验证系统凭据服务缺失/锁定时的行为，不回退明文。
-  **待验证。** Windows 的 EasyTier 桥有编译、加载和离线流检查。Windows overlay→SSH、Linux 凭据服务锁定／缺失仍待验证。[Windows 原生桥](10-blocker-repair.md) · [Linux 降级边界](60-m0-evidence-archive.md)
+  **待验证。** Windows 的 EasyTier 桥已有编译、加载和离线流检查，overlay→SSH 待验。Linux 配对共享桥在独立 GNOME 服务及无服务对照中验证了锁定、缺失与临时集合的失败边界。两壳官方 Linux 测试包和隔离单主机配对已验，其他密钥环、实际用户桌面和跨网待验。 [Windows 原生桥](10-blocker-repair.md) · [Linux 密钥环证据](evidence/linux-pairing-secret-service-20261120/README.md)
 - [ ] **M0.5-09** 按衍生改动继续开源的立场核清候选组件许可与分发条件，再用相同五端 IME、ANSI 与性能用例比较；通过前不锁定组件，也不把项目开源立场直接当作某个 GPL/AGPL 许可证已选定。
   **待验证。** 主许可证已有决定。依赖需按候选产物和渠道闭合，仍缺相同五端 IME、ANSI 和性能对照。[许可审查](17-license-and-distribution-review.md) · [候选对比](64-libghostty-terminal-core-evaluation.md)
 - [ ] **M0.5-10** 字体是终端选型必过项：固定纯 zsh、选定 Oh My Zsh 主题/Powerlevel10k、Oh My Posh 图标配置的五端 fixture，覆盖 Powerline/Git/PUA/CJK/emoji/组合字符、IME、光标列、换行、本地字号/观察视图 resize 与异步重绘；不接管远端 PTY，锁定字体版本与可再分发许可。
@@ -126,11 +126,11 @@ Flutter 平台流与节点 GUI 随后在 `d6c4285` 接入，两套当前源码�
 - [ ] **M1-05** 五端本地配置/偏好加密导出与审查导入；预览覆盖/冲突/缺失认证项及受影响连接/标签，替换在用配置时停止相关连接与自动重试；按秘密分类排除设备私钥和节点身份，不自动连接/信任/发送。
   **待验证。** 两壳已分别在 Android API 35 模拟器通过字号偏好的系统选择器闭环。Flutter R7 完成 19 个检查点与五次 DocumentsUI，覆盖取消、独立解密导出档案、错口令和篡改拒绝、预览保持目录不变，以及一次确认后恢复字号 19。v2 加密互读与原子写入已有隔离回归，Mac 系统选择器已有导入导出。390×844 下已复核两壳按替换选项更新连接和标签影响预览。[Flutter Android R7](evidence/flutter-android-documents-saf-20261120/README.md) · [Tauri Android R6](evidence/tauri-mobile-native-20261120/README.md#android-系统文件选择器) · [手机预览和复跑](evidence/config-import-impact-20261120/README.md) · [迁移与 Mac 实测](18-mobile-network-profiles.md) · [负向用例](16-mobile-input-and-config.md)
 
-  活动连接替换已有 Flutter 双真实回环（`e74c7ec`）、Tauri WebKit 合成迟到撤权 IPC（`ad0d70e`）及 Tauri Linux GTK/x86 官方回环实跑。Linux 的 R4 `5a85d585` 和 #55 集成历史复验 `ab6ef070` 均通过正式文件导入、旧标签保留停用和幸存端在原连接推进。五端文件提供方、在用连接和自动重试停止仍须逐端验收。实体设备、跨网、系统读屏未验证。[活动连接替换证据](evidence/config-import-retained-tabs-20261120/README.md) · [Linux R4](https://github.com/Luck9Star/herdr-pocket/actions/runs/44649668455/job/136001096650) · [#55 集成复验](https://github.com/Luck9Star/herdr-pocket/actions/runs/44653580682/job/136014197833)
+  活动连接替换已有 Flutter 双真实回环（`e74c7ec`）、Tauri WebKit 合成迟到撤权 IPC（`ad0d70e`）及 Tauri Linux GTK/x86 官方回环实跑。Linux 的 R4 `5a85d585` 和 #55 集成历史复验 `ab6ef070` 均通过正式文件导入、旧标签保留停用和幸存端在原连接推进。#59 集成复验在私有 Secret Service 同轮独立核对两把配对公钥、两条原 SSH 的关闭与零输入。待创建身份拒绝替换另有本机回归。五端文件提供方、在用连接和自动重试停止仍须逐端验收。实体设备、跨网、系统读屏未验证。[活动连接替换证据](evidence/config-import-retained-tabs-20261120/README.md) · [Linux R4](https://github.com/Luck9Star/herdr-pocket/actions/runs/44649668455/job/136001096650) · [#55 集成复验](https://github.com/Luck9Star/herdr-pocket/actions/runs/44653580682/job/136014197833) · [#59 正常导入替换](evidence/linux-pairing-secret-service-20261120/README.md#正常导入替换)
 - [ ] **M1-06** 按主机分组的看板、待处理项、同步时间与失去连接状态。
   **待验证。** 看板、会话筛选、同步与陈旧状态已有源码及 Android 配对观察证据。待处理项、掉线和前台刷新需在真实设备组合复测。[同步模型](23-mobile-session-watch.md) · [Android 看板](40-android-paired-dashboard-validation.md) · [看板搜索复测](58-session-handoff-2026-11-09-r2.md)
 - [ ] **M1-07** 手机看板进入多个终端标签并切换；桌面主机侧栏、列表与多标签/分屏工作台，支持窗口调整和键盘导航，始终只有一个明确输入焦点。
-  **待验证。** 手机标签已有实现与 Android 全帧恢复证据。Ubuntu S06 有 Flutter Widget 真实双连接结果，Tauri 原生 GTK R12 在同一次双 SSH 运行中通过逐键窗口往返、退出及主动关闭。Flutter 最新 D2 在合成 Widget 中通过阈值、窗口变化和键盘导航验证。macOS 普通 SSH 单窗口及无界面双回环已有独立记录，原生双连接在当前签名环境下未验证。[标签](22-mobile-terminal-tabs.md) · [普通 SSH 实窗](63-design-parity-and-direct-ssh.md) · [S06 与 D2 证据](74-desktop-split-resize.md)
+  **待验证。** 手机标签已有实现与 Android 全帧恢复证据。Ubuntu 私有密钥环 S06 R2 的两壳只读双连接通过，Flutter GTK integration 验收焦点侧关闭及另一侧继续，Tauri 原生 GTK 验收窗口往返和手动暂停。Tauri 原生 GTK guarded R12 有逐键、窗口往返与关闭证据。#59 集成复验在私有 Secret Service 同轮独立核对两把设备公钥、逐键与草稿的实际 [9,1] 字节、原窗口往返及逐侧 SSH 关闭。Flutter D2 的阈值与键盘导航由合成 Widget 覆盖。macOS 普通 SSH 单窗口及无界面双回环已有独立记录，原生双连接在当前签名环境下未验证。[标签](22-mobile-terminal-tabs.md) · [普通 SSH 实窗](63-design-parity-and-direct-ssh.md) · [S06 与 D2 证据](74-desktop-split-resize.md) · [#59 受保护双主机](evidence/linux-pairing-secret-service-20261120/README.md#tauri-受保护输入双主机-s06)
 - [x] **M1-08** 从看板进入准确目标，观察终端，区分当前画面与旧画面。
   **已通过。** （2026-11-10 勾选：两壳在 API 35 模拟器完成明确 pane 选择、full/delta 与主动停止，停止后画面正确标记陈旧——[15](15-mobile-gui-validation.md)、run `42659301059`（Flutter）、run `42681783874`（Tauri，`stoppedStale: true`）；为模拟器级证据。）
 - [ ] **M1-09** 五端默认观察，显式进入完整逐键终端，支持快捷键、组合键与交互 TUI；手机提供辅助键、草稿编辑和多行粘贴预览。
@@ -140,7 +140,7 @@ Flutter 平台流与节点 GUI 随后在 `d6c4285` 接入，两套当前源码�
 - [ ] **M1-11** 重连后重新同步状态与全量画面；目标退出或身份变化时关闭发送。
   **待验证。** Android 两壳受保护路径分批有隐藏后取新 full 的证据。服务重启、代际变化、实际切网和五端恢复仍须验证。[0011 / 0014](58-session-handoff-2026-11-09-r2.md) · [目标替换与旧帧](23-mobile-session-watch.md)
 - [ ] **M1-12** 本地凭据安全保存与删除入口，诊断日志脱敏。
-  **待验证。** Android API 35 模拟器有软件 KeyMint 签名与删除证据，macOS 有普通 SSH 安全输入专项。硬件密钥、五端存储删除与诊断脱敏仍待逐端验证。[设备身份](55-mobile-shared-network-device.md) · [诊断](53-mobile-connection-diagnostics.md) · [Mac 安全输入](63-design-parity-and-direct-ssh.md)
+  **待验证。** Android API 35 模拟器有软件 KeyMint 签名与删除证据，macOS 有普通 SSH 安全输入专项。Linux 两壳在私有 GNOME Secret Service 完成官方单主机、S06 回环与原密钥双进程复用。锁定和服务停止后的第二进程均拒绝连接，保留原目录、句柄与授权。Flutter 解锁对照 R4 已复验两进程正常退出、同钥认证及各自窗口中的观察推进。Linux 定向测试包的许可、修改来源及外层诊断资产均已比对。Tauri 待创建身份保留原主机记录的修复已在原生壳定向复验，用户桌面环境中的中断恢复待验。不同密钥环、硬件密钥、五端存储删除与诊断脱敏仍按平台验收。 [设备身份](55-mobile-shared-network-device.md) · [诊断](53-mobile-connection-diagnostics.md) · [Mac 安全输入](63-design-parity-and-direct-ssh.md) · [Linux 密钥环证据](evidence/linux-pairing-secret-service-20261120/README.md)
 
 验收：手机新用户无需桌面 GUI 也能扫码接入，畸形资料与错配/过期/已完成响应被拒，手动兜底可用；扫码后所需入网/授权步骤明确，实际 SSH 认证成功才计配对完成。五端加密迁移在错误口令/篡改/冲突下不部分导入或自动信任。再通过首连、逐键/TUI、草稿/粘贴、多标签、模式切换、目标变化和恢复；手机辅助与桌面分屏不串目标。保存实际输入及反馈，证明主机、session、目标和内容一致。逐键中断不积压，未知不重放；未通过的平台记录实验或未支持。
 

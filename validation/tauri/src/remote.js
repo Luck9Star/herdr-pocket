@@ -124,6 +124,8 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     $('pair-preview').disabled=document.hidden || gate.pending || pairBusy;
     $('pair-preview').textContent=pairCamera?.held ? '重新查看本次响应扫描' : '查看响应内容';
     $('pair-create').disabled=revocationMode() || !native || gate.pending || pairState!=='none' || !$('pair-target-review').checked;
+    $('pair-pending-recover').disabled=!native || gate.pending || pairBusy || !((pairState==='none' && $('pair-target-review').checked) || (pairState==='restore-required' && $('host-restore-review').checked));
+    $('pair-pending-discard').disabled=!native || gate.pending || pairBusy || pairState!=='none' || !$('pair-target-review').checked;
     let responseReady=false;try{responseReady=!!previewResponse && pairReviewIdentity===responseScope() && !!validCurrentResponse(previewResponse);}catch{}
     $('pair-accept').disabled=!native || gate.pending || pairBusy || document.hidden || !responseReady || !$('pair-source-review').checked;
     const record=currentRequestRecord();$('pair-request-summary').hidden=!record;
@@ -501,7 +503,20 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
       inputUnknown=false; inputEpoch=null; unknownReview=null;showUnknownReview(); $('remote-input-recover').hidden=true; inputStatus('已核实原目标；请重新选择输入模式。');
     } catch {if(generation===inputGeneration && target===selectedTarget && revision===inputRevision)inputStatus('只能在重新连接并核实原目标后恢复。');}
   };
-  function hostMessage(message) { const note=$('host-home-status');note.textContent=message;note.hidden=message==='选择主机、管理资料，或新增主机。'; if(!$('remote-page').hidden)status(message,'warning'); }
+  function hostMessage(message, reviewHostId) {
+    const note=$('host-home-status');
+    note.replaceChildren();
+    note.textContent=message;
+    note.hidden=message==='选择主机、管理资料，或新增主机。';
+    if(reviewHostId) {
+      const review=document.createElement('button');
+      review.type='button';
+      review.textContent='打开原主机核对身份';
+      review.onclick=()=>void openSavedHost(reviewHostId,true);
+      note.append(review);
+    }
+    if(!$('remote-page').hidden)status(message,'warning');
+  }
   function targetConfig() {return {schemaVersion:1,host:$('remote-host').value,port:Number($('remote-port').value),username:$('remote-user').value,expectedHostKey:$('remote-pin').value,privateKeyPem:'',socketPath:$('remote-socket').value,herdrPath:$('remote-herdr').value,session:$('remote-session').value,paneId:'',reviewConfirmed:true};}
   function draftOwner(key) {
     try {
@@ -745,15 +760,52 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
       if(!host.retired && !host.keyDeletionPending) button(host.enabled?'停用':'启用',async()=>{try {await waitForOldConnection(++hostNavigation);if(host.enabled)workspace.affected([host.id]);await invoke('host_update',{id:host.id,name:null,enabled:!host.enabled});await refreshHosts();}catch {await refreshHosts();hostMessage('操作未确认，请核查状态并确保连接已结束。');}});
       const cleanupIdentity=host.keyDeletionPending && host.keyCleanupMode==='identity';
       const cleanupKnown=!host.keyDeletionPending || ['identity','host'].includes(host.keyCleanupMode);
-      let confirming=false; const remove=button(host.keyDeletionPending?(cleanupIdentity?'重试仅清理设备身份':'重试移除主机资料'):'移除',async()=>{if(!confirming){confirming=true;remove.textContent=cleanupIdentity?'再次确认仅清身份，保留主机资料':'确认移除本机资料';return;}confirming=false; try {await waitForOldConnection(++hostNavigation);workspace.affected([host.id]);const result=await invoke(host.keyDeletionPending?'host_cleanup_retry':'host_remove',{id:host.id});if(result?.keyDeleted!==true || (host.keyDeletionPending && (result.hostId!==host.id || result.mode!==host.keyCleanupMode || result.hostRemoved!==(host.keyCleanupMode==='host'))))throw Error('host_key_cleanup_changed');const removed=!host.keyDeletionPending || result.hostRemoved===true;if(activeHostId===host.id)activeHostId=null;if(removed)removeHostDrafts(host.id);hostStatuses.delete(host.id);await refreshHosts();hostMessage(removed?'已移除本机资料；主机授权仍须另行处理。':'仅清理本机设备身份，原主机公开资料已保留并停用；主机授权仍须另行处理。');}catch {try{await refreshHosts();}catch{}hostMessage('本机删除未确认；请重新读取目录核查。若显示待清理，按原清理意图再次确认重试，不会自动重试。');}});remove.disabled=pairBusy || !cleanupKnown;remove.setAttribute('aria-describedby',detailId);
+      let confirming=false;
+      const remove=button(host.keyDeletionPending?(cleanupIdentity?'重试仅清理设备身份':'重试移除主机资料'):'移除',async()=>{
+        if(!confirming) {
+          confirming=true;
+          remove.textContent=cleanupIdentity?'再次确认仅清身份，保留主机资料':'确认移除本机资料';
+          return;
+        }
+        confirming=false;
+        remove.disabled=true;
+        try {
+          const result=await invoke(host.keyDeletionPending?'host_cleanup_retry':'host_remove',{id:host.id});
+          if(result?.keyDeleted!==true || (host.keyDeletionPending && (result.hostId!==host.id || result.mode!==host.keyCleanupMode || result.hostRemoved!==(host.keyCleanupMode==='host'))))throw Error('host_key_cleanup_changed');
+          workspace.affected([host.id]);
+          const removed=!host.keyDeletionPending || result.hostRemoved===true;
+          if(activeHostId===host.id)activeHostId=null;
+          if(removed)removeHostDrafts(host.id);
+          hostStatuses.delete(host.id);
+          await refreshHosts();
+          hostMessage(removed?'已移除本机资料；主机授权仍须另行处理。':'仅清理本机设备身份，原主机公开资料已保留并停用；主机授权仍须另行处理。');
+        } catch(e) {
+          await refreshHosts();
+          const saved=hostRecords.find(record=>record.id===host.id);
+          const error=e?.message || String(e);
+          if(error==='host_key_creation_pending') {
+            hostMessage('原主机有待确认的设备身份，资料已保留。请打开原主机核对并恢复或删除该身份。'+(saved && !saved.enabled?' 请先启用原主机。':''),saved?.enabled ? host.id : null);
+            return;
+          }
+          if(saved?.keyDeletionPending)workspace.affected([host.id]);
+          hostMessage(['key_locked','key_unavailable','key_missing'].includes(error) ? identityError(error) : '本机删除未确认；请重新读取目录核查。若显示待清理，按原清理意图再次确认重试，不会自动重试。'+(error==='connection_active'?' 请先结束原主机的旧观察，再重试。':''));
+        }
+      });
+      remove.disabled=pairBusy || !cleanupKnown;
+      remove.setAttribute('aria-describedby',detailId);
       actions.append(manage);card.append(actions);$('host-list').append(card);
       if(host.enabled) {const tab=document.createElement('button');tab.type='button';tab.textContent=host.name;tab.disabled=pairBusy;tab.setAttribute('aria-pressed',String(host.id===activeHostId));tab.onclick=()=>void openSavedHost(host.id);$('host-tabs').append(tab);}
     }
     filterHostCards();
     workbench.render();
   }
-  async function openSavedHost(id) {
+  async function openSavedHost(id, reviewPending=false) {
     if(pairBusy)return;
+    if(reviewPending && activeHostId===id && pairState==='storage-failed') {
+      showRemotePage();render();
+      pairStatus('本次创建的身份尚未确认，请在此显式删除该身份。');
+      return;
+    }
     if(runtimeRevokedHosts.has(id) && hostRecords.find(host=>host.id===id)?.pairingStatus!=='revoked'){hostMessage('本次运行已停用此设备，撤销回执保存未确认；不能恢复旧授权，请保留原回执并核查或显式清理。');return;}
     connectionProfiles?.invalidate();pairCamera?.discard();clearHandoff();revocationReview=false;pairReviewIdentity=null;
     const revision=++hostNavigation; saveHostDraft();
@@ -761,11 +813,12 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
       await waitForOldConnection(revision);const host=await invoke('host_select',{id});if(revision!==hostNavigation)return;
       clearSnapshot();pairFingerprint=null;activeHostId=id;unsavedHostOpen=false;fillHost(host.target);$('remote-profile-provider').value=host.provider || '';$('host-save-name').value=host.name;discardKey();
       $('pair-request').value='';$('pair-response').value='';previewResponse='';$('pair-source-review').checked=false;$('pair-target-review').checked=false;
-      $('pair-mode').checked=!!host.deviceFingerprint;pairState=host.deviceFingerprint?'restore-required':'none';
+      $('pair-mode').checked=reviewPending || !!host.deviceFingerprint;pairState=host.deviceFingerprint?'restore-required':'none';
       $('host-restore-panel').hidden=!host.deviceFingerprint;$('host-restore-review').checked=false;
       $('host-restore-description').textContent=`主机：${host.hostFingerprint} · 设备：${host.deviceFingerprint || '未保存'}。身份恢复只会验证本机公钥，不会建立连接。`;
       $('host-restore-status').textContent='';clearDraftBinding();gate.reviewed=false;showRemotePage();renderHosts();render();
       pairStatus(host.deviceFingerprint?'先核对指纹并恢复原设备；不会自动重建。':'此主机尚无设备身份，可新建配对或使用手动入口。');
+      await refreshPendingIdentity();
       status((hostStatuses.get(id) || '已切换目标。')+' 重新核对后主动连接。');
     } catch(e) {hostMessage(String(e)==='unsaved_pairing'?'当前设备身份尚未保存；请先保存或删除后再切换。':'无法打开主机；资料或旧连接不可用。');}
   }
@@ -929,6 +982,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   $('add-ssh').onclick=()=>{ if(!ssh.isActive()) sshBackSection='add'; setHomeSection('ssh'); };
   $('home-open-ssh').onclick=()=>{ if(!ssh.isActive()) sshBackSection='dashboard'; setHomeSection('ssh'); };
   const closeConfigTransfer=initConfigTransfer({native, invoke, getHosts:()=>hostRecords, getTabImpacts:workspace.tabImpacts, refreshHosts,
+    onReviewPending: id=>void openSavedHost(id,true),
     captureLeases:()=>({tabs:workspace.tabLeaseSnapshot(),legacy:{hostId:activeHostId,generation:gate.pendingGeneration,nativeGeneration:gate.nativeGeneration}}),
     createRevokeChannel:()=>new Channel(),
     onRevoked:(event,snapshot,selected)=>{
@@ -949,7 +1003,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
   $('host-restore').onclick=()=>pairOperation(async()=>{
     if(!activeHostId || !$('host-restore-review').checked)return;
     try {const p=await invoke('host_restore',{id:activeHostId,reviewed:true}); pairState=p.state;pairFingerprint=p.fingerprint; $('pair-request').value=p.request; $('host-restore-review').checked=false; $('host-restore-panel').hidden=true;gate.reviewed=false;pairStatus(p.state==='revoked'?`原设备记录已撤销 · ${p.fingerprint}；不能连接或重新授权。记录保留供核对和显式清理。`:p.state==='awaiting-host'?`原设备公钥匹配 · ${p.fingerprint}；继续等待同一请求的主机响应，需重新审查。`:p.state==='expired'?'原请求已过期；不能接受授权，请核查主机状态，可审查撤销响应或删除本机身份。':p.state==='cancelled'?'请求已取消；不能接受授权，请核查主机状态或审查撤销响应。':`原设备公钥匹配 · ${p.fingerprint}；尚未进行 SSH 认证。`);}
-    catch(e){$('host-restore-status').textContent=`恢复失败：${String(e)}。不会自动生成替代身份。`;}
+    catch(e){$('host-restore-status').textContent=identityError(e);await refreshPendingIdentity();}
   });
   async function pairOperation(work) {
     if (pairBusy) return;
@@ -958,6 +1012,35 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     pairBusy=true; render(); renderHosts();
     try { await work(); } finally { pairBusy=false; render(); renderHosts(); }
   }
+  const identityError = e => ({key_locked:'系统密钥环已锁定，请先解锁后重新核查原身份。',
+    key_unavailable:'系统密钥服务不可用，请配置或启动后重新核查；不会使用明文或替代身份。',
+    key_missing:'原设备身份不存在；主机资料保留，不会自动重新创建。',
+    key_creation_pending:'存在未确认的身份创建，请核对原待处理身份，不会自动重试。',
+    key_write_unknown:'创建结果未确认；请核对原待处理身份，不会自动重试。'}[String(e)] || `操作未确认：${String(e)}`);
+  async function refreshPendingIdentity() {
+    const button=$('pair-pending-recover'), discard=$('pair-pending-discard');
+    button.hidden=true;discard.hidden=true;
+    if(!native || !activeHostId)return;
+    const id=activeHostId;
+    try {const pending=await invoke('pair_pending_status',{hostId:id});if(activeHostId===id){button.hidden=pending!==true;discard.hidden=pending!==true;}}
+    catch {if(activeHostId===id)pairStatus('待处理身份状态不可确认；请核查本机存储，不会自动创建。');}
+    render();
+  }
+  $('pair-pending-discard').onclick=()=>pairOperation(async()=>{
+    if(!activeHostId || pairState!=='none' || !$('pair-target-review').checked)return;
+    if(!window.confirm('确认删除原待处理设备身份？主机资料会保留，可能已有的主机授权须另行处理。'))return;
+    try {await invoke('pair_discard_pending',{hostId:activeHostId});await refreshPendingIdentity();pairStatus('原待处理身份已删除或确认不存在；主机资料已保留。');}
+    catch(e){pairStatus(identityError(e));}
+  });
+  $('pair-pending-recover').onclick=()=>pairOperation(async()=>{
+    if(!activeHostId || !((pairState==='none' && $('pair-target-review').checked) || (pairState==='restore-required' && $('host-restore-review').checked)))return;
+    if(pairTargetIds.some(id=>!$(id).checkValidity() || !$(id).value))return;
+    const config={schemaVersion:1,host:$('remote-host').value,port:Number($('remote-port').value),username:$('remote-user').value,expectedHostKey:$('remote-pin').value,privateKeyPem:'',socketPath:$('remote-socket').value,herdrPath:$('remote-herdr').value,session:$('remote-session').value,paneId:'',reviewConfirmed:true};
+    try {const p=await invoke('pair_recover_pending',{config,device:$('pair-device').value,hostId:activeHostId});
+      $('pair-request').value=p.request;pairState=p.state;pairFingerprint=p.fingerprint;$('pair-pending-recover').hidden=true;$('pair-pending-discard').hidden=true;
+      pairStatus(`原待处理身份已核对 · 设备指纹 ${p.fingerprint} · 授权未知`);await refreshHosts();
+    } catch(e) {pairStatus(identityError(e));}
+  });
   $('pair-create').onclick=()=>pairOperation(async()=>{
     const phase = $('pair-status').dataset;
     phase.createPhase='review';
@@ -977,7 +1060,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
         'host_pairing_exists','host_already_exists','host_restore_required','invalid_public_field'];
       const code=known.includes(e)?e:'unavailable';
       phase.createPhase+='_'+code;
-      pairStatus(`配对请求未确认 · ${code}。请核验本机资料及设备解锁状态，再手动处理。`);
+      pairStatus(identityError(e)); await refreshPendingIdentity();
     }
   });
   $('pair-request-copy').onclick=async()=>{
@@ -1030,7 +1113,7 @@ export function initRemote({ native, theme, onFixture, onLeaveFixture, clipboard
     } catch(e) { pairStatus(`响应拒绝：${String(e)}。请重新核对；请求未被消耗。`); }
   });
   $('pair-cancel').onclick=()=>pairOperation(async()=>{ if(activeHostId)workspace.affected([activeHostId]);try { await invoke('pair_cancel'); pairState='cancelled';revocationReview=true; pairStatus('已取消；主机可能已授权，请核查或导入匹配的撤销响应。'); } catch(e) {pairStatus(`取消失败：${String(e)}`);} });
-  $('pair-reset').onclick=()=>pairOperation(async()=>{ if(activeHostId)workspace.affected([activeHostId]);try { await invoke('pair_reset');if(activeHostId)runtimeRevokedHosts.delete(activeHostId); pairState='none';pairFingerprint=null;revocationReview=false;pairReviewIdentity=null;clearHandoff(); $('pair-request').value=''; $('pair-response').value=''; previewResponse=''; $('pair-target-review').checked=false; $('pair-source-review').checked=false; $('pair-response-preview').hidden=true; pairStatus('本机身份已删除；请向主机核查或撤销可能存在的授权。');await refreshHosts(); } catch(e) {pairStatus('本机身份删除未确认；请保留本页或返回主机列表核查待清理记录，再按原“仅清身份”意图明确重试。');} });
+  $('pair-reset').onclick=()=>pairOperation(async()=>{ if(activeHostId)workspace.affected([activeHostId]);try { await invoke('pair_reset');if(activeHostId)runtimeRevokedHosts.delete(activeHostId); pairState='none';pairFingerprint=null;revocationReview=false;pairReviewIdentity=null;clearHandoff(); $('pair-request').value=''; $('pair-response').value=''; previewResponse=''; $('pair-target-review').checked=false; $('pair-source-review').checked=false; $('pair-response-preview').hidden=true; pairStatus('本机身份已删除；请向主机核查或撤销可能存在的授权。');await refreshHosts(); } catch(e) {pairStatus(['key_locked','key_unavailable','key_missing'].includes(String(e)) ? identityError(e) : '本机身份删除未确认；请保留本页或返回主机列表核查待清理记录，再按原“仅清身份”意图明确重试。');} });
   $('remote-cancel').onclick=()=>cancel();
   const stopObservation=()=>{cancel();$('remote-setup').open=true;};
   $('remote-stop-visible').onclick=stopObservation;

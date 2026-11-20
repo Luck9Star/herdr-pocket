@@ -1678,6 +1678,8 @@ dependencies = [
  "herdr-android-network-source",
  "herdr-probe-core",
  "herdr-readonly-transport",
+ "libc",
+ "ring",
  "serde",
  "serde_json",
  "tauri",

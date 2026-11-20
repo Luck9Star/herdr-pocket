@@ -10,6 +10,10 @@ on:
         default: false
   workflow_dispatch:
     inputs:
+      linux_only:
+        description: Build only the Linux test package
+        type: boolean
+        default: false
       android_only:
         description: Build only the Android test shell
         type: boolean
@@ -17,7 +21,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: tauri-probe-${{ github.ref }}
+  group: tauri-probe-${{ github.ref }}-${{ inputs.linux_only }}
   cancel-in-progress: true
 jobs:
   build:
@@ -27,7 +31,7 @@ jobs:
       max-parallel: 4
       matrix:
         include: >-
-          ${{ fromJSON(inputs.include_ios &&
+          ${{ fromJSON(inputs.linux_only && '[{"platform":"linux","runner":"ubuntu-24.04"}]' || inputs.include_ios &&
           '[{"platform":"android","runner":"ubuntu-24.04"},{"platform":"ios-simulator","runner":"macos-15"},{"platform":"ios-device","runner":"macos-15"}]' || inputs.android_only &&
           '[{"platform":"android","runner":"ubuntu-24.04"}]' ||
           '[{"platform":"android","runner":"ubuntu-24.04"},{"platform":"ios-simulator","runner":"macos-15"},{"platform":"ios-device","runner":"macos-15"},{"platform":"macos","runner":"macos-15"},{"platform":"linux","runner":"ubuntu-24.04"},{"platform":"windows","runner":"windows-2025"}]') }}

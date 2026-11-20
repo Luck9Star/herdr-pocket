@@ -80,7 +80,7 @@ async function importedRemote() {
   return import(`data:text/javascript;base64,${source}`);
 }
 
-async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scanResponse, pairRequest=pairingCameraFixture().request, clipboardWrite, pairAcceptStored=true, hostRemove, hostCleanupRetry, read = null, compactEntry = null, tabInvoke, sshInvoke } = {}) {
+async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scanResponse, pairRequest=pairingCameraFixture().request, clipboardWrite, pairAcceptStored=true, hostRemove, hostCleanupRetry, pairCreate, pairRecover, pendingStatus, read = null, compactEntry = null, tabInvoke, sshInvoke } = {}) {
   const previous = {
     document: globalThis.document,
     window: globalThis.window,
@@ -174,6 +174,10 @@ async function setup({ inputMode = () => 1, clipboardRead, keyboardRequest, scan
       }
       return structuredClone(records[0]);
     }
+    if (name === 'pair_pending_status') return pendingStatus ? pendingStatus(args,records) : false;
+    if (name === 'pair_recover_pending') return pairRecover ? pairRecover(args,records) : Promise.reject('key_creation_missing');
+    if (name === 'pair_discard_pending') return null;
+    if (name === 'pair_create' && pairCreate) return pairCreate(args,records);
     if (name === 'pair_create') {
       records[0].deviceFingerprint = 'device-fingerprint';
       records[0].pairingStatus = 'awaiting-host';
@@ -1359,6 +1363,40 @@ test('normal new host entry previews profile, fills every target field without w
     assert.equal(h.calls.filter(x=>x.name==='pair_create').length,1);
   }finally{h.restore();}
 });
+test('uncertain key creation requires explicit same-host recovery without creating another key',async()=>{
+  const h=await setup({pairCreate:()=>{throw 'key_write_unknown';},pendingStatus:()=>true,
+    pairRecover:()=>({stored:true,state:'awaiting-host',request:pairingCameraFixture().request,fingerprint:'device-fingerprint'})}),n=h.nodes;
+  try {
+    n['host-open-remote'].click();n['add-herdr'].click();await flush();await flush();
+    n['connection-profile-raw'].value=connectionProfiles.valid[0].raw;
+    await n['connection-profile-preview'].onclick();n['connection-profile-apply'].click();
+    n['pair-target-review'].checked=true;n['remote-form'].dispatch('input',{target:n['pair-target-review']});
+    n['pair-create'].click();await flush();await flush();await flush();
+    assert.equal(h.calls.filter(x=>x.name==='pair_create').length,1);
+    assert.match(n['pair-status'].textContent,/创建结果未确认/);
+    assert.equal(n['pair-pending-recover'].hidden,false);
+    n['pair-pending-recover'].click();await flush();await flush();
+    assert.equal(h.calls.filter(x=>x.name==='pair_recover_pending').length,1);
+    assert.equal(h.calls.filter(x=>x.name==='pair_create').length,1);
+    assert.equal(h.calls.filter(x=>x.name==='remote_observe').length,0);
+  } finally {h.restore();}
+});
+test('discarding an uncertain identity needs confirmation and never creates another',async()=>{
+  const h=await setup({pairCreate:()=>{throw 'key_write_unknown';},pendingStatus:()=>true}),n=h.nodes;
+  try {
+    n['host-open-remote'].click();n['add-herdr'].click();await flush();await flush();
+    n['connection-profile-raw'].value=connectionProfiles.valid[0].raw;
+    await n['connection-profile-preview'].onclick();n['connection-profile-apply'].click();
+    n['pair-target-review'].checked=true;n['remote-form'].dispatch('input',{target:n['pair-target-review']});
+    n['pair-create'].click();await flush();await flush();await flush();
+    assert.equal(n['pair-pending-discard'].hidden,false);
+    window.confirm=()=>false;n['pair-pending-discard'].click();await flush();
+    assert.equal(h.calls.filter(x=>x.name==='pair_discard_pending').length,0);
+    window.confirm=()=>true;n['pair-pending-discard'].click();await flush();await flush();
+    assert.equal(h.calls.filter(x=>x.name==='pair_discard_pending').length,1);
+    assert.equal(h.calls.filter(x=>x.name==='pair_create').length,1);
+  } finally {h.restore();}
+});
 test('real new host camera entry previews before fill and rejects edits / saved-host identity',async()=>{
   const h=await setup({scanResponse:()=>connectionProfiles.valid[0].raw}),n=h.nodes;
   try {
@@ -1647,6 +1685,37 @@ for(const error of ['connection_active','host_storage_unavailable'])test(`delete
   const actions=()=>n['host-list'].children[0].children.find(x=>x.className==='saved-host-actions');const remove=expandedActions(actions()).find(x=>x.textContent==='移除');remove.click();remove.click();await flush();await flush();
   assert.match(n['host-home-status'].textContent,/本机删除未确认/);assert.doesNotMatch(n['host-home-status'].textContent,/连接已停用|原引用保留/);assert.equal(expandedActions(actions()).find(x=>x.textContent==='打开主机').disabled,false);
  }finally{h.restore();}
+});
+
+test('blocked removal offers to review the original pending identity on its saved host', async () => {
+  const id = 'a'.repeat(32);
+  const h = await setup({
+    hostRemove: () => Promise.reject('host_key_creation_pending'),
+    pendingStatus: ({hostId}) => hostId === id,
+  }), n = h.nodes;
+  try {
+    await createCameraPair(h);
+    h.updateHost({deviceFingerprint: null, pairingStatus: null});
+    n['host-return-home'].click();
+    await flush();
+    const actions = n['host-list'].children[0].children.find(x => x.className === 'saved-host-actions');
+    const remove = expandedActions(actions).find(x => x.textContent === '移除');
+    remove.click();
+    remove.click();
+    await flush();
+    const notice = n['host-home-status'];
+    assert.match(notice.textContent, /原主机/);
+    const review = notice.all().find(x => x.textContent === '打开原主机核对身份');
+    assert.ok(review);
+    assert.equal(h.calls.filter(x => x.name === 'host_select').length, 0);
+    review.click();
+    await flush();
+    assert.deepEqual(h.calls.filter(x => x.name === 'host_select').map(x => x.args.id), [id]);
+    assert.equal(n['pair-mode'].checked, true);
+    assert.equal(n['pair-pending-recover'].hidden, false);
+    assert.equal(n['pair-pending-discard'].hidden, false);
+    assert.equal(h.calls.some(x => x.name === 'pair_discard_pending'), false);
+  } finally { h.restore(); }
 });
 
 test('delete failure with unavailable directory readback still reports an unconfirmed result neutrally',async()=>{

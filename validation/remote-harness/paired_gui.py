@@ -1,5 +1,5 @@
 """Exercise a real pairing UI against the runner's disposable SSH server."""
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 import json
 import os
 from pathlib import Path
@@ -17,6 +17,7 @@ sys.path.insert(0, str(REPO / 'helper'))
 sys.path.insert(0, str(REPO / 'validation/pairing'))
 from pairing import fingerprint
 from guarded_input import ANDROID_ROUTES, DIRECT, DRAFT, EvidenceError, expected_bytes, mobile_receipts, mobile_tui_evidence
+from linux_pairing_keyring import DENIAL_MODES, KeyringFailure, denied_service
 from paired_tui import validate_report
 
 # The pairing fixture uses POSIX authorization files and a PTY. The Windows
@@ -118,12 +119,13 @@ def bounded_wire(path, limit=2048):
 
 
 class FixtureApproval:
-    def __init__(self, root, config, host, *, blocked_targets=None):
+    def __init__(self, root, config, host, *, blocked_targets=None, keyring=None):
         if sys.platform == 'win32':
             raise GuiFailure('paired_gui_posix_required')
         self.root = root
         self.config = config
         self.host = host
+        self.keyring = keyring
         self.request_id = None
         self.fingerprint = None
         self.applied = False
@@ -153,6 +155,14 @@ class FixtureApproval:
             raise GuiFailure('fixture_public_request_invalid') from None
         if self.request_id or request['account'] != self.config['username']:
             raise GuiFailure('unexpected_fixture_request')
+        if self.keyring is not None:
+            from linux_pairing_keyring import KeyringFailure
+            try:
+                self.keyring.verify(request['public_key'])
+            except KeyringFailure as error:
+                raise GuiFailure(str(error)) from None
+            except (OSError, subprocess.SubprocessError):
+                raise GuiFailure('private_keyring_verification_failed') from None
         try:
             response = self.host.authorize(raw, request['request_id'], now=now)
         except (OSError, ValueError):
@@ -247,17 +257,24 @@ def run_flutter(args, root, env, config, approval):
     exchange.mkdir(mode=0o700)
     target = exchange / 'target.json'
     target.write_text(json.dumps(config))
-    widget_env = dict(env, HERDR_PAIRING_GUI_CONFIG=str(target), HERDR_PAIRING_GUI_DIR=str(exchange),
-                      HERDR_PAIRING_GUI_TEST_KEY=str(root / 'client'))
+    widget_env = dict(env, HERDR_PAIRING_GUI_CONFIG=str(target), HERDR_PAIRING_GUI_DIR=str(exchange))
+    native = approval.keyring is not None
+    if not native:
+        widget_env['HERDR_PAIRING_GUI_TEST_KEY'] = str(root / 'client')
     if args.input_fixture:
         widget_env['HERDR_PAIRING_GUI_EXPECT_INPUT'] = '1'
-    command = ['flutter', 'test', '--no-pub', '--reporter', 'expanded', 'test/pairing_gui_ssh_test.dart']
+    if native:
+        widget_env.pop('FLUTTER_TEST', None)
+        from flutter_linux_pairing import native_command
+        command = native_command(args, root, env)
+    else:
+        command = ['flutter', 'test', '--no-pub', '--reporter', 'expanded', 'test/pairing_gui_ssh_test.dart']
     with owned_process(command, cwd=args.flutter_app, env=widget_env, log=root/'widget.log') as proc:
         def request_ready():
             if proc.poll() is not None:
                 raise widget_failure(exchange, 'widget_exited_before_request')
             return (exchange / 'request.json').is_file()
-        wait_for(request_ready, 'widget_request_timeout', timeout=100)
+        wait_for(request_ready, 'widget_request_timeout', timeout=420 if native else 100)
         response = approval.approve(bounded_wire(exchange / 'request.json'))
         pending = exchange / 'response.new'
         pending.write_bytes(response)
@@ -274,8 +291,9 @@ def run_flutter(args, root, env, config, approval):
                     'reopenedPendingRequest', 'pauseResumeSameConnection', 'hostSummaryActive',
                     'hostSummaryRetained', 'hostSummaryResumed', 'hostSummaryStopped')
         calls = result.get('signCalls')
-        if (not all(result.get(field) is True for field in required) or result.get('identityCreations') != 1
-                or type(calls) != int or not 1 <= calls <= 8):
+        mode_ok = (result.get('nativeCatalogAndKeys') is True and calls is None and result.get('identityCreations') is None
+                   if native else result.get('identityCreations') == 1 and type(calls) is int and 1 <= calls <= 8)
+        if not all(result.get(field) is True for field in required) or not mode_ok:
             raise GuiFailure('widget_evidence_incomplete')
         frames = result.get('frameCount')
         deltas = result.get('deltaFrames')
@@ -283,15 +301,19 @@ def run_flutter(args, root, env, config, approval):
             raise GuiFailure('widget_frame_evidence_incomplete')
         if args.input_fixture and result.get('inputQueueAccepted') is not True:
             raise GuiFailure('widget_input_not_accepted')
-        return {**{field: True for field in required}, 'inputQueueAccepted':bool(args.input_fixture), 'signCalls': calls, 'frameCount': frames, 'deltaFrames': deltas,
-                'localViewportChanges':result.get('localViewportChanges',0), 'keyStore': 'test-only Dart signer with runner-generated identity'}
+        return {**{field: True for field in required}, 'inputQueueAccepted':bool(args.input_fixture), 'frameCount': frames, 'deltaFrames': deltas,
+                'localViewportChanges':result.get('localViewportChanges',0),
+                **({'keyStore': 'private Linux Secret Service', 'flutterNativeSource': args.flutter_native_source,
+                    'nativeCatalogReadback': True} if native else
+                   {'keyStore': 'test-only Dart signer with runner-generated identity', 'signCalls': calls})}
 
 
 class WebDriver:
     """Minimal W3C client. Exercise public controls in the native Linux WebView."""
-    def __init__(self):
+    def __init__(self, *, native_webkit=False):
         self.base = 'http://127.0.0.1:4444'
         self.session = ''
+        self.native_webkit = native_webkit
 
     def call(self, method, path, data=None):
         raw = None if data is None else json.dumps(data).encode()
@@ -316,8 +338,10 @@ class WebDriver:
             except (OSError, ValueError):
                 return False
         wait_for(ready, 'webdriver_unavailable')
-        reply = self.call('POST', '/session', {'capabilities':{'alwaysMatch':{
-            'tauri:options':{'application':str(binary.resolve())}}}})
+        application = str(binary.resolve())
+        options = ({'webkitgtk:browserOptions': {'binary': application, 'args': []}} if self.native_webkit
+                   else {'tauri:options': {'application': application}})
+        reply = self.call('POST', '/session', {'capabilities': {'alwaysMatch': options}})
         self.session = '/session/' + reply['sessionId']
         self.call('POST', self.session + '/window/rect', {'width':390, 'height':844})
 
@@ -414,12 +438,26 @@ def stop_tauri_observation(driver):
 
 
 def run_tauri(args, root, env, config, approval):
-    driver = WebDriver()
-    with owned_process(['tauri-driver'], cwd=root, env=env, log=root/'driver.log'):
+    native = approval.keyring is not None
+    denial = getattr(args, 'linux_keyring_denial', 'off')
+    if denial != 'off' and (denial not in DENIAL_MODES or not native):
+        raise GuiFailure('denial_requires_native_private_keyring')
+    if native and args.input_fixture:
+        raise GuiFailure('restart_requires_stock_read_only')
+    driver = WebDriver(native_webkit=native)
+    restart = None
+    if native:
+        from tauri_linux_pairing_restart import RestartReceipt, no_keyring_writes
+        restart = RestartReceipt(args.tauri_app, root, env, config, approval)
+    command = ['/usr/bin/WebKitWebDriver', '--host=127.0.0.1', '--port=4444'] if native else ['tauri-driver']
+    driver_env = dict(env, TAURI_WEBVIEW_AUTOMATION='true') if native else env
+    with owned_process(command, cwd=root, env=driver_env, log=root/'driver.log') as driver_process, ExitStack() as lifetime:
         try:
             driver.start(args.tauri_app)
-            driver.click('#host-open-remote')
-            driver.click('#add-herdr')
+            if restart is not None:
+                restart.first_started(driver_process.pid)
+            from s06_tauri_gui import SplitDriver
+            SplitDriver(driver).open_pairing(empty_board=True)
             for field, key in [('host','host'), ('port','port'), ('user','username'), ('session','session'),
                                ('herdr','herdrPath'), ('socket','socketPath'), ('pin','expectedHostKey')]:
                 driver.fill('#remote-'+field, config[key])
@@ -480,13 +518,56 @@ def run_tauri(args, root, env, config, approval):
             wait_for(lambda: retained_host_card_matches(retained,
                 driver.read('#host-list [data-host-task-summary]')),
                      'retained_home_summary_missing')
-            return {'paired':True, 'paneChosen':True, 'fullRendered':True, 'deltaRendered':True,
+            result = {'paired':True, 'paneChosen':True, 'fullRendered':True, 'deltaRendered':True,
                     'initialHostBoardPhase':initial_board, 'hostBoardPhaseDuringTerminal':terminal_board,
                     'hostSummaryRetainedOnHome':True,
                     'stoppedStale':True, 'fullRenderAcknowledgements':full, 'deltaRenderAcknowledgements':deltas,
-                    'localViewportChanges':2, 'inputQueueAccepted':bool(args.input_fixture), 'keyStore':'native process-memory Linux test identity'}
+                    'localViewportChanges':2, 'inputQueueAccepted':bool(args.input_fixture),
+                    'keyStore':('private Linux Secret Service' if approval.keyring else
+                        'isolated Secret Service session; keyring binding not independently verified'
+                        if getattr(args, 'private_keyring_session', False) else 'Linux identity; storage not independently verified')}
+            if restart is not None:
+                restart.before_first_exit(driver, driver_process.pid)
+                if denial == 'off':
+                    lifetime.enter_context(no_keyring_writes(approval, root, env))
         finally:
             driver.close()
+        if restart is not None:
+            restart.after_first_exit()
+            with ExitStack() as second_lifetime:
+                if denial != 'off':
+                    restart.before_denial()
+                    require_denied = second_lifetime.enter_context(denied_service(approval.keyring, denial))
+                    second_lifetime.enter_context(no_keyring_writes(approval, root, env, service_available=False))
+                second = WebDriver(native_webkit=True)
+                try:
+                    second.start(args.tauri_app)
+                    if second.session == driver.session:
+                        raise GuiFailure('restart_webview_session_reused')
+                    if denial == 'off':
+                        result['restart'] = restart.second(second, driver_process.pid)
+                    else:
+                        second_app = restart.second_denied(second, driver_process.pid, denial)
+                        require_denied()
+                finally:
+                    second.close()
+                if denial != 'off':
+                    restart.wait_second_exit(second_app)
+            if denial != 'off':
+                result['keyringDenial'] = restart.after_denial(denial)
+    return result
+
+
+def checked_keyring_denial(proof, mode):
+    flags = ('independentAppProcesses', 'noticeVisible', 'connectDisabled', 'originalHostAndIdentityRetained',
+             'authorizationUnchanged', 'firstPeerClosed', 'noKeyringWrites')
+    if (mode not in DENIAL_MODES or not isinstance(proof, dict) or
+            proof.keys() != {'mode', 'exactPeerAuthentications', 'receivedInputBytes', *flags} or
+            proof['mode'] != mode or any(proof[key] is not True for key in flags) or
+            type(proof['exactPeerAuthentications']) is not int or proof['exactPeerAuthentications'] != 1 or
+            type(proof['receivedInputBytes']) is not int or proof['receivedInputBytes'] != 0):
+        raise GuiFailure('keyring_denial_proof_incomplete')
+    return proof
 
 
 def run_gui(args, root, env, config):
@@ -500,7 +581,13 @@ def run_gui(args, root, env, config):
         raise GuiFailure('unsafe_fixture')
     guarded_mobile = args.paired_gui in ANDROID_ROUTES and bool(args.input_fixture)
     case = 'reviewed-device-key-to-direct-and-draft' if guarded_mobile else 'reviewed-device-key-to-observe'
+    if getattr(args, 'flutter_stock_app', None):
+        case = 'reviewed-device-key-across-stock-linux-restart'
+    denial = getattr(args, 'linux_keyring_denial', 'off')
+    if denial != 'off':
+        case = 'reviewed-device-key-denied-on-stock-linux-restart'
     result = {'adapter': args.paired_gui, 'testId': case, 'status':'failed'}
+    keyring = getattr(args, 'linux_keyring', None)
     try:
         if getattr(args, 'android_tui', False) and not guarded_mobile:
             raise GuiFailure('android_tui_requires_guarded_input')
@@ -510,21 +597,25 @@ def run_gui(args, root, env, config):
         with tempfile.TemporaryDirectory(dir=root, prefix='fixture-home-') as scratch:
             host = Host(Path(scratch), config['username'], config['expectedHostKey'])
             blocked_targets = getattr(args,'blocked_targets',None)
-            approval = (FixtureApproval(root,config,host,blocked_targets=blocked_targets) if blocked_targets
-                        else FixtureApproval(root,config,host))
+            approval = FixtureApproval(root, config, host, blocked_targets=blocked_targets, keyring=keyring)
             terminal = None
             try:
                 if args.paired_gui == 'tauri-android':
                     from android_gui import run_android as exercise
                 elif args.paired_gui == 'flutter-android':
                     from flutter_android_gui import run_flutter_android as exercise
+                elif args.paired_gui == 'flutter' and getattr(args, 'flutter_stock_app', None):
+                    from flutter_linux_stock_pairing import run_stock as exercise
                 else:
                     exercise = run_tauri if args.paired_gui == 'tauri' else run_flutter
                 terminal = fixture_terminal_id(config) if guarded_mobile else None
                 observed = exercise(args, root, env, config, approval)
+                denial_proof = observed.pop('keyringDenial', None)
                 receipts = observed.pop('inputReceipts', None)
                 tui = observed.pop('tui', None)  # Publish only after strict validation.
                 observed.pop('hostTui', None)  # Host attestation can never originate from a GUI.
+                if denial != 'off' and 'restart' in observed:
+                    raise GuiFailure('keyring_denial_conflicts_with_reauthentication')
                 result.update(observed)
                 expected = expected_bytes(args.paired_gui, bool(args.input_fixture))
                 if expected and result.get('inputQueueAccepted') is not True:
@@ -552,6 +643,14 @@ def run_gui(args, root, env, config):
                 elif tui is not None:
                     raise GuiFailure('unexpected_mobile_tui')
                 approval.verify_ssh(expected)
+                if denial != 'off':
+                    result['keyringDenial'] = checked_keyring_denial(denial_proof, denial)
+                elif denial_proof is not None:
+                    raise GuiFailure('unexpected_keyring_denial_proof')
+                if keyring is not None:
+                    if len(keyring.verified) != 1:
+                        raise GuiFailure('private_keyring_public_proof_missing')
+                    result['linuxKeyring'] = {'publicKeysMatched': 1, 'sameKeyAuthenticated': True}
             finally:
                 result['temporaryHostApprovedRequest'] = approval.applied
                 try:
@@ -569,7 +668,7 @@ def run_gui(args, root, env, config):
                     approval.revoke()
                     result['revokedFixtureKey'] = approval.applied
         result.update(status='passed', matchedDeviceKeyInSshd=True, receivedInputBytes=len(expected), revokedFixtureKey=True)
-    except GuiFailure as exc:
+    except (GuiFailure, KeyringFailure) as exc:
         result['errorCode'] = str(exc)
     except (OSError, ValueError, KeyError, subprocess.SubprocessError) as exc:
         result['errorCode'] = 'gui_'+type(exc).__name__.lower()

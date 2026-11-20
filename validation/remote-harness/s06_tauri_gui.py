@@ -594,6 +594,40 @@ class SplitDriver:
     def read(self, script, *args):
         return self.driver.call('POST', self.driver.session + '/execute/sync', {'script': script, 'args': list(args)})
 
+    def open_pairing(self, *, empty_board):
+        board = '#host-home:not([hidden]) #home-dashboard:not([hidden])'
+        if empty_board:
+            # The empty board hides the header, even in a wide window.
+            self.driver.click(board + ' #host-empty:not([hidden]) #host-empty-add')
+        else:
+            self.driver.click('body:has(' + board + ' #host-list .saved-host-card) #host-open-remote')
+        self.driver.click('#host-home:not([hidden]) #home-add:not([hidden]) #add-herdr')
+        self.driver.wait_control('#remote-page:not([hidden]) #remote-setup[open] #remote-host')
+
+    def entry_failure(self, stage):
+        if self.output is None or not self.driver.session:
+            return
+        controls = {
+            'board': '#home-dashboard', 'emptyAdd': '#host-empty-add',
+            'headerAdd': '#host-open-remote', 'connectionChoice': '#add-herdr',
+            'pairingHostField': '#remote-host', 'settings': '#home-settings',
+            'importPanel': '#config-transfer', 'importFile': '#config-transfer input[type="file"]',
+            'importPreview': '#config-transfer .config-preview',
+            'workspace': '#tab-workspace',
+        }
+        try:
+            visible = self.read('''return arguments[0].map(selector => {
+                const node = document.querySelector(selector);
+                return !!node && node.getClientRects().length > 0 &&
+                    getComputedStyle(node).visibility === 'visible';
+            });''', list(controls.values()))
+            if (isinstance(visible, list) and len(visible) == len(controls) and
+                    all(type(value) is bool for value in visible)):
+                report = {'stage': stage, 'visible': dict(zip(controls, visible))}
+                (self.output / 's06-tauri-entry-failure.json').write_text(json.dumps(report, sort_keys=True))
+        except (GuiFailure, OSError, ValueError):
+            pass  # Preserve the original failure. No UI text, form values, or raw screenshots.
+
     def named(self, text, scope='body', tag='button'):
         # Locate by public text, then send a real WebDriver click. Never invoke
         # a product handler, IPC command, renderer or input callback directly.
@@ -1386,8 +1420,7 @@ def exercise(args, root, env, configs, approvals, expected):
                 host_ids = []
                 for index, (config, approval) in enumerate(zip(configs, approvals)):
                     stage = 'pair_' + str(index)
-                    driver.click('#host-open-remote')
-                    driver.click('#add-herdr')
+                    ui.open_pairing(empty_board=index == 0)
                     for field, key in [('host', 'host'), ('port', 'port'), ('user', 'username'),
                             ('session', 'session'), ('herdr', 'herdrPath'), ('socket', 'socketPath'), ('pin', 'expectedHostKey')]:
                         driver.fill('#remote-' + field, config[key])
@@ -1511,7 +1544,7 @@ def exercise(args, root, env, configs, approvals, expected):
                     stage = 'window_resize'
                     targets = [(config['paneId'], fixture_terminal_id(config)) for config in configs]
                     resize_evidence = exercise_window_resize(ui, panels, targets, approvals, check_bytes)
-                stage = 'close'
+                stage = 'import_replace' if import_replace else 'close'
                 import_evidence = exercise_import_replace(ui, driver, root, approvals, tab_ids, check_bytes, expected) if import_replace else None
                 peer_authentication_counts = ([peer['authenticationCount'] for peer in import_evidence['peerSamples']['afterSurvivorClose']]
                                               if import_replace else exercise_peer_close(ui, panels, approvals))
@@ -1529,6 +1562,10 @@ def exercise(args, root, env, configs, approvals, expected):
                         'readOnlyAfterEscape': True, 'noExtraInputBytes': True}} if guarded else {}),
                     **({'guardedDirectResize': direct_resize_evidence} if direct_resize_evidence is not None else {}),
                     **({'windowResize': resize_evidence} if resize_evidence is not None else {})}
+            except GuiFailure:
+                if stage in ('pair_0', 'pair_1', 'import_replace'):
+                    ui.entry_failure(stage)
+                raise
             finally:
                 driver.close()
     except GuiFailure as error:

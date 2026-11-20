@@ -157,6 +157,10 @@ void main() {
       pending.renameSync('${exchange.path}/request-$i.json');
       final response = File('${exchange.path}/response-$i.json');
       await until(response.existsSync);
+      if (i == 1) {
+        expect(tabs.find(tabIds.first), isNotNull, reason:'creating B must retain A through the catalog read');
+        expect(adapters.first.evidence.observationPhase, 'paused');
+      }
       final profile = catalog.profiles.singleWhere((p) => p.target['session'] == configs[i]['session']);
       await tester.pageBack(); await tester.pumpAndSettle();
       await tap('host-open-${profile.id}'); await tester.pumpAndSettle();

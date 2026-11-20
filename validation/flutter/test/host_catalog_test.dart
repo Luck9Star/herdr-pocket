@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/host_catalog.dart';
+import 'package:herdr_flutter_probe/network_profiles.dart';
 import 'package:herdr_flutter_probe/pairing.dart';
 import 'package:herdr_flutter_probe/remote_adapter.dart';
 import 'remote_test_data.dart';
@@ -9,9 +10,13 @@ import 'remote_test_data.dart';
 class MemoryCatalogStorage implements HostCatalogStorage {
   String contents = '',revision = '';
   int writes = 0;
-  Completer<void>? beforeWrite;
+  Completer<void>? beforeWrite, beforeRead;
   @override
-  Future<({String revision,String contents})> load() async => (revision:revision,contents:contents);
+  Future<({String revision,String contents})> load() async {
+    final pending = beforeRead;
+    if (pending != null) await pending.future;
+    return (revision:revision,contents:contents);
+  }
   @override
   Future<String> save(String expected,String contents) async {
     writes++; await beforeWrite?.future;
@@ -118,6 +123,50 @@ void main() {
     final count = disk.writes;
     await expectLater(active.update(profile.change(label:'Other',now:1000)),throwsA(isA<RemoteFailure>())); expect(disk.writes,count); active.dispose();
   });
+  for (final outcome in ['unchanged','identity changed','network changed','read failed']) {
+    test('catalog refresh gates commands before checking frozen binding ($outcome)',() async {
+      final disk = MemoryCatalogStorage();
+      final catalog = HostCatalog(storage:disk,clock:() => 1000);
+      addTearDown(catalog.dispose);
+      await catalog.load();
+      final host = await saveCatalogProfile(catalog);
+      final network = NetworkProfile.create('Fixture network','tailscale',{'controlUrl':'','hostname':''});
+      await catalog.addNetwork(network);
+      final bound = host.change(networkProfileId:network.id,replaceNetwork:true,now:1000);
+      await catalog.update(bound);
+      final frozen = catalog.freezeNetwork(bound);
+      final pending = disk.beforeRead = Completer<void>();
+      final reading = catalog.load();
+      expect(catalog.reading,isTrue);
+      expect(frozen.stillCurrent(),isTrue);
+      expect(frozen.canUseCommands,isFalse);
+      expect(() => frozen.requireTransport(overlayReady:true),
+        throwsA(isA<RemoteFailure>().having((e) => e.code,'code','catalog_unavailable')));
+      final writes = disk.writes;
+      await expectLater(catalog.updateTerminalFontSize(16),throwsA(isA<RemoteFailure>()));
+      expect(disk.writes,writes);
+      if (outcome == 'read failed') {
+        pending.completeError(const RemoteFailure('catalog_unavailable'));
+      } else {
+        final persisted = jsonDecode(disk.contents) as Map<String,dynamic>;
+        if (outcome == 'identity changed') {
+          (persisted['profiles'].single['pairing'] as Map)['handle'] = 'different-opaque-handle';
+        }
+        if (outcome == 'network changed') {
+          persisted['networkProfiles'] = [network.change(enabled:false).toJson()];
+        }
+        disk.contents = jsonEncode(persisted);
+        pending.complete();
+      }
+      await reading;
+      expect(catalog.reading,isFalse);
+      expect(frozen.stillCurrent(),outcome == 'unchanged');
+      expect(frozen.canUseCommands,outcome != 'read failed');
+      if (outcome != 'unchanged') {
+        expect(() => frozen.requireTransport(overlayReady:true),throwsA(isA<RemoteFailure>()));
+      }
+    });
+  }
   test('a delayed profile snapshot cannot undo a newer local change',() async {
     final disk = MemoryCatalogStorage();
     final active = HostCatalog(storage:disk,clock:() => 1000); await active.load();

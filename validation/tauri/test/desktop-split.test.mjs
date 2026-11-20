@@ -23,7 +23,7 @@ class Element {
 }
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 
-function setup({innerWidth=1280,rejectDrafts=false,onFrameAck=async()=>{}}={}) {
+function setup({innerWidth=1280,rejectDrafts=false,onFrameAck=async()=>{},onClose=async()=>{}}={}) {
   const oldDocument=globalThis.document, oldWindow=globalThis.window;
   const nodes=Object.fromEntries(['tab-workspace','view-tabs','view-content','workbench-split'].map(id=>[id,new Element('div')]));
   const listeners={};
@@ -34,6 +34,7 @@ function setup({innerWidth=1280,rejectDrafts=false,onFrameAck=async()=>{}}={}) {
   const invoke=(name,args)=>{calls.push({name,args});
     if(name==='remote_tab_reserve')return Promise.resolve(++generation);
     if(name==='remote_tab_ack')return onFrameAck(args);
+    if(name==='remote_tab_close')return onClose(args);
     if(name==='remote_tab_input_mode')return Promise.resolve(7);
     if(name==='remote_tab_input_send'){if(args.draft && rejectDrafts)return Promise.resolve({status:'rejected',recoveryRequired:true});const pane=tabTargets[args.tabId];return Promise.resolve({status:'accepted',receipt:{requestId:'0'.repeat(32),paneId:pane.paneId,terminalId:pane.terminalId,acceptedBytes:args.bytes.length}});}
     if(name==='remote_tab_observe'){observes.push(args);channels.push(args.onEvent);return new Promise(()=>{});}
@@ -220,8 +221,39 @@ test('closing either split panel ends split; the remaining panel becomes the sin
     assert.equal(s.splitButton.getAttribute('aria-pressed'),'false');
     // 剩余面板仍是活动标签：不会再有隐藏的无面板观察
     assert.equal(s.observes.filter(o=>o.tabId===a).length,1);
-    assert.ok(s.calls.some(c=>c.name==='remote_tab_cancel'&&c.args.tabId===a));
+    assert.deepEqual(s.calls.filter(c=>c.name==='remote_tab_close').map(c=>c.args),[
+      {tabId:a,clientGeneration:s.observes.find(o=>o.tabId===a).clientGeneration,generation:s.observes.find(o=>o.tabId===a).generation}
+    ]);
+    assert.equal(s.calls.some(c=>c.name==='remote_tab_cancel'),false);
   } finally { s.restore(); }
+});
+
+test('a paused tab keeps an unconfirmed close visible and local removal never retries it', async () => {
+  let rejectClose;
+  const s=setup({innerWidth:390,onClose:()=>new Promise((_resolve,reject)=>{rejectClose=reject;})});
+  try {
+    const a=await s.openTab('direct-pane-a');
+    const b=await s.openTab('mesh-pane-b');
+    await s.settlePaused(a);
+    await s.ui.select(a);
+    const button=label=>s.panelOf(a).all().find(n=>n.tagName==='button'&&n.textContent===label);
+    const close=button('关闭此标签');
+    close.onclick();close.onclick();
+    await s.flush();
+    assert.equal(button('关闭此标签').disabled,true);
+    const old=s.observes.find(o=>o.tabId===a);
+    assert.deepEqual(s.calls.filter(c=>c.name==='remote_tab_close').map(c=>c.args),
+      [{tabId:a,clientGeneration:old.clientGeneration,generation:old.generation}]);
+    rejectClose('private transport error text');await s.flush();
+    assert.ok(s.panelOf(a).all().some(n=>n.textContent.includes('原 SSH 连接关闭未确认')));
+    assert.ok(!s.panelOf(a).all().some(n=>n.textContent.includes('private transport error text')));
+    assert.equal(button('连接').disabled,true);
+    button('移除此标签').onclick();await s.flush();
+    assert.equal(s.nodes['view-tabs'].children.length,1);
+    assert.equal(s.calls.filter(c=>c.name==='remote_tab_close').length,1);
+    assert.equal(s.calls.some(c=>c.name==='remote_tab_cancel'),false);
+    assert.equal(s.observes.filter(o=>o.tabId===b).length,1);
+  } finally {s.restore();}
 });
 
 test('narrow windows never split: entry hidden, toggle refused, crossing 900px pauses the partner', async () => {

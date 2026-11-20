@@ -264,7 +264,7 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     const add=(label,enabled,action)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.disabled=!enabled || switching || !focused;b.onclick=action;controls.append(b);};
     add('连接',native && !!info && tab.reviewed && !tab.invalidated && tab.state==='disconnected' && !tab.closing,()=>void connect(tab));
     add('恢复观察',tab.state==='paused' && !tab.closing,()=>void resume(tab));
-    add('关闭此标签',!switching,()=>void close(tab));panel.append(controls);
+    add(tab.closeUnconfirmed?'移除此标签':'关闭此标签',!switching && !tab.closePending,()=>void close(tab));panel.append(controls);
     renderDashboard(tab);const boardSection=document.createElement('details');boardSection.className='tab-board-details';boardSection.open=!tab.target || isWide();const boardSummary=document.createElement('summary');boardSummary.textContent='会话窗格';boardSection.append(boardSummary,tab.boardElement);panel.append(boardSection);
     // Keep the live terminal next to its mode controls, after the session chooser.
     const frameStatus=document.createElement('p');frameStatus.className='tab-frame-status';tab.frameStatusElement=frameStatus;
@@ -649,7 +649,10 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     } catch {if(sameLease(tab,binding)){tab.unknown=true;tab.unknownReview=pending;tab.inputEpoch=null;tab.message='发送结果未确认；请核查原目标，不会自动重发。';}}
     finally {if(tab.inflightReview===pending)tab.inflightReview=null;if(tabs.get(tab.id)===tab){tab.draftPending--;if(sameLease(tab,binding))tab.inputBusy=false;render();}}
   }
-  async function cancel(tab) {
+  async function cancel(tab,{explicitClose=false}={}) {
+    const closingAttempt=tab.nativeGeneration===null ? null : {
+      tabId:tab.id,clientGeneration:tab.token.generation,generation:tab.nativeGeneration
+    };
     retireSplitPause(tab);
     if(tab.inputBusy && tab.inflightReview){tab.unknown=true;tab.unknownReview=tab.inflightReview;}
     clearReceipt(tab);
@@ -657,11 +660,22 @@ export function initTabWorkspace({native,invoke,theme,hostName,hostInfo=()=>null
     retireDirectPending(tab);
     const wasDisconnected=tab.state==='disconnected' && tab.nativeGeneration===null;
     tab.board.invalidate('disconnected');boardEvent(tab,'stale');tab.selectionReady=false;tab.suppressBlur=true;tab.closing=true;tab.controlRevision++;tab.inputRevision++;tab.inputBusy=false;tab.inputEpoch=null;tab.mode='observe';tab.queue.clear();if(tab.terminal)tab.terminal.options.disableStdin=true;tabs.invalidate(tab.id);render();tab.suppressBlur=false;
-    if(tab.nativeGeneration!==null)try {await invoke('remote_tab_cancel',{tabId:tab.id,clientGeneration:tab.token.generation,generation:tab.nativeGeneration});}catch {}
+    let confirmed=true;
+    if(closingAttempt)try {
+      await invoke(explicitClose?'remote_tab_close':'remote_tab_cancel',closingAttempt);
+    }catch {confirmed=false;}
     tab.state='disconnected';if(wasDisconnected)tab.closing=false;render();
+    return confirmed;
   }
   async function close(tab) {
-    await cancel(tab);tab.localViewport.detach();tab.terminal?.dispose();tabs.close(tab.id);
+    if(tab.closePending)return;
+    tab.closePending=true;
+    if(!tab.closeUnconfirmed && !await cancel(tab,{explicitClose:true})) {
+      tab.closeUnconfirmed=true;tab.closePending=false;tab.closing=false;tab.invalidated=true;
+      status(tab,'原 SSH 连接关闭未确认；输入已停用。移除标签只会清理本机界面。');
+      return;
+    }
+    tab.localViewport.detach();tab.terminal?.dispose();tabs.close(tab.id);
     if(splitPartnerId) {
       // 分屏的一侧被关闭即结束分屏：剩余面板升为唯一焦点面板，不留“无面板仍在观察”的隐藏流。
       if(splitPartnerId===tab.id){splitOn=false;splitPartnerId=null;}

@@ -106,6 +106,9 @@ class SharedScenarioTests(unittest.TestCase):
         session.control.call.side_effect=host_call
         report={}
         states=({'seq':i,'binding':binding} for i in range(1,5))
+        def close_tab(_browser,role):
+            events.append(role)
+            return 'removed'
         with patch.multiple(dual,create_network=Mock(),pair_host=Mock(),
                 bind_host=Mock(return_value='profile'),expand_profile=Mock(return_value='#et'),
                 shared_bound_hosts=Mock(return_value='QA host ET、QA host TS'),
@@ -116,7 +119,7 @@ class SharedScenarioTests(unittest.TestCase):
                 shared_tick=Mock(side_effect=[10,20,21,22]),find_tab=Mock(return_value=None),
                 select_tab=Mock(),wait_named=Mock(),install_stop_observer=Mock(),uninstall_stop_observer=Mock(),
                 named_action_available=Mock(return_value=True),
-                close_shared_tab=Mock(side_effect=lambda _browser,role:events.append(role)),
+                close_shared_tab=Mock(side_effect=close_tab),
                 stop_node_once=Mock(side_effect=lambda *_args,**_kwargs:events.append('stop')),
                 start_observer_snapshot=Mock(return_value={'sent':1,'resolved':1,'rejected':0})), \
                 patch('flutter_android_gui.public_host_fingerprint',side_effect=str):

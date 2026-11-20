@@ -11,6 +11,7 @@ pub struct Session {
     attempt: u64,
     cancellation: Option<Cancellation>,
     claimed: bool,
+    pub closing: bool,
     // Visible slots are per-tab: several tabs may observe at once (desktop split view).
     pub visible: bool,
     pub host_id: Option<String>,
@@ -63,7 +64,7 @@ impl Sessions {
     pub fn get_mut(&mut self, tab:&str)->Option<&mut Session> {self.entries.get_mut(tab)}
     // A visibility claim is only valid for the exact owner/generation that registered it.
     pub fn is_visible(&self, tab:&str, owner:u64, generation:u64)->bool {self.entries.get(tab).is_some_and(|s|s.owner==owner && s.generation==generation && s.visible)}
-    pub fn set_visible(&mut self, tab:&str, owner:u64, generation:u64)->Result<(),&'static str> {self.entries.get_mut(tab).filter(|s|s.owner==owner && s.generation==generation).map(|s|s.visible=true).ok_or("tab_stale")}
+    pub fn set_visible(&mut self, tab:&str, owner:u64, generation:u64)->Result<(),&'static str> {self.entries.get_mut(tab).filter(|s|s.owner==owner && s.generation==generation && !s.closing).map(|s|s.visible=true).ok_or("tab_stale")}
     // Input focus is unique: entering a write mode takes it, observe mode releases it.
     pub fn take_focus(&mut self, key:(String,u64,u64,u64))->Result<(),&'static str> {
         if self.focus.as_ref().is_some_and(|active|active!=&key) {return Err("focus_busy");}
@@ -93,6 +94,21 @@ impl Sessions {
         }
         if release {self.entries.remove(tab);}
     }
+    pub fn prepare_close(&mut self, tab:&str, owner:u64, generation:u64)->Result<Option<herdr_readonly_transport::ObservationControl>,&'static str> {
+        let s=self.entries.get(tab).filter(|s|s.owner==owner && s.generation==generation).ok_or("tab_stale")?;
+        if s.closing {return Err("tab_close_pending");}
+        if s.node_binding.as_ref().is_some_and(|binding|self.is_stopping(binding)) {
+            return Err("mobile_node_stop_pending");
+        }
+        // An unclaimed reservation has never acquired a transport.
+        if !s.claimed {self.cancel(tab,owner,generation);return Ok(None);}
+        let control=s.control.clone().ok_or("tab_close_unconfirmed")?;
+        self.entries.get_mut(tab).unwrap().closing=true;
+        // Keep the ACK and input ownership until ObservationControl retires
+        // them. Dropping an ACK here can exit the SSH task before graceful close.
+        self.clear_visible(tab,owner,generation);
+        Ok(Some(control))
+    }
     pub fn cancel_hosts(&mut self, ids:&[String]) {
         let targets:Vec<_>=self.entries.iter().filter(|(_,s)|s.host_id.as_ref().is_some_and(|id|ids.contains(id))).map(|(id,s)|(id.clone(),s.owner,s.generation)).collect();
         for (id,owner,generation) in targets {self.cancel(&id,owner,generation)}
@@ -112,6 +128,7 @@ impl Sessions {
         for (id,owner,generation) in &targets {
             if self.focus.as_ref().is_some_and(|(tab,o,g,_)|tab==id && o==owner && g==generation) {self.focus=None;}
             if let Some(s)=self.entries.get_mut(id) {
+                if s.closing {continue;} // Still wait for the exact pinned slot below.
                 s.visible=false;
                 if let Some(control)=&s.control {controls.push(control.clone());} else {s.gate.cancel();}
                 if let Some((_,_,input))=s.input.take() {input.invalidate();}
@@ -172,6 +189,45 @@ where S:FnMut(&str,bool)->Result<u64,String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn explicit_close_targets_exact_paused_slot_without_retiring_the_other_input_focus() {
+        let mut tabs=Sessions::default();
+        let binding=Binding::new("profile".into(),1,"qa".into(),"identity-a".into()).unwrap();
+        let (a,ca)=tabs.begin("a",1,Some("host-a".into()),Some(binding.clone())).unwrap();
+        let (b,cb)=tabs.begin("b",2,Some("host-b".into()),Some(binding.clone())).unwrap();
+        tabs.claim("a",1,a).unwrap();
+        tabs.claim("b",2,b).unwrap();
+        tabs.set_visible("b",2,b).unwrap();
+        tabs.take_focus(("b".into(),2,b,3)).unwrap();
+        let control=herdr_readonly_transport::ObservationControl::new();
+        let (tx,_rx)=oneshot::channel();
+        let session=tabs.get_mut("a").unwrap();
+        session.control=Some(control.clone());
+        session.ack=Some((a,1,1,tx));
+
+        assert!(matches!(tabs.prepare_close("a",2,a),Err("tab_stale")));
+        assert!(matches!(tabs.prepare_close("a",1,b),Err("tab_stale")));
+        let close=tabs.prepare_close("a",1,a).unwrap().unwrap();
+        assert!(matches!(tabs.prepare_close("a",1,a),Err("tab_close_pending")));
+        assert_eq!(tabs.set_visible("a",1,a),Err("tab_stale"));
+        assert!(tabs.get("a").unwrap().ack.is_some());
+        assert!(tabs.input_guard("b",2,b,3).is_ok());
+        close.stop_gracefully();
+        assert_eq!(control.snapshot().phase,herdr_readonly_transport::ObservationPhase::Closed);
+        assert!(!ca.is_cancelled() && !cb.is_cancelled());
+        assert!(matches!(tabs.begin("a",3,None,None),Err("tab_busy")));
+
+        // A separate security revocation still overrides graceful retirement.
+        tabs.cancel_hosts(&["host-a".into()]);
+        assert!(ca.is_cancelled() && !cb.is_cancelled());
+        tabs.finish("a",1,a);
+        let (new,cn)=tabs.begin("a",3,None,Some(binding)).unwrap();
+        assert!(matches!(tabs.prepare_close("a",1,a),Err("tab_stale")));
+        assert!(tabs.prepare_close("a",3,new).unwrap().is_none());
+        assert!(cn.is_cancelled() && !cb.is_cancelled());
+        assert!(tabs.input_guard("b",2,b,3).is_ok());
+    }
+
     #[test] fn cancelled_slot_stays_reserved_and_cannot_cancel_other_tab() {
         let mut s=Sessions::default();
         let (g,c)=s.begin("a",1,Some("one".into()),None).unwrap();s.claim("a",1,g).unwrap();

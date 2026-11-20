@@ -1454,8 +1454,15 @@ def shared_tick(browser, role, target, tab_id, *, after=0):
 
 
 def close_shared_tab(browser, role):
-    browser.click_named('#view-content .tab-connection-actions','关闭此标签','dual_shared_close_action_missing')
-    wait_for(lambda:find_tab(browser,role) is None,'dual_shared_tab_close_unconfirmed',timeout=20)
+    scope='#view-content .tab-connection-actions'
+    browser.click_named(scope,'关闭此标签','dual_shared_close_action_missing')
+    def outcome():
+        if find_tab(browser,role) is None:
+            return 'removed'
+        if named_action_available(browser,scope,'移除此标签'):
+            return 'unconfirmed'
+        return None
+    return wait_for(outcome,'dual_shared_tab_close_unconfirmed',timeout=20)
 
 
 def shared_bound_hosts(browser, scope):
@@ -1527,7 +1534,9 @@ def run_shared_easytier(browser, session, report, ensure_app):
     if shared_tab_id(browser,'et',targets['et'])!=tabs['et']:
         raise GuiFailure('dual_shared_close_target_mismatch')
     shared_peer_state(control,report,'before_a_close',live=('a','b'))
-    close_shared_tab(browser,'et')
+    if close_shared_tab(browser,'et')!='removed':
+        shared_peer_state(control,report,'a_native_close_unconfirmed',live=('b',))
+        raise GuiFailure('dual_shared_a_native_close_unconfirmed')
     report['aTabRemoved']=True
     report['aCloseBeforeBTabClose']=shared_peer_state(control,report,'after_a_close',live=('b',),closing='a')
 
@@ -1555,7 +1564,9 @@ def run_shared_easytier(browser, session, report, ensure_app):
     if shared_tab_id(browser,'ts',targets['ts'])!=tabs['ts']:
         raise GuiFailure('dual_shared_close_target_mismatch')
     shared_peer_state(control,report,'before_b_close',live=('b',))
-    close_shared_tab(browser,'ts')
+    if close_shared_tab(browser,'ts')!='removed':
+        shared_peer_state(control,report,'b_native_close_unconfirmed')
+        raise GuiFailure('dual_shared_b_native_close_unconfirmed')
     if find_tab(browser,'et') is not None:
         raise GuiFailure('dual_shared_closed_tab_returned')
     report['bothTabsRemoved']=True

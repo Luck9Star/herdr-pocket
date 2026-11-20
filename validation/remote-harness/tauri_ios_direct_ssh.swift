@@ -494,11 +494,34 @@ enum NativeControlPolicy {
             guard matches.count <= 1 else { return .failure(.ambiguous) }
             guard let index = matches.first else { return .failure(.missing) }
             let row = rows[index]
-            guard row.identifier == identifier else { return .failure(.identifier) }
+            // WK accessibility can omit a DOM id or use the accessible name
+            // as the identifier. A different nonempty identifier is a conflict.
+            guard row.identifier == identifier || row.identifier.isEmpty || row.identifier == label else {
+                return .failure(.identifier)
+            }
             guard row.label == label else { return .failure(.label) }
             guard row.role == "button" else { return .failure(.role) }
             guard row.enabled else { return .failure(.disabled) }
+            guard row.visible else { return .failure(.missing) }
             return .success(index)
+        }
+
+        static func sameCredentialBranch(summary: [Int], passphrase: [Int], submit: [Int],
+                                         previousEditor: [Int], previousPassphrase: [Int]) -> Bool {
+            func branch(_ left: [Int], _ right: [Int]) -> [Int] {
+                zip(left, right).prefix { $0.0 == $0.1 }.map { $0.0 }
+            }
+            let owner = branch(previousEditor, previousPassphrase)
+            guard !owner.isEmpty, branch(summary, passphrase) == owner,
+                  previousEditor.count > owner.count, previousPassphrase.count > owner.count,
+                  summary.count > owner.count, passphrase.count > owner.count,
+                  summary.lexicographicallyPrecedes(passphrase), passphrase.lexicographicallyPrecedes(submit) else { return false }
+            // The button replaces the editor, or follows its surviving label
+            // wrapper. It cannot move into a different nested form.
+            let editorSlot = previousEditor[owner.count]
+            let buttonSlot = summary[owner.count]
+            return (buttonSlot == editorSlot || buttonSlot == editorSlot + 1) &&
+                (summary.count == owner.count + 1 || summary.dropLast() == previousEditor.dropLast())
         }
     }
     enum PEMRepresentation: String {
@@ -1861,6 +1884,11 @@ final class TauriDirectSSHUITests: XCTestCase {
             // representation cannot be ignored at the actual interaction.
             // The raw witness still has to match the returned node exactly.
             match = NSPredicate(format: "identifier == %@ OR label IN %@", "ssh-password", NativeControlPolicy.mobilePasswordLabels)
+        } else if snapshot.elementType == .button && snapshot.label == NativeControlPolicy.CollapsedPEM.label {
+            // Count both representations in the scoped live query, even if
+            // the raw summary had a DOM id.
+            match = NSPredicate(format: "identifier == %@ OR label == %@",
+                                NativeControlPolicy.CollapsedPEM.identifier, NativeControlPolicy.CollapsedPEM.label)
         } else if snapshot.elementType == .button {
             match = snapshot.identifier.isEmpty ? NSPredicate(format: "label == %@", snapshot.label) :
                 NSPredicate(format: "identifier == %@", snapshot.identifier)
@@ -3330,7 +3358,8 @@ final class TauriDirectSSHUITests: XCTestCase {
     }
 
     @MainActor
-    private func collapsedPEMControl(_ rows: [Observed], owner: RevealedControl) throws -> RevealedControl {
+    private func collapsedPEMControl(_ rows: [Observed], passphrase: RevealedControl, submit: RevealedControl,
+                                     previousEditor: RevealedControl, previousPassphrase: RevealedControl) throws -> RevealedControl {
         let failure = "native_encrypted_key_summary_owner_unproven"
         let facts = rows.map { row in
             let snapshot = row.snapshot
@@ -3341,7 +3370,17 @@ final class TauriDirectSSHUITests: XCTestCase {
         switch NativeControlPolicy.CollapsedPEM.candidate(facts) {
         case .success(let index):
             let control = try mobileControl(rows[index], rows, failure)
-            try require(sameControlScope(control, owner), failure)
+            let form = rows.filter { $0.webPath == submit.owner.webPath && $0.snapshot.identifier == "ssh-form" }
+            let formMembers = [control, passphrase, submit]
+            try require(formMembers.allSatisfy { sameControlScope($0, previousPassphrase) } &&
+                        sameControlScope(previousEditor, previousPassphrase) &&
+                        sameIdentity(passphrase.owner.snapshot, previousPassphrase.owner.snapshot) &&
+                        NativeControlPolicy.CollapsedPEM.sameCredentialBranch(summary: control.owner.path,
+                            passphrase: passphrase.owner.path, submit: submit.owner.path,
+                            previousEditor: previousEditor.owner.path, previousPassphrase: previousPassphrase.owner.path) &&
+                        (form.isEmpty || (form.count == 1 && formMembers.allSatisfy {
+                            $0.owner.path.count > form[0].path.count && $0.owner.path.starts(with: form[0].path)
+                        })), failure)
             try require(control.live.snapshot.isEnabled, "native_encrypted_key_summary_disabled")
             return control
         case .failure(let issue):
@@ -3370,18 +3409,20 @@ final class TauriDirectSSHUITests: XCTestCase {
             [.textField, .secureTextField, .textView].contains($0.snapshot.elementType) }
         try require(passwords.allSatisfy { !NativeFramePolicy.valid($0.snapshot.frame) && credentialEmpty($0.snapshot) },
                     "native_encrypted_key_method_unproven")
-        let pem: RevealedControl
-        if collapsedPEM != nil {
-            pem = try collapsedPEMControl(rows, owner: owner)
-        } else if let anchor = encryptedFieldAnchor(.pem, rows) {
-            let editorFailure = "native_encrypted_key_editor_owner_unproven"
-            let control = try mobileControl(anchor, rows, editorFailure)
-            try require(sameControlScope(control, owner) && control.live.snapshot.isEnabled, editorFailure)
-            pem = control
-        } else {
-            pem = try collapsedPEMControl(rows, owner: owner)
+        let passphrase = try encryptedField(.passphrase, rows: rows, owner: submit)
+        if let collapsedPEM {
+            let summary = try collapsedPEMControl(rows, passphrase: passphrase, submit: submit,
+                previousEditor: collapsedPEM.editor, previousPassphrase: owner)
+            return (summary, passphrase, submit)
         }
-        return (pem, try encryptedField(.passphrase, rows: rows, owner: submit), submit)
+        let editorFailure = "native_encrypted_key_editor_owner_unproven"
+        guard let anchor = encryptedFieldAnchor(.pem, rows) else {
+            try require(false, editorFailure)
+            throw NSError(domain: editorFailure, code: 1)
+        }
+        let editor = try mobileControl(anchor, rows, editorFailure)
+        try require(sameControlScope(editor, owner) && editor.live.snapshot.isEnabled, editorFailure)
+        return (editor, passphrase, submit)
     }
 
     private func credentialEmpty(_ field: any XCUIElementSnapshot) -> Bool {
@@ -3439,10 +3480,13 @@ final class TauriDirectSSHUITests: XCTestCase {
 
         try phase("pem_reopen")
         let summaryFailure = "native_encrypted_key_summary_owner_unproven"
-        let summary = try reveal(filled.pem.live.element, matching: filled.pem,
+        let revealed = try reveal(filled.pem.live.element, matching: filled.pem,
             protectRouteTabs: true, mobileOwnerFailure: summaryFailure)
+        let summary = try encryptedForm(port: port, owner: entered.passphrase, collapsedPEM: (pem, entered.pem)).pem
         try require(app.state == .runningForeground && !app.alerts.firstMatch.exists &&
-                    summary.owner.snapshot.isEnabled && summary.live.snapshot.isEnabled, summaryFailure)
+                    sameControlScope(summary, revealed) && sameIdentity(summary.owner.snapshot, revealed.owner.snapshot) &&
+                    summary.owner.path == revealed.owner.path && summary.owner.snapshot.frame == revealed.owner.snapshot.frame &&
+                    summary.owner.snapshot.isEnabled && summary.live.snapshot.isEnabled && summary.live.hittable, summaryFailure)
         summary.live.element.tap()
         try require(app.keyboards.firstMatch.waitForExistence(timeout: 2), "native_encrypted_key_reopen_keyboard_missing")
         let reopenedRows = try observedNodes()
@@ -3469,6 +3513,8 @@ final class TauriDirectSSHUITests: XCTestCase {
         try require(NativeControlPolicy.credentialMasked(current.live.snapshot.value), maskFailure)
         current.live.element.tap()
         let secured = try encryptedForm(port: port, owner: current, collapsedPEM: (pem, reopenedEditor))
+        try require(sameControlScope(secured.pem, summary) &&
+                    sameIdentity(secured.pem.owner.snapshot, summary.owner.snapshot), summaryFailure)
         try require(NativeControlPolicy.credentialMasked(secured.passphrase.live.snapshot.value), maskFailure)
         try require(secured.submit.owner.snapshot.isEnabled && secured.submit.live.snapshot.isEnabled, "native_control_disabled")
         try post(prefix + "_ready")

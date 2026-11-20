@@ -86,6 +86,10 @@ let textChild: Row = ("", summary, "staticText", true, true)
 let hiddenEditor: Row = ("ssh-key", "", "textView", false, false)
 let visibleEditor: Row = ("", "私钥 PEM（仅本次使用）", "textView", false, true)
 let labelOnly: Row = ("", summary, "button", true, true)
+let nameAsID: Row = (summary, summary, "button", true, true)
+let knownConflict: Row = ("ssh-paste-key", summary, "button", true, true)
+let foreignID: Row = ("other-form-edit", summary, "button", true, true)
+let hidden: Row = ("", summary, "button", true, false)
 let badLabel: Row = ("ssh-key-summary", "unexpected", "button", true, true)
 let badRole: Row = ("ssh-key-summary", summary, "other", true, true)
 let disabled: Row = ("ssh-key-summary", summary, "button", false, true)
@@ -96,11 +100,30 @@ func rejected(_ rows: [Row], _ expected: Policy.Issue) {
 }
 rejected([textChild], .missing)
 rejected([good, labelOnly], .ambiguous)
-rejected([labelOnly], .identifier)
+precondition(try! Policy.candidate([labelOnly]).get() == 0)
+precondition(try! Policy.candidate([nameAsID]).get() == 0)
+rejected([labelOnly, nameAsID], .ambiguous)
+rejected([good, knownConflict], .ambiguous)
+rejected([knownConflict], .identifier)
+rejected([foreignID], .identifier)
+rejected([hidden], .missing)
 rejected([badLabel], .label)
 rejected([badRole], .role)
 rejected([disabled], .disabled)
 rejected([visibleEditor, good], .editorPresent)
+func inCredentialBranch(_ summary: [Int], passphrase: [Int] = [0, 0, 3, 4],
+                        submit: [Int] = [0, 0, 8]) -> Bool {
+    Policy.sameCredentialBranch(summary: summary, passphrase: passphrase, submit: submit,
+        previousEditor: [0, 0, 3, 1, 0], previousPassphrase: [0, 0, 3, 5])
+}
+precondition(inCredentialBranch([0, 0, 3, 1]))
+precondition(inCredentialBranch([0, 0, 3, 2]))
+precondition(!inCredentialBranch([0, 0, 3, 0]))
+precondition(!inCredentialBranch([0, 0, 3, 2, 0]))
+precondition(!inCredentialBranch([0, 0, 4, 1]))
+precondition(!inCredentialBranch([0, 1, 3, 1]))
+precondition(!inCredentialBranch([1, 0, 3, 1]))
+precondition(!inCredentialBranch([0, 0, 3, 1], submit: [0, 0, 2]))
 ''')
 
     def test_headerless_fixture_pem_body_outside_editor_is_detected(self):
@@ -907,6 +930,9 @@ final class Adapter {
     func checkCollapsedPEM(previous: RevealedControl, pem: String) throws {
         try assertEncryptedCredentialsHidden(rows, pem: pem, previousEditor: previous)
     }
+    func collapsedForm(passphrase: RevealedControl, editor: RevealedControl, pem: String) throws -> RevealedControl {
+        try encryptedForm(port: 2222, owner: passphrase, collapsedPEM: (pem, editor)).pem
+    }
     func auth(_ previous: RevealedControl, ready: Bool = false) throws -> (password: RevealedControl, submit: RevealedControl) {
         try mobileAuth(port: 2222, ready: ready, previous: previous)
     }
@@ -1143,6 +1169,61 @@ checkPEMLeaf(pemLeaf(), expected: true, web: [0, 1])
 checkPEMLeaf(pemLeaf(), expected: true, reason: "editor_unproven", duplicate: true)
 checkPEMLeaf(pemLeaf(), expected: true, liveCopies: 2)
 checkPEMLeaf(pemLeaf(), expected: true, path: pemPath + [0, 0], attached: true)
+func checkCollapsedSummary(id: String = "", summaryPath: [Int] = [0, 0, 4, 0, 2],
+                           conflict: Bool = false, liveConflict: Bool = false,
+                           liveID: String? = nil, leaked: Bool = false, expected: String? = nil) {
+    let keySummary = NativeControlPolicy.CollapsedPEM.label
+    let formPath = [0, 0, 4]
+    let summaryRoot = Array(summaryPath.prefix(2))
+    let summary = row(snapshot(.button, identifier: id, label: keySummary), path: summaryPath,
+                      window: [summaryPath[0]], web: summaryRoot)
+    let pass = row(snapshot(.secureTextField, identifier: "ssh-passphrase", label: "私钥口令（加密私钥需要）"),
+                   path: formPath + [0, 4])
+    let send = row(snapshot(.button, identifier: "ssh-connect", label: "连接 SSH"), path: formPath + [1])
+    let editor = row(snapshot(.textView, identifier: "ssh-key", label: pemLabel), path: formPath + [0, 1, 0])
+    let base = Array(formRows(snapshot()).suffix(2))
+    let auth = [row(snapshot(.staticText, identifier: "ssh-step-title", label: "SSH 账号认证"), path: [0, 0, 2]),
+                row(snapshot(.staticText, identifier: "ssh-reviewed-endpoint", label: "fixture-target"), path: formPath + [2]),
+                row(snapshot(.staticText, identifier: "ssh-approved-note", label: "本次主机密钥已确认"), path: formPath + [3]),
+                row(snapshot(.group, identifier: "ssh-form", label: ""), path: formPath)]
+    let other = row(snapshot(.button, identifier: "ssh-key-summary", label: keySummary), path: formPath + [0, 3])
+    let observations = Observations([])
+    func bind(_ observed: Observed, replacingIdentifier: String? = nil) -> LiveControl {
+        let sample = observed.snapshot
+        let live = snapshot(sample.elementType, identifier: replacingIdentifier ?? sample.identifier, label: sample.label)
+        let element = Element()
+        element.identity = ["identifier": live.identifier, "label": live.label]
+        return LiveControl(snapshot: live, hittable: true, element: element)
+    }
+    let boundEditor = bind(editor), boundPass = bind(pass), boundSend = bind(send)
+    let actualSummary = bind(summary, replacingIdentifier: liveID), alternate = bind(other)
+    observations.webSurface.descendantsByRole[.button] = [boundSend.element, actualSummary.element] +
+        (liveConflict ? [alternate.element] : [])
+    observations.webSurface.descendantsByRole[.secureTextField] = [boundPass.element]
+    let rows = base + auth + [summary, pass, send] + (conflict ? [other] : []) +
+        (leaked ? [row(pemLeaf(), path: formPath + [0, 6])] : [])
+    let candidate = Adapter(app: App(frame: screen), current: actualSummary, rows: rows, blockers: [],
+        observations: observations, pathControls: [send.path: boundSend, pass.path: boundPass, other.path: alternate])
+    let priorEditor = RevealedControl(live: boundEditor, owner: editor, window: base[0], web: base[1])
+    let priorPass = RevealedControl(live: boundPass, owner: pass, window: base[0], web: base[1])
+    do {
+        let result = try candidate.collapsedForm(passphrase: priorPass, editor: priorEditor, pem: syntheticKey)
+        check(expected == nil && result.live.element === actualSummary.element, "only the authenticated summary may bind")
+    } catch {
+        check((error as? Rejected)?.reason == expected, "collapsed summary uses fixed failure categories")
+    }
+    check(actualSummary.element.taps == 0 && alternate.element.taps == 0, "collapse verification never taps")
+}
+checkCollapsedSummary()
+checkCollapsedSummary(id: NativeControlPolicy.CollapsedPEM.label)
+checkCollapsedSummary(id: "ssh-key-summary")
+checkCollapsedSummary(id: "ssh-paste-key", expected: "native_encrypted_key_summary_identifier_unproven")
+checkCollapsedSummary(summaryPath: [0, 0, 3, 2], expected: "native_encrypted_key_summary_owner_unproven")
+checkCollapsedSummary(summaryPath: [1, 0, 4, 0, 2], expected: "native_encrypted_key_summary_owner_unproven")
+checkCollapsedSummary(conflict: true, expected: "native_encrypted_key_summary_ambiguous")
+checkCollapsedSummary(liveConflict: true, expected: "native_encrypted_key_summary_owner_unproven")
+checkCollapsedSummary(liveID: "ssh-key-summary", expected: "native_encrypted_key_summary_owner_unproven")
+checkCollapsedSummary(leaked: true, expected: "native_secret_exposed")
 checkPEMLeaf(pemLeaf(), expected: true, staleScope: true)
 let password = "AX TEST ONLY"
 for representation: NativeControlPolicy.PEMRepresentation in [.editorValue, .editorText, .editorUnproven] {

@@ -1021,7 +1021,12 @@ class CaptureDiagnosticsTests(unittest.TestCase):
             sample = draft.split(start, 1)[1].split(end, 1)[0]
             self.assertIn('collapsedPEM: (pem,', sample)
         self.assertEqual(draft.count('summary.live.element.tap()'), 1)
-        self.assertLess(draft.index('reveal(filled.pem.live.element'), draft.index('summary.live.element.tap()'))
+        before_tap = draft.split('reveal(filled.pem.live.element', 1)[1].split('summary.live.element.tap()', 1)[0]
+        self.assertIn('encryptedForm(port: port, owner: entered.passphrase, collapsedPEM: (pem, entered.pem))', before_tap)
+        self.assertIn('sameIdentity(summary.owner.snapshot, revealed.owner.snapshot)', before_tap)
+        self.assertIn('summary.live.hittable', before_tap)
+        self.assertIn('reopenedEditor.owner.snapshot.value as? String == pem', draft)
+        self.assertIn('reopenedEditor.live.snapshot.value as? String == pem', draft)
         self.assertGreater(draft.index('encryptedField(.passphrase, rows: reopenedRows'), draft.index('summary.live.element.tap()'))
         self.assertIn('native_encrypted_key_reopen_keyboard_missing', draft)
         self.assertNotIn('coordinate(withNormalizedOffset:', draft)

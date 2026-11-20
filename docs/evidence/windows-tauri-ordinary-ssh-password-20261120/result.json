@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "c888d09bf4b99914772bdc7e72711a70c89aa115",
+  "executableSHA256": "1935be8d87f9e4bbd10222b97b90851f8cbbb7b0a2969008998b341663738ada",
+  "platform": "Windows Tauri WebView2",
+  "authentication": "password",
+  "scope": "native window, WebDriver input, desktop pixels and isolated SSH",
+  "status": "passed",
+  "stage": "complete",
+  "listener": {
+    "ownedBeforeLaunch": true,
+    "fixtureResourcesClosed": true,
+    "absentFromWin32Table": true,
+    "connectProbe": "refused"
+  },
+  "failurePhase": "fixture_cleanup",
+  "checkpoint": "fixture_cleanup",
+  "windowActivation": "set_foreground",
+  "target": {
+    "host": "127.0.0.1",
+    "port": 64458,
+    "username": "fixture",
+    "algorithm": "ssh-rsa",
+    "fingerprint": "SHA256:5fYDH24QJL/Lnv0brKforcG3np7kWBTUUjPzlpt3hVg"
+  },
+  "fingerprintReviewed": true,
+  "terminal": {
+    "schemaVersion": 1,
+    "imageSha256": "81a06012cb10ae87d36534f8c76327998beb73924a3ae955086d4d3b1c86b894",
+    "imageSize": [
+      1024,
+      705
+    ],
+    "terminalBounds": [
+      276,
+      132,
+      677,
+      544
+    ],
+    "expectedMarker": "POCKET-ANDROID-SSH-OK",
+    "expectedToken": "HARD LEFT HAVE PAST HARP DECK FADE SEAT",
+    "markerVisible": true,
+    "tokenVisible": true,
+    "ocrEngine": "tesseract 5.5.3.20260724",
+    "ocrAttempts": 1,
+    "ocrPageSegmentationMode": 6,
+    "proofSequenceVisible": true,
+    "captureAttempt": 1,
+    "capture": "Win32 foreground desktop framebuffer, native Tauri client pixels",
+    "targetBounds": [
+      336,
+      84,
+      138,
+      12
+    ]
+  },
+  "disconnectOutcome": {
+    "imageSha256": "e67c044304a1b0f0d339954d554d716a6e8bed692346b47484e5e88f92d88071",
+    "imageSize": [
+      1024,
+      705
+    ],
+    "bounds": [
+      264,
+      76,
+      560,
+      66
+    ],
+    "capture": "Win32 foreground desktop framebuffer, native Tauri client pixels"
+  },
+  "homeOutcome": {
+    "imageSha256": "fa49eecc86d1496f5199b4d83b9d81fe6f2f7f9b589f5f4d5294d49c729817b2",
+    "imageSize": [
+      1024,
+      705
+    ],
+    "bounds": [
+      264,
+      62,
+      560,
+      44
+    ],
+    "capture": "Win32 foreground desktop framebuffer, native Tauri client pixels"
+  },
+  "returnedHome": true,
+  "credentialFieldsCleared": true,
+  "peer": {
+    "authAccepted": true,
+    "ptyRequested": true,
+    "shellRequested": true,
+    "markerReceived": true,
+    "sessionClosed": true,
+    "connections": 2,
+    "connectionsClosed": true,
+    "ptySizes": [
+      [
+        80,
+        24
+      ],
+      [
+        88,
+        32
+      ]
+    ],
+    "connectionEvents": [
+      {
+        "id": 1,
+        "hostKey": "A",
+        "handshakeCompleted": true,
+        "authAttempts": 0,
+        "authAccepted": false,
+        "authSuccesses": 0,
+        "ptyRequests": 0,
+        "shellRequests": 0,
+        "inputBytes": 0,
+        "outputBytes": 0,
+        "markerReceived": false,
+        "sessionClosed": false,
+        "closed": true,
+        "phase": "await_channel",
+        "closeReason": "transport_closed",
+        "handshakeMs": 0,
+        "firstAuthMs": null,
+        "closedMs": 0,
+        "hostKeyAlgorithm": "rsa-sha2-512",
+        "clientCipher": "aes256-gcm@openssh.com",
+        "serverCipher": "aes256-gcm@openssh.com",
+        "socketErrorKind": null,
+        "socketErrno": null
+      },
+      {
+        "id": 2,
+        "hostKey": "A",
+        "handshakeCompleted": true,
+        "authAttempts": 1,
+        "authAccepted": true,
+        "authSuccesses": 1,
+        "ptyRequests": 1,
+        "shellRequests": 1,
+        "inputBytes": 9,
+        "outputBytes": 102,
+        "markerReceived": true,
+        "sessionClosed": true,
+        "closed": true,
+        "phase": "shell",
+        "closeReason": "peer_eof",
+        "handshakeMs": 0,
+        "firstAuthMs": 0,
+        "closedMs": 469,
+        "hostKeyAlgorithm": "rsa-sha2-512",
+        "clientCipher": "aes256-gcm@openssh.com",
+        "serverCipher": "aes256-gcm@openssh.com",
+        "socketErrorKind": null,
+        "socketErrno": null
+      }
+    ]
+  },
+  "cleanup": {
+    "ownedProcessJobEmpty": true,
+    "peerListenerReleased": true,
+    "fixturePasswordCleared": true,
+    "driverPortsReleased": true,
+    "privateDirectoryRemoved": true
+  }
+}

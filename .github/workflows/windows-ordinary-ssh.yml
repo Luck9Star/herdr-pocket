@@ -2,6 +2,13 @@ name: Windows ordinary SSH
 on:
   workflow_dispatch:
     inputs:
+      application:
+        description: Application under test
+        type: choice
+        options:
+          - flutter
+          - tauri
+        default: flutter
       authentication:
         description: Ordinary SSH authentication
         type: choice
@@ -13,6 +20,7 @@ on:
   push:
     branches:
       - 'codex/windows-ordinary-ssh-run-*'
+      - 'codex/windows-tauri-ordinary-ssh-run-*'
 permissions:
   contents: read
 concurrency:
@@ -21,7 +29,7 @@ concurrency:
 
 jobs:
   flutter-password:
-    if: startsWith(github.ref, 'refs/heads/codex/')
+    if: startsWith(github.ref, 'refs/heads/codex/') && !startsWith(github.ref, 'refs/heads/codex/windows-tauri-ordinary-ssh-run-') && (github.event_name != 'workflow_dispatch' || inputs.application != 'tauri')
     runs-on: windows-2022
     timeout-minutes: 45
     defaults:
@@ -64,5 +72,67 @@ jobs:
         with:
           name: flutter-windows-direct-ssh-${{ env.WINDOWS_DIRECT_SSH_AUTHENTICATION }}-${{ github.sha }}
           path: ${{ runner.temp }}/windows-direct-ssh-evidence/
+          retention-days: 14
+          if-no-files-found: warn
+
+  tauri-password:
+    if: startsWith(github.ref, 'refs/heads/codex/') && ((github.event_name == 'workflow_dispatch' && inputs.application == 'tauri') || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/codex/windows-tauri-ordinary-ssh-run-')))
+    runs-on: windows-2022
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Require supported authentication
+        if: github.event_name == 'workflow_dispatch' && inputs.authentication != 'password'
+        run: throw 'Windows Tauri acceptance currently supports password only'
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.22.2'
+      - name: Prepare isolated peer and native driver
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          rustup toolchain install 1.96.0 --profile minimal
+          rustup default 1.96.0
+          python -m venv "$env:RUNNER_TEMP\tauri-direct-python"
+          $python = "$env:RUNNER_TEMP\tauri-direct-python\Scripts\python.exe"
+          & $python -m pip install -r validation/pairing/requirements.txt paramiko==4.0.0 pillow==12.2.0 pywin32==311
+          & $python -m unittest discover -s validation/remote-harness -p test_tauri_windows_direct_ssh.py -v
+          choco install tesseract --version=5.5.3.20260724 --yes --no-progress
+          "$env:ProgramFiles\Tesseract-OCR" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          cargo install tauri-driver --version 2.1.0 --locked
+          $keys = @('HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}', 'HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}', 'HKCU:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}')
+          $versions = @($keys | ForEach-Object { (Get-ItemProperty -Path $_ -ErrorAction SilentlyContinue).pv } | Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -Unique)
+          if ($versions.Count -ne 1) { throw 'WebView2 runtime version unavailable or ambiguous' }
+          $driverDir = "$env:RUNNER_TEMP\webview2-driver"
+          New-Item -ItemType Directory $driverDir | Out-Null
+          Invoke-WebRequest "https://msedgedriver.microsoft.com/$($versions[0])/edgedriver_win64.zip" -OutFile "$driverDir\driver.zip"
+          Expand-Archive "$driverDir\driver.zip" -DestinationPath $driverDir
+          $signature = Get-AuthenticodeSignature "$driverDir\msedgedriver.exe"
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Microsoft Corporation') { throw 'WebView2 driver signature invalid' }
+          $actual = & "$driverDir\msedgedriver.exe" --version
+          if ($actual -notmatch [regex]::Escape($versions[0])) { throw 'WebView2 driver version mismatch' }
+          $driverDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Build normal Tauri application
+        working-directory: validation/tauri
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          npm ci
+          npm run tauri -- icon icon.svg
+          npm run tauri -- build --no-bundle -- --locked
+      - name: Exercise ordinary password SSH in the visible Windows app
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          & "$env:RUNNER_TEMP\tauri-direct-python\Scripts\python.exe" validation/remote-harness/tauri_windows_direct_ssh.py --app validation/tauri/src-tauri/target/release/herdr-pocket-tauri-probe.exe --source-sha $env:GITHUB_SHA --output "$env:RUNNER_TEMP\tauri-windows-direct-ssh-evidence"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: tauri-windows-direct-ssh-password-${{ github.sha }}
+          path: ${{ runner.temp }}/tauri-windows-direct-ssh-evidence/
           retention-days: 14
           if-no-files-found: warn

@@ -154,7 +154,7 @@ def snapshot_diagnostics(result):
             'nestedKnownFields': protocol_diagnostics(snapshot) if isinstance(snapshot, dict) else None}
 
 
-def gui_report_fields(route, result, input_fixture=False, *, import_replace=False):
+def gui_report_fields(route, result, input_fixture=False, *, import_replace=False, linux_keyring=False):
     """Keep test route, required frame evidence and runtime limits distinct."""
     scopes = {
         'tauri-android': 'API35 emulator WebView and AndroidKeyStore-wrapped identity',
@@ -179,11 +179,20 @@ def gui_report_fields(route, result, input_fixture=False, *, import_replace=Fals
                         all(result.get(name) is False for name in
                             ('storageMocked', 'signerInjected', 'framesInjected')))
         unverified.append('Flutter release/profile application runtime')
+    if linux_keyring:
+        scopes[route] = ('Linux GTK integration_test driving the real Flutter pairing widgets and native channels'
+                         if route == 'flutter' else 'stock Linux GTK WebView with private Secret Service')
+        proof = result.get('linuxKeyring', {})
+        native_store = (proof.get('publicKeysMatched') in (1, 2) and proof.get('sameKeyAuthenticated') is True)
+        unverified.extend(['stock second-process identity restore', 'other Linux keyring implementations'])
+        if route == 'flutter':
+            unverified.append('unmodified Flutter release app with external user input')
     if not passed or not native_store:
         unverified.append('protected system-store runtime')
     fields = {'scope': scopes[route], 'frameEvidence': frames[route], 'unverified': unverified}
     if import_replace:
-        fields.update(scope='Linux GTK WebView config replacement with native process-memory test identities',
+        fields.update(scope=('Linux GTK WebView config replacement with private Secret Service' if linux_keyring
+                             else 'Linux GTK WebView config replacement with native process-memory test identities'),
                       frameEvidence='public visible-terminal-text UI snapshots; native WebDriver actions')
         unverified.extend(['desktop window resize', 'desktop keyboard focus and routing',
                            'non-BMP import password entry'])
@@ -298,6 +307,8 @@ def main():
     parser.add_argument('--paired-gui', choices=('flutter', 'tauri', 'tauri-android', 'flutter-android'))
     parser.add_argument('--tauri-app', type=Path)
     parser.add_argument('--input-fixture', type=Path)
+    parser.add_argument('--linux-keyring-probe', type=Path,
+                        help='require the approved key to match the private Linux Secret Service')
     parser.add_argument('--s06-split', action='store_true',
                         help='opt-in two real SSH/herdr targets through the desktop split UI')
     parser.add_argument('--android-guarded-input', action='store_true')
@@ -307,6 +318,8 @@ def main():
     args = parser.parse_args()
     require_runner(os.environ)
     import_replace = os.environ.get('HERDR_S06_IMPORT_REPLACE') == '1'
+    if args.linux_keyring_probe and (args.paired_gui not in ('flutter', 'tauri') or args.input_fixture):
+        parser.error('--linux-keyring-probe requires a stock desktop paired route')
     if import_replace and (not args.s06_split or args.paired_gui != 'tauri' or args.input_fixture):
         parser.error('S06 import replacement requires stock Tauri --s06-split')
     if args.s06_split and args.paired_gui not in ('flutter', 'tauri'):
@@ -333,6 +346,7 @@ def main():
     processes = []
     blocked_fixture = None
     args.blocked_targets = []
+    args.linux_keyring = None
     env = {k: v for k, v in os.environ.items()
            if not k.startswith('HERDR_') and k not in ('SSH_AUTH_SOCK', 'SSH_AGENT_PID', 'BASH_ENV')}
     env.update(XDG_CONFIG_HOME=str(root / 'config'), XDG_STATE_HOME=str(root / 'state'),
@@ -429,7 +443,13 @@ def main():
         herdr = root / 'herdr'
         herdr.write_bytes(binary)
         herdr.chmod(0o700)
-        for name in ('host', 'wrong', 'client'):
+        if args.linux_keyring_probe:
+            from linux_pairing_keyring import KeyringEvidence, KeyringFailure
+            try:
+                args.linux_keyring = KeyringEvidence(args.paired_gui, args.linux_keyring_probe)
+            except KeyringFailure as error:
+                raise ProbeFailure(str(error)) from None
+        for name in (('host', 'wrong') if args.linux_keyring else ('host', 'wrong', 'client')):
             command(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-C',
                      'ephemeral-herdr-pocket-mobile', '-f', root / name])
         authorized = root / 'authorized_keys'
@@ -516,7 +536,7 @@ LogLevel VERBOSE
                 milestone = 'android-paired-interactive-tui'
             report.update(milestone=milestone,
                           **gui_report_fields(args.paired_gui, {'status': 'failed'}, bool(args.input_fixture),
-                                              import_replace=import_replace))
+                                              import_replace=import_replace, linux_keyring=bool(args.linux_keyring)))
             report.pop('cancelScope', None)
             if args.s06_split:
                 report['milestone'] = split_test_id
@@ -525,7 +545,7 @@ LogLevel VERBOSE
             else:
                 result = run_gui(args, root, env, config)
             report.update(gui_report_fields(args.paired_gui, result, bool(args.input_fixture),
-                                            import_replace=import_replace))
+                                            import_replace=import_replace, linux_keyring=bool(args.linux_keyring)))
             report['checks'].append(result)
             publish()
         else:

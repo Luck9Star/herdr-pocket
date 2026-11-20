@@ -1,0 +1,1182 @@
+{
+  "unit": "logical-point",
+  "tolerance": 2,
+  "boards": [
+    {
+      "id": "private-key-focused-1440",
+      "title": "私钥 · 聚焦编辑",
+      "width": 1440,
+      "height": 900,
+      "anchors": {
+        "app-sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 224,
+          "height": 900,
+          "role": "geometry"
+        },
+        "sidebar-toggle": {
+          "x": 8,
+          "y": 8,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-board": {
+          "x": 8,
+          "y": 68,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-terminal": {
+          "x": 8,
+          "y": 120,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-network": {
+          "x": 8,
+          "y": 172,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-settings": {
+          "x": 8,
+          "y": 224,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "page-header": {
+          "x": 224,
+          "y": 0,
+          "width": 1216,
+          "height": 56,
+          "role": "geometry"
+        },
+        "back": {
+          "x": 232,
+          "y": 6,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "target-card": {
+          "x": 264,
+          "y": 76,
+          "width": 560,
+          "height": 52,
+          "role": "geometry"
+        },
+        "trust-approved": {
+          "x": 264,
+          "y": 138,
+          "width": 560,
+          "height": 44,
+          "role": "geometry"
+        },
+        "auth-password": {
+          "x": 264,
+          "y": 224,
+          "width": 276,
+          "height": 44,
+          "role": "hit"
+        },
+        "auth-key": {
+          "x": 548,
+          "y": 224,
+          "width": 276,
+          "height": 44,
+          "role": "hit"
+        },
+        "key-pem": {
+          "x": 264,
+          "y": 304,
+          "width": 560,
+          "height": 84,
+          "role": "hit"
+        },
+        "paste-key": {
+          "x": 264,
+          "y": 398,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        },
+        "passphrase": {
+          "x": 264,
+          "y": 480,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        },
+        "connect": {
+          "x": 264,
+          "y": 542,
+          "width": 560,
+          "height": 48,
+          "role": "disabled"
+        }
+      },
+      "textLimits": [
+        {
+          "id": "private-key-focused-1440-text-1",
+          "maxWidth": 148
+        },
+        {
+          "id": "private-key-focused-1440-text-2",
+          "maxWidth": 148
+        },
+        {
+          "id": "private-key-focused-1440-text-3",
+          "maxWidth": 148
+        },
+        {
+          "id": "private-key-focused-1440-text-4",
+          "maxWidth": 148
+        },
+        {
+          "id": "private-key-focused-1440-text-5",
+          "maxWidth": 120
+        },
+        {
+          "id": "private-key-focused-1440-text-6",
+          "maxWidth": 188
+        },
+        {
+          "id": "private-key-focused-1440-text-7",
+          "maxWidth": 1112
+        },
+        {
+          "id": "private-key-focused-1440-text-8",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-focused-1440-text-9",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-focused-1440-text-10",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-focused-1440-text-11",
+          "maxWidth": 560
+        },
+        {
+          "id": "private-key-focused-1440-text-12",
+          "maxWidth": 264
+        },
+        {
+          "id": "private-key-focused-1440-text-13",
+          "maxWidth": 264
+        },
+        {
+          "id": "private-key-focused-1440-text-14",
+          "maxWidth": 560
+        },
+        {
+          "id": "private-key-focused-1440-text-15",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-focused-1440-text-16",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-focused-1440-text-17",
+          "maxWidth": 544
+        },
+        {
+          "id": "private-key-focused-1440-text-18",
+          "maxWidth": 560
+        },
+        {
+          "id": "private-key-focused-1440-text-19",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-focused-1440-text-20",
+          "maxWidth": 544
+        },
+        {
+          "id": "private-key-focused-1440-text-21",
+          "maxWidth": 560
+        }
+      ]
+    },
+    {
+      "id": "private-key-collapsed-1440",
+      "title": "私钥 · 失焦摘要",
+      "width": 1440,
+      "height": 900,
+      "anchors": {
+        "app-sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 224,
+          "height": 900,
+          "role": "geometry"
+        },
+        "sidebar-toggle": {
+          "x": 8,
+          "y": 8,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-board": {
+          "x": 8,
+          "y": 68,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-terminal": {
+          "x": 8,
+          "y": 120,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-network": {
+          "x": 8,
+          "y": 172,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-settings": {
+          "x": 8,
+          "y": 224,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "page-header": {
+          "x": 224,
+          "y": 0,
+          "width": 1216,
+          "height": 56,
+          "role": "geometry"
+        },
+        "back": {
+          "x": 232,
+          "y": 6,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "target-card": {
+          "x": 264,
+          "y": 76,
+          "width": 560,
+          "height": 52,
+          "role": "geometry"
+        },
+        "trust-approved": {
+          "x": 264,
+          "y": 138,
+          "width": 560,
+          "height": 44,
+          "role": "geometry"
+        },
+        "auth-password": {
+          "x": 264,
+          "y": 224,
+          "width": 276,
+          "height": 44,
+          "role": "hit"
+        },
+        "auth-key": {
+          "x": 548,
+          "y": 224,
+          "width": 276,
+          "height": 44,
+          "role": "hit"
+        },
+        "edit-pem": {
+          "x": 264,
+          "y": 304,
+          "width": 560,
+          "height": 84,
+          "role": "hit"
+        },
+        "paste-key": {
+          "x": 264,
+          "y": 398,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        },
+        "passphrase": {
+          "x": 264,
+          "y": 480,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        },
+        "connect": {
+          "x": 264,
+          "y": 542,
+          "width": 560,
+          "height": 48,
+          "role": "disabled"
+        }
+      },
+      "textLimits": [
+        {
+          "id": "private-key-collapsed-1440-text-1",
+          "maxWidth": 148
+        },
+        {
+          "id": "private-key-collapsed-1440-text-2",
+          "maxWidth": 148
+        },
+        {
+          "id": "private-key-collapsed-1440-text-3",
+          "maxWidth": 148
+        },
+        {
+          "id": "private-key-collapsed-1440-text-4",
+          "maxWidth": 148
+        },
+        {
+          "id": "private-key-collapsed-1440-text-5",
+          "maxWidth": 120
+        },
+        {
+          "id": "private-key-collapsed-1440-text-6",
+          "maxWidth": 188
+        },
+        {
+          "id": "private-key-collapsed-1440-text-7",
+          "maxWidth": 1112
+        },
+        {
+          "id": "private-key-collapsed-1440-text-8",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-collapsed-1440-text-9",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-collapsed-1440-text-10",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-collapsed-1440-text-11",
+          "maxWidth": 560
+        },
+        {
+          "id": "private-key-collapsed-1440-text-12",
+          "maxWidth": 264
+        },
+        {
+          "id": "private-key-collapsed-1440-text-13",
+          "maxWidth": 264
+        },
+        {
+          "id": "private-key-collapsed-1440-text-14",
+          "maxWidth": 560
+        },
+        {
+          "id": "private-key-collapsed-1440-text-15",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-collapsed-1440-text-16",
+          "maxWidth": 544
+        },
+        {
+          "id": "private-key-collapsed-1440-text-17",
+          "maxWidth": 560
+        },
+        {
+          "id": "private-key-collapsed-1440-text-18",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-collapsed-1440-text-19",
+          "maxWidth": 544
+        },
+        {
+          "id": "private-key-collapsed-1440-text-20",
+          "maxWidth": 560
+        }
+      ]
+    },
+    {
+      "id": "private-key-focused-980",
+      "title": "私钥 · 聚焦编辑",
+      "width": 980,
+      "height": 780,
+      "anchors": {
+        "app-sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 224,
+          "height": 780,
+          "role": "geometry"
+        },
+        "sidebar-toggle": {
+          "x": 8,
+          "y": 8,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-board": {
+          "x": 8,
+          "y": 68,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-terminal": {
+          "x": 8,
+          "y": 120,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-network": {
+          "x": 8,
+          "y": 172,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-settings": {
+          "x": 8,
+          "y": 224,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "page-header": {
+          "x": 224,
+          "y": 0,
+          "width": 756,
+          "height": 56,
+          "role": "geometry"
+        },
+        "back": {
+          "x": 232,
+          "y": 6,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "target-card": {
+          "x": 264,
+          "y": 76,
+          "width": 560,
+          "height": 52,
+          "role": "geometry"
+        },
+        "trust-approved": {
+          "x": 264,
+          "y": 138,
+          "width": 560,
+          "height": 44,
+          "role": "geometry"
+        },
+        "auth-password": {
+          "x": 264,
+          "y": 224,
+          "width": 276,
+          "height": 44,
+          "role": "hit"
+        },
+        "auth-key": {
+          "x": 548,
+          "y": 224,
+          "width": 276,
+          "height": 44,
+          "role": "hit"
+        },
+        "key-pem": {
+          "x": 264,
+          "y": 304,
+          "width": 560,
+          "height": 84,
+          "role": "hit"
+        },
+        "paste-key": {
+          "x": 264,
+          "y": 398,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        },
+        "passphrase": {
+          "x": 264,
+          "y": 480,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        },
+        "connect": {
+          "x": 264,
+          "y": 542,
+          "width": 560,
+          "height": 48,
+          "role": "disabled"
+        }
+      },
+      "textLimits": [
+        {
+          "id": "private-key-focused-980-text-1",
+          "maxWidth": 148
+        },
+        {
+          "id": "private-key-focused-980-text-2",
+          "maxWidth": 148
+        },
+        {
+          "id": "private-key-focused-980-text-3",
+          "maxWidth": 148
+        },
+        {
+          "id": "private-key-focused-980-text-4",
+          "maxWidth": 148
+        },
+        {
+          "id": "private-key-focused-980-text-5",
+          "maxWidth": 120
+        },
+        {
+          "id": "private-key-focused-980-text-6",
+          "maxWidth": 188
+        },
+        {
+          "id": "private-key-focused-980-text-7",
+          "maxWidth": 652
+        },
+        {
+          "id": "private-key-focused-980-text-8",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-focused-980-text-9",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-focused-980-text-10",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-focused-980-text-11",
+          "maxWidth": 560
+        },
+        {
+          "id": "private-key-focused-980-text-12",
+          "maxWidth": 264
+        },
+        {
+          "id": "private-key-focused-980-text-13",
+          "maxWidth": 264
+        },
+        {
+          "id": "private-key-focused-980-text-14",
+          "maxWidth": 560
+        },
+        {
+          "id": "private-key-focused-980-text-15",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-focused-980-text-16",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-focused-980-text-17",
+          "maxWidth": 544
+        },
+        {
+          "id": "private-key-focused-980-text-18",
+          "maxWidth": 560
+        },
+        {
+          "id": "private-key-focused-980-text-19",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-focused-980-text-20",
+          "maxWidth": 544
+        },
+        {
+          "id": "private-key-focused-980-text-21",
+          "maxWidth": 560
+        }
+      ]
+    },
+    {
+      "id": "private-key-collapsed-980",
+      "title": "私钥 · 失焦摘要",
+      "width": 980,
+      "height": 780,
+      "anchors": {
+        "app-sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 224,
+          "height": 780,
+          "role": "geometry"
+        },
+        "sidebar-toggle": {
+          "x": 8,
+          "y": 8,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-board": {
+          "x": 8,
+          "y": 68,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-terminal": {
+          "x": 8,
+          "y": 120,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-network": {
+          "x": 8,
+          "y": 172,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-settings": {
+          "x": 8,
+          "y": 224,
+          "width": 208,
+          "height": 44,
+          "role": "hit"
+        },
+        "page-header": {
+          "x": 224,
+          "y": 0,
+          "width": 756,
+          "height": 56,
+          "role": "geometry"
+        },
+        "back": {
+          "x": 232,
+          "y": 6,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "target-card": {
+          "x": 264,
+          "y": 76,
+          "width": 560,
+          "height": 52,
+          "role": "geometry"
+        },
+        "trust-approved": {
+          "x": 264,
+          "y": 138,
+          "width": 560,
+          "height": 44,
+          "role": "geometry"
+        },
+        "auth-password": {
+          "x": 264,
+          "y": 224,
+          "width": 276,
+          "height": 44,
+          "role": "hit"
+        },
+        "auth-key": {
+          "x": 548,
+          "y": 224,
+          "width": 276,
+          "height": 44,
+          "role": "hit"
+        },
+        "edit-pem": {
+          "x": 264,
+          "y": 304,
+          "width": 560,
+          "height": 84,
+          "role": "hit"
+        },
+        "paste-key": {
+          "x": 264,
+          "y": 398,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        },
+        "passphrase": {
+          "x": 264,
+          "y": 480,
+          "width": 560,
+          "height": 48,
+          "role": "hit"
+        },
+        "connect": {
+          "x": 264,
+          "y": 542,
+          "width": 560,
+          "height": 48,
+          "role": "disabled"
+        }
+      },
+      "textLimits": [
+        {
+          "id": "private-key-collapsed-980-text-1",
+          "maxWidth": 148
+        },
+        {
+          "id": "private-key-collapsed-980-text-2",
+          "maxWidth": 148
+        },
+        {
+          "id": "private-key-collapsed-980-text-3",
+          "maxWidth": 148
+        },
+        {
+          "id": "private-key-collapsed-980-text-4",
+          "maxWidth": 148
+        },
+        {
+          "id": "private-key-collapsed-980-text-5",
+          "maxWidth": 120
+        },
+        {
+          "id": "private-key-collapsed-980-text-6",
+          "maxWidth": 188
+        },
+        {
+          "id": "private-key-collapsed-980-text-7",
+          "maxWidth": 652
+        },
+        {
+          "id": "private-key-collapsed-980-text-8",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-collapsed-980-text-9",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-collapsed-980-text-10",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-collapsed-980-text-11",
+          "maxWidth": 560
+        },
+        {
+          "id": "private-key-collapsed-980-text-12",
+          "maxWidth": 264
+        },
+        {
+          "id": "private-key-collapsed-980-text-13",
+          "maxWidth": 264
+        },
+        {
+          "id": "private-key-collapsed-980-text-14",
+          "maxWidth": 560
+        },
+        {
+          "id": "private-key-collapsed-980-text-15",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-collapsed-980-text-16",
+          "maxWidth": 544
+        },
+        {
+          "id": "private-key-collapsed-980-text-17",
+          "maxWidth": 560
+        },
+        {
+          "id": "private-key-collapsed-980-text-18",
+          "maxWidth": 536
+        },
+        {
+          "id": "private-key-collapsed-980-text-19",
+          "maxWidth": 544
+        },
+        {
+          "id": "private-key-collapsed-980-text-20",
+          "maxWidth": 560
+        }
+      ]
+    },
+    {
+      "id": "private-key-focused-700",
+      "title": "私钥 · 聚焦编辑",
+      "width": 700,
+      "height": 900,
+      "anchors": {
+        "app-sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 64,
+          "height": 900,
+          "role": "geometry"
+        },
+        "sidebar-toggle": {
+          "x": 10,
+          "y": 8,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-board": {
+          "x": 10,
+          "y": 68,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-terminal": {
+          "x": 10,
+          "y": 120,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-network": {
+          "x": 10,
+          "y": 172,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-settings": {
+          "x": 10,
+          "y": 224,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "page-header": {
+          "x": 64,
+          "y": 0,
+          "width": 636,
+          "height": 56,
+          "role": "geometry"
+        },
+        "back": {
+          "x": 72,
+          "y": 6,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "target-card": {
+          "x": 104,
+          "y": 76,
+          "width": 556,
+          "height": 52,
+          "role": "geometry"
+        },
+        "trust-approved": {
+          "x": 104,
+          "y": 138,
+          "width": 556,
+          "height": 44,
+          "role": "geometry"
+        },
+        "auth-password": {
+          "x": 104,
+          "y": 224,
+          "width": 274,
+          "height": 44,
+          "role": "hit"
+        },
+        "auth-key": {
+          "x": 386,
+          "y": 224,
+          "width": 274,
+          "height": 44,
+          "role": "hit"
+        },
+        "key-pem": {
+          "x": 104,
+          "y": 304,
+          "width": 556,
+          "height": 84,
+          "role": "hit"
+        },
+        "paste-key": {
+          "x": 104,
+          "y": 398,
+          "width": 556,
+          "height": 48,
+          "role": "hit"
+        },
+        "passphrase": {
+          "x": 104,
+          "y": 480,
+          "width": 556,
+          "height": 48,
+          "role": "hit"
+        },
+        "connect": {
+          "x": 104,
+          "y": 542,
+          "width": 556,
+          "height": 48,
+          "role": "disabled"
+        }
+      },
+      "textLimits": [
+        {
+          "id": "private-key-focused-700-text-1",
+          "maxWidth": 532
+        },
+        {
+          "id": "private-key-focused-700-text-2",
+          "maxWidth": 532
+        },
+        {
+          "id": "private-key-focused-700-text-3",
+          "maxWidth": 532
+        },
+        {
+          "id": "private-key-focused-700-text-4",
+          "maxWidth": 532
+        },
+        {
+          "id": "private-key-focused-700-text-5",
+          "maxWidth": 556
+        },
+        {
+          "id": "private-key-focused-700-text-6",
+          "maxWidth": 262
+        },
+        {
+          "id": "private-key-focused-700-text-7",
+          "maxWidth": 262
+        },
+        {
+          "id": "private-key-focused-700-text-8",
+          "maxWidth": 556
+        },
+        {
+          "id": "private-key-focused-700-text-9",
+          "maxWidth": 532
+        },
+        {
+          "id": "private-key-focused-700-text-10",
+          "maxWidth": 532
+        },
+        {
+          "id": "private-key-focused-700-text-11",
+          "maxWidth": 540
+        },
+        {
+          "id": "private-key-focused-700-text-12",
+          "maxWidth": 556
+        },
+        {
+          "id": "private-key-focused-700-text-13",
+          "maxWidth": 532
+        },
+        {
+          "id": "private-key-focused-700-text-14",
+          "maxWidth": 540
+        },
+        {
+          "id": "private-key-focused-700-text-15",
+          "maxWidth": 556
+        }
+      ]
+    },
+    {
+      "id": "private-key-collapsed-700",
+      "title": "私钥 · 失焦摘要",
+      "width": 700,
+      "height": 900,
+      "anchors": {
+        "app-sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 64,
+          "height": 900,
+          "role": "geometry"
+        },
+        "sidebar-toggle": {
+          "x": 10,
+          "y": 8,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-board": {
+          "x": 10,
+          "y": 68,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-terminal": {
+          "x": 10,
+          "y": 120,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-network": {
+          "x": 10,
+          "y": 172,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "nav-settings": {
+          "x": 10,
+          "y": 224,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "page-header": {
+          "x": 64,
+          "y": 0,
+          "width": 636,
+          "height": 56,
+          "role": "geometry"
+        },
+        "back": {
+          "x": 72,
+          "y": 6,
+          "width": 44,
+          "height": 44,
+          "role": "hit"
+        },
+        "target-card": {
+          "x": 104,
+          "y": 76,
+          "width": 556,
+          "height": 52,
+          "role": "geometry"
+        },
+        "trust-approved": {
+          "x": 104,
+          "y": 138,
+          "width": 556,
+          "height": 44,
+          "role": "geometry"
+        },
+        "auth-password": {
+          "x": 104,
+          "y": 224,
+          "width": 274,
+          "height": 44,
+          "role": "hit"
+        },
+        "auth-key": {
+          "x": 386,
+          "y": 224,
+          "width": 274,
+          "height": 44,
+          "role": "hit"
+        },
+        "edit-pem": {
+          "x": 104,
+          "y": 304,
+          "width": 556,
+          "height": 84,
+          "role": "hit"
+        },
+        "paste-key": {
+          "x": 104,
+          "y": 398,
+          "width": 556,
+          "height": 48,
+          "role": "hit"
+        },
+        "passphrase": {
+          "x": 104,
+          "y": 480,
+          "width": 556,
+          "height": 48,
+          "role": "hit"
+        },
+        "connect": {
+          "x": 104,
+          "y": 542,
+          "width": 556,
+          "height": 48,
+          "role": "disabled"
+        }
+      },
+      "textLimits": [
+        {
+          "id": "private-key-collapsed-700-text-1",
+          "maxWidth": 532
+        },
+        {
+          "id": "private-key-collapsed-700-text-2",
+          "maxWidth": 532
+        },
+        {
+          "id": "private-key-collapsed-700-text-3",
+          "maxWidth": 532
+        },
+        {
+          "id": "private-key-collapsed-700-text-4",
+          "maxWidth": 532
+        },
+        {
+          "id": "private-key-collapsed-700-text-5",
+          "maxWidth": 556
+        },
+        {
+          "id": "private-key-collapsed-700-text-6",
+          "maxWidth": 262
+        },
+        {
+          "id": "private-key-collapsed-700-text-7",
+          "maxWidth": 262
+        },
+        {
+          "id": "private-key-collapsed-700-text-8",
+          "maxWidth": 556
+        },
+        {
+          "id": "private-key-collapsed-700-text-9",
+          "maxWidth": 532
+        },
+        {
+          "id": "private-key-collapsed-700-text-10",
+          "maxWidth": 540
+        },
+        {
+          "id": "private-key-collapsed-700-text-11",
+          "maxWidth": 556
+        },
+        {
+          "id": "private-key-collapsed-700-text-12",
+          "maxWidth": 532
+        },
+        {
+          "id": "private-key-collapsed-700-text-13",
+          "maxWidth": 540
+        },
+        {
+          "id": "private-key-collapsed-700-text-14",
+          "maxWidth": 556
+        }
+      ]
+    }
+  ]
+}

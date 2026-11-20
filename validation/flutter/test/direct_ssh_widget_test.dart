@@ -118,6 +118,7 @@ void main() {
     expect(data.flagsCollection.isButton, isTrue); expect(data.hasAction(SemanticsAction.tap), isTrue);
     await tapPasteKey(tester); await tester.pump();
     expect(reads, 1);
+    await tester.tap(find.byKey(const ValueKey('direct-edit-pem'))); await tester.pumpAndSettle();
     final field = tester.widget<TextField>(find.byKey(const ValueKey('direct-secret')));
     expect(field.controller!.text, clipboardPem);
     expect(field.controller!.selection.baseOffset, clipboardPem.length);
@@ -147,6 +148,7 @@ void main() {
       await tester.ensureVisible(find.byKey(const ValueKey('direct-paste-key'))); await tester.pumpAndSettle();
       final height = tester.getSize(key).height;
       await tapPasteKey(tester); await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('direct-edit-pem'))); await tester.pumpAndSettle();
       final field = tester.widget<TextField>(key);
       expect(field.minLines, 2); expect(field.maxLines, 2);
       expect(field.controller!.text, pem); expect(tester.getSize(key).height, height);
@@ -184,7 +186,8 @@ void main() {
       await enableKeyMode(tester);
       await tester.enterText(find.byKey(const ValueKey('direct-secret')), 'manual-key');
       await tapPasteKey(tester); await tester.pump();
-      expect(tester.widget<TextField>(find.byKey(const ValueKey('direct-secret'))).controller!.text, 'manual-key');
+      final dynamic state = tester.state(find.byType(DirectSshPage));
+      expect(state.secret.text == 'manual-key', isTrue);
       final message = tester.widget<Text>(find.byKey(const ValueKey('direct-paste-status'))).data!;
       expect(message, outcome == 'empty' ? '剪贴板中没有可粘贴的文本。' : '无法读取剪贴板，请重试或手动输入私钥。');
       expect(message.contains(clipboardPem), isFalse); expect(tester.takeException(), isNull);
@@ -207,7 +210,9 @@ void main() {
       switch (change) {
         case 'target': await tester.enterText(find.byKey(const ValueKey('direct-host')), 'changed.invalid'); expected = ''; break;
         case 'mode': await enableKeyMode(tester); expected = ''; break;
-        case 'manual': await tester.enterText(key, 'typed-after-paste'); expected = 'typed-after-paste'; break;
+        case 'manual':
+          await tester.tap(find.byKey(const ValueKey('direct-edit-pem'))); await tester.pumpAndSettle();
+          await tester.enterText(key, 'typed-after-paste'); expected = 'typed-after-paste'; break;
         case 'background':
           tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
           tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
@@ -224,7 +229,8 @@ void main() {
           break;
       }
       pending.complete({'text': clipboardPem}); await tester.pump(); await tester.pump();
-      expect(tester.widget<TextField>(key).controller!.text, expected);
+      final dynamic current = tester.state(find.byType(DirectSshPage));
+      expect(current.secret.text == expected, isTrue);
       expect(find.byKey(const ValueKey('direct-paste-status')), findsNothing);
       expect(tester.takeException(), isNull);
     });

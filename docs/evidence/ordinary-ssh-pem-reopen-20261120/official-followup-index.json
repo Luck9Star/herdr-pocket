@@ -1,0 +1,954 @@
+{
+  "schemaVersion": 1,
+  "repository": "Luck9Star/herdr-pocket",
+  "pullRequest": 56,
+  "runs": {
+    "android-tauri-rotation": {
+      "runId": 44662840108,
+      "artifactId": 14596169777,
+      "sourceSha": "d1ed86462745556ad020189c4dd3ad066fd69cf1",
+      "zipBytes": 391480,
+      "zipSha256": "cb8d6e9d7cc98385798c8daec0ba2958874ad158cc89c0953b6e695b9cf7e113",
+      "artifactExpiresAt": "2026-12-04T02:52:46Z",
+      "jobId": 136044961608,
+      "jobConclusion": "success",
+      "manifestStatus": "passed",
+      "manifestFile": "tauri-direct-evidence/manifest.json",
+      "manifestSha256": "ffd13e736ebde0466123185b7bdcff06634512609f24a2e048cd26c7b529bc40",
+      "png": {
+        "tauri-direct-evidence/s10-host-key-change-android.png": {
+          "memberSha256": "5646d4abc7cc0f4a0770f2ee0361c05bbc25d5c91e537b6e96d74c59f841acd3",
+          "archivePath": "followup/android-tauri-rotation/s10-host-key-change-android.png",
+          "archiveSha256": "5646d4abc7cc0f4a0770f2ee0361c05bbc25d5c91e537b6e96d74c59f841acd3",
+          "decodedSizePx": [
+            1081,
+            2341
+          ],
+          "removedPngChunks": []
+        },
+        "tauri-direct-evidence/ssh-rotation-terminal-android-webview-before.png": {
+          "memberSha256": "462a1d4c562beb5d5b5590fec5efcfd4966fefcddf6e932d7fac5b31bf86c1e6"
+        },
+        "tauri-direct-evidence/ssh-rotation-terminal-android.png": {
+          "memberSha256": "3c82b1e2be11b95fdb57b54727016167a33797abec538a2a9c5587f431718706",
+          "archivePath": "followup/android-tauri-rotation/ssh-rotation-terminal-android.png",
+          "archiveSha256": "3c82b1e2be11b95fdb57b54727016167a33797abec538a2a9c5587f431718706",
+          "decodedSizePx": [
+            1080,
+            2340
+          ],
+          "removedPngChunks": []
+        }
+      },
+      "ocrCriteria": {
+        "memberFile": "tauri-direct-evidence/ssh-rotation-terminal-android.json",
+        "memberSha256": "2172b0f39ae955c48cdc6b8934d49672a638576c1d11f599b844e4e2fe2cbea4"
+      },
+      "suite": {
+        "scenario": "encrypted-key-rotation",
+        "phase": "complete",
+        "apkSha256": "6ea18ac1f33bbf46b4a9de71de8fa1095773408ca4d11f78b77217b31512849e",
+        "probeReviewed": true,
+        "refusalBlocked": true,
+        "cancelKeptTrust": true,
+        "reprobePresented": true,
+        "connected": true,
+        "terminalEchoRendered": true,
+        "terminalInputReceived": true,
+        "disconnected": true,
+        "credentialsCleared": true,
+        "cleanup": {
+          "browser": true,
+          "application": true,
+          "forward": true,
+          "reverse": true,
+          "fixtureConnections": true
+        },
+        "apiLevel": 35,
+        "abi": "x86_64",
+        "captureEngine": "adb exec-out screencap -p"
+      },
+      "peer": {
+        "hostKey": [
+          "A",
+          "B",
+          "B",
+          "B"
+        ],
+        "closed": [
+          true,
+          true,
+          true,
+          true
+        ],
+        "authAttempts": [
+          0,
+          0,
+          0,
+          2
+        ],
+        "authSuccesses": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "ptyRequests": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "shellRequests": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "inputBytes": [
+          0,
+          0,
+          0,
+          9
+        ],
+        "outputBytes": [
+          0,
+          0,
+          0,
+          102
+        ],
+        "markerReceived": [
+          false,
+          false,
+          false,
+          true
+        ],
+        "sessionClosed": [
+          false,
+          false,
+          false,
+          true
+        ]
+      },
+      "terminal": {
+        "imageSize": [
+          1080,
+          2340
+        ],
+        "imageSha256": "3c82b1e2be11b95fdb57b54727016167a33797abec538a2a9c5587f431718706",
+        "ocrEngine": "tesseract 5.3.4",
+        "ocrPageSegmentationMode": 6,
+        "ocrAttempts": 1,
+        "markerVisible": true,
+        "tokenVisible": true,
+        "proofSequenceVisible": true,
+        "terminalBounds": [
+          99,
+          500,
+          875,
+          769
+        ]
+      }
+    },
+    "linux-tauri-rotation": {
+      "runId": 44660753647,
+      "artifactId": 14594674668,
+      "sourceSha": "0ae850eae4fc6aa492c1bf01304ee222f1907a5d",
+      "zipBytes": 145328,
+      "zipSha256": "53846ff83f628cf0400bf60a03f665f1e85d33f66acba8c23bfbe481247db8e3",
+      "artifactExpiresAt": "2026-12-04T02:30:09Z",
+      "jobId": 136038119946,
+      "jobConclusion": "success",
+      "manifestStatus": "passed",
+      "manifestFile": "result.json",
+      "manifestSha256": "43ec8826b452fc32679911774adf75783bb97ef6a33813948980f0d5aff93b04",
+      "png": {
+        "ordinary-terminal.png": {
+          "memberSha256": "03bb6ce20d903f95708ff2e5912209899a25aacb21649f1b7664dc9a442ea450",
+          "archivePath": "followup/linux-tauri-rotation/ordinary-terminal.png",
+          "archiveSha256": "03bb6ce20d903f95708ff2e5912209899a25aacb21649f1b7664dc9a442ea450",
+          "decodedSizePx": [
+            1440,
+            1200
+          ],
+          "removedPngChunks": []
+        },
+        "ordinary-home.png": {
+          "memberSha256": "d0fbc04b60a63c9d787da5d8e3b3f3a9115923a79aaea106b6ee79bf19e1da85",
+          "archivePath": "linux-tauri/ordinary-home.png",
+          "archiveSha256": "d0fbc04b60a63c9d787da5d8e3b3f3a9115923a79aaea106b6ee79bf19e1da85",
+          "reused": true
+        },
+        "ordinary-disconnect.png": {
+          "memberSha256": "7aa688757e646907fac39b9a5e761494ba616db0977811667683653bcc0bbb29"
+        },
+        "rotation-rejected.png": {
+          "memberSha256": "bb531034c1b5908242a6ec1b5ebd09fa7020e0be58a70afd1a1cfde36bd6e533",
+          "archivePath": "followup/linux-tauri-rotation/rotation-rejected.png",
+          "archiveSha256": "bb531034c1b5908242a6ec1b5ebd09fa7020e0be58a70afd1a1cfde36bd6e533",
+          "decodedSizePx": [
+            1440,
+            1200
+          ],
+          "removedPngChunks": []
+        }
+      },
+      "suite": {
+        "platform": "Linux Tauri GTK / Xvfb",
+        "authentication": "publickey",
+        "hostKeyRotation": true,
+        "returnedHome": true,
+        "credentialFieldsCleared": true,
+        "cleanup": {
+          "peerListenerReleased": true,
+          "fixturePasswordCleared": true,
+          "webdriverProcessStopped": true,
+          "webdriverPortsReleased": true,
+          "privateDirectoryRemoved": true,
+          "fixtureKeyAndPassphrasesCleared": true
+        },
+        "capture": "native WebKitGTK WebDriver viewport"
+      },
+      "peer": {
+        "hostKey": [
+          "A",
+          "B",
+          "B",
+          "B"
+        ],
+        "closed": [
+          true,
+          true,
+          true,
+          true
+        ],
+        "authAttempts": [
+          0,
+          0,
+          0,
+          2
+        ],
+        "authSuccesses": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "ptyRequests": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "shellRequests": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "inputBytes": [
+          0,
+          0,
+          0,
+          9
+        ],
+        "outputBytes": [
+          0,
+          0,
+          0,
+          102
+        ],
+        "markerReceived": [
+          false,
+          false,
+          false,
+          true
+        ],
+        "sessionClosed": [
+          false,
+          false,
+          false,
+          true
+        ]
+      },
+      "terminal": {
+        "imageSize": [
+          1440,
+          1200
+        ],
+        "imageSha256": "03bb6ce20d903f95708ff2e5912209899a25aacb21649f1b7664dc9a442ea450",
+        "ocrEngine": "tesseract 5.3.4",
+        "ocrPageSegmentationMode": 11,
+        "ocrAttempts": 2,
+        "markerVisible": true,
+        "tokenVisible": true,
+        "proofSequenceVisible": true,
+        "terminalBounds": [
+          276,
+          132,
+          1112,
+          1040
+        ]
+      }
+    },
+    "linux-flutter-rotation": {
+      "runId": 44660753582,
+      "artifactId": 14596196132,
+      "sourceSha": "0ae850eae4fc6aa492c1bf01304ee222f1907a5d",
+      "zipBytes": 166020,
+      "zipSha256": "fd42032d6b135eb8c6ee08538b873c3a95f0f27075861702d0bdff5475fc38bf",
+      "artifactExpiresAt": "2026-12-04T02:30:14Z",
+      "jobId": 136038119937,
+      "jobConclusion": "success",
+      "manifestStatus": "passed",
+      "manifestFile": "result.json",
+      "manifestSha256": "936c9542542015ad1eff59ee330e22d60540da3adc220097744ab3c12696a182",
+      "png": {
+        "ordinary-disconnect.png": {
+          "memberSha256": "6137029080ff3554c269981b675bd3f9382e0d0611bd805ffba3f3dbbaaeadc4"
+        },
+        "ordinary-home.png": {
+          "memberSha256": "c776f2616015b5d1433f57a8a7711a7e352c1cca86c51f45166a3b7667e0fddf",
+          "archivePath": "linux-flutter/ordinary-home.png",
+          "archiveSha256": "c776f2616015b5d1433f57a8a7711a7e352c1cca86c51f45166a3b7667e0fddf",
+          "reused": true
+        },
+        "ordinary-terminal.png": {
+          "memberSha256": "2cdec3f8ae2bd19dff95410826e9f6353e72da71c18554e1d5293c91079244a3"
+        },
+        "rotation-rejected.png": {
+          "memberSha256": "bbfb839ac163244ad045a9a937986ad6e5c6529b9f0686dba6a301156cca863a"
+        }
+      },
+      "suite": {
+        "platform": "Linux Flutter debug GTK / Xvfb",
+        "authentication": "publickey",
+        "hostKeyRotation": true,
+        "returnedHome": true,
+        "credentialFieldsCleared": true,
+        "cleanup": {
+          "ownedFlutterProcessStopped": true,
+          "peerListenerReleased": true,
+          "fixturePasswordCleared": true,
+          "fixtureDirectoryRemoved": true,
+          "fixtureKeyAndPassphrasesCleared": true
+        },
+        "capture": "unscaled X11 Xvfb framebuffer PNG",
+        "wrongPassphrase": {
+          "rejectedLocally": true,
+          "connections": 1,
+          "authenticationAttempts": 0
+        },
+        "modeSwitch": {
+          "passwordToKeyCleared": true,
+          "keyToPasswordCleared": true,
+          "sameTrust": true,
+          "connections": 1,
+          "authenticationAttempts": 0
+        }
+      },
+      "peer": {
+        "hostKey": [
+          "A",
+          "B",
+          "B",
+          "B"
+        ],
+        "closed": [
+          true,
+          true,
+          true,
+          true
+        ],
+        "authAttempts": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "authSuccesses": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "ptyRequests": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "shellRequests": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "inputBytes": [
+          0,
+          0,
+          0,
+          9
+        ],
+        "outputBytes": [
+          0,
+          0,
+          0,
+          102
+        ],
+        "markerReceived": [
+          false,
+          false,
+          false,
+          true
+        ],
+        "sessionClosed": [
+          false,
+          false,
+          false,
+          true
+        ]
+      },
+      "terminal": {
+        "imageSize": [
+          1920,
+          1080
+        ],
+        "imageSha256": "2cdec3f8ae2bd19dff95410826e9f6353e72da71c18554e1d5293c91079244a3",
+        "ocrEngine": "tesseract 5.3.4",
+        "ocrPageSegmentationMode": 6,
+        "ocrAttempts": 1,
+        "markerVisible": true,
+        "tokenVisible": true,
+        "proofSequenceVisible": true,
+        "terminalBounds": [
+          264,
+          120,
+          976,
+          584
+        ]
+      }
+    },
+    "ios-flutter-retry": {
+      "runId": 44659776085,
+      "artifactId": 14595348177,
+      "sourceSha": "939097e17ffceef1ca5739f580eda36e4572932b",
+      "zipBytes": 513076,
+      "zipSha256": "2fbad8ca2c37ef56a5619c25e4a03e8c6acad96ec20d9eaad09cb11b0bd596c8",
+      "artifactExpiresAt": "2027-02-18T02:17:59Z",
+      "jobId": 136034860976,
+      "jobConclusion": "failure",
+      "manifestStatus": "failed",
+      "manifestFile": "result.json",
+      "manifestSha256": "25a764a048df29d08a7993ce775d69dd2ee9a96d8cfee22269b80d25eceb73a9",
+      "png": {
+        "ordinary-terminal.png": {
+          "memberSha256": "c174ce25c3f572d4b9e96f614f4cb9ff4c4364e74e336bf488af10f5a7eabdd0"
+        },
+        "key-change-review.png": {
+          "memberSha256": "bee0dd1b9576a3bb49390c741a453a6d615695993e85da4716cb88c1b2fec526"
+        },
+        "key-change-terminal.png": {
+          "memberSha256": "975d43d0588b3c0824eacc68c35efa208c49e1317fbdb23d36d5816047a38b8a"
+        },
+        "preconnect.png": {
+          "memberSha256": "5ea09f60e9ee4b07a4f56b0af3be7d1e09b3de761da43dfc7d366ea287d2480e"
+        }
+      },
+      "suite": {
+        "failureStage": "encrypted_connect",
+        "failureCode": "ios_device_test_failed",
+        "cleanup": {
+          "simulatorDeleted": true,
+          "fixtureClosed": true,
+          "flutterToolStopped": true,
+          "appRemoved": true,
+          "privateRemoved": true,
+          "rawLogsUploaded": false,
+          "encryptedFixtureClosed": true,
+          "encryptedSecretsCleared": true
+        },
+        "rejectedCheckpoint": {
+          "hostKey": "A",
+          "authAttempts": 0,
+          "closed": true
+        },
+        "frameworkDiagnostic": {
+          "exceptionClass": "StateError",
+          "sourceLine": 617,
+          "semantics": {
+            "platformEnabled": true,
+            "realPlatformEnabled": true,
+            "bindingHandles": 2,
+            "pipelineHandles": 0
+          }
+        },
+        "xctestResult": {
+          "resultBundlePresent": true,
+          "summaryReadable": true,
+          "totalTestCount": 1,
+          "passedTests": 0,
+          "failedTests": 1,
+          "skippedTests": 0,
+          "launchFailed": false,
+          "installFailed": false,
+          "runnerExited": false,
+          "timedOut": false,
+          "crashed": false,
+          "noTests": false,
+          "bundleLoadFailed": false
+        }
+      },
+      "peer": {
+        "hostKey": [
+          "A"
+        ],
+        "closed": [
+          true
+        ],
+        "authAttempts": [
+          0
+        ],
+        "authSuccesses": [
+          0
+        ],
+        "ptyRequests": [
+          0
+        ],
+        "shellRequests": [
+          0
+        ],
+        "inputBytes": [
+          0
+        ],
+        "outputBytes": [
+          0
+        ],
+        "markerReceived": [
+          false
+        ],
+        "sessionClosed": [
+          false
+        ]
+      }
+    },
+    "android-flutter-retry": {
+      "runId": 44660617833,
+      "artifactId": 14596052057,
+      "sourceSha": "0ae850eae4fc6aa492c1bf01304ee222f1907a5d",
+      "zipBytes": 3250,
+      "zipSha256": "98f5c616354200df294327da8a6430dd6e62f703fcf78ecf60968af4edd4c9fa",
+      "artifactExpiresAt": "2027-02-18T02:24:55Z",
+      "jobId": 136037669336,
+      "jobConclusion": "failure",
+      "manifestStatus": "failed",
+      "manifestFile": "direct-ssh-public/result.json",
+      "manifestSha256": "228a097bd194e4271da42fc42817ec30448e854c1df55276bed57f5d8035cccd",
+      "suite": {
+        "failureStage": "encrypted_rejected",
+        "failureCode": "direct_android_device_test_failed",
+        "cleanup": {
+          "reverseRemoved": true,
+          "packageRemoved": true,
+          "ownedForwardsRemoved": true,
+          "fixtureClosed": true,
+          "temporaryKeyRemoved": true,
+          "flutterToolStopped": true,
+          "rawLogsUploaded": false
+        },
+        "rejectedCheckpoint": {
+          "hostKey": "A",
+          "authAttempts": 0,
+          "closed": true
+        },
+        "deviceFailure": {
+          "stage": "encrypted_rejected",
+          "code": "direct_ssh_android_ui_failed",
+          "exceptionClass": "TestFailure",
+          "sourceLocations": [
+            {
+              "file": "direct_ssh_ui_steps.dart",
+              "line": 154
+            },
+            {
+              "file": "direct_ssh_ui_steps.dart",
+              "line": 867
+            },
+            {
+              "file": "direct_ssh_ui_steps.dart",
+              "line": 965
+            },
+            {
+              "file": "android_direct_ssh_test.dart",
+              "line": 287
+            }
+          ]
+        }
+      },
+      "peer": {
+        "hostKey": [
+          "A"
+        ],
+        "closed": [
+          true
+        ],
+        "authAttempts": [
+          0
+        ],
+        "authSuccesses": [
+          0
+        ],
+        "ptyRequests": [
+          0
+        ],
+        "shellRequests": [
+          0
+        ],
+        "inputBytes": [
+          0
+        ],
+        "outputBytes": [
+          0
+        ],
+        "markerReceived": [
+          false
+        ],
+        "sessionClosed": [
+          false
+        ]
+      }
+    },
+    "ios-tauri-r13": {
+      "runId": 44660347850,
+      "artifactId": 14595039692,
+      "sourceSha": "1684d15e42199443d63ca5033c6d9cc743a1282d",
+      "zipBytes": 11817,
+      "zipSha256": "ec1fb78cb5907c46dba60a40d37802945b73d2d01ddf921b6584b9f840db1305",
+      "artifactExpiresAt": "2027-02-18T02:22:43Z",
+      "jobId": 136036755995,
+      "jobConclusion": "failure",
+      "manifestStatus": "failed",
+      "manifestFile": "result.json",
+      "manifestSha256": "22e5919931c6e49c8e52ab2e9dad72262983aae4230915cc52c108830bc7f49c",
+      "png": {
+        "tauri-manual-key-empty-home.png": {
+          "memberSha256": "65e68b3eca5b20a772bcbc4e5e2f6862d6eb0bfd913321cf6502856a28aa18c7",
+          "archivePath": "followup/ios-tauri-r13/tauri-manual-key-empty-home.png",
+          "archiveSha256": "a733393af0e78af6aca2318674d615862023e0b2e050c9243392bb39bad3ea1d",
+          "decodedSizePx": [
+            1320,
+            2868
+          ],
+          "removedPngChunks": [
+            "eXIf",
+            "iTXt"
+          ]
+        }
+      },
+      "suite": {
+        "stage": "encrypted_key_form",
+        "nativeCheckpoint": "encrypted_key_open_add",
+        "nativeFailureCode": "native_encrypted_key_home_shortcut_unproven",
+        "simulator": {
+          "deviceType": "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max",
+          "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-26-2"
+        },
+        "cleanup": {
+          "simulatorDeleted": true,
+          "fixturesClosed": true,
+          "privateFilesRemoved": true,
+          "encryptedSecretsCleared": true,
+          "rawLogsUploaded": false
+        },
+        "homeReadiness": {
+          "strictSamples": 3,
+          "outcome": "ready",
+          "elapsedMs": 9531,
+          "waitCalls": 2,
+          "samples": [
+            {
+              "state": "shell",
+              "elapsedMs": 998
+            },
+            {
+              "elapsedMs": 9531,
+              "state": "ready"
+            }
+          ],
+          "strictSampleMs": 1309
+        },
+        "shortcutDiagnostic": {
+          "visibleCandidates": 1,
+          "visibleAddMarkers": 0,
+          "candidateSizePt": [
+            163,
+            22
+          ],
+          "liveSizePt": null,
+          "buttonGapPt": 5,
+          "reason": "button_size_or_role"
+        },
+        "shortcutCapture": {
+          "imageFile": "tauri-manual-key-empty-home.png",
+          "imageSha256": "65e68b3eca5b20a772bcbc4e5e2f6862d6eb0bfd913321cf6502856a28aa18c7",
+          "geometry": {
+            "visibleFrame": [
+              0,
+              54,
+              440,
+              902
+            ],
+            "frame": [
+              17,
+              193,
+              163,
+              22
+            ],
+            "role": "button",
+            "hittable": true,
+            "ownerResolved": true,
+            "centerVisible": true,
+            "fullyVisible": true,
+            "screenFrame": [
+              0,
+              0,
+              440,
+              956
+            ],
+            "statusBarFrames": [
+              [
+                0,
+                0,
+                440,
+                54
+              ]
+            ],
+            "enabled": true
+          },
+          "emptyAddFrame": [
+            17,
+            166,
+            163,
+            22
+          ],
+          "screenPixels": [
+            1320,
+            2868
+          ],
+          "visualTargetReady": false,
+          "peerConnections": 0
+        },
+        "uniformWhiteAppArea": {
+          "firstRowPx": 162,
+          "pixelCount": 3571920
+        }
+      }
+    },
+    "macos-flutter-r3": {
+      "runId": 44662494257,
+      "artifactId": 14596239411,
+      "sourceSha": "34c3e54ce276ad52a43909ff582ddfdfd570502c",
+      "zipBytes": 1776,
+      "zipSha256": "63c5196a7d9937132336d910ab8dbe10ce44c264e4bc44babec6820c1335a800",
+      "artifactExpiresAt": "2026-12-04T02:51:32Z",
+      "jobId": 136043832798,
+      "jobConclusion": "failure",
+      "manifestStatus": "failed",
+      "manifestFile": "result.json",
+      "manifestSha256": "772b47c6da64577fd21a80d58afe088357baa19ac1a4beecab9969965c0e2331",
+      "suite": {
+        "platform": "macos-xcuitest",
+        "testCounts": {
+          "totalTestCount": 4,
+          "passedTests": 3,
+          "failedTests": 1,
+          "skippedTests": 0
+        },
+        "cases": {
+          "testSystemMasking": {
+            "executed": true,
+            "passed": true
+          },
+          "testPasswordSSH": {
+            "executed": true,
+            "passed": true
+          },
+          "testEncryptedKeySSH": {
+            "executed": true,
+            "passed": false
+          },
+          "testReturnAndReopen": {
+            "executed": true,
+            "passed": true
+          }
+        },
+        "failureMethod": "testEncryptedKeySSH",
+        "failureSourceLines": [
+          281
+        ],
+        "systemTreeAndSecureFieldsVerified": true,
+        "passphraseInputProven": true,
+        "rawLogsUploaded": false,
+        "encryptedKeyPeerAuthenticationPtyShellAndClose": false
+      }
+    },
+    "linux-flutter-rotation-strict": {
+      "runId": 44664325486,
+      "artifactId": 14596687636,
+      "sourceSha": "2720e2f536c69adbed9ce3f91d70e0466114af0d",
+      "zipBytes": 165116,
+      "zipSha256": "f3736e3bb37baf28e9a6d3ba6d572729c00dd647f1011fc51923556af45dcf5a",
+      "artifactExpiresAt": "2026-12-04T03:00:49Z",
+      "jobId": 136049825334,
+      "jobConclusion": "success",
+      "manifestStatus": "passed",
+      "manifestFile": "result.json",
+      "manifestSha256": "717e8ff999f31bca8d467cd3d75c9ad36efeb42bab402fbcdcda3b7f02e18877",
+      "png": {
+        "ordinary-disconnect.png": {
+          "memberSha256": "303c03255d5152805fe3d47763b6ae0fab4f0f639ffa4b8256a2948d396a3047"
+        },
+        "ordinary-terminal.png": {
+          "memberSha256": "7a0adf4c41fba891b2ef4bea71237cee4be68f2afc795e7456ccb99c6b100ec2",
+          "archivePath": "followup/linux-flutter-rotation/ordinary-terminal.png",
+          "archiveSha256": "7a0adf4c41fba891b2ef4bea71237cee4be68f2afc795e7456ccb99c6b100ec2",
+          "decodedSizePx": [
+            1920,
+            1080
+          ],
+          "removedPngChunks": []
+        },
+        "ordinary-home.png": {
+          "memberSha256": "c776f2616015b5d1433f57a8a7711a7e352c1cca86c51f45166a3b7667e0fddf",
+          "archivePath": "linux-flutter/ordinary-home.png",
+          "archiveSha256": "c776f2616015b5d1433f57a8a7711a7e352c1cca86c51f45166a3b7667e0fddf",
+          "reused": true
+        },
+        "rotation-rejected.png": {
+          "memberSha256": "66bfec1627c903ff2875aa8fcfbdcd442641dadbe70039a235df6d5b2e2fdfd8",
+          "archivePath": "followup/linux-flutter-rotation/rotation-rejected.png",
+          "archiveSha256": "66bfec1627c903ff2875aa8fcfbdcd442641dadbe70039a235df6d5b2e2fdfd8",
+          "decodedSizePx": [
+            1920,
+            1080
+          ],
+          "removedPngChunks": []
+        }
+      },
+      "suite": {
+        "platform": "Linux Flutter debug GTK / Xvfb",
+        "authentication": "publickey",
+        "hostKeyRotation": true,
+        "returnedHome": true,
+        "credentialFieldsCleared": true,
+        "cleanup": {
+          "ownedFlutterProcessStopped": true,
+          "peerListenerReleased": true,
+          "fixturePasswordCleared": true,
+          "fixtureDirectoryRemoved": true,
+          "fixtureKeyAndPassphrasesCleared": true
+        },
+        "capture": "unscaled X11 Xvfb framebuffer PNG",
+        "wrongPassphrase": {
+          "rejectedLocally": true,
+          "connections": 1,
+          "authenticationAttempts": 0
+        },
+        "modeSwitch": {
+          "passwordToKeyCleared": true,
+          "keyToPasswordCleared": true,
+          "sameTrust": true,
+          "connections": 1,
+          "authenticationAttempts": 0
+        },
+        "pemReopen": {
+          "summaryBefore": true,
+          "draftExactFocused": true,
+          "summaryAfter": true,
+          "editorAndSemanticsAbsent": true
+        }
+      },
+      "peer": {
+        "hostKey": [
+          "A",
+          "B",
+          "B",
+          "B"
+        ],
+        "closed": [
+          true,
+          true,
+          true,
+          true
+        ],
+        "authAttempts": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "authSuccesses": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "ptyRequests": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "shellRequests": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "inputBytes": [
+          0,
+          0,
+          0,
+          9
+        ],
+        "outputBytes": [
+          0,
+          0,
+          0,
+          102
+        ],
+        "markerReceived": [
+          false,
+          false,
+          false,
+          true
+        ],
+        "sessionClosed": [
+          false,
+          false,
+          false,
+          true
+        ]
+      },
+      "terminal": {
+        "imageSize": [
+          1920,
+          1080
+        ],
+        "imageSha256": "7a0adf4c41fba891b2ef4bea71237cee4be68f2afc795e7456ccb99c6b100ec2",
+        "ocrEngine": "tesseract 5.3.4",
+        "ocrPageSegmentationMode": 6,
+        "ocrAttempts": 1,
+        "markerVisible": true,
+        "tokenVisible": true,
+        "proofSequenceVisible": true,
+        "terminalBounds": [
+          264,
+          120,
+          976,
+          584
+        ]
+      }
+    }
+  }
+}

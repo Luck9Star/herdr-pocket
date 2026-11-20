@@ -50,6 +50,7 @@ void main() {
       expect(tester.widget<FilledButton>(key('direct-connect')).onPressed, isNotNull);
       await tester.tap(key('direct-auth-key')); await tester.pumpAndSettle();
       expect(tester.widget<TextField>(key('direct-secret')).controller!.text, isEmpty);
+      await tester.tap(key('direct-secret')); await tester.pumpAndSettle();
       await tester.enterText(key('direct-secret'), 'synthetic-key'); await tester.pump();
       expect(tester.widget<FilledButton>(key('direct-connect')).onPressed, isNull);
       await tester.enterText(key('direct-secret'), '-----BEGIN PRIVATE KEY-----\n${base64Encode(List.filled(48, 65))}\n-----END PRIVATE KEY-----'); await tester.pump();

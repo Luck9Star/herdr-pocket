@@ -608,38 +608,73 @@ Future<void> runDirectSshUi(
   step('report_data_set');
 }
 
+Future<void> _revealEncryptedPassphrase(
+  WidgetTester tester,
+  Finder passphrase,
+) async {
+  final form = control('direct-form');
+  for (var attempt = 0; attempt < 6; attempt++) {
+    final count = passphrase.evaluate().length;
+    if (count > 1) fail('direct_ssh_encrypted_passphrase_ambiguous');
+    if (count == 1 && passphrase.hitTestable().evaluate().isNotEmpty) return;
+    expect(form, findsOneWidget);
+    final bounds = tester.getRect(form);
+    final above = count == 1 && tester.getCenter(passphrase).dy < bounds.top;
+    // Swipe in the form margin so a focused multiline PEM cannot consume
+    // the gesture. A lazy field may not exist until the viewport scrolls.
+    await tester.timedDragFrom(
+      Offset(bounds.left + 8, bounds.top + bounds.height * (above ? .25 : .75)),
+      Offset(0, bounds.height * (above ? .5 : -.5)),
+      const Duration(milliseconds: 300),
+    );
+    await tester.pump(const Duration(milliseconds: 250));
+  }
+  expect(passphrase, findsOneWidget);
+  expect(
+    passphrase.hitTestable(),
+    findsOneWidget,
+    reason: 'direct_ssh_encrypted_passphrase_unreachable',
+  );
+}
+
 Future<void> enterEncryptedPassphrase(
   WidgetTester tester,
   Finder passphrase,
   String text, {
   required bool finishIosEditing,
 }) async {
+  await _revealEncryptedPassphrase(tester, passphrase);
   expect(tester.widget<TextField>(passphrase).obscureText, isTrue);
-  await tester.ensureVisible(passphrase);
-  if (!finishIosEditing) {
-    await tester.enterText(passphrase, text);
-    return;
-  }
   final editor = find.descendant(
     of: passphrase,
     matching: find.byType(EditableText),
   );
-  // The keyboard can move the editor and connect button out of the lazy list.
-  final focus = tester.widget<EditableText>(editor).focusNode;
-  final form = Scrollable.of(tester.element(editor));
-  await tester.enterText(passphrase, text);
+  final field = tester.widget<EditableText>(editor);
+  final focus = field.focusNode;
+  final form = finishIosEditing ? Scrollable.of(tester.element(editor)) : null;
+  await tapControl(tester, passphrase, 'direct-passphrase', reveal: false);
   await until(
     tester,
-    () => focus.hasFocus && tester.view.viewInsets.bottom > 0,
-    timeoutReason: 'direct_ssh_ios_ui_timeout_passphrase_keyboard_open',
+    () => focus.hasPrimaryFocus && tester.view.viewInsets.bottom > 0,
+    timeoutReason: 'direct_ssh_encrypted_ui_timeout_passphrase_keyboard_open',
   );
+  // The IME can shrink the lazy list again after the tap, even while this
+  // field keeps focus. Reveal the same editor before sending any input.
+  await _revealEncryptedPassphrase(tester, passphrase);
+  expect(tester.widget<EditableText>(editor).focusNode, same(focus));
+  expect(focus.hasPrimaryFocus, isTrue);
+  tester.testTextInput.enterText(text);
+  await tester.idle();
+  await tester.pump();
+  expect(field.controller.text == text, isTrue);
+  if (!finishIosEditing) return;
   await tester.testTextInput.receiveAction(TextInputAction.done);
   await until(
     tester,
     () =>
         !focus.hasFocus &&
         tester.view.viewInsets.bottom == 0 &&
-        form.mounted &&
+        form!.mounted &&
         !form.position.isScrollingNotifier.value,
     timeoutReason: 'direct_ssh_ios_ui_timeout_passphrase_keyboard_closed',
   );
@@ -670,6 +705,37 @@ Future<void> finishAndroidEncryptedPassphrase(WidgetTester tester) async {
   }, timeoutReason: 'direct_ssh_encrypted_passphrase_layout_timeout');
 }
 
+Future<void> verifyEncryptedPemCollapsed(WidgetTester tester) async {
+  final summary = control('direct-edit-pem');
+  final editor = control('direct-secret');
+  await until(
+    tester,
+    () => summary.evaluate().length == 1 && editor.evaluate().isEmpty,
+    timeoutReason: 'direct_ssh_encrypted_pem_collapse_timeout',
+  );
+}
+
+Future<void> reopenEncryptedPem(
+  WidgetTester tester,
+  String expectedDraft,
+) async {
+  await verifyEncryptedPemCollapsed(tester);
+  await tap(tester, 'direct-edit-pem');
+  final editor = control('direct-secret');
+  await until(
+    tester,
+    () =>
+        editor.evaluate().length == 1 &&
+        tester.widget<TextField>(editor).focusNode?.hasPrimaryFocus == true,
+    timeoutReason: 'direct_ssh_encrypted_pem_focus_timeout',
+  );
+  expect(
+    tester.widget<TextField>(editor).controller!.text == expectedDraft,
+    isTrue,
+    reason: 'direct_ssh_encrypted_pem_readback_mismatch',
+  );
+}
+
 const _rotationTrustEvidence = <String, bool>{
   'sameTarget': true,
   'oldFingerprintMatchedIndependentA': true,
@@ -696,6 +762,8 @@ Future<void> runEncryptedDirectSshUi(
   bool rotating = false,
   Future<void> Function(String)? captureRotationRejected,
 }) async {
+  final android = platform == 'android-api35-emulator';
+  final ios = platform == 'ios-simulator';
   final exchangeName = rotating && platform == 'ios-simulator'
       ? 'encrypted-rotation'
       : 'encrypted';
@@ -780,22 +848,11 @@ Future<void> runEncryptedDirectSshUi(
   }
 
   Future<void> pasteKey() async {
+    final key = config['privateKey'] as String;
     try {
-      await tester.runAsync(
-        () => Clipboard.setData(
-          ClipboardData(text: config['privateKey'] as String),
-        ),
-      );
+      await tester.runAsync(() => Clipboard.setData(ClipboardData(text: key)));
       await tap(tester, 'direct-paste-key');
-      await until(
-        tester,
-        () =>
-            tester
-                .widget<TextField>(control('direct-secret'))
-                .controller!
-                .text ==
-            config['privateKey'],
-      );
+      await reopenEncryptedPem(tester, key);
     } finally {
       await tester.runAsync(
         () => Clipboard.setData(const ClipboardData(text: '')),
@@ -824,17 +881,20 @@ Future<void> runEncryptedDirectSshUi(
   }
 
   final passphrase = control('direct-passphrase');
-  final android = platform == 'android-api35-emulator';
-  final ios = platform == 'ios-simulator';
-  Future<void> fillEncryptedCredentials({String? incorrectPassphrase}) async {
-    await tap(tester, 'direct-auth-key');
-    await pasteKey();
+  Future<void> fillPassphrase(String value) async {
     await enterEncryptedPassphrase(
       tester,
       passphrase,
-      incorrectPassphrase ?? config['passphrase'] as String,
+      value,
       finishIosEditing: ios,
     );
+    await verifyEncryptedPemCollapsed(tester);
+  }
+
+  Future<void> fillEncryptedCredentials({String? incorrectPassphrase}) async {
+    await tap(tester, 'direct-auth-key');
+    await pasteKey();
+    await fillPassphrase(incorrectPassphrase ?? config['passphrase'] as String);
     await tester.pump();
   }
 
@@ -919,12 +979,7 @@ Future<void> runEncryptedDirectSshUi(
   } else {
     await pasteKey();
     if (ios) step('encrypted_connect');
-    await enterEncryptedPassphrase(
-      tester,
-      passphrase,
-      config['passphrase'] as String,
-      finishIosEditing: ios,
-    );
+    await fillPassphrase(config['passphrase'] as String);
   }
   config.remove('privateKey');
   config.remove('passphrase');
@@ -1063,6 +1118,9 @@ Future<void> runEncryptedDirectSshUi(
     'fingerprintMatched': true,
     'explicitTrustRequired': true,
     'privateKeyPasted': true,
+    'pemCollapsedBeforeReopen': true,
+    'pemReopenedFocusedAndExact': true,
+    'pemRecollapsedAfterBlur': true,
     'passphraseObscured': true,
     if (rotating)
       ..._rotationTrustEvidence

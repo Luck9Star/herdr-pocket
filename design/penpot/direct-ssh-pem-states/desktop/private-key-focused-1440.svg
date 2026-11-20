@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+<g id="private-key-focused-1440" transform="translate(0 0)">
+<title>private-key-focused-1440 · 私钥 · 聚焦编辑</title>
+<rect x="0" y="0" width="1440" height="900" rx="0" fill="#F8FAFC"/>
+<g id="private-key-focused-1440-app-sidebar"><title>app-sidebar</title>
+<rect x="0" y="0" width="224" height="900" rx="0" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+<path d="M 223.5 0 L 223.5 900" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+<g id="private-key-focused-1440-sidebar-toggle"><title>sidebar-toggle</title>
+<rect x="8" y="8" width="44" height="44" fill="none"/>
+<path d="M4 6 H20 M4 12 H20 M4 18 H20" transform="translate(18 17)" fill="none" stroke="#0F172A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g id="private-key-focused-1440-nav-board"><title>nav-board</title>
+<rect x="8" y="68" width="208" height="44" fill="none"/>
+<path d="M3 3 H10 V10 H3 Z M14 3 H21 V10 H14 Z M3 14 H10 V21 H3 Z M14 14 H21 V21 H14 Z" transform="translate(22 81)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text id="private-key-focused-1440-text-1" x="56" y="96" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">看板</text>
+</g>
+<g id="private-key-focused-1440-nav-terminal"><title>nav-terminal</title>
+<rect x="8" y="120" width="208" height="44" fill="none"/>
+<path d="M3 4 H21 V20 H3 Z M7 9 L10 12 L7 15 M13 15 H17" transform="translate(22 133)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text id="private-key-focused-1440-text-2" x="56" y="148" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">终端</text>
+</g>
+<g id="private-key-focused-1440-nav-network"><title>nav-network</title>
+<rect x="8" y="172" width="208" height="44" fill="none"/>
+<path d="M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 M3 12 H21 M12 3 C6 7 6 17 12 21 C18 17 18 7 12 3" transform="translate(22 185)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text id="private-key-focused-1440-text-3" x="56" y="200" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">网络</text>
+</g>
+<g id="private-key-focused-1440-nav-settings"><title>nav-settings</title>
+<rect x="8" y="224" width="208" height="44" fill="none"/>
+<path d="M3 6 H21 M3 12 H21 M3 18 H21 M8 3 V9 M16 9 V15 M10 15 V21" transform="translate(22 237)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text id="private-key-focused-1440-text-4" x="56" y="252" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">设置</text>
+</g>
+<text id="private-key-focused-1440-text-5" x="20" y="304" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#475569" text-anchor="start">主机</text>
+<text id="private-key-focused-1440-text-6" x="20" y="326" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="400" fill="#64748B" text-anchor="start">还没有主机 · 从看板添加</text>
+</g>
+<g id="private-key-focused-1440-page-header"><title>page-header</title>
+<path d="M 224 55.5 L 1440 55.5" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+<g id="private-key-focused-1440-back"><title>back</title>
+<rect x="232" y="6" width="44" height="44" fill="none"/>
+<path d="M14 4 L6 12 L14 20 M6 12 H20" transform="translate(241 16)" fill="none" stroke="#0F172A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<text id="private-key-focused-1440-text-7" x="288" y="35" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="600" fill="#0F172A" text-anchor="start">SSH 账号认证</text>
+</g>
+<g id="private-key-focused-1440-target-card"><title>target-card</title>
+<rect x="264" y="76" width="560" height="52" rx="10" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+<text id="private-key-focused-1440-text-8" x="276" y="94" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#475569" text-anchor="start">本次连接目标</text>
+<text id="private-key-focused-1440-text-9" x="276" y="113" font-family="JetBrainsMono Nerd Font Mono, JetBrains Mono, Menlo, monospace" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">demo@ssh.example.test:22</text>
+</g>
+<g id="private-key-focused-1440-trust-approved"><title>trust-approved</title>
+<rect x="264" y="138" width="560" height="44" rx="10" fill="#ECFDF5" stroke="#A7F3D0" stroke-width="1"/>
+<text id="private-key-focused-1440-text-10" x="276" y="165" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#047857" text-anchor="start">本次主机密钥已确认</text>
+</g>
+<text id="private-key-focused-1440-text-11" x="264" y="216" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">认证方式</text>
+<g id="private-key-focused-1440-auth-password"><title>auth-password</title>
+<rect x="264" y="224" width="276" height="44" fill="none"/>
+<rect x="264" y="224" width="276" height="44" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="private-key-focused-1440-text-12" x="402" y="251" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="middle">密码</text>
+</g>
+<g id="private-key-focused-1440-auth-key"><title>auth-key</title>
+<rect x="548" y="224" width="276" height="44" fill="none"/>
+<rect x="548" y="224" width="276" height="44" rx="10" fill="#EEF2FF" stroke="#4F46E5" stroke-width="1"/>
+<text id="private-key-focused-1440-text-13" x="686" y="251" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#4F46E5" text-anchor="middle">已有私钥</text>
+</g>
+<text id="private-key-focused-1440-text-14" x="264" y="296" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">私钥 PEM（仅本次使用）</text>
+<g id="private-key-focused-1440-key-pem"><title>key-pem</title>
+<rect x="264" y="304" width="560" height="84" fill="none"/>
+<rect x="264" y="304" width="560" height="84" rx="10" fill="#FFFFFF" stroke="#4F46E5" stroke-width="2"/>
+<text id="private-key-focused-1440-text-15" x="276" y="332" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">合成示意内容 · 第一行</text>
+<text id="private-key-focused-1440-text-16" x="276" y="352" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">合成示意内容 · 第二行</text>
+</g>
+<g id="private-key-focused-1440-paste-key"><title>paste-key</title>
+<rect x="264" y="398" width="560" height="48" fill="none"/>
+<rect x="264" y="398" width="560" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="private-key-focused-1440-text-17" x="544" y="427" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">粘贴私钥</text>
+</g>
+<text id="private-key-focused-1440-text-18" x="264" y="472" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">私钥口令（加密私钥需要）</text>
+<g id="private-key-focused-1440-passphrase"><title>passphrase</title>
+<rect x="264" y="480" width="560" height="48" fill="none"/>
+<rect x="264" y="480" width="560" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="private-key-focused-1440-text-19" x="276" y="509" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#64748B" text-anchor="start">未填写</text>
+</g>
+<g id="private-key-focused-1440-connect"><title>connect</title>
+<rect x="264" y="542" width="560" height="48" fill="none"/>
+<rect x="264" y="542" width="560" height="48" rx="10" fill="#F1F5F9" stroke="#E2E8F0" stroke-width="1"/>
+<text id="private-key-focused-1440-text-20" x="544" y="571" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#475569" text-anchor="middle">连接 SSH</text>
+</g>
+<text id="private-key-focused-1440-text-21" x="264" y="610" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="start">填写完整私钥后才能连接。</text>
+</g>
+</svg>

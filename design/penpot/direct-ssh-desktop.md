@@ -17,6 +17,18 @@ node direct-ssh-desktop.mjs                        # 重生成 direct-ssh-deskto
 node direct-ssh-desktop.mjs out.svg pages/         # 另存总览 + 每屏单页 + geometry.json
 ```
 单一源驱动三档视口。每屏 `<g id="{state}-{width}">` 下锚点 `<g id="{state}-{width}-{name}">` 带 `<title>`；`geometry.json` 记录每屏锚点 `{x,y,width,height,role}` 与文本 `maxWidth` 上限，`tolerance: 2` 逻辑像素为逐点验收门槛。角色：`geometry`（卡片、面板、滚动条）、`hit`（≥44×44 可命中）、`disabled`。命中区规范框是透明矩形，与可见形状分离；实际系统命中行为留给两壳验收。
+## 私钥编辑与失焦状态
+
+在原有空白私钥画板基础上，附加了 700、980、1440 宽度的独立状态页：[聚焦编辑与失焦摘要](direct-ssh-pem-states/desktop/)。聚焦时同一两行编辑区展示可滚动的合成示意；失焦且非空时以同尺寸「已填写私钥 · 重新编辑」按钮替代正文，点击回到同一内容的编辑状态。空内容保持编辑框；认证切换、取消及断开仍按原有凭据清除规则处理，口令继续遮罩。示意文字不是私钥。连接可用性仍由实际完整凭据决定。
+
+以下命令在临时目录生成既有总览与逐页，并把附加状态写入第四个参数指定的目录，不移动或改变原有画板：
+
+```sh
+node design/penpot/direct-ssh-desktop.mjs /tmp/ssh-desktop.svg /tmp/ssh-desktop-pages design/penpot/direct-ssh-pem-states/desktop
+```
+
+附加页的 `geometry.json` 记录同一凭据区域的编辑框或重编辑按钮锚点；它们是离线设计，非 Penpot 导入或设备运行验收。
+
 ## 状态清单（16 状态 × 3 视口 = 48 屏）
 首页 → 普通 SSH 选择 → 目标表单（含聚焦态）→ 完整可信指纹 → 密码 / 已有私钥 → 活动终端 → 看板/网络/设置（会话保持）→ 已断开 → 返回首页；换钥拒绝、取消仍旧信任、明确重核。
 | 状态 | id | 关键锚点（hit） | 滚动/上下文 |

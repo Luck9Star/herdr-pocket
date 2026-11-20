@@ -21,6 +21,8 @@ class BatchFailure(RuntimeError):
 
 TERMINAL_PROOFS = {'ordinary-terminal.png': 'ordinary-terminal-ocr.json',
                    'key-change-terminal.png': 'key-change-terminal-ocr.json'}
+TAURI_MANUAL_KEY_PROOF = {'tauri-manual-key-terminal.png': 'tauri-manual-key-terminal-ocr.json'}
+TAURI_MANUAL_KEY_HOME = 'tauri-manual-key-empty-home.png'
 ENCRYPTED_KEY_PROOF = {'encrypted-key-terminal.png': 'encrypted-key-terminal-ocr.json'}
 ENCRYPTED_ROTATION_PROOF = {'encrypted-rotation-terminal.png': 'encrypted-rotation-terminal-ocr.json'}
 ENCRYPTED_ROTATION_REVIEW = 'encrypted-rotation-review.png'
@@ -138,7 +140,50 @@ def encrypted_rotation_case_valid(report):
                     for name, value in accepted.items()))
 
 
-def publish_evidence(root, destination, *, shell, source_sha, include_encrypted_key=False, encrypted_rotation=False):
+def tauri_manual_key_valid(report):
+    cases = report.get('cases')
+    cleanup = report.get('cleanup')
+    home = report.get('homeEntry')
+    if (report.get('scope') != 'owned_loopback_ordinary_ssh_encrypted_key_manual'
+            or report.get('client') != 'tauri' or report.get('platform') != 'ios-simulator'
+            or report.get('lastCompletedStage') != 'encrypted_key_returned_home'
+            or not isinstance(cases, dict) or set(cases) != {'ordinary', 'keyChange', 'encryptedKey'}
+            or any(cases[name] != {'status': 'not_run'} for name in ('ordinary', 'keyChange'))
+            or not isinstance(home, dict) or set(home) != {'encryptedKey'}
+            or not isinstance(cleanup, dict) or cleanup.get('rawLogsUploaded') is not False
+            or any(cleanup.get(name) is not True for name in
+                   ('simulatorDeleted', 'fixturesClosed', 'privateFilesRemoved', 'encryptedSecretsCleared'))):
+        return False
+    case = cases['encryptedKey']
+    if (not isinstance(case, dict) or case.get('credentialEntry') != 'nativeTypeText'
+            or case.get('status') != 'passed' or case.get('authenticationMethod') != 'publickey'
+            or any(case.get(name) is not True for name in ('fingerprintReviewed', 'wrongPemExact', 'correctPemExact',
+                   'wrongPemReopened', 'correctPemReopened', 'wrongPassphraseObscured', 'correctPassphraseObscured',
+                   'terminalInputReceived', 'disconnected',
+                   'credentialsCleared', 'peerClosedBeforeDriverExit', 'returnedHome'))):
+        return False
+    wrong = case.get('wrongPassphrase')
+    if (not isinstance(wrong, dict) or wrong.get('rejected') is not True or wrong.get('credentialsCleared') is not True):
+        return False
+    empty_counters = ('authAttempts', 'authSuccesses', 'ptyRequests', 'shellRequests', 'inputBytes', 'outputBytes')
+    for index, event in enumerate((case.get('initialProbe'), wrong.get('peer')), 1):
+        if (not isinstance(event, dict) or type(event.get('id')) is not int or event['id'] != index
+                or event.get('hostKey') != 'A' or event.get('closed') is not True
+                or (index == 2 and event.get('handshakeCompleted') is not True)
+                or any(type(event.get(name)) is not int or event[name] != 0 for name in empty_counters)
+                or any(event.get(name) is not False for name in ('authAccepted', 'sessionClosed', 'markerReceived'))):
+            return False
+    final = case.get('acceptedSession')
+    counters = {'id': 3, 'authAttempts': 2, 'authSuccesses': 1, 'ptyRequests': 1, 'shellRequests': 1, 'inputBytes': 9}
+    return (isinstance(final, dict) and final.get('hostKey') == 'A'
+            and all(type(final.get(name)) is int and final[name] == count for name, count in counters.items())
+            and type(final.get('outputBytes')) is int and final['outputBytes'] > 0
+            and all(final.get(name) is True for name in ('handshakeCompleted', 'authAccepted', 'closed',
+                                                         'sessionClosed', 'markerReceived', 'singleMarkerLineExact')))
+
+
+def publish_evidence(root, destination, *, shell, source_sha, include_encrypted_key=False,
+                     encrypted_rotation=False, encrypted_key_manual_only=False):
     """Copy only this run's bound public files; leave SSH/OCR to the runners.
 
     Failed runs may retain an already completed scene. A passed result must
@@ -152,7 +197,8 @@ def publish_evidence(root, destination, *, shell, source_sha, include_encrypted_
     if root.is_symlink() or not root.is_dir() or destination.exists() or destination.is_symlink():
         raise BatchFailure('ios_batch_public_directory_invalid')
     if (shell not in ('flutter', 'tauri') or ((include_encrypted_key or encrypted_rotation) and shell != 'flutter')
-            or (include_encrypted_key and encrypted_rotation)
+            or (encrypted_key_manual_only and shell != 'tauri')
+            or sum((include_encrypted_key, encrypted_rotation, encrypted_key_manual_only)) > 1
             or not re.fullmatch(r'[0-9a-f]{40}', source_sha)):
         raise BatchFailure('ios_batch_source_invalid')
     raw, report = read_public_json(root, 'result.json')
@@ -162,7 +208,10 @@ def publish_evidence(root, destination, *, shell, source_sha, include_encrypted_
     (destination / 'result.json').write_bytes(raw)
     passed = report['status'] == 'passed'
     artifacts = report.get('artifacts', {})
-    if encrypted_rotation:
+    if encrypted_key_manual_only:
+        terminal_proofs = TAURI_MANUAL_KEY_PROOF
+        required = allowed = set(terminal_proofs) | {TAURI_MANUAL_KEY_HOME}
+    elif encrypted_rotation:
         terminal_proofs = ENCRYPTED_ROTATION_PROOF
         required = allowed = {ENCRYPTED_ROTATION_REVIEW, *terminal_proofs}
     else:
@@ -173,8 +222,28 @@ def publish_evidence(root, destination, *, shell, source_sha, include_encrypted_
             any(not isinstance(value, str) or not re.fullmatch(r'[0-9a-f]{64}', value)
                 for value in artifacts.values())):
         raise BatchFailure('ios_batch_artifact_manifest_invalid')
+    if encrypted_key_manual_only and TAURI_MANUAL_KEY_HOME in artifacts:
+        home_capture = report.get('shortcutCapture')
+        if (report.get('scope') != 'owned_loopback_ordinary_ssh_encrypted_key_manual'
+                or report.get('client') != 'tauri' or report.get('platform') != 'ios-simulator'
+                or not isinstance(home_capture, dict)
+                or home_capture.get('imageFile') != TAURI_MANUAL_KEY_HOME
+                or home_capture.get('imageSha256') != artifacts[TAURI_MANUAL_KEY_HOME]
+                or home_capture.get('systemCapture') != 'XCUIScreen.main'
+                or type(home_capture.get('peerConnections')) is not int or home_capture['peerConnections'] != 0):
+            raise BatchFailure('ios_batch_tauri_manual_key_home_ref_invalid')
     if passed and not required.issubset(artifacts):
         raise BatchFailure('ios_batch_required_images_missing')
+    if passed and encrypted_key_manual_only:
+        if not tauri_manual_key_valid(report):
+            raise BatchFailure('ios_batch_tauri_manual_key_case_invalid')
+        terminal, criteria = next(iter(terminal_proofs.items()))
+        capture = report['cases']['encryptedKey'].get('terminalScreenshot')
+        if (not isinstance(capture, dict) or capture.get('imageFile') != terminal
+                or capture.get('imageSha256') != artifacts[terminal] or capture.get('criteriaFile') != criteria
+                or capture.get('systemCapture') != 'XCUIScreen.main' or capture.get('targetVisible') is not True
+                or capture.get('noCredentialsVisible') is not True):
+            raise BatchFailure('ios_batch_tauri_manual_key_artifact_ref_invalid')
     if passed and encrypted_rotation:
         if not encrypted_rotation_case_valid(report):
             raise BatchFailure('ios_batch_encrypted_rotation_case_invalid')
@@ -197,7 +266,7 @@ def publish_evidence(root, destination, *, shell, source_sha, include_encrypted_
         if not encrypted_key_case_valid(case):
             raise BatchFailure('ios_batch_encrypted_key_case_missing')
     published = {'result.json'}
-    for name in sorted(allowed):
+    for name in sorted(allowed, key=lambda name: (name == TAURI_MANUAL_KEY_HOME, name)):
         if name not in artifacts:
             continue
         try:
@@ -207,11 +276,13 @@ def publish_evidence(root, destination, *, shell, source_sha, include_encrypted_
             with Image.open(io.BytesIO(data)) as image:
                 if image.format != 'PNG' or image.width * image.height > 16_000_000:
                     raise BatchFailure('ios_batch_image_invalid')
+                if name == TAURI_MANUAL_KEY_HOME and list(image.size) != home_capture.get('screenPixels'):
+                    raise BatchFailure('ios_batch_tauri_manual_key_home_ref_invalid')
                 image.verify()
             proof_name = terminal_proofs.get(name)
             if proof_name:
                 proof_raw, proof = read_public_json(root, proof_name)
-                if (passed and encrypted_rotation and
+                if (passed and (encrypted_rotation or encrypted_key_manual_only) and
                         hashlib.sha256(proof_raw).hexdigest() != capture.get('criteriaSha256')):
                     raise BatchFailure('ios_batch_ocr_criteria_hash_mismatch')
                 if proof.get('imageSha256') != artifacts[name]:
@@ -285,13 +356,15 @@ def main():
     cases = publish.add_mutually_exclusive_group()
     cases.add_argument('--include-encrypted-key', action='store_true')
     cases.add_argument('--encrypted-key-rotation', action='store_true')
+    cases.add_argument('--encrypted-key-manual-only', action='store_true')
     args = parser.parse_args()
     try:
         if args.action == 'select-app':
             print(select_simulator_app(args.root))
         elif args.action == 'publish':
             names = publish_evidence(args.root, args.destination, shell=args.shell, source_sha=args.source_sha,
-                                     include_encrypted_key=args.include_encrypted_key, encrypted_rotation=args.encrypted_key_rotation)
+                                     include_encrypted_key=args.include_encrypted_key, encrypted_rotation=args.encrypted_key_rotation,
+                                     encrypted_key_manual_only=args.encrypted_key_manual_only)
             print('Verified public files: ' + ', '.join(sorted(names)))
             if read_public_json(Path(args.destination), 'result.json')[1]['status'] != 'passed':
                 raise BatchFailure('ios_batch_runner_reported_failure')

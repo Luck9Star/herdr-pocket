@@ -311,14 +311,31 @@ function trust(board, rotated) {
   button('trust-cancel', rotated ? '取消核对，保留旧信任' : '取消核对', y + 256, { kind: 'secondary' });
 }
 
-function auth(board, key) {
-  const { screen: { width, safeTop }, margin, span, header, field, button, footnote, notice, targetCard, options } = board;
+function auth(board, key, pemState = null) {
+  const { screen: { width, safeTop }, margin, span, header, field, button, footnote, notice, targetCard, options, layer, rect, text } = board;
   header('SSH 账号认证');
   let y = targetCard(safeTop + 76, { compact: true }) + 10;
   y = notice('trust-approved', '本次主机密钥已确认', [], y, 'success') + (width < 360 ? 12 : 20);
   y = options(y, Number(key)) + 14;
   if (key) {
+    if (pemState == null) {
     y = field('key-pem', '私钥 PEM（仅本次使用）', '粘贴已有私钥的完整 PEM', margin, y, span, { height: width < 360 ? 68 : 84, example: true }) + 10;
+    } else {
+      const h = width < 360 ? 68 : 84;
+      text('私钥 PEM（仅本次使用）', margin, y + 14, { size: 13, bold: true, limit: span });
+      layer(pemState == 'collapsed' ? 'edit-pem' : 'key-pem', margin, y + 22, span, h, () => {
+        rect(margin, y + 22, span, h, color.card, pemState == 'collapsed' ? h / 2 : tokens.radii.button,
+          pemState == 'focused' ? color.brand : color.borderStrong, pemState == 'focused' ? 2 : 1);
+        if (pemState == 'focused') {
+          text('合成示意内容 · 第一行', margin + 12, y + 50, { limit: span - 24 });
+          text('合成示意内容 · 第二行', margin + 12, y + 70, { limit: span - 24 });
+        } else {
+          text('已填写私钥 · 重新编辑', margin + span / 2, y + 22 + h / 2 + 5,
+            { align: 'middle', fill: color.brand, limit: span - 24 });
+        }
+      }, 'hit');
+      y += 22 + h + 10;
+    }
     button('paste-key', '粘贴私钥', y, { kind: 'secondary' });
     y = field('passphrase', '私钥口令（加密私钥需要）', '未填写', margin, y + 60, span, { example: true }) + 14;
   } else {
@@ -458,3 +475,20 @@ const atlasWidth = columnWidth * cols + gutter;
 const atlasHeight = rowHeight * rowsPerSize * sizes.length + gutter;
 write(output, svg(atlasWidth, atlasHeight, `<title>Herdr Pocket · 普通 SSH 手机设计</title>\n<rect width="${atlasWidth}" height="${atlasHeight}" fill="${color.border}"/>\n${atlas.join('\n')}`));
 if (pages) write(join(pages, 'geometry.json'), JSON.stringify({ unit: 'logical-point', tolerance: 2, boards: manifest }, null, 2) + '\n');
+
+// 附加状态单页独立导出，不改变既有总览及其画板坐标。
+const pemPages = process.argv[4];
+if (pemPages) {
+  mkdirSync(pemPages, { recursive: true });
+  const pemManifest = [];
+  for (const screen of sizes) for (const state of ['focused', 'collapsed']) {
+    const title = state === 'focused' ? '私钥 · 聚焦编辑' : '私钥 · 失焦摘要';
+    const board = createBoard(`private-key-${state}`, title, screen);
+    board.rect(0, 0, screen.width, screen.height, color.canvas);
+    board.safeChrome();
+    auth(board, true, state);
+    write(join(pemPages, `${board.id}.svg`), svg(screen.width, screen.height, boardGroup(board)));
+    pemManifest.push({ id: board.id, title, width: screen.width, height: screen.height, anchors: board.anchors, textLimits: board.textLimits });
+  }
+  write(join(pemPages, 'geometry.json'), JSON.stringify({ unit: 'logical-point', tolerance: 2, boards: pemManifest }, null, 2) + '\n');
+}

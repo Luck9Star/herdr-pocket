@@ -13,6 +13,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   let submitting = false;
   let openingCancelled = false;
   let pasteRevision = 0;
+  let privateKeyDraft = '';
   let retainedTrust = false;
   let closeResult = null;
   let pendingTargetValues = null;
@@ -134,7 +135,14 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
   }
   function clearSecrets() {
     pasteRevision++;
+    privateKeyDraft = '';
     for (const id of ['ssh-password','ssh-key','ssh-passphrase']) $(id).value = '';
+    $('ssh-key').hidden = false;
+    if ($('ssh-key').style) $('ssh-key').style.height = '';
+    if ($('ssh-key-summary')) {
+      $('ssh-key-summary').hidden = true;
+      if ($('ssh-key-summary').style) $('ssh-key-summary').style.height = '';
+    }
   }
   function resetReview() {
     probeRevision++;
@@ -229,16 +237,53 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     return evidence && now.host === evidence.target.host && now.port === evidence.target.port &&
       now.username === evidence.target.username;
   }
+  function privateKeyValue() {
+    const editor = $('ssh-key');
+    return editor.hidden ? privateKeyDraft : editor.value;
+  }
+  function collapsePrivateKeyEditor() {
+    const editor = $('ssh-key');
+    const summary = $('ssh-key-summary');
+    const value = editor.value;
+    if (!summary || editor.hidden || value.length === 0) return false;
+    privateKeyDraft = value;
+    const height = editor.getBoundingClientRect?.().height;
+    if (height) summary.style.height = `${Math.round(height)}px`;
+    editor.value = '';
+    editor.hidden = true;
+    summary.textContent = '已填写私钥 · 重新编辑';
+    summary.hidden = false;
+    applyLock();
+    return true;
+  }
+  function revealPrivateKeyEditor({focus = true} = {}) {
+    const editor = $('ssh-key');
+    const summary = $('ssh-key-summary');
+    if (!summary || summary.hidden) return false;
+    editor.value = privateKeyDraft;
+    privateKeyDraft = '';
+    if (summary.style?.height && editor.style) editor.style.height = summary.style.height;
+    editor.hidden = false;
+    summary.hidden = true;
+    if (summary.style) summary.style.height = '';
+    applyLock();
+    if (focus) {
+      editor.focus();
+      editor.setSelectionRange?.(editor.value.length, editor.value.length);
+      if (!compact()) revealAuthField();
+    }
+    return true;
+  }
   function usableCredentials() {
     if ($('ssh-auth-method').value !== 'key') return !!$('ssh-password').value;
-    const pem = $('ssh-key').value.trim();
+    const pem = privateKeyValue().trim();
     return privateKeyReady(pem, $('ssh-passphrase').value);
   }
   function applyLock(ready = controller.isReady(), blockedView = !$('ssh-key-change').hidden) {
     const unavailable = !native || ready || blockedView || controller.isActive() || submitting || closeResult?.phase === 'pending';
     const locked = unavailable || probing || controller.isBlocked() || !reviewMatches() || !$('ssh-review').checked;
     for (const id of ['ssh-host','ssh-port','ssh-user']) $(id).disabled = closeResult?.phase === 'pending';
-    for (const id of ['ssh-password','ssh-key','ssh-passphrase','ssh-auth-method','ssh-auth-password','ssh-auth-key','ssh-paste-key']) {
+    for (const id of ['ssh-password','ssh-key','ssh-passphrase','ssh-auth-method','ssh-auth-password','ssh-auth-key','ssh-paste-key','ssh-key-summary']) {
       const field = $(id);
       if (field) field.disabled = locked;
     }
@@ -265,6 +310,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     }
   }
   $('ssh-review').addEventListener('change', () => {
+    refreshStep();
     applyLock();
     revealAuthField();
   });
@@ -354,15 +400,28 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     pasteRevision++;
     applyLock();
   });
+  $('ssh-key').addEventListener('blur', () => {
+    collapsePrivateKeyEditor();
+  });
+  if ($('ssh-key-summary')) $('ssh-key-summary').onclick = () => {
+    if (!$('ssh-key-summary').disabled) revealPrivateKeyEditor();
+  };
   if ($('ssh-paste-key')) $('ssh-paste-key').onclick = async () => {
     if ($('ssh-paste-key').disabled || !clipboardRead) return;
+    $('ssh-paste-key').focus();
     const revision = ++pasteRevision;
     const current = () => revision === pasteRevision && !document.hidden && !mobileSection.hidden &&
       !$('host-home').hidden && !$('ssh-key-fields').hidden && !$('ssh-paste-key').disabled;
     try {
       const text = await clipboardRead();
       if (!current()) return;
-      $('ssh-key').value = text;
+      const editor = $('ssh-key');
+      if (editor.hidden) {
+        if (text.length) privateKeyDraft = text;
+      } else {
+        editor.value = text;
+        if (text.length) collapsePrivateKeyEditor();
+      }
       $('ssh-credential-note').textContent = '填写完整私钥后才能连接。';
       applyLock();
     } catch {
@@ -454,7 +513,7 @@ export function initDirectSshUI({native, invoke, channelFactory, terminalFactory
     openingCancelled = false;
     closeResult = null;
     applyLock();
-    const password = $('ssh-password').value, privateKeyPem = $('ssh-key').value, passphrase = $('ssh-passphrase').value;
+    const password = $('ssh-password').value, privateKeyPem = privateKeyValue(), passphrase = $('ssh-passphrase').value;
     const credentials = $('ssh-auth-method').value === 'key'
       ? (privateKeyPem ? {privateKeyPem, ...(passphrase ? {privateKeyPassphrase:passphrase} : {})} : {})
       : (password ? {password} : {});

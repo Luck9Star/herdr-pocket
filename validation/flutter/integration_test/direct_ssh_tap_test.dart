@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_flutter_probe/design_tokens.dart';
 import 'package:herdr_flutter_probe/direct_ssh_page.dart';
 
 import '../integration_test/direct_ssh_ui_steps.dart' as steps;
+import '../integration_test/ios_direct_ssh_test.dart'
+    show checkIosCredentialSwitches;
+import '../test/direct_ssh_widget_test.dart' show mockClipboard;
 
 void main() {
   testWidgets('one home tap waits for the delayed SSH route and form', (
@@ -122,6 +127,49 @@ void main() {
     expect(clicks, 0);
   });
 
+  testWidgets('iOS credential switches clear both drafts and keep host trust', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 2;
+    tester.view.physicalSize = const Size(828, 1792);
+    tester.view.padding = const FakeViewPadding(top: 96, bottom: 68);
+    tester.view.viewPadding = tester.view.padding;
+    addTearDown(tester.view.reset);
+    final tokens = (await tester.runAsync(DesignTokens.load))!;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: tokens.theme,
+        home: DirectSshPage(tokens: tokens),
+      ),
+    );
+    final dynamic state = tester.state(find.byType(DirectSshPage));
+    const fingerprint = 'fixture-fingerprint';
+    state.setState(() {
+      state.mobileAuth = true;
+      state.fingerprint = fingerprint;
+      state.checkedTarget = state.target;
+    });
+    await tester.pumpAndSettle();
+
+    // Mirror the test IME's visibility in the viewport.
+    final keyboard = Timer.periodic(const Duration(milliseconds: 50), (_) {
+      final inset = tester.testTextInput.isVisible ? 780.0 : 0.0;
+      if (tester.view.viewInsets.bottom != inset) {
+        tester.view.viewInsets = FakeViewPadding(bottom: inset);
+      }
+    });
+    try {
+      expect(await checkIosCredentialSwitches(tester, fingerprint), {
+        'passwordToKeyCleared': true,
+        'keyToPasswordCleared': true,
+        'sameTrust': true,
+      });
+      expect(tester.view.viewInsets.bottom, 0);
+    } finally {
+      keyboard.cancel();
+    }
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
   testWidgets(
     'finishes the iOS passphrase edit before one stable connect tap',
     (tester) async {
@@ -135,11 +183,21 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: ListView(
+              key: const ValueKey('direct-form'),
               children: [
                 const SizedBox(height: 430),
                 TextField(
                   key: const ValueKey('direct-passphrase'),
                   obscureText: true,
+                  onTap: () {
+                    events.add('field_tap');
+                    Future<void>.delayed(const Duration(milliseconds: 150), () {
+                      tester.view.viewInsets = const FakeViewPadding(
+                        bottom: 692,
+                      );
+                      events.add('keyboard_open');
+                    });
+                  },
                   onSubmitted: (_) {
                     expect(connect, findsNothing);
                     expect(tester.view.viewInsets.bottom, 692);
@@ -161,45 +219,112 @@ void main() {
           ),
         ),
       );
-      Future<void>.delayed(const Duration(milliseconds: 250), () {
-        tester.view.viewInsets = const FakeViewPadding(bottom: 692);
-        events.add('keyboard_open');
-      });
-
       await steps.enterEncryptedPassphrase(
         tester,
         passphrase,
         'synthetic-passphrase',
         finishIosEditing: true,
       );
-      expect(events, ['keyboard_open', 'done', 'keyboard_closed']);
+      expect(events, ['field_tap', 'keyboard_open', 'done', 'keyboard_closed']);
       await steps.tap(
         tester,
         'direct-connect',
         requireEnabled: true,
         stableHitPoint: true,
       );
-      expect(events, ['keyboard_open', 'done', 'keyboard_closed', 'tap']);
+      expect(events, [
+        'field_tap',
+        'keyboard_open',
+        'done',
+        'keyboard_closed',
+        'tap',
+      ]);
     },
     variant: TargetPlatformVariant.only(TargetPlatform.iOS),
   );
 
-  testWidgets('Android entry leaves the edit for its existing keyboard step', (
+  testWidgets(
+    'Android PEM summary reopens the exact draft and collapses again',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final tokens = (await tester.runAsync(DesignTokens.load))!;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: tokens.theme,
+          home: DirectSshPage(tokens: tokens),
+        ),
+      );
+      final dynamic state = tester.state(find.byType(DirectSshPage));
+      state.setState(() {
+        state.mobileAuth = true;
+        state.fingerprint = 'fixture-fingerprint';
+        state.checkedTarget = state.target;
+      });
+      await tester.pumpAndSettle();
+      const draft = 'synthetic PEM draft\nsecond line';
+      mockClipboard(tester, () async => {'text': draft});
+
+      await steps.tap(tester, 'direct-auth-key');
+      await steps.tap(tester, 'direct-paste-key');
+      await steps.reopenEncryptedPem(tester, draft);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      await tester.pumpAndSettle();
+      await steps.tap(tester, 'direct-passphrase');
+      await steps.verifyEncryptedPemCollapsed(tester);
+      final passphraseEditor = find.descendant(
+        of: steps.control('direct-passphrase'),
+        matching: find.byType(EditableText),
+      );
+      expect(
+        tester.widget<EditableText>(passphraseEditor).focusNode.hasPrimaryFocus,
+        isTrue,
+      );
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
+  testWidgets('Android reaches an offscreen passphrase with one tap', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(393, 851);
+    tester.view.devicePixelRatio = 1;
+    tester.view.viewInsets = const FakeViewPadding(bottom: 275);
+    addTearDown(tester.view.reset);
+    final scroll = ScrollController();
+    addTearDown(scroll.dispose);
+    var taps = 0;
+    var edits = 0;
     var submissions = 0;
     final passphrase = steps.control('direct-passphrase');
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: TextField(
-            key: const ValueKey('direct-passphrase'),
-            obscureText: true,
-            onSubmitted: (_) => submissions++,
+          body: ListView(
+            key: const ValueKey('direct-form'),
+            controller: scroll,
+            children: [
+              const SizedBox(height: 900),
+              TextField(
+                key: const ValueKey('direct-passphrase'),
+                obscureText: true,
+                onTap: () {
+                  taps++;
+                  tester.view.viewInsets = const FakeViewPadding(bottom: 430);
+                },
+                onChanged: (_) {
+                  expect(passphrase.hitTestable(), findsOneWidget);
+                  edits++;
+                },
+                onSubmitted: (_) => submissions++,
+              ),
+            ],
           ),
         ),
       ),
     );
+    expect(passphrase, findsNothing);
     await steps.enterEncryptedPassphrase(
       tester,
       passphrase,
@@ -211,6 +336,10 @@ void main() {
       matching: find.byType(EditableText),
     );
     expect(tester.widget<EditableText>(editor).focusNode.hasFocus, isTrue);
+    expect(passphrase.hitTestable(), findsOneWidget);
+    expect(scroll.offset, greaterThan(0));
+    expect(taps, 1);
+    expect(edits, 1);
     expect(submissions, 0);
   }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 }

@@ -60,7 +60,8 @@ class ManualEncryptedKeyTests(unittest.TestCase):
     def through_wrong_submission(self):
         self.post('form')
         self.peer.events.append(self.peer.empty_event(1))
-        for step in ('probe', 'reviewed', 'wrong_pem_entry', 'wrong_pem_verified', 'wrong_ready', 'wrong_submit'):
+        for step in ('probe', 'reviewed', 'wrong_pem_entry', 'wrong_pem_verified', 'wrong_pem_reopened',
+                     'wrong_ready', 'wrong_submit'):
             self.post(step)
 
     def test_manual_flow_checks_distinct_wrong_and_correct_stages_and_live_close(self):
@@ -71,7 +72,8 @@ class ManualEncryptedKeyTests(unittest.TestCase):
         with self.assertRaisesRegex(ios.Failure, 'pre_auth_not_empty'):
             self.post('wrong_rejected')
         wrong['authAttempts'] = 0
-        for step in ('wrong_rejected', 'correct_pem_entry', 'correct_pem_verified', 'correct_ready', 'correct_submit'):
+        for step in ('wrong_rejected', 'correct_pem_entry', 'correct_pem_verified', 'correct_pem_reopened',
+                     'correct_ready', 'correct_submit'):
             self.post(step)
         session = self.peer.empty_event(3) | dict(closed=False, authAccepted=True, authAttempts=2, authSuccesses=1,
                                                    ptyRequests=1, shellRequests=1, outputBytes=25)
@@ -92,6 +94,28 @@ class ManualEncryptedKeyTests(unittest.TestCase):
                           case['acceptedSession']['authSuccesses']], [0, 0, 1])
         self.assertTrue(case['peerClosedBeforeDriverExit'])
         self.assertEqual(self.state.index, len(self.state.stages))
+
+    def test_pem_reopened_checkpoints_are_ordered_before_each_ready_stage(self):
+        self.post('form')
+        self.peer.events.append(self.peer.empty_event(1))
+        for step in ('probe', 'reviewed', 'wrong_pem_entry', 'wrong_pem_verified'):
+            self.post(step)
+        with self.assertRaisesRegex(ios.Failure, 'checkpoint_order_invalid'):
+            self.post('wrong_ready')
+        self.post('wrong_pem_reopened')
+        self.post('wrong_ready')
+        self.post('wrong_submit')
+        self.peer.events.append(self.peer.empty_event(2))
+        self.post('wrong_rejected')
+        for step in ('correct_pem_entry', 'correct_pem_verified'):
+            self.post(step)
+        with self.assertRaisesRegex(ios.Failure, 'checkpoint_order_invalid'):
+            self.post('correct_ready')
+        self.post('correct_pem_reopened')
+        self.post('correct_ready')
+        case = self.result['cases']['encryptedKey']
+        self.assertTrue(case['wrongPemReopened'])
+        self.assertTrue(case['correctPemReopened'])
 
     def test_native_event_disallows_replay_cross_case_and_secret_payload(self):
         self.post('form')
@@ -620,6 +644,49 @@ class GeometryReasonTests(unittest.TestCase):
         with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
             self.state.accept(payload | {'nativeCheckpoint': 'ordinary_password'})
 
+    def test_manual_host_diagnostics_accept_exactly_two_ordered_samples_without_text(self):
+        state = ios.Checkpoints(None, None, self.directory.name, {}, encrypted=object())
+        phase = {'stage': 'native_progress', 'nativeCheckpoint': 'encrypted_key_host'}
+        state.accept(phase)
+        first = {'sample': 'afterTap', 'initialKeyboard': 'hidden', 'keyboard': 'visible',
+                 'formUIFocus': 'host', 'liveHostUIFocus': True, 'treeHostReadback': 'empty',
+                 'liveHostReadback': 'empty', 'portReadback': 'notCompared', 'userReadback': 'notCompared'}
+        second = first | {'sample': 'afterInput', 'formUIFocus': 'port', 'treeHostReadback': 'nil',
+                          'liveHostReadback': 'nonString', 'visualReadback': 'match',
+                          'portReadback': 'changed', 'userReadback': 'unchanged'}
+        for invalid in (
+            phase | {'manualHostEntry': second},
+            phase | {'manualHostEntry': first | {'input': 'fixture-secret'}},
+            phase | {'manualHostEntry': first | {'formUIFocus': 'fixture-secret'}},
+            phase | {'manualHostEntry': first | {'liveHostUIFocus': 1}},
+            phase | {'manualHostEntry': first | {'visualReadback': 'match'}},
+            phase | {'manualHostEntry': first, 'nativeCheckpoint': 'encrypted_key_passphrase'},
+            phase | {'manualHostEntry': first, 'stage': 'native_failure'},
+        ):
+            with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                state.accept(invalid)
+            self.assertNotIn('manualHostEntry', state.result)
+        state.accept(phase | {'manualHostEntry': first})
+        for invalid in (first, second | {'initialKeyboard': 'visible'}, second | {'userReadback': 'notCompared'},
+                        second | {'treeHostReadback': None}, second | {'liveHostReadback': 'fixture-secret'},
+                        second | {'visualReadback': '127.0.0.1'}, second | {'visualReadback': {'text': 'fixture-secret'}},
+                        second | {'image': 'fixture-secret'}, second | {'frame': [1, 2, 3, 4]},
+                        {k: v for k, v in second.items() if k != 'visualReadback'}):
+            with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                state.accept(phase | {'manualHostEntry': invalid})
+        state.accept(phase | {'manualHostEntry': second})
+        with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+            state.accept(phase | {'manualHostEntry': second})
+        self.assertEqual(state.result['manualHostEntry'], [first, second])
+        for classification in ios.MANUAL_HOST_READBACKS:
+            detail = {'state': classification, 'samples': 6}
+            state.accept(phase | {'inputReadback': detail})
+            self.assertEqual(state.result['inputReadbacks']['encrypted_key_host'], detail)
+        for classification in ('nil', 'nonString'):
+            with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                self.state.accept({'stage': 'native_progress', 'nativeCheckpoint': 'ordinary_host',
+                                   'inputReadback': {'state': classification, 'samples': 6}})
+
     def test_secret_exposure_diagnostic_only_accepts_bounded_categories(self):
         state = ios.Checkpoints(None, None, self.directory.name, {}, encrypted=object())
         candidate = {'role': 'textView', 'scope': 'sameWeb', 'relation': 'ancestor',
@@ -629,8 +696,33 @@ class GeometryReasonTests(unittest.TestCase):
         payload = {'stage': 'native_progress', 'nativeCheckpoint': 'encrypted_key_passphrase', 'secretDiagnostic': detail}
         state.accept(payload)
         self.assertEqual(state.result['secretDiagnostic'], detail)
+        reasons = ('content_not_exact', 'editor_unproven', 'outside_editor',
+                   'geometry_mismatch', 'subtree_unproven', 'unsupported_node')
+        for reason in reasons:
+            classified = {'count': 1, 'candidates': [candidate | {'pemReason': reason}]}
+            state.accept(payload | {'secretDiagnostic': classified})
+            self.assertEqual(state.result['secretDiagnostic'], classified)
+        for phase in ('encrypted_key_pem_collapse', 'encrypted_key_pem_recollapse'):
+            classified = {'count': 1, 'candidates': [candidate | {'pemReason': 'editor_after_blur'}]}
+            state.accept(payload | {'nativeCheckpoint': phase, 'secretDiagnostic': classified})
+            self.assertEqual(state.result['secretDiagnostic'], classified)
+        with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+            state.accept(payload | {'nativeCheckpoint': 'encrypted_key_pem_reopen'})
+        password_only = candidate | {'privateKeyHeader': False, 'passphrase': True, 'pemReason': 'none'}
+        state.accept(payload | {'secretDiagnostic': {'count': 1, 'candidates': [password_only]}})
+        body_only = candidate | {'privateKeyHeader': False, 'privateKeyBody': True, 'pemReason': 'outside_editor'}
+        classified = {'count': 1, 'candidates': [body_only]}
+        state.accept(payload | {'secretDiagnostic': classified})
+        self.assertEqual(state.result['secretDiagnostic'], classified)
         for bad in (detail | {'text': 'fixture-secret'}, {'count': 1, 'candidates': [candidate | {'role': 'secret'}]},
-                    {'count': 1, 'candidates': [candidate | {'value': 'secret'}]}, {'count': 10001, 'candidates': []}):
+                    {'count': 1, 'candidates': [candidate | {'value': 'secret'}]}, {'count': 10001, 'candidates': []},
+                    {'count': 1, 'candidates': [candidate | {'pemReason': 'fixture-secret'}]},
+                    {'count': 1, 'candidates': [candidate | {'pemReason': 'none'}]},
+                    {'count': 1, 'candidates': [body_only | {'privateKeyBody': 'fixture-secret'}]},
+                    {'count': 1, 'candidates': [body_only | {'privateKeyBody': 1}]},
+                    {'count': 1, 'candidates': [body_only | {'pemReason': 'none'}]},
+                    {'count': 1, 'candidates': [body_only | {'excerpt': 'fixture-secret'}]},
+                    {'count': 1, 'candidates': [password_only | {'pemReason': 'geometry_mismatch'}]}):
             with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
                 state.accept(payload | {'secretDiagnostic': bad})
 
@@ -919,6 +1011,40 @@ class CaptureDiagnosticsTests(unittest.TestCase):
         self.assertEqual(state.result['nativeFailureCode'], 'native_terminal_header_unproven')
         self.assertEqual(state.failure, 'tauri_ios_native_check_failed')
 
+    def test_collapsed_pem_witness_keeps_secret_gate(self):
+        source = (ios.HERE / 'tauri_ios_direct_ssh.swift').read_text()
+        form = source.split('private func encryptedForm', 1)[1].split('private func credentialEmpty', 1)[0]
+        self.assertLess(form.index('assertEncryptedCredentialsHidden(rows'), form.index('collapsedPEMControl(rows'))
+        draft = source.split('private func encryptedDraft', 1)[1].split('private func authMethodFact', 1)[0]
+        for start, end in (('phase("pem_collapse")', 'phase("pem_reopen")'),
+                           ('phase("pem_recollapse")', '"_ready"')):
+            sample = draft.split(start, 1)[1].split(end, 1)[0]
+            self.assertIn('collapsedPEM: (pem,', sample)
+        self.assertEqual(draft.count('summary.live.element.tap()'), 1)
+        before_tap = draft.split('reveal(filled.pem.live.element', 1)[1].split('summary.live.element.tap()', 1)[0]
+        self.assertIn('encryptedForm(port: port, owner: entered.passphrase, collapsedPEM: (pem, entered.pem))', before_tap)
+        self.assertIn('sameIdentity(summary.owner.snapshot, revealed.owner.snapshot)', before_tap)
+        self.assertIn('summary.live.hittable', before_tap)
+        self.assertIn('reopenedEditor.owner.snapshot.value as? String == pem', draft)
+        self.assertIn('reopenedEditor.live.snapshot.value as? String == pem', draft)
+        self.assertGreater(draft.index('encryptedField(.passphrase, rows: reopenedRows'), draft.index('summary.live.element.tap()'))
+        self.assertIn('native_encrypted_key_reopen_keyboard_missing', draft)
+        self.assertNotIn('coordinate(withNormalizedOffset:', draft)
+
+    def test_encrypted_key_summary_failure_codes_are_fixed(self):
+        for reason in ('missing', 'ambiguous', 'identifier_unproven', 'label_unproven', 'role_invalid',
+                       'disabled', 'editor_present', 'owner_unproven'):
+            state = ios.Checkpoints(None, None, '/tmp', {}, encrypted=object())
+            payload = {'stage': 'native_failure', 'nativeCheckpoint': 'encrypted_key_pem_collapse',
+                       'nativeFailureCode': 'native_encrypted_key_summary_' + reason}
+            with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                state.accept(payload | {'label': 'fixture-secret'})
+            state.accept(payload)
+            self.assertEqual(state.result['nativeFailureCode'], payload['nativeFailureCode'])
+        state = ios.Checkpoints(None, None, '/tmp', {}, encrypted=object())
+        with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+            state.accept(payload | {'nativeFailureCode': 'native_encrypted_key_summary_fixture_secret'})
+
     def test_fixed_capture_diagnostics_export_and_bound(self):
         detail = {'anchor': 'terminal', 'matchCount': 2, 'reason': 'geometry_ambiguous',
                   'candidates': [{'role': 'other', 'frame': [10, 200, 400, 500],
@@ -1001,6 +1127,199 @@ class CaptureDiagnosticsTests(unittest.TestCase):
 
 
 class HomeDiagnosticsTests(unittest.TestCase):
+    def test_manual_shortcut_diagnostic_is_pre_action_and_strictly_redacted(self):
+        class Peer:
+            connections = 0
+
+            def snapshot(self):
+                return {'connections': self.connections}
+
+        reason = {'reason': 'card_button_parent', 'visibleCandidates': 1, 'visibleAddMarkers': 0,
+                  'candidateSizePt': [360, 48], 'liveSizePt': None, 'buttonGapPt': None}
+        event = {'stage': 'native_failure', 'nativeCheckpoint': 'encrypted_key_open_add',
+                 'nativeFailureCode': 'native_encrypted_key_home_shortcut_unproven', 'shortcutDiagnostic': reason}
+        invalid = 'tauri_ios_native_diagnostic_invalid'
+        with tempfile.TemporaryDirectory() as directory:
+            peer = Peer()
+            state = ios.Checkpoints(None, None, directory, {}, encrypted=peer)
+            stage = ios.ENCRYPTED_KEY_STAGES.index('encrypted_key_probe')
+            for payload in (event, {**event, 'stage': 'native_progress'}):
+                with self.assertRaisesRegex(ios.Failure, invalid):
+                    state.accept(payload)
+            state.index = stage
+            for payload in ({**event, 'nativeCheckpoint': 'encrypted_key_host'},
+                            {**event, 'nativeFailureCode': 'native_encrypted_key_home_shortcut_no_progress'},
+                            {**event, 'nativeFailureCode': 'native_home_alert_present'},
+                            {**event, 'label': 'PRIVATE'}):
+                with self.assertRaisesRegex(ios.Failure, invalid):
+                    state.accept(payload)
+            for change in ({'reason': 'PRIVATE'}, {'reason': []}, {'rawTree': 'PRIVATE'},
+                           {'visibleCandidates': True}, {'visibleAddMarkers': 10001},
+                           {'buttonGapPt': '12'}, {'candidateSizePt': [40, 346, 360, 48]},
+                           {'liveSizePt': [-1, 48]}, {'liveSizePt': [360, 'PRIVATE']}):
+                with self.subTest(change=change), self.assertRaisesRegex(ios.Failure, invalid):
+                    state.accept({**event, 'shortcutDiagnostic': {**reason, **change}})
+            peer.connections = 1
+            with self.assertRaisesRegex(ios.Failure, invalid):
+                state.accept(event)
+            peer.connections = 0
+            state.result['navigationTrace'] = {'encryptedKey': [{'performed': True}]}
+            with self.assertRaisesRegex(ios.Failure, invalid):
+                state.accept(event)
+            del state.result['navigationTrace']
+            self.assertNotIn('shortcutDiagnostic', state.result)
+            self.assertNotIn('PRIVATE', json.dumps(state.result))
+            state.accept(event)
+            self.assertEqual(state.result['shortcutDiagnostic'], reason)
+            self.assertEqual(state.index, stage)
+            self.assertEqual(state.failure, 'tauri_ios_native_check_failed')
+            self.assertNotIn('navigationTrace', state.result)
+
+    def test_manual_compact_home_accepts_only_one_bound_direct_shortcut(self):
+        from PIL import Image, ImageDraw
+
+        class NoPeer:
+            def snapshot(self):
+                return {'connections': 0}
+
+        phase = 'encrypted_key_open_add'
+        home = {**self.value(), 'compactEmptyHome': True}
+        for name in ('homeHeading', 'zeroHosts', 'headerAdd'):
+            home['members'][name] = {'count': 0, 'roles': []}
+        home['members']['emptyDescription'] = {'count': 1, 'roles': ['staticText']}
+        home['members']['compactShortcut'] = {'count': 1, 'roles': ['button']}
+        readiness = {'outcome': 'ready', 'elapsedMs': 200, 'strictSampleMs': 200, 'strictSamples': 1,
+                     'waitCalls': 0, 'samples': [{'state': 'ready', 'elapsedMs': 200}]}
+        add_frame = [40, 286, 360, 48]
+        frame = [40, 346, 360, 48]
+        ax_label = [139, 359, 163, 22]
+
+        def new_state(directory):
+            state = ios.Checkpoints(None, None, directory, {}, encrypted=NoPeer())
+            state.index = ios.ENCRYPTED_KEY_STAGES.index('encrypted_key_probe')
+            state.accept({'stage': 'native_progress', 'nativeCheckpoint': phase})
+            state.accept({'stage': 'native_home', 'nativeCheckpoint': phase, 'home': home, 'readiness': readiness})
+            return state
+
+        def navigation(after, bounds=frame):
+            event = self.navigation('ordinaryShortcut', 'emptyHome', after)
+            event.update(nativeCheckpoint=phase, method='systemHitPoint', afterInShortcutScope=after == 'sshForm', binding={
+                'witnessFrame': bounds, 'liveFrame': bounds, 'ownerFrame': bounds,
+                'windowFrame': [0, 0, 440, 956], 'webFrames': [[0, 62, 440, 850]],
+            })
+            event['before']['compactEmptyHome'] = True
+            event['geometry'].update(role='button', frame=bounds)
+            return event
+
+        def capture(event, painted=frame):
+            image = Image.new('RGB', (440, 956), '#ffffff')
+            draw = ImageDraw.Draw(image)
+            for box, style in ((add_frame, {'fill': '#4F46E5'}), (painted, {'outline': '#CBD5E1'})):
+                x, y, w, h = box
+                draw.rounded_rectangle((x, y, x + w - 1, y + h - 1), radius=10, **style)
+            png = io.BytesIO()
+            image.save(png, format='PNG')
+            return {'stage': 'native_shortcut_capture', 'nativeCheckpoint': phase,
+                    'geometry': event['geometry'], 'emptyAddFrame': add_frame,
+                    'windowFrame': event['binding']['windowFrame'], 'webFrames': event['binding']['webFrames'],
+                    'pngBase64': base64.b64encode(png.getvalue()).decode()}
+
+        entry = {'stage': 'native_home_entry', 'nativeCheckpoint': phase, 'member': 'ordinaryShortcut',
+                 'selection': 'uniqueIdentifier', 'role': 'button', 'enteredAddPage': False,
+                 'enteredSSHForm': True, 'route': 'directSSH'}
+        with tempfile.TemporaryDirectory() as directory:
+            state = new_state(directory)
+            success = navigation('sshForm')
+            shot = capture(success)
+            with self.assertRaisesRegex(ios.Failure, 'tauri_ios_home_retry_unsafe'):
+                state.accept(success)
+            for change in ({'rawTree': 'PRIVATE'}, {'nativeCheckpoint': 'encrypted_key_host'},
+                           {'pngBase64': 'invalid'}, {'emptyAddFrame': [500, 286, 360, 48]},
+                           {'webFrames': [[0, 62, 440, 90]]}):
+                with self.subTest(change=change), self.assertRaisesRegex(ios.Failure, 'shortcut_capture_invalid'):
+                    state.accept({**shot, **change})
+            self.assertIs(state.accept(shot), True)
+            self.assertEqual(state.result['shortcutCapture']['paintedButtonFramesPx']['ordinaryShortcut'], frame)
+            self.assertEqual(state.result['shortcutCapture']['peerConnections'], 0)
+            with self.assertRaisesRegex(ios.Failure, 'shortcut_capture_invalid'):
+                state.accept(shot)
+            alternate_routes = ({'member': 'emptyAdd'}, {'member': 'sshChoice'},
+                                {'nativeCheckpoint': 'encrypted_key_open_ssh'}, {'selection': 'uniqueLabel'},
+                                {'method': 'elementCenter'}, {'afterInShortcutScope': 'true'},
+                                {'binding': None}, {'performed': False, 'outcome': 'blocked'},
+                                {'binding': {**success['binding'], 'ownerFrame': [139, 360, 163, 22]}},
+                                {'geometry': {**success['geometry'], 'fullyVisible': False}},
+                                {'before': {**success['before'], 'addTitleSeen': True}})
+            for change in alternate_routes:
+                with self.subTest(change=change), self.assertRaises(ios.Failure):
+                    state.accept({**success, **change})
+            with self.assertRaisesRegex(ios.Failure, 'home_entry_invalid'):
+                state.accept(entry)
+            state.accept(success)
+            with self.assertRaisesRegex(ios.Failure, 'navigation_replay_rejected'):
+                state.accept(success)
+            for change in ({'route': 'viaAdd', 'enteredAddPage': True}, {'selection': 'buttonRole'}):
+                with self.subTest(change=change), self.assertRaisesRegex(ios.Failure, 'home_entry_invalid'):
+                    state.accept({**entry, **change})
+            state.accept(entry)
+            self.assertEqual(state.result['homeEntry']['encryptedKey']['route'], 'directSSH')
+            with self.assertRaisesRegex(ios.Failure, 'home_entry_invalid'):
+                state.accept(entry)
+            self.assertEqual(len(state.result['navigationTrace']['encryptedKey']), 1)
+            self.assertEqual(state.index, ios.ENCRYPTED_KEY_STAGES.index('encrypted_key_probe'))
+        for page in ('emptyHome', 'addChoice', 'unexpected', 'sshForm'):
+            with tempfile.TemporaryDirectory() as directory:
+                missed = new_state(directory)
+                event = {**navigation(page), 'afterInShortcutScope': False}
+                self.assertIs(missed.accept(capture(event)), True)
+                missed.accept(event)
+                with self.subTest(page=page), self.assertRaisesRegex(ios.Failure, 'home_entry_invalid'):
+                    missed.accept(entry)
+                code = 'native_encrypted_key_home_shortcut_no_progress'
+                missed.accept({'stage': 'native_failure', 'nativeCheckpoint': phase, 'nativeFailureCode': code})
+                self.assertEqual(missed.result['nativeFailureCode'], code)
+                self.assertNotIn('homeEntry', missed.result)
+        with tempfile.TemporaryDirectory() as directory:
+            small = new_state(directory)
+            event = navigation('sshForm', bounds=ax_label)
+            self.assertIs(small.accept(capture(event, painted=ax_label)), False)
+            with self.assertRaisesRegex(ios.Failure, 'tauri_ios_home_retry_unsafe'):
+                small.accept(event)
+            self.assertIn(ios.SHORTCUT_HOME_PNG, small.result['artifacts'])
+
+        with tempfile.TemporaryDirectory() as directory:
+            delayed = new_state(directory)
+            self.assertIs(delayed.accept(capture(navigation('sshForm', bounds=ax_label))), False)
+            self.assertEqual(delayed.result['shortcutCapture']['attempt'], 1)
+            ready = navigation('sshForm')
+            self.assertIs(delayed.accept(capture(ready)), True)
+            self.assertEqual(delayed.result['shortcutCapture']['attempt'], 2)
+            delayed.accept(ready)
+
+        with tempfile.TemporaryDirectory() as directory:
+            unclickable = new_state(directory)
+            shot = capture(navigation('sshForm'))
+            shot['geometry']['hittable'] = False
+            self.assertIs(unclickable.accept(shot), False)
+
+        for height, ready in ((46, True), (47, True), (47.99, True), (45, False), (51, False)):
+            with self.subTest(height=height), tempfile.TemporaryDirectory() as directory:
+                sample = new_state(directory)
+                bounds = [*frame[:3], height]
+                painted = [*frame[:3], round(height)]
+                self.assertIs(sample.accept(capture(navigation('sshForm', bounds), painted=painted)), ready)
+
+        with tempfile.TemporaryDirectory() as directory:
+            never_painted = new_state(directory)
+            invalid = capture(navigation('sshForm'), painted=ax_label)
+            for attempt in range(1, 4):
+                self.assertIs(never_painted.accept(invalid), False)
+                self.assertEqual(never_painted.result['shortcutCapture']['attempt'], attempt)
+            with self.assertRaisesRegex(ios.Failure, 'shortcut_capture_invalid'):
+                never_painted.accept(capture(navigation('sshForm')))
+            with self.assertRaisesRegex(ios.Failure, 'tauri_ios_home_retry_unsafe'):
+                never_painted.accept(navigation('sshForm'))
+
     def test_compact_home_requires_owned_roles_and_two_real_navigation_actions(self):
         home = {**self.value(), 'compactEmptyHome': True}
         members = home['members']
@@ -1116,6 +1435,39 @@ class HomeDiagnosticsTests(unittest.TestCase):
             home = {**self.value(), **home_change}
             with self.subTest(home_change=home_change), self.assertRaisesRegex(ios.Failure, 'home_diagnostic_invalid'):
                 ios.public_home_readiness(base, home)
+    def test_manual_compact_add_pending_is_bounded_to_the_encrypted_open_add_phase(self):
+        home = {**self.value(), 'compactEmptyHome': True}
+        for name in ('homeHeading', 'zeroHosts', 'headerAdd'):
+            home['members'][name] = {'count': 0, 'roles': []}
+        home['members']['emptyDescription'] = {'count': 1, 'roles': ['staticText']}
+        home['members']['compactShortcut'] = {'count': 1, 'roles': ['button']}
+        sample = {'state': 'compact_add_pending', 'elapsedMs': 10}
+        pending = {'outcome': 'compact_add_pending', 'elapsedMs': 35010, 'strictSampleMs': 10, 'strictSamples': 10,
+                   'waitCalls': 9, 'samples': [sample]}
+        recovered = pending | {'outcome': 'ready', 'samples': [sample, {'state': 'ready', 'elapsedMs': 35010}]}
+        self.assertEqual(ios.public_home_readiness(pending, home, manual_key=True), pending)
+        self.assertEqual(ios.public_home_readiness(recovered, home, manual_key=True), recovered)
+        with self.assertRaisesRegex(ios.Failure, 'home_diagnostic_invalid'):
+            ios.public_home_readiness(pending, home)
+        with self.assertRaisesRegex(ios.Failure, 'home_diagnostic_invalid'):
+            ios.public_home_readiness(pending, self.value(), manual_key=True)
+        with tempfile.TemporaryDirectory() as directory:
+            class NoPeer:
+                def snapshot(self):
+                    return {'connections': 0}
+            state = ios.Checkpoints(None, None, directory, {}, encrypted=NoPeer())
+            state.index = ios.ENCRYPTED_KEY_STAGES.index('encrypted_key_probe')
+            phase = 'encrypted_key_open_add'
+            state.accept({'stage': 'native_home', 'nativeCheckpoint': phase, 'home': home, 'readiness': pending})
+            navigation = self.navigation('emptyAdd', 'emptyHome', 'addChoice')
+            with self.assertRaisesRegex(ios.Failure, 'home_retry_unsafe'):
+                state.accept(navigation | {'nativeCheckpoint': phase})
+            code = 'native_encrypted_key_empty_add_unproven'
+            with self.assertRaisesRegex(ios.Failure, 'native_diagnostic_invalid'):
+                state.accept({'stage': 'native_failure', 'nativeCheckpoint': 'encrypted_key_open_ssh', 'nativeFailureCode': code})
+            state.accept({'stage': 'native_failure', 'nativeCheckpoint': phase, 'nativeFailureCode': code})
+            self.assertEqual(state.result['nativeFailureCode'], code)
+            self.assertNotIn('navigationTrace', state.result)
 
     def test_repeated_home_sampling_retains_latest_without_navigation_or_ssh_replay(self):
         with tempfile.TemporaryDirectory() as directory:

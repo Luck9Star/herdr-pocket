@@ -58,11 +58,67 @@ private final class HerdrSecureAccessibilityRegistry {
 }
 
 func registerHerdrSecureAccessibilityWindow(_ window: NSWindow) {
+    (window as? HerdrSecureCredentialWindow)?.bindRenderView()
     HerdrSecureAccessibilityRegistry.shared.register(window)
 }
 
 func herdrSecureAccessibilityChildren(window: NSWindow, preserving original: [Any]?) -> [Any]? {
     HerdrSecureAccessibilityRegistry.shared.children(in: window, preserving: original)
+}
+
+/// Keep a native click in charge while Flutter closes the previous PEM editor.
+class HerdrSecureCredentialWindow: NSWindow {
+    private weak var renderView: NSView?
+    private weak var handoffField: HerdrSecureTextField?
+    private var handoffSequence = 0
+
+    fileprivate func bindRenderView() {
+        // Capture the pinned Flutter wrapper's rendering child at window
+        // setup, before it inserts transient accessibility text fields.
+        if renderView == nil { renderView = contentViewController?.view.subviews.first }
+    }
+
+    fileprivate func beginSecureHandoff(_ field: HerdrSecureTextField) -> Int {
+        handoffSequence += 1
+        handoffField = field
+        return handoffSequence
+    }
+
+    fileprivate func finishSecureHandoff(_ sequence: Int) {
+        if handoffSequence == sequence { handoffField = nil }
+    }
+
+    override func makeFirstResponder(_ responder: NSResponder?) -> Bool {
+        if let field = handoffField, field.window === self, !field.retired, field.isEnabled,
+           !field.isHiddenOrHasHiddenAncestor, let editor = field.currentEditor(), firstResponder === editor,
+           let renderView, renderView.window === self, responder === renderView {
+            // The pinned Flutter macOS embedder's TextInput.clearClient/hide
+            // returns focus to the rendering child, even if AppKit already
+            // selected the native editor. Leave that editor in place.
+            return false
+        }
+        let accepted = super.makeFirstResponder(responder)
+        if let field = handoffField, field.currentEditor() !== firstResponder { handoffField = nil }
+        return accepted
+    }
+
+    override func sendEvent(_ event: NSEvent) {
+        // A later click or keyboard traversal is a new user choice.
+        switch event.type {
+        case .leftMouseDown, .rightMouseDown, .otherMouseDown:
+            handoffField = nil
+        case .keyDown where event.keyCode == 48:
+            handoffField = nil
+        default:
+            break
+        }
+        super.sendEvent(event)
+    }
+
+    override func resignKey() {
+        handoffField = nil
+        super.resignKey()
+    }
 }
 
 /// A distinct AppKit secure editor per field. Never uses FlutterTextInputPlugin.
@@ -110,6 +166,29 @@ final class HerdrSecureTextField: NSSecureTextField, NSTextFieldDelegate {
     override func accessibilityParent() -> Any? {
         if let window, HerdrSecureAccessibilityRegistry.shared.exposed(self, in: window) { return window }
         return super.accessibilityParent()
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        let accepted = super.becomeFirstResponder()
+        if accepted {
+            // An AppKit overlay click does not reach Flutter's tap regions.
+            // Wait until AppKit has installed this field's editor as responder.
+            let focusedRevision = revision
+            DispatchQueue.main.async { [weak self] in
+                guard let self, !self.retired, self.isEnabled, self.revision == focusedRevision,
+                      let editor = self.currentEditor(), self.window?.firstResponder === editor else { return }
+                let host = self.window as? HerdrSecureCredentialWindow
+                guard self.identifier?.rawValue == "direct-passphrase", let host else {
+                    self.channel.invokeMethod("focused", arguments: ["revision": focusedRevision])
+                    return
+                }
+                let handoff = host.beginSecureHandoff(self)
+                self.channel.invokeMethod("focused", arguments: ["revision": focusedRevision]) { [weak host] _ in
+                    host?.finishSecureHandoff(handoff)
+                }
+            }
+        }
+        return accepted
     }
 
     private func wipe() {

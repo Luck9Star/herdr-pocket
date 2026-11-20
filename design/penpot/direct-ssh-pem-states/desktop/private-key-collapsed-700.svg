@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="900" viewBox="0 0 700 900">
+<g id="private-key-collapsed-700" transform="translate(0 0)">
+<title>private-key-collapsed-700 · 私钥 · 失焦摘要</title>
+<rect x="0" y="0" width="700" height="900" rx="0" fill="#F8FAFC"/>
+<g id="private-key-collapsed-700-app-sidebar"><title>app-sidebar</title>
+<rect x="0" y="0" width="64" height="900" rx="0" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+<path d="M 63.5 0 L 63.5 900" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+<g id="private-key-collapsed-700-sidebar-toggle"><title>sidebar-toggle</title>
+<rect x="10" y="8" width="44" height="44" fill="none"/>
+<path d="M4 6 H20 M4 12 H20 M4 18 H20" transform="translate(20 17)" fill="none" stroke="#0F172A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g id="private-key-collapsed-700-nav-board"><title>nav-board</title>
+<rect x="10" y="68" width="44" height="44" fill="none"/>
+<path d="M3 3 H10 V10 H3 Z M14 3 H21 V10 H14 Z M3 14 H10 V21 H3 Z M14 14 H21 V21 H14 Z" transform="translate(20 81)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g id="private-key-collapsed-700-nav-terminal"><title>nav-terminal</title>
+<rect x="10" y="120" width="44" height="44" fill="none"/>
+<path d="M3 4 H21 V20 H3 Z M7 9 L10 12 L7 15 M13 15 H17" transform="translate(20 133)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g id="private-key-collapsed-700-nav-network"><title>nav-network</title>
+<rect x="10" y="172" width="44" height="44" fill="none"/>
+<path d="M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 M3 12 H21 M12 3 C6 7 6 17 12 21 C18 17 18 7 12 3" transform="translate(20 185)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g id="private-key-collapsed-700-nav-settings"><title>nav-settings</title>
+<rect x="10" y="224" width="44" height="44" fill="none"/>
+<path d="M3 6 H21 M3 12 H21 M3 18 H21 M8 3 V9 M16 9 V15 M10 15 V21" transform="translate(20 237)" fill="none" stroke="#475569" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</g>
+<g id="private-key-collapsed-700-page-header"><title>page-header</title>
+<path d="M 64 55.5 L 700 55.5" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+<g id="private-key-collapsed-700-back"><title>back</title>
+<rect x="72" y="6" width="44" height="44" fill="none"/>
+<path d="M14 4 L6 12 L14 20 M6 12 H20" transform="translate(81 16)" fill="none" stroke="#0F172A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<text id="private-key-collapsed-700-text-1" x="128" y="35" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="600" fill="#0F172A" text-anchor="start">SSH 账号认证</text>
+</g>
+<g id="private-key-collapsed-700-target-card"><title>target-card</title>
+<rect x="104" y="76" width="556" height="52" rx="10" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+<text id="private-key-collapsed-700-text-2" x="116" y="94" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#475569" text-anchor="start">本次连接目标</text>
+<text id="private-key-collapsed-700-text-3" x="116" y="113" font-family="JetBrainsMono Nerd Font Mono, JetBrains Mono, Menlo, monospace" font-size="14" font-weight="400" fill="#0F172A" text-anchor="start">demo@ssh.example.test:22</text>
+</g>
+<g id="private-key-collapsed-700-trust-approved"><title>trust-approved</title>
+<rect x="104" y="138" width="556" height="44" rx="10" fill="#ECFDF5" stroke="#A7F3D0" stroke-width="1"/>
+<text id="private-key-collapsed-700-text-4" x="116" y="165" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#047857" text-anchor="start">本次主机密钥已确认</text>
+</g>
+<text id="private-key-collapsed-700-text-5" x="104" y="216" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">认证方式</text>
+<g id="private-key-collapsed-700-auth-password"><title>auth-password</title>
+<rect x="104" y="224" width="274" height="44" fill="none"/>
+<rect x="104" y="224" width="274" height="44" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="private-key-collapsed-700-text-6" x="241" y="251" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="middle">密码</text>
+</g>
+<g id="private-key-collapsed-700-auth-key"><title>auth-key</title>
+<rect x="386" y="224" width="274" height="44" fill="none"/>
+<rect x="386" y="224" width="274" height="44" rx="10" fill="#EEF2FF" stroke="#4F46E5" stroke-width="1"/>
+<text id="private-key-collapsed-700-text-7" x="523" y="251" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#4F46E5" text-anchor="middle">已有私钥</text>
+</g>
+<text id="private-key-collapsed-700-text-8" x="104" y="296" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">私钥 PEM（仅本次使用）</text>
+<g id="private-key-collapsed-700-edit-pem"><title>edit-pem</title>
+<rect x="104" y="304" width="556" height="84" fill="none"/>
+<rect x="104" y="304" width="556" height="84" rx="42" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="private-key-collapsed-700-text-9" x="382" y="351" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#4F46E5" text-anchor="middle">已填写私钥 · 重新编辑</text>
+</g>
+<g id="private-key-collapsed-700-paste-key"><title>paste-key</title>
+<rect x="104" y="398" width="556" height="48" fill="none"/>
+<rect x="104" y="398" width="556" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="private-key-collapsed-700-text-10" x="382" y="427" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">粘贴私钥</text>
+</g>
+<text id="private-key-collapsed-700-text-11" x="104" y="472" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#0F172A" text-anchor="start">私钥口令（加密私钥需要）</text>
+<g id="private-key-collapsed-700-passphrase"><title>passphrase</title>
+<rect x="104" y="480" width="556" height="48" fill="none"/>
+<rect x="104" y="480" width="556" height="48" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+<text id="private-key-collapsed-700-text-12" x="116" y="509" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#64748B" text-anchor="start">未填写</text>
+</g>
+<g id="private-key-collapsed-700-connect"><title>connect</title>
+<rect x="104" y="542" width="556" height="48" fill="none"/>
+<rect x="104" y="542" width="556" height="48" rx="10" fill="#F1F5F9" stroke="#E2E8F0" stroke-width="1"/>
+<text id="private-key-collapsed-700-text-13" x="382" y="571" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#475569" text-anchor="middle">连接 SSH</text>
+</g>
+<text id="private-key-collapsed-700-text-14" x="104" y="610" font-family="Inter, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="start">填写完整私钥后才能连接。</text>
+</g>
+</svg>

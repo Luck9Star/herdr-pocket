@@ -54,13 +54,16 @@ class WorkflowRoutingTests(unittest.TestCase):
         manual = {}
         prefix = 'refs/heads/codex/acceptance/direct-ssh-ios-'
         combo = prefix + 'flutter-only-encrypted-rotation-'
+        tauri_key = prefix + 'tauri-only-encrypted-manual-'
         for client in ('flutter', 'tauri'):
             job = re.search(rf'(?ms)^  {client}-ordinary-ssh-ios:\n    if: (.*?)^    runs-on:', workflow)
             self.assertIsNotNone(job)
             routes[client] = []
             for clause in job[1].removeprefix('>-\n').split('&&'):
-                if clause.strip() == f"(!startsWith(github.ref, '{combo}') || github.event_name == 'workflow_dispatch')":
-                    manual[client] = combo
+                gated = next((branch for branch in (combo, tauri_key) if clause.strip() ==
+                              f"(!startsWith(github.ref, '{branch}') || github.event_name == 'workflow_dispatch')"), None)
+                if gated:
+                    manual[client] = gated
                     continue
                 match = re.fullmatch(r"(!?)startsWith\(github\.ref, '([^']+)'\)", clause.strip())
                 self.assertIsNotNone(match, 'expected a branch-prefix condition')
@@ -73,6 +76,8 @@ class WorkflowRoutingTests(unittest.TestCase):
             (prefix + 'flutter-only-encrypted-key-r1', 'push', {'flutter'}),
             (combo + 'r1', 'push', set()),
             (combo + 'r1', 'workflow_dispatch', {'flutter'}),
+            (tauri_key + 'r1', 'push', set()),
+            (tauri_key + 'r1', 'workflow_dispatch', {'tauri'}),
             ('refs/heads/main', 'workflow_dispatch', set()),
             ('refs/tags/codex/acceptance/direct-ssh-ios-r1', 'workflow_dispatch', set()),
         ):
@@ -81,6 +86,18 @@ class WorkflowRoutingTests(unittest.TestCase):
                             if all(ref.startswith(branch) != bool(negated) for negated, branch in clauses)
                             and (client not in manual or not ref.startswith(manual[client]) or event == 'workflow_dispatch')}
                 self.assertEqual(selected, expected)
+
+    def test_tauri_manual_key_ref_routes_the_runner_and_publisher_together(self):
+        workflow = (Path(__file__).resolve().parents[2] / '.github/workflows/direct-ssh-ios.yml').read_text()
+        flutter, tauri = self.job(workflow, 'flutter'), self.job(workflow, 'tauri')
+        prefix = 'refs/heads/codex/acceptance/direct-ssh-ios-tauri-only-encrypted-manual-'
+        self.assertIn(f"TAURI_ENCRYPTED_KEY_MANUAL: ${{{{ startsWith(github.ref, '{prefix}') }}}}", tauri)
+        self.assertEqual(tauri.count('options+=(--encrypted-key-manual-only)'), 2)
+        self.assertNotIn('--encrypted-key-manual-only', flutter)
+        for name in (*batch.TAURI_MANUAL_KEY_PROOF, *batch.TAURI_MANUAL_KEY_PROOF.values()):
+            self.assertIn(name, tauri)
+            self.assertNotIn(name, flutter)
+
 
 class PublicEvidenceTests(unittest.TestCase):
     source_sha = 'a' * 40
@@ -99,11 +116,18 @@ class PublicEvidenceTests(unittest.TestCase):
                     'markerReceived': True, 'singleMarkerLineExact': True, 'sessionClosed': True, 'closed': True},
                 'authenticationMethod': 'publickey', 'peerClosedBeforeDriverExit': True}
 
-    def evidence(self, root, *, status='passed', encrypted_rotation=False):
+    def evidence(self, root, *, status='passed', encrypted_rotation=False, tauri_manual_key=False):
         from PIL import Image
         artifacts = {}
-        proofs = batch.ENCRYPTED_ROTATION_PROOF if encrypted_rotation else batch.TERMINAL_PROOFS
-        names = {batch.ENCRYPTED_ROTATION_REVIEW, *proofs} if encrypted_rotation else batch.REQUIRED_IMAGES
+        if tauri_manual_key:
+            proofs = batch.TAURI_MANUAL_KEY_PROOF
+            names = set(proofs) | {batch.TAURI_MANUAL_KEY_HOME}
+        elif encrypted_rotation:
+            proofs = batch.ENCRYPTED_ROTATION_PROOF
+            names = {batch.ENCRYPTED_ROTATION_REVIEW, *proofs}
+        else:
+            proofs = batch.TERMINAL_PROOFS
+            names = batch.REQUIRED_IMAGES
         for index, name in enumerate(sorted(names)):
             stream = io.BytesIO()
             Image.new('RGB', (8, 8), (index * 30, 40, 60)).save(stream, format='PNG')
@@ -117,6 +141,82 @@ class PublicEvidenceTests(unittest.TestCase):
         report = {'sourceSHA': self.source_sha, 'status': status, 'artifacts': artifacts}
         (root / 'result.json').write_text(json.dumps(report))
         return report
+
+    def tauri_manual_key_report(self, root):
+        report = self.evidence(root, tauri_manual_key=True)
+        case = self.encrypted_key_case()
+        del case['modeSwitch']
+        case.update(credentialEntry='nativeTypeText', wrongPemExact=True, correctPemExact=True,
+                    wrongPemReopened=True, correctPemReopened=True, wrongPassphraseObscured=True,
+                    correctPassphraseObscured=True, credentialsCleared=True)
+        probe = {**case['wrongPassphrase']['peer'], 'markerReceived': False, 'authAccepted': False,
+                 'sessionClosed': False, 'handshakeCompleted': False}
+        case['initialProbe'] = probe
+        case['wrongPassphrase'].update(peer={**probe, 'id': 2, 'handshakeCompleted': True}, credentialsCleared=True)
+        case['acceptedSession'].update(id=3, authAttempts=2, authAccepted=True, handshakeCompleted=True)
+        terminal, criteria = next(iter(batch.TAURI_MANUAL_KEY_PROOF.items()))
+        case['terminalScreenshot'] = {'imageFile': terminal, 'imageSha256': report['artifacts'][terminal],
+            'criteriaFile': criteria, 'criteriaSha256': hashlib.sha256((root / criteria).read_bytes()).hexdigest(),
+            'systemCapture': 'XCUIScreen.main', 'targetVisible': True, 'noCredentialsVisible': True}
+        report.update(scope='owned_loopback_ordinary_ssh_encrypted_key_manual', client='tauri', platform='ios-simulator',
+                      lastCompletedStage='encrypted_key_returned_home', homeEntry={'encryptedKey': {}},
+                      cases={'ordinary': {'status': 'not_run'}, 'keyChange': {'status': 'not_run'}, 'encryptedKey': case},
+                      cleanup={'simulatorDeleted': True, 'fixturesClosed': True, 'privateFilesRemoved': True,
+                               'encryptedSecretsCleared': True, 'rawLogsUploaded': False})
+        home = batch.TAURI_MANUAL_KEY_HOME
+        report['shortcutCapture'] = {'imageFile': home, 'imageSha256': report['artifacts'][home],
+            'systemCapture': 'XCUIScreen.main', 'peerConnections': 0, 'screenPixels': [8, 8]}
+        (root / 'result.json').write_text(json.dumps(report))
+        return report
+
+    def test_tauri_manual_key_requires_distinct_preauth_phases_and_bound_private_safe_terminal_proof(self):
+        mutations = (
+            lambda report, case: case.update(credentialEntry='systemEditMenu'),
+            lambda report, case: case['initialProbe'].update(authAttempts=1),
+            lambda report, case: case['wrongPassphrase']['peer'].update(authAttempts=1),
+            lambda report, case: case['wrongPassphrase']['peer'].update(handshakeCompleted=False),
+            lambda report, case: case['acceptedSession'].update(authSuccesses=2),
+            lambda report, case: case.update(peerClosedBeforeDriverExit=False),
+            lambda report, case: case.update(wrongPemExact=False),
+            lambda report, case: case.update(correctPemReopened=False),
+            lambda report, case: report['cases']['ordinary'].update(status='passed'),
+            lambda report, case: report['cleanup'].update(encryptedSecretsCleared=False),
+            lambda report, case: case['terminalScreenshot'].update(noCredentialsVisible=False),
+            lambda report, case: case['terminalScreenshot'].update(criteriaSha256='b' * 64),
+            lambda report, case: report['shortcutCapture'].update(peerConnections=1),
+            lambda report, case: report['artifacts'].pop(batch.TAURI_MANUAL_KEY_HOME),
+        )
+        for mutation in (None, *mutations):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory) / 'source'
+                root.mkdir()
+                report = self.tauri_manual_key_report(root)
+                destination = Path(directory) / 'published'
+                options = {'shell': 'tauri', 'source_sha': self.source_sha, 'encrypted_key_manual_only': True}
+                if mutation:
+                    mutation(report, report['cases']['encryptedKey'])
+                    (root / 'result.json').write_text(json.dumps(report))
+                    with self.assertRaises(batch.BatchFailure):
+                        batch.publish_evidence(root, destination, **options)
+                    self.assertEqual({p.name for p in destination.iterdir()}, {'result.json'})
+                else:
+                    published = batch.publish_evidence(root, destination, **options)
+                    self.assertEqual(published, {'result.json', batch.TAURI_MANUAL_KEY_HOME,
+                                                 *batch.TAURI_MANUAL_KEY_PROOF, *batch.TAURI_MANUAL_KEY_PROOF.values()})
+
+    def test_tauri_manual_key_failure_can_publish_only_the_bound_preinput_capture(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'source'
+            root.mkdir()
+            report = self.tauri_manual_key_report(root)
+            home = batch.TAURI_MANUAL_KEY_HOME
+            report.update(status='failed', artifacts={home: report['artifacts'][home]})
+            (root / 'result.json').write_text(json.dumps(report))
+            options = {'shell': 'tauri', 'source_sha': self.source_sha, 'encrypted_key_manual_only': True}
+            self.assertEqual(batch.publish_evidence(root, Path(directory) / 'safe', **options), {'result.json', home})
+            report['shortcutCapture']['screenPixels'] = [9, 8]
+            (root / 'result.json').write_text(json.dumps(report))
+            self.assertEqual(batch.publish_evidence(root, Path(directory) / 'mismatch', **options), {'result.json'})
 
     def encrypted_rotation_report(self, root):
         report = self.evidence(root, encrypted_rotation=True)

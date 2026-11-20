@@ -51,6 +51,7 @@ ENCRYPTED_KEY_STAGES = (
 )
 ENCRYPTED_KEY_PNG = 'tauri-manual-key-terminal.png'
 SHORTCUT_HOME_PNG = 'tauri-manual-key-empty-home.png'
+MAX_SHORTCUT_CAPTURES = 3
 ENCRYPTED_AUTH_FAILURES = frozenset('native_encrypted_auth_' + code for code in (
     'method_missing', 'method_ambiguous', 'method_role_invalid', 'method_identity_invalid',
     'method_owner_unproven', 'method_live_unproven', 'page_unproven'))
@@ -568,15 +569,23 @@ def shortcut_contains(outer, inner):
 def shortcut_visual_ready(frames, scale, add, geometry):
     primary, secondary = frames['emptyAdd'], frames['ordinaryShortcut']
     viewport = [n * scale for n in geometry['visibleFrame']]
-    if not primary or not secondary or not all(shortcut_contains(viewport, frame) for frame in (primary, secondary)):
+    if (not geometry['enabled'] or not geometry['hittable'] or not primary or not secondary
+            or not all(shortcut_contains(viewport, frame) for frame in (primary, secondary))):
         return False
+
+    def matches_ax(painted, frame):
+        def edges(rect):
+            x, y, w, h = rect
+            return (x, y, x + w, y + h)
+        return min(frame[2:]) >= 48 and all(
+            abs(pixel - point * scale) <= 2 * scale for pixel, point in zip(edges(painted), edges(frame)))
+
     gap = secondary[1] - (primary[1] + primary[3])
     return (primary[3] >= 48 * scale and secondary[3] >= 48 * scale
             and primary[2] >= 48 * scale and secondary[2] >= 48 * scale
             and abs(primary[0] - secondary[0]) <= scale and abs(primary[2] - secondary[2]) <= scale
             and 0 < gap <= 24 * scale
-            and shortcut_contains(primary, [n * scale for n in add])
-            and shortcut_contains(secondary, [n * scale for n in geometry['frame']]))
+            and matches_ax(primary, add) and matches_ax(secondary, geometry['frame']))
 
 
 def read_shortcut_capture(payload):
@@ -1307,6 +1316,8 @@ class Checkpoints:
         require('shortcutDiagnostic' not in payload or stage == 'native_failure', 'tauri_ios_native_diagnostic_invalid')
         if stage == 'native_shortcut_capture':
             invalid = 'tauri_ios_shortcut_capture_invalid'
+            previous = self.result.get('shortcutCapture')
+            attempt = 1 if previous is None else previous['attempt'] + 1
             require(set(payload) == {'stage', 'nativeCheckpoint', 'geometry', 'emptyAddFrame', 'windowFrame',
                                     'webFrames', 'pngBase64'}
                     and self.failure is None and self.encrypted is not None
@@ -1314,14 +1325,22 @@ class Checkpoints:
                     and self.index == self.stages.index('encrypted_key_probe')
                     and self.result.get('homeReadiness', {}).get('encryptedKey', {}).get('outcome') == 'ready'
                     and not self.result.get('navigationTrace', {}).get('encryptedKey')
-                    and 'shortcutCapture' not in self.result and self.encrypted.snapshot()['connections'] == 0, invalid)
+                    and (previous is None or not previous['visualTargetReady'])
+                    and attempt <= MAX_SHORTCUT_CAPTURES and self.encrypted.snapshot()['connections'] == 0, invalid)
             data, capture = read_shortcut_capture(payload)
             name = SHORTCUT_HOME_PNG
-            require(not (self.output / name).exists(), invalid)
-            (self.output / name).write_bytes(data)
+            destination = self.output / name
+            require(destination.is_file() == (previous is not None), invalid)
+            with tempfile.TemporaryDirectory(dir=self.output) as pending:
+                image = Path(pending) / name
+                image.write_bytes(data)
+                if previous is None:
+                    os.link(image, destination)
+                else:
+                    image.replace(destination)
             digest = hashlib.sha256(data).hexdigest()
             self.result.setdefault('artifacts', {})[name] = digest
-            self.result['shortcutCapture'] = {'imageFile': name, 'imageSha256': digest, **capture}
+            self.result['shortcutCapture'] = {'imageFile': name, 'imageSha256': digest, 'attempt': attempt, **capture}
             return capture['visualTargetReady']
         if stage == 'native_active_diagnostic':
             invalid = 'tauri_ios_active_diagnostic_invalid'

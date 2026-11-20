@@ -1196,7 +1196,7 @@ class HomeDiagnosticsTests(unittest.TestCase):
             state.accept({'stage': 'native_home', 'nativeCheckpoint': phase, 'home': home, 'readiness': readiness})
             return state
 
-        def navigation(after, bounds=ax_label):
+        def navigation(after, bounds=frame):
             event = self.navigation('ordinaryShortcut', 'emptyHome', after)
             event.update(nativeCheckpoint=phase, method='systemHitPoint', afterInShortcutScope=after == 'sshForm', binding={
                 'witnessFrame': bounds, 'liveFrame': bounds, 'ownerFrame': bounds,
@@ -1276,11 +1276,37 @@ class HomeDiagnosticsTests(unittest.TestCase):
                 self.assertNotIn('homeEntry', missed.result)
         with tempfile.TemporaryDirectory() as directory:
             small = new_state(directory)
-            event = navigation('sshForm')
+            event = navigation('sshForm', bounds=ax_label)
             self.assertIs(small.accept(capture(event, painted=ax_label)), False)
             with self.assertRaisesRegex(ios.Failure, 'tauri_ios_home_retry_unsafe'):
                 small.accept(event)
             self.assertIn(ios.SHORTCUT_HOME_PNG, small.result['artifacts'])
+
+        with tempfile.TemporaryDirectory() as directory:
+            delayed = new_state(directory)
+            self.assertIs(delayed.accept(capture(navigation('sshForm', bounds=ax_label))), False)
+            self.assertEqual(delayed.result['shortcutCapture']['attempt'], 1)
+            ready = navigation('sshForm')
+            self.assertIs(delayed.accept(capture(ready)), True)
+            self.assertEqual(delayed.result['shortcutCapture']['attempt'], 2)
+            delayed.accept(ready)
+
+        with tempfile.TemporaryDirectory() as directory:
+            unclickable = new_state(directory)
+            shot = capture(navigation('sshForm'))
+            shot['geometry']['hittable'] = False
+            self.assertIs(unclickable.accept(shot), False)
+
+        with tempfile.TemporaryDirectory() as directory:
+            never_painted = new_state(directory)
+            invalid = capture(navigation('sshForm'), painted=ax_label)
+            for attempt in range(1, 4):
+                self.assertIs(never_painted.accept(invalid), False)
+                self.assertEqual(never_painted.result['shortcutCapture']['attempt'], attempt)
+            with self.assertRaisesRegex(ios.Failure, 'shortcut_capture_invalid'):
+                never_painted.accept(capture(navigation('sshForm')))
+            with self.assertRaisesRegex(ios.Failure, 'tauri_ios_home_retry_unsafe'):
+                never_painted.accept(navigation('sshForm'))
 
     def test_compact_home_requires_owned_roles_and_two_real_navigation_actions(self):
         home = {**self.value(), 'compactEmptyHome': True}

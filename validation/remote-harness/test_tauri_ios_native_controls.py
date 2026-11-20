@@ -264,6 +264,7 @@ final class Adapter {
     let launch: Launch
     var app: App { App(staticTexts: Query(launch: launch)) }
     var lastHomeSample: [String: Any]?
+    var nativeHomeDeadline: TimeInterval = 0
     var manualHomeCardSeen = false
     var shortcutEvidence = NativeControlPolicy.ShortcutEvidence()
     var shortcutIssue: NativeControlPolicy.ShortcutEvidence.Issue?

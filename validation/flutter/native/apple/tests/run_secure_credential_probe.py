@@ -21,7 +21,9 @@ CHECKS = {'channelRetired', 'clearDoesNotChangeOtherField', 'clearIsEmpty',
     'preexistingSecureChildDeduplicated', 'retiredFieldNotExposed',
     'rebuiltPasswordIsOnlySecureChild', 'closedWindowNoRegisteredSecureChild',
     'closedWindowClearsNativeValue', 'closedWindowRetiresChannel',
-    'stagedPassphraseIsNative', 'invalidPairsHaveNoEditorOrChannel'}
+    'stagedPassphraseIsNative', 'invalidPairsHaveNoEditorOrChannel',
+    'pendingFlutterReturnPreservesNativeFocus', 'laterChosenEditorKeepsFocus',
+    'finishedHandoffAllowsRendererFocus'}
 
 
 def main():

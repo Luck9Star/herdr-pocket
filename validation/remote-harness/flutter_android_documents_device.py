@@ -12,7 +12,7 @@ import time
 
 from paired_gui import GuiFailure, owned_process
 import flutter_android_documents_oracle as oracle
-from flutter_android_documents_preflight import PACKAGE, SERIAL, adb
+from flutter_android_documents_preflight import PACKAGE, SERIAL, Failure as AdbFailure, adb
 from flutter_android_gui import SystemImeFailure, public_file_pending, public_ime_diagnostic, wait_system_ime
 from tauri_android_config_document import (Picker, ARCHIVE, CORRUPT, DOWNLOADS, MAX_ARCHIVE,
                                            foreground, binary_file, wait_download_storage)
@@ -38,8 +38,13 @@ def device_catalog():
 
 def exchange_read(relative):
     # A single known app-private public JSON file; content is validated below and never logged.
-    p = subprocess.run(['adb', '-s', SERIAL, 'shell', '-T', 'run-as', PACKAGE, 'head', '-c', '257', relative],
-                       capture_output=True, timeout=10, check=False)
+    try:
+        p = subprocess.run(['adb', '-s', SERIAL, 'shell', '-T', 'run-as', PACKAGE, 'head', '-c', '257', relative],
+                           capture_output=True, timeout=10, check=False)
+    except subprocess.TimeoutExpired:
+        raise GuiFailure('exchange_read_timeout') from None
+    except OSError:
+        raise GuiFailure('exchange_read_unavailable') from None
     if public_file_pending(p, relative):
         return None
     need(not p.returncode and len(p.stdout) <= 256 and not p.stderr, 'exchange_read_failed')
@@ -54,10 +59,34 @@ def exchange_read(relative):
 def acknowledge(relative, stage):
     # Unknown writes are never replayed; only fixed public stage names cross stdin.
     value = json.dumps({'stage': stage}, separators=(',', ':')).encode()
-    p = subprocess.run(['adb', '-s', SERIAL, 'shell', '-T', 'run-as', PACKAGE, 'tee', relative + '/ack.new'],
-                       input=value, capture_output=True, timeout=10, check=False)
+    try:
+        p = subprocess.run(['adb', '-s', SERIAL, 'shell', '-T', 'run-as', PACKAGE, 'tee', relative + '/ack.new'],
+                           input=value, capture_output=True, timeout=10, check=False)
+    except subprocess.TimeoutExpired:
+        raise GuiFailure('ack_write_timeout') from None
+    except OSError:
+        raise GuiFailure('ack_write_unavailable') from None
     need(p.returncode == 0 and p.stdout == value and not p.stderr, 'ack_write_unconfirmed')
     adb('shell', 'run-as', PACKAGE, 'mv', relative + '/ack.new', relative + '/ack.json')
+
+
+def adb_failure_report(error):
+    operations = {'devices', 'window', 'hierarchy_dump', 'package_list', 'package_path', 'device_property',
+                  'current_user', 'launch', 'tap', 'scratch_check', 'scratch_remove', 'file_read',
+                  'install', 'uninstall', 'other'}
+    outcomes = {'timeout', 'os_error', 'nonzero', 'output_limit'}
+    result = {'error': 'adb_operation_failed'}
+    if error.operation in operations and error.outcome in outcomes:
+        result['commandDiagnostic'] = {'operation': error.operation, 'outcome': error.outcome}
+    return result
+
+
+def ensure_running(process, report):
+    code = process.poll()
+    if code is not None:
+        if type(code) is int and -255 <= code <= 255:
+            report['flutterExitCode'] = code
+        raise GuiFailure('flutter_process_exited')
 
 
 def installed_digest(expected):
@@ -127,7 +156,7 @@ def drive(app, output):
                 report['stage'] = stage
                 deadline = time.monotonic() + 180
                 while True:
-                    need(process.poll() is None, 'flutter_process_exited')
+                    ensure_running(process, report)
                     current = exchange_read(relative + '/checkpoint.json')
                     if current == stage:
                         break
@@ -187,7 +216,7 @@ def drive(app, output):
                         picker.cancel()
                     else:
                         picker.directory(folder)
-                        need(process.poll() is None, 'flutter_process_exited')
+                        ensure_running(process, report)
                         if stage == 'save_picker':
                             picker.save(folder)
                         else:
@@ -205,9 +234,13 @@ def drive(app, output):
                  'built_apk_changed')
             report['status'] = 'passed'
         report['cleanup']['flutterTool'] = True
+    except AdbFailure as error:
+        report.update(adb_failure_report(error))
     except SystemImeFailure as error:
         report['error'] = str(error)
         report['imeDiagnostic'] = public_ime_diagnostic(error.diagnostic)
+    except OSError:
+        report['error'] = 'os_operation_failed'
     except Exception as error:
         report['error'] = str(error) if isinstance(error, GuiFailure) and re.fullmatch(r'[a-z_]+', str(error)) else 'driver_failed'
     finally:

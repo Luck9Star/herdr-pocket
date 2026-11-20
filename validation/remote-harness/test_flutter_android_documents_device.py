@@ -1,6 +1,7 @@
 import json
 import subprocess
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import flutter_android_documents_device as driver
@@ -35,6 +36,30 @@ class ExchangeTest(unittest.TestCase):
                 driver.acknowledge('cache/herdr-documents-1', 'apply_dispatch')
             self.assertEqual(call.call_count, 1)
             adb.assert_not_called()
+
+    def test_exchange_timeout_has_fixed_label_and_no_replay(self):
+        with patch.object(driver.subprocess, 'run', side_effect=subprocess.TimeoutExpired('secret', 10)) as call:
+            with self.assertRaisesRegex(GuiFailure, 'exchange_read_timeout') as caught:
+                driver.exchange_read('cache/herdr-documents-1/checkpoint.json')
+            self.assertEqual(call.call_count, 1)
+            self.assertNotIn('secret', str(caught.exception))
+
+    def test_adb_error_uses_only_fixed_diagnostic_vocabulary(self):
+        error = driver.AdbFailure('secret', operation='window', outcome='timeout')
+        self.assertEqual(driver.adb_failure_report(error), {'error': 'adb_operation_failed',
+            'commandDiagnostic': {'operation': 'window', 'outcome': 'timeout'}})
+        error = driver.AdbFailure('secret', operation='private-value', outcome='private-value')
+        self.assertEqual(driver.adb_failure_report(error), {'error': 'adb_operation_failed'})
+
+    def test_stopped_flutter_process_reports_only_bounded_numeric_exit(self):
+        report = {}
+        with self.assertRaisesRegex(GuiFailure, 'flutter_process_exited'):
+            driver.ensure_running(SimpleNamespace(poll=lambda: -4), report)
+        self.assertEqual(report, {'flutterExitCode': -4})
+        report = {}
+        with self.assertRaises(GuiFailure):
+            driver.ensure_running(SimpleNamespace(poll=lambda: 'sensitive'), report)
+        self.assertEqual(report, {})
 
     def test_ack_contains_only_public_stage(self):
         data = b'{"stage":"apply_dispatch"}'

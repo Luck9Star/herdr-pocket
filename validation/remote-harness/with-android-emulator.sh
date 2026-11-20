@@ -17,6 +17,28 @@ case "$evidence_real" in
   *) echo 'AVD_EVIDENCE_DIR must be inside RUNNER_TEMP' >&2; exit 1 ;;
 esac
 export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+# Only an explicitly supplied launcher inside this job's private temp directory
+# may override the normal Android SDK launcher. Never search the user's PATH.
+select_emulator_launcher() {
+  if [[ -n ${AVD_EMULATOR_LAUNCHER:-} ]]; then
+    python3 - "$RUNNER_TEMP" "$AVD_EMULATOR_LAUNCHER" <<'PYTHON'
+import os
+from pathlib import Path
+import sys
+root = Path(sys.argv[1]).resolve()
+path = Path(sys.argv[2])
+resolved = path.resolve()
+if (not path.is_absolute() or path.is_symlink() or resolved == root or
+        not resolved.is_relative_to(root) or resolved.name != 'emulator' or
+        not resolved.is_file() or not os.access(resolved, os.X_OK)):
+    raise SystemExit('invalid private emulator launcher')
+print(resolved)
+PYTHON
+  else
+    printf '%s\n' "$ANDROID_HOME/emulator/emulator"
+  fi
+}
+emulator_launcher=$(select_emulator_launcher)
 export ANDROID_SERIAL=emulator-5554
 export ANDROID_AVD_HOME
 ANDROID_AVD_HOME=$(mktemp -d "$RUNNER_TEMP/herdr-avd-XXXXXX")
@@ -40,12 +62,26 @@ evidence_event 'preflight: no existing device'
 if [[ ! -w /dev/kvm ]]; then
   sudo setfacl -m "u:$(id -un):rw" /dev/kvm
 fi
-if [[ ! -x "$ANDROID_HOME/emulator/emulator" || ! -x "$ANDROID_HOME/platform-tools/adb" ||
-      ! -f "$ANDROID_HOME/system-images/android-35/google_apis/x86_64/source.properties" ]]; then
+if [[ -n ${AVD_EMULATOR_LAUNCHER:-} ]]; then
+  if [[ ! -x "$ANDROID_HOME/platform-tools/adb" ||
+        ! -f "$ANDROID_HOME/system-images/android-35/google_apis/x86_64/source.properties" ]]; then
+    sdkmanager --install 'platform-tools' "$image"
+  fi
+elif [[ ! -x "$emulator_launcher" || ! -x "$ANDROID_HOME/platform-tools/adb" ||
+        ! -f "$ANDROID_HOME/system-images/android-35/google_apis/x86_64/source.properties" ]]; then
   sdkmanager --install 'emulator' 'platform-tools' "$image"
 fi
 # Save actual tool/image revisions as the SDK registry can update this package.
 cp "$ANDROID_HOME/system-images/android-35/google_apis/x86_64/source.properties" "$evidence_real/image.properties"
+if [[ -n ${AVD_EXPECTED_IMAGE_REVISION:-} ]]; then
+  [[ $AVD_EXPECTED_IMAGE_REVISION =~ ^[0-9]+$ ]] || { echo 'invalid expected image revision' >&2; exit 1; }
+  for expected in "Pkg.Revision=$AVD_EXPECTED_IMAGE_REVISION" 'AndroidVersion.ApiLevel=35' \
+      'SystemImage.Abi=x86_64' 'SystemImage.TagId=google_apis'; do
+    key=${expected%%=*}
+    [[ $(awk -F= -v key="$key" '$1 == key {n++} END {print n+0}' "$evidence_real/image.properties") = 1 ]] || { echo 'image property ambiguous' >&2; exit 1; }
+    [[ $(grep -cFx "$expected" "$evidence_real/image.properties") = 1 ]] || { echo 'image property mismatch' >&2; exit 1; }
+  done
+fi
 # qemu-system-x86_64 resolves libpulse.so.0 at load time (even for -version),
 # and ubuntu-24.04 runners ship without it; supply it before touching the launcher.
 if ! ldconfig -p | grep -q 'libpulse\.so\.0'; then
@@ -54,9 +90,13 @@ if ! ldconfig -p | grep -q 'libpulse\.so\.0'; then
   sudo apt-get install -y --no-install-recommends libpulse0
 fi
 # The launcher sets its private library path. Check the actual launcher.
-emulator -version > "$evidence_real/emulator-version.txt"
+"$emulator_launcher" -version > "$evidence_real/emulator-version.txt"
+if [[ -n ${AVD_EXPECTED_EMULATOR_VERSION:-} ]]; then
+  IFS= read -r actual_version < "$evidence_real/emulator-version.txt"
+  [[ $actual_version = "$AVD_EXPECTED_EMULATOR_VERSION" ]] || { echo 'emulator version mismatch' >&2; exit 1; }
+fi
 printf 'no\n' | avdmanager create avd --name "$name" --package "$image" --device pixel_5
-emulator -avd "$name" -port 5554 -accel on -no-window -no-audio -no-boot-anim -no-snapshot -gpu software > "$RUNNER_TEMP/avd.log" 2>&1 &
+"$emulator_launcher" -avd "$name" -port 5554 -accel on -no-window -no-audio -no-boot-anim -no-snapshot -gpu software > "$RUNNER_TEMP/avd.log" 2>&1 &
 avd_pid=$!
 evidence_event 'startup: launched owned emulator on emulator-5554'
 resource_snapshot() {

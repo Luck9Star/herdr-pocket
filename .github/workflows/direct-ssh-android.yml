@@ -180,9 +180,22 @@ jobs:
           cp "$GITHUB_WORKSPACE/validation/remote-harness/flutter_android_documents_device_test.dart" integration_test/flutter_android_documents_device_test.dart
           flutter analyze integration_test/flutter_android_documents_device_test.dart
           flutter build apk --debug --target-platform android-x64 --no-pub --dart-define=HERDR_ANDROID_DOCUMENTS=1 --dart-define="HERDR_ANDROID_DOCUMENTS_RUN_ID=$GITHUB_RUN_ID" -t integration_test/flutter_android_documents_device_test.dart
+      - name: Install the pinned emulator in the job's private directory
+        run: |
+          archive="$RUNNER_TEMP/documents-emulator-16740729.zip"
+          curl --fail --location --silent --show-error --max-time 600 \
+            'https://redirector.gvt1.com/edgedl/android/repository/emulator-linux_x64-16740729.zip' --output "$archive"
+          test "$(stat -c %s "$archive")" = 349658551
+          printf '%s  %s\n' cbc7c3cfb83220b8a0f9c513fdab557712e74d339ec19ddffa43f23350ae9bdd "$archive" | sha256sum --check --status
+          mkdir "$RUNNER_TEMP/documents-emulator" "$RUNNER_TEMP/documents-avd"
+          unzip -q "$archive" -d "$RUNNER_TEMP/documents-emulator"
+          printf '%s\n' cbc7c3cfb83220b8a0f9c513fdab557712e74d339ec19ddffa43f23350ae9bdd > "$RUNNER_TEMP/documents-avd/emulator-archive-sha256.txt"
       - name: Run integration-test wrapper with real system DocumentsUI
         run: |
           export PATH="$RUNNER_TEMP/documents-sdk/bin:$PATH"
+          AVD_EMULATOR_LAUNCHER="$RUNNER_TEMP/documents-emulator/emulator/emulator" \
+          AVD_EXPECTED_EMULATOR_VERSION='Android emulator version 37.2.13.0 (build_id 16740729) (CL:N/A)' \
+          AVD_EXPECTED_IMAGE_REVISION=9 \
           AVD_EVIDENCE_DIR="$RUNNER_TEMP/documents-avd" bash validation/remote-harness/with-android-emulator.sh \
             "$RUNNER_TEMP/documents-python/bin/python" validation/remote-harness/flutter_android_documents_device.py \
             --project "$RUNNER_TEMP/documents-app" --output "$RUNNER_TEMP/documents-public"

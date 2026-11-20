@@ -41,7 +41,7 @@ export async function exportIfCurrent(encrypt, isCurrent, save) {
   return true;
 }
 
-export function initConfigTransfer({ native, invoke, getHosts, refreshHosts, onApplied, getTabImpacts=()=>[], captureLeases=()=>null, createRevokeChannel=()=>({}), onRevoked=()=>{} }) {
+export function initConfigTransfer({ native, invoke, getHosts, refreshHosts, onApplied, getTabImpacts=()=>[], captureLeases=()=>null, createRevokeChannel=()=>({}), onRevoked=()=>{}, onReviewPending=()=>{} }) {
   const panel = document.getElementById('config-transfer');
   const opener = document.getElementById('config-transfer-open');
   let ticket = null, plan = null, reviewedLeases = null, fileBytes = null, busy = false, pickerPending = false, epoch = 0, platform = null, catalog = null;
@@ -165,20 +165,38 @@ export function initConfigTransfer({ native, invoke, getHosts, refreshHosts, onA
         if (busy) return;
         let choices; try { choices = buildImportChoices(plan.entries, selections); } catch { message('请逐条选择操作；同一冲突不能被多条同时替换。'); return; }
         const usedTicket = ticket, leaseSnapshot=reviewedLeases, selectedNetworkKeys=[...selectedNetworks], shouldApplyPreferences=applyPreferences, current=epoch; ticket = null; plan = null; activeHostIds.clear(); selections.clear(); selectedNetworks.clear(); applyPreferences=false; catalog=null; busy = true; exp.disabled=true; apply.disabled = true; close.disabled = true;
-        let result=null, confirmed=false, refreshFailed=false;
+        let result=null, confirmed=false, refreshFailed=false, pendingCreationBlocked=false, pendingHostId=null;
         const affectedIds=choices.flatMap(c=>c.replaceIds || []);
         const onRevoke=createRevokeChannel();
         onRevoke.onmessage=event=>onRevoked(event,leaseSnapshot,affectedIds);
         try { result = await invoke('config_apply', { ticket: usedTicket, choices, selectedNetworks:selectedNetworkKeys, applyPreferences:shouldApplyPreferences, onRevoke }); await onApplied(result); confirmed=true; }
-        catch { /* the single-use write may have completed; never replay */ }
+        catch (error) {
+          pendingCreationBlocked=(error?.message || String(error))==='host_key_creation_pending';
+          if(pendingCreationBlocked) {
+            const pending=await Promise.allSettled(affectedIds.map(hostId=>invoke('pair_pending_status',{hostId})));
+            const index=pending.findIndex(status=>status.status==='fulfilled' && status.value===true);
+            if(index!==-1)pendingHostId=affectedIds[index];
+          }
+          // The single-use write is never replayed.
+        }
         try { await refreshHosts(); } catch { refreshFailed=true; }
         let updated=null;
         try { updated=await invoke('network_list'); if (!updated || !Array.isArray(updated.profiles)) throw Error('invalid_catalog'); } catch { updated=null; }
         busy=false; clearSecrets();
         if (!previewIsCurrent(current,epoch) || panel.hidden) return;
         catalog=updated; render();
-        const outcome=confirmed ? `导入完成：主机新增 ${result.added.length}，主机旧身份停用保留 ${result.retired.length}，移除旧主机资料 ${result.removedIds.length}。网络配置请核对当前状态；字号偏好${shouldApplyPreferences ? '已按选择应用' : '未选择覆盖'}。新目标需重新配对。` : '导入结果未确认；请先核对主机、网络配置和字号的当前状态，再重新预览并审查，不会自动重试。';
-        panel.querySelector('[role=status]').textContent=outcome + (!catalog ? ' 网络目录读取未确认，暂不能导出。' : '') + (refreshFailed ? ' 主机目录读取未确认。' : '');
+        const pendingHost=getHosts().find(host=>host.id===pendingHostId);
+        const outcome=confirmed ? `导入完成：主机新增 ${result.added.length}，主机旧身份停用保留 ${result.retired.length}，移除旧主机资料 ${result.removedIds.length}。网络配置请核对当前状态；字号偏好${shouldApplyPreferences ? '已按选择应用' : '未选择覆盖'}。新目标需重新配对。`
+          : pendingCreationBlocked ? '原主机有待确认的设备身份，导入未替换资料。请打开原主机核对并恢复或删除该身份，再重新预览。'+(pendingHost && !pendingHost.enabled?' 请先启用原主机。':'')
+          : '导入结果未确认；请先核对主机、网络配置和字号的当前状态，再重新预览并审查，不会自动重试。';
+        const outcomeStatus=panel.querySelector('[role=status]');
+        outcomeStatus.textContent=outcome + (!catalog ? ' 网络目录读取未确认，暂不能导出。' : '') + (refreshFailed ? ' 主机目录读取未确认。' : '');
+        if(pendingHost?.enabled) {
+          const review=el('button','打开原主机核对身份');
+          review.type='button';
+          review.onclick=()=>onReviewPending(pendingHost.id);
+          outcomeStatus.append(review);
+        }
       }; previewBox.append(apply); panel.append(previewBox);
     }
     panel.append(status);

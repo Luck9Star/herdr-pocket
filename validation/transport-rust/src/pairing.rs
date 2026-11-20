@@ -11,6 +11,9 @@ pub trait KeyStore: Send + Sync {
     fn begin_create(&self, _host_id: &str, _target: &str) -> Result<()> { Ok(()) }
     /// An unfinished write is queried only by its original host and handle.
     fn pending_create(&self, _host_id: &str, _target: &str) -> Result<Option<String>> { Ok(None) }
+    /// Read the handle reserved for this host while holding the store transaction.
+    /// Protect the original host record even if its current target cannot recover the write.
+    fn pending_create_handle(&self, _host_id: &str) -> Result<Option<String>> { Ok(None) }
     /// Clear a durable intent only after the matching public reference is stored.
     fn finish_create(&self, _handle: &str) -> Result<()> { Ok(()) }
     /// After explicit confirmed deletion, clear only a matching creation intent.

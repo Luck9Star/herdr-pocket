@@ -1,9 +1,13 @@
 //! Explicit local deletion. Preserve the original handle and narrow intent through errors and restart.
 use crate::{
     PairingState, RemoteFlow, RemoveHostReply,
-    hosts::{Hosts, KeyCleanupMode},
+    hosts::{Hosts, KeyCleanupMode, Record},
 };
-use std::sync::{Mutex, atomic::Ordering};
+use herdr_readonly_transport::AttemptGate;
+use std::{
+    sync::{Mutex, atomic::Ordering},
+    time::{Duration, Instant},
+};
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,38 +18,34 @@ pub struct CleanupReply {
     pub mode: KeyCleanupMode,
 }
 
-pub fn remove_host(
+pub async fn remove_host(
     state: &PairingState,
     hosts: &Hosts,
     flow: &Mutex<RemoteFlow>,
+    gate: &Mutex<AttemptGate>,
     id: &str,
 ) -> Result<RemoveHostReply, String> {
-    cleanup_record(state, hosts, flow, id, Some(KeyCleanupMode::Host))?;
+    cleanup_record(state, hosts, flow, gate, id, Some(KeyCleanupMode::Host)).await?;
     Ok(RemoveHostReply { key_deleted: true })
 }
 
-pub fn retry_cleanup(
+pub async fn retry_cleanup(
     state: &PairingState,
     hosts: &Hosts,
     flow: &Mutex<RemoteFlow>,
+    gate: &Mutex<AttemptGate>,
     id: &str,
 ) -> Result<CleanupReply, String> {
     // Retry has no caller-controlled mode: only the durable original intent applies.
-    cleanup_record(state, hosts, flow, id, None)
+    cleanup_record(state, hosts, flow, gate, id, None).await
 }
 
-fn cleanup_record(
+fn review_cleanup(
     state: &PairingState,
     hosts: &Hosts,
-    flow: &Mutex<RemoteFlow>,
     id: &str,
     requested: Option<KeyCleanupMode>,
-) -> Result<CleanupReply, String> {
-    let _lease = state.enter()?;
-    let mut flow = flow.lock().map_err(|_| "state_unavailable")?;
-    if flow.owner.is_some() {
-        return Err("connection_active".into());
-    }
+) -> Result<(Record, KeyCleanupMode), String> {
     let record = hosts.get(id)?;
     let mode = match (record.key_cleanup_mode, requested) {
         (Some(original), Some(requested)) if original != requested => {
@@ -55,6 +55,58 @@ fn cleanup_record(
         (None, Some(requested)) => requested,
         (None, None) => return Err("host_key_cleanup_missing".into()),
     };
+    if let Some(handle) = state.store.pending_create_handle(id)? {
+        if !record.pairing.as_ref().is_some_and(|reference| reference.handle == handle) {
+            return Err("host_key_creation_pending".into());
+        }
+    }
+    Ok((record, mode))
+}
+
+async fn cleanup_record(
+    state: &PairingState,
+    hosts: &Hosts,
+    flow: &Mutex<RemoteFlow>,
+    gate: &Mutex<AttemptGate>,
+    id: &str,
+    requested: Option<KeyCleanupMode>,
+) -> Result<CleanupReply, String> {
+    let _lease = state.enter()?;
+    let legacy = {
+        let mut flow = flow.lock().map_err(|_| "state_unavailable")?;
+        review_cleanup(state, hosts, id, requested)?;
+        match (flow.owner, flow.host_id.as_deref()) {
+            (Some(owner), Some(host)) if host == id => {
+                let attempt = flow.attempt.ok_or("connection_active")?;
+                let mut gate = gate.lock().map_err(|_| "state_unavailable")?;
+                flow.cancel(owner, &mut gate);
+                Some((owner, attempt))
+            }
+            (Some(_), None) => return Err("connection_active".into()),
+            _ => None,
+        }
+    };
+    if let Some(legacy) = legacy {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let retired = {
+                let flow = flow.lock().map_err(|_| "state_unavailable")?;
+                flow.owner.zip(flow.attempt) != Some(legacy)
+            };
+            if retired {
+                break;
+            }
+            if Instant::now() >= deadline {
+                return Err("connection_active".into());
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+    let mut flow = flow.lock().map_err(|_| "state_unavailable")?;
+    if flow.owner.is_some() && flow.host_id.as_deref().is_none_or(|host| host == id) {
+        return Err("connection_active".into());
+    }
+    let (record, mode) = review_cleanup(state, hosts, id, requested)?;
     flow.tabs.cancel_hosts(&[id.to_owned()]);
     let mut current = state.current.lock().map_err(|_| "state_unavailable")?;
     if let Some(reference) = &record.pairing {
@@ -151,6 +203,26 @@ mod tests {
             atomic::{AtomicBool, AtomicUsize},
         },
     };
+    fn remove_host(
+        state: &PairingState,
+        hosts: &Hosts,
+        flow: &Mutex<RemoteFlow>,
+        id: &str,
+    ) -> std::result::Result<RemoveHostReply, String> {
+        tauri::async_runtime::block_on(super::remove_host(
+            state, hosts, flow, &Mutex::default(), id,
+        ))
+    }
+    fn retry_cleanup(
+        state: &PairingState,
+        hosts: &Hosts,
+        flow: &Mutex<RemoteFlow>,
+        id: &str,
+    ) -> std::result::Result<CleanupReply, String> {
+        tauri::async_runtime::block_on(super::retry_cleanup(
+            state, hosts, flow, &Mutex::default(), id,
+        ))
+    }
     struct FailingStore {
         inner: VolatileKeyStore,
         fail_before: AtomicBool,

@@ -340,15 +340,14 @@ fn host_update(id:String,name:Option<String>,enabled:Option<bool>,hosts:State<'_
 #[serde(rename_all="camelCase")]
 struct RemoveHostReply {key_deleted:bool}
 #[tauri::command]
-async fn host_remove(id:String,hosts:State<'_,Hosts>,pairing:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,ops:State<'_,network_identity::Operations>)->Result<RemoveHostReply,String>{
+async fn host_remove(id:String,hosts:State<'_,Hosts>,pairing:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,gate:State<'_,Mutex<AttemptGate>>,ops:State<'_,network_identity::Operations>)->Result<RemoveHostReply,String>{
     let _network_lease=ops.enter()?;
-    key_cleanup::remove_host(&pairing,&hosts,&flow,&id)
-
+    key_cleanup::remove_host(&pairing,&hosts,&flow,&gate,&id).await
 }
 #[tauri::command]
-async fn host_cleanup_retry(id:String,hosts:State<'_,Hosts>,pairing:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,ops:State<'_,network_identity::Operations>)->Result<key_cleanup::CleanupReply,String>{
+async fn host_cleanup_retry(id:String,hosts:State<'_,Hosts>,pairing:State<'_,PairingState>,flow:State<'_,Arc<Mutex<RemoteFlow>>>,gate:State<'_,Mutex<AttemptGate>>,ops:State<'_,network_identity::Operations>)->Result<key_cleanup::CleanupReply,String>{
     let _network_lease=ops.enter()?;
-    key_cleanup::retry_cleanup(&pairing,&hosts,&flow,&id)
+    key_cleanup::retry_cleanup(&pairing,&hosts,&flow,&gate,&id).await
 }
 struct PairingState { store: Arc<dyn KeyStore>, current: Arc<Mutex<Option<Pairing>>>, busy: AtomicBool, restore_required: AtomicBool }
 struct PairingLease<'a> { busy: &'a AtomicBool, _transaction: Box<dyn Send> }
@@ -393,13 +392,16 @@ fn pair_pending_status(host_id:String,state:State<'_,PairingState>,hosts:State<'
 }
 #[tauri::command]
 fn pair_discard_pending(host_id:String,state:State<'_,PairingState>,hosts:State<'_,Hosts>,flow:State<'_,Arc<Mutex<RemoteFlow>>>)->Result<(),String>{
+    discard_pending_identity(&host_id,&state,&hosts,&flow)
+}
+fn discard_pending_identity(host_id:&str,state:&PairingState,hosts:&Hosts,flow:&Mutex<RemoteFlow>)->Result<(),String>{
     let _lease=state.enter()?;
     if flow.lock().map_err(|_|"state_unavailable")?.owner.is_some(){return Err("connection_active".into());}
     if state.current.lock().map_err(|_|"state_unavailable")?.is_some(){return Err("pairing_already_exists".into());}
-    let host=hosts.get(&host_id)?;
+    let host=hosts.get(host_id)?;
     if host.pairing.is_some(){return Err("host_pairing_exists".into());}
     let target=serde_json::to_string(&host.target).map_err(|_|"invalid_config")?;
-    let handle=state.store.pending_create(&host_id,&target).map_err(str::to_string)?.ok_or("key_creation_missing")?;
+    let handle=state.store.pending_create(host_id,&target).map_err(str::to_string)?.ok_or("key_creation_missing")?;
     state.store.delete(&handle).map_err(str::to_string)?;
     state.store.clear_deleted_create(&handle).map_err(str::to_string)?;
     Ok(())

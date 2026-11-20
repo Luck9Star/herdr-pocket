@@ -96,6 +96,9 @@ impl KeyStore for LinuxPairingStore {
         match self.read()? { Some(j) if j.host_id == host_id && j.target_sha256 == target_digest(target) => Ok(Some(j.handle)),
             Some(_) => Err("key_creation_pending"), None => Ok(None) }
     }
+    fn pending_create_handle(&self, host_id: &str) -> Result<Option<String>> {
+        Ok(self.read()?.filter(|journal| journal.host_id == host_id).map(|journal| journal.handle))
+    }
     fn create(&self) -> Result<(String, String)> {
         let (host, target_sha256) = self.host.lock().map_err(|_| "key_unavailable")?.take().ok_or("key_creation_pending")?;
         let handle = reserve()?;
@@ -165,6 +168,8 @@ mod tests {
         assert_eq!(store.pending_create(&host,"target-a").unwrap(),Some(handle.clone()));
         assert_eq!(store.pending_create(&other,"target-a"),Err("key_creation_pending"));
         assert_eq!(store.pending_create(&host,"target-b"),Err("key_creation_pending"));
+        assert_eq!(store.pending_create_handle(&host).unwrap(),Some(handle.clone()));
+        assert_eq!(store.pending_create_handle(&other).unwrap(),None);
         assert_eq!(store.clear(&other),Err("key_creation_pending"));
         store.clear_deleted_create(&other).unwrap();
         assert!(store.read().unwrap().is_some());
@@ -212,6 +217,7 @@ mod tests {
         fs::create_dir(&dir).unwrap();let store=LinuxPairingStore::new(dir.clone());
         let target=dir.join("other");fs::write(&target,b"{}").unwrap();symlink(&target,store.path()).unwrap();
         assert!(matches!(store.read(),Err("key_unavailable")));
+        assert_eq!(store.pending_create_handle(&"1".repeat(32)),Err("key_unavailable"));
         fs::remove_file(store.path()).unwrap();fs::remove_file(target).unwrap();fs::remove_dir(dir).unwrap();
     }
 }

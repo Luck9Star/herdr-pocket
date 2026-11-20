@@ -1687,6 +1687,37 @@ for(const error of ['connection_active','host_storage_unavailable'])test(`delete
  }finally{h.restore();}
 });
 
+test('blocked removal offers to review the original pending identity on its saved host', async () => {
+  const id = 'a'.repeat(32);
+  const h = await setup({
+    hostRemove: () => Promise.reject('host_key_creation_pending'),
+    pendingStatus: ({hostId}) => hostId === id,
+  }), n = h.nodes;
+  try {
+    await createCameraPair(h);
+    h.updateHost({deviceFingerprint: null, pairingStatus: null});
+    n['host-return-home'].click();
+    await flush();
+    const actions = n['host-list'].children[0].children.find(x => x.className === 'saved-host-actions');
+    const remove = expandedActions(actions).find(x => x.textContent === '移除');
+    remove.click();
+    remove.click();
+    await flush();
+    const notice = n['host-home-status'];
+    assert.match(notice.textContent, /原主机/);
+    const review = notice.all().find(x => x.textContent === '打开原主机核对身份');
+    assert.ok(review);
+    assert.equal(h.calls.filter(x => x.name === 'host_select').length, 0);
+    review.click();
+    await flush();
+    assert.deepEqual(h.calls.filter(x => x.name === 'host_select').map(x => x.args.id), [id]);
+    assert.equal(n['pair-mode'].checked, true);
+    assert.equal(n['pair-pending-recover'].hidden, false);
+    assert.equal(n['pair-pending-discard'].hidden, false);
+    assert.equal(h.calls.some(x => x.name === 'pair_discard_pending'), false);
+  } finally { h.restore(); }
+});
+
 test('delete failure with unavailable directory readback still reports an unconfirmed result neutrally',async()=>{
  let failed=false;const h=await setup({hostRemove:()=>{failed=true;throw Error('host_storage_unavailable');}}),n=h.nodes;
  try{await createCameraPair(h);n['host-return-home'].click();await flush();await flush();h.setRead((name,value)=>{if(failed && name==='host_list')throw Error('readback_unavailable');return value;});

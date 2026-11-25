@@ -20,8 +20,12 @@ from paired_gui import GuiFailure, wait_for
 
 AUTH_PACKAGE = 'dev.herdrpocket.dualtestauth'
 SHARED_SCENARIO = 'shared-easytier'
+SHARED_INPUT_SCENARIO = 'shared-easytier-input'
+SHARED_SCENARIOS = (SHARED_SCENARIO, SHARED_INPUT_SCENARIO)
 SHARED_HOSTS = {'et': 'a', 'ts': 'b'}  # Controller role aliases; both use EasyTier.
 SHARED_PROFILE_TITLE = 'QA ET · EasyTier'
+SHARED_WRITES = {'a_first': ('et', b'E', 'ONE'), 'b_first': ('ts', b'T', 'ONE'),
+                 'b_after_a_close': ('ts', b't', 'TWO')}
 
 
 class ConfirmingWebView(AndroidWebView):
@@ -29,6 +33,7 @@ class ConfirmingWebView(AndroidWebView):
     def __init__(self, port):
         super().__init__(port)
         self.expectedConfirmation = None
+        self.singleConfirmation = False
         self.confirmationObserved = False
         self.confirmDiagnostic = {}
         self.confirmationHistory = []
@@ -63,7 +68,9 @@ class ConfirmingWebView(AndroidWebView):
                             not self.confirmDiagnostic['expectedTextMatched']):
                         raise GuiFailure('dual_unexpected_confirmation')
                     native = {}
-                    clicked=native_dialog_click(self.expectedConfirmation, {'OK','确定'}, timeout=20, diagnostic=native)
+                    options = {'once': True} if getattr(self,'singleConfirmation',False) else {}
+                    clicked=native_dialog_click(self.expectedConfirmation, {'OK','确定'}, timeout=20, diagnostic=native,
+                                                **options)
                     self.confirmDiagnostic.update(nativeXmlParsed=native.get('xmlParsed') is True,
                         nativeExpectedVisible=native.get('expectedSeen') is True,
                         nativeButtonVisible=native.get('uniqueButton') is True,
@@ -181,7 +188,7 @@ def wait_for_ordinary_tree(report, timeout=45):
     return wait_for(inspect,'dual_native_ui_tree_not_ready',timeout=timeout)
 
 
-def native_dialog_click(expected, button, *, timeout=20, cancelled=None, diagnostic=None):
+def native_dialog_click(expected, button, *, timeout=20, cancelled=None, diagnostic=None, once=False):
     """Read the actual system dialog and click its uniquely labeled visible button."""
     deadline = time.monotonic() + timeout
     if diagnostic is None: diagnostic = {}
@@ -206,7 +213,12 @@ def native_dialog_click(expected, button, *, timeout=20, cancelled=None, diagnos
                 continue
             if cancelled and cancelled.is_set():
                 return False
-            adb('shell', 'input', 'tap', str((x1+x2)//2), str((y1+y2)//2))
+            try:
+                adb('shell', 'input', 'tap', str((x1+x2)//2), str((y1+y2)//2))
+            except GuiFailure:
+                if once:
+                    return False  # The dispatch may have run. Never tap again.
+                raise
             diagnostic['clicked']=True
             return True
         except (GuiFailure, ET.ParseError, ValueError):
@@ -214,11 +226,12 @@ def native_dialog_click(expected, button, *, timeout=20, cancelled=None, diagnos
     return False
 
 
-def confirm_click(browser, scope, label, expected):
+def confirm_click(browser, scope, label, expected, *, once=False):
     """Activate a real button and confirm the exact native WebView dialog."""
     if browser.expectedConfirmation is not None:
         raise GuiFailure('dual_confirmation_already_pending')
     browser.expectedConfirmation=expected
+    browser.singleConfirmation=once
     browser.confirmationObserved=False
     try:
         browser.click_named(scope,label,'dual_button_unavailable')
@@ -228,6 +241,7 @@ def confirm_click(browser, scope, label, expected):
             raise GuiFailure('dual_confirmation_not_observed')
     finally:
         browser.expectedConfirmation=None
+        browser.singleConfirmation=False
 
 
 def profile_scope(browser, name):
@@ -1357,11 +1371,13 @@ SHARED_STREAM_COUNTS = {'a': {'acceptedOverlayStreams': 1, 'loopbackTcpConnectio
                         'b': {'acceptedOverlayStreams': 1, 'loopbackTcpConnections': 1}}
 
 
-def shared_host_sample(host, report, checkpoint, *, initial=False):
+def shared_host_sample(host, report, checkpoint, *, initial=False, inputs=None, pending=None):
     sample={}
     report.setdefault('peerCheckpoints',{})[checkpoint]=sample
     for role, side in SHARED_HOSTS.items():
-        value=host_request(host,{'op':'audit','role':role,'expectedBase64':''},'host_audit')
+        expected=b'' if inputs is None else inputs[side]
+        value=host_request(host,{'op':'audit','role':role,
+            'expectedBase64':base64.b64encode(expected).decode('ascii')},'host_audit')
         counters=('acceptedSessions','newSessions','capturedBytes','newInputBytes')
         flags=('exactBytes','authorizationActive','soleApprovedSession','inputAttributionAmbiguous')
         sessions=value.get('sessions')
@@ -1375,32 +1391,53 @@ def shared_host_sample(host, report, checkpoint, *, initial=False):
             raise GuiFailure('dual_shared_peer_evidence_invalid')
         sample[side]={key:value[key] for key in (*counters,*flags)}
         sample[side]['sessions']=[{key:s[key] for key in ('ordinal','approvedDevice','active','peerClose')} for s in sessions]
-    for peer in sample.values():
-        if peer['capturedBytes']!=0 or peer['newInputBytes']!=0 or not peer['exactBytes']:
+        if inputs is not None:
+            attributed=len(sessions)==1 and type(sessions[0].get('capturedBytes')) is int \
+                and sessions[0]['capturedBytes']==value['capturedBytes']
+            sample[side]['inputAttributedToOriginalSession']=attributed
+    for side, peer in sample.items():
+        if inputs is None and (peer['capturedBytes']!=0 or peer['newInputBytes']!=0 or not peer['exactBytes']):
             raise GuiFailure('dual_shared_stock_writes_detected')
         if (peer['acceptedSessions']!=1 or peer['newSessions']!=int(initial)
                 or not peer['authorizationActive'] or not peer['soleApprovedSession']
                 or peer['inputAttributionAmbiguous'] or len(peer['sessions'])!=1
                 or peer['sessions'][0]['ordinal']!=1 or not peer['sessions'][0]['approvedDevice']):
             raise GuiFailure('dual_shared_original_ssh_changed')
+        if inputs is not None:
+            length=len(inputs[side])
+            prior=side==pending and (peer['capturedBytes'],peer['newInputBytes'],peer['exactBytes'])==(length-1,0,False)
+            exact=(peer['capturedBytes'],peer['newInputBytes'],peer['exactBytes'])==(length,int(side==pending),True)
+            if not peer['inputAttributedToOriginalSession'] or not (prior or exact):
+                raise GuiFailure('dual_shared_input_bytes_mismatch')
     return {side:peer['sessions'][0] for side,peer in sample.items()}
 
 
-def shared_peer_state(host, report, checkpoint, *, live=(), closing=None, initial=False, require_closed=(), timeout=10):
+def shared_peer_state(host, report, checkpoint, *, live=(), closing=None, initial=False, require_closed=(),
+                      timeout=10, inputs=None, pending=None):
     deadline=time.monotonic()+timeout
     while True:
-        peers=shared_host_sample(host,report,checkpoint,initial=initial)
+        args={'inputs':inputs,'pending':pending} if inputs is not None else {}
+        peers=shared_host_sample(host,report,checkpoint,initial=initial,**args)
         if any(not peers[side]['active'] or peers[side]['peerClose']!='unconfirmed' for side in live):
             raise GuiFailure('dual_shared_live_peer_lost')
         if any(peers[side]['active'] for side in require_closed):
             raise GuiFailure('dual_shared_peer_still_active')
-        if closing is None:
+        if inputs is not None and any(peers[side]['peerClose'] not in SHARED_CLEAN_CLOSE for side in require_closed):
+            raise GuiFailure('dual_shared_peer_close_unconfirmed')
+        if pending is not None:
+            peer=report['peerCheckpoints'][checkpoint][pending]
+            if peer['exactBytes']:
+                return
+        elif closing is None:
             return
-        peer=peers[closing]
-        if not peer['active'] and peer['peerClose']!='unconfirmed':
-            return peer['peerClose']
+        else:
+            peer=peers[closing]
+            if not peer['active'] and peer['peerClose']!='unconfirmed':
+                return peer['peerClose']
         remaining=deadline-time.monotonic()
         if remaining<=0:
+            if pending is not None:
+                raise GuiFailure('dual_shared_input_unconfirmed')
             return 'unconfirmed'
         time.sleep(min(0.25,remaining))
 
@@ -1482,10 +1519,159 @@ def shared_status_sequence(browser):
     return seq
 
 
-def run_shared_easytier(browser, session, report, ensure_app):
+def shared_input_foreground():
+    from tauri_auth_failure_diagnostic import window_component
+
+    activity=foreground_component()
+    windows=adb('shell','dumpsys','window','displays',timeout=5)
+    displays=re.findall(r'^\s*Display: mDisplayId=(\d+)\b',windows,re.M)
+    focus=re.findall(r'^\s*mCurrentFocus\s*=\s*([^\n]*)$',windows,re.M)
+    return bool(activity and activity.startswith(PACKAGE+'/') and displays==['0'] and
+                len(focus)==1 and re.match(r'Window\{[0-9a-fA-F]+\s+u0\s+',focus[0]) and
+                window_component(windows)==activity)
+
+
+def resume_shared_input_tab(browser, role, target, tab_id, tick):
+    select_tab(browser,role)
+    if shared_tab_id(browser,role,target)!=tab_id:
+        raise GuiFailure('dual_shared_input_target_mismatch')
+    scope='#view-content .tab-connection-actions'
+    def state():
+        value=browser.evaluate("document.querySelector('#view-content .tab-connection-actions')?.dataset.state")
+        if value=='active' or value=='paused' and named_action_available(browser,scope,'恢复观察'):
+            return value
+        return None
+    if wait_for(state,'dual_shared_input_tab_not_ready')=='paused':
+        browser.click_named(scope,'恢复观察')
+    shared_tick(browser,role,target,tab_id,after=tick)
+
+
+def shared_input_frame(browser, role, target, tab_id):
+    title='QA host '+role.upper()+' · '+target['pane']+' · '+target['terminal']
+    prefix='Synthetic '+role.upper()+' ACK '
+    # Read only current DOM rows from the original active terminal. Return fixed
+    # evidence, without exposing terminal text or target identifiers.
+    frame=browser.evaluate(r"""(()=>{const view=document.querySelector('#view-content');
+      const result={state:'other_tab',ack:'none',tick:null};
+      if(!view || view.dataset.tabId!==%s ||
+         view.querySelector(':scope > p:first-child')?.textContent!==%s)return result;
+      result.state='inactive';
+      if(document.hidden || !view.getClientRects().length ||
+         view.querySelector('.tab-connection-actions')?.dataset.state!=='active' ||
+         !view.querySelector('.tab-frame-status')?.textContent.startsWith('当前观察画面。'))return result;
+      const rows=[...view.querySelectorAll('.terminal-host .xterm-rows > div')]
+        .filter(row=>row.getClientRects().length).map(row=>row.textContent.replace(/\u00a0/g,' ').trim());
+      result.state=rows.length ? 'current' : 'no_rows';
+      const prefix=%s, acks=rows.filter(row=>row.includes(prefix.trimEnd()));
+      if(acks.length>1)result.ack='multiple';
+      else if(acks.length===1)result.ack=acks[0]===prefix+'ONE' ? 'one' :
+        acks[0]===prefix+'TWO' ? 'two' : 'partial';
+      const ticks=rows.map(row=>/^Synthetic observe tick ([0-9]{6})$/.exec(row)).filter(Boolean);
+      if(ticks.length===1)result.tick=Number(ticks[0][1]);
+      return result;})()""" % (json.dumps(tab_id),json.dumps(title),json.dumps(prefix)))
+    if (not isinstance(frame,dict) or set(frame)!={'state','ack','tick'} or
+            frame['state'] not in ('other_tab','inactive','no_rows','current') or
+            frame['ack'] not in ('none','partial','one','two','multiple') or
+            (frame['tick'] is not None and (type(frame['tick']) is not int or not 0<frame['tick']<1000000))):
+        raise GuiFailure('dual_shared_input_frame_evidence_invalid')
+    return frame
+
+
+def shared_input_once(browser, control, report, phase, target, tab_id, inputs, receipt_ids, ensure_app):
+    role, marker, ack=SHARED_WRITES[phase]
+    side=SHARED_HOSTS[role]
+    after_close=phase=='b_after_a_close'
+    live=('b',) if after_close else ('a','b')
+    closed=('a',) if after_close else ()
+    attempts=report.setdefault('sharedInputActions',{})
+    if phase in attempts:
+        raise GuiFailure('dual_shared_input_already_attempted')
+    attempt=attempts[phase]={'nativeConfirmationAttempted':False}
+    ensure_app()
+    shared_peer_state(control,report,phase+'_before',live=live,require_closed=closed,inputs=inputs)
+    field='#view-content .tab-draft-field'
+    receipt='#view-content details[data-role=input-receipt]'
+    expected_ack=ack.lower()
+    on_target=lambda:shared_tab_id(browser,role,target)==tab_id
+    if not on_target():
+        raise GuiFailure('dual_shared_input_target_mismatch')
+    before=shared_input_frame(browser,role,target,tab_id)
+    attempt['frameBefore']=before
+    if before['ack'] in (expected_ack,'multiple'):
+        raise GuiFailure('dual_shared_input_target_mismatch')
+    if before['state']!='current' or before['tick'] is None:
+        raise GuiFailure('dual_shared_input_baseline_missing')
+    wait_named(browser,'#view-content','启用草稿输入')
+    browser.click_named('#view-content','启用草稿输入','dual_draft_mode_missing')
+    wait_for(lambda:on_target() and browser.evaluate(
+        "document.querySelector('#view-content .tab-mobile-controls')?.dataset.mode==='draft'") is True,
+        'dual_draft_not_enabled')
+    if browser.read(field,'value')!='' or browser.evaluate(
+            "document.querySelector(%s)?.hidden === true" % json.dumps(receipt)) is not True:
+        raise GuiFailure('dual_shared_input_controls_not_fresh')
+    if not shared_input_foreground():
+        raise GuiFailure('dual_shared_input_foreground_unconfirmed')
+    browser.click(field)
+    browser.fill(field,marker.decode('ascii'))
+    ensure_app()
+    if (not shared_input_foreground() or not on_target() or browser.read(field,'value')!=marker.decode('ascii')
+            or browser.evaluate('document.activeElement === document.querySelector(%s)' % json.dumps(field)) is not True):
+        raise GuiFailure('dual_shared_input_foreground_unconfirmed')
+    attempt['foregroundTargetVerified']=True
+    attempt['nativeConfirmationAttempted']=True
+    prompt=f"发送到 QA host {role.upper()} · {target['pane']} · {target['terminal']}？"
+    confirm_click(browser,'#view-content','发送草稿',prompt,once=True)
+    attempt['nativeConfirmationObserved']=True
+    # Check exact cumulative bytes on the original connections independently
+    # of the UI receipt and frame. A frame timeout must retain this evidence.
+    inputs[side]+=marker
+    shared_peer_state(control,report,phase+'_after',live=live,require_closed=closed,inputs=inputs,
+                      pending=side,timeout=30)
+    attempt['peerBytesAndSessionVerified']=True
+    wait_for(lambda:on_target() and shared_input_foreground(),'dual_shared_input_foreground_unconfirmed')
+    wait_for(lambda:on_target() and browser.evaluate(
+        "!!document.querySelector(%s + ':not([hidden])')?.getClientRects().length" % json.dumps(receipt)) is True,
+        'dual_shared_input_receipt_missing',timeout=60)
+    if browser.evaluate("document.querySelector(%s)?.open === false" % json.dumps(receipt)) is True:
+        browser.click(receipt+' > summary')
+    wait_for(lambda:on_target() and browser.evaluate(
+        "!!document.querySelector(%s + '[open] > p')?.getClientRects().length" % json.dumps(receipt)) is True,
+        'dual_shared_input_receipt_missing')
+    prefix='请求 ID：'
+    suffix=f" · pane：{target['pane']} · terminal：{target['terminal']} · 受理 1 字节。主机已受理，命令结果请查看终端。"
+    text=browser.read(receipt+' > p')
+    match=re.fullmatch(re.escape(prefix)+r'([0-9a-f]{32})'+re.escape(suffix),text or '')
+    if not on_target() or not match or match[1] in receipt_ids:
+        raise GuiFailure('dual_shared_input_receipt_invalid')
+    receipt_ids.add(match[1])
+    attempt['uiAcceptedBytes']=1
+
+    first_current_tick=None
+    def witness_frame():
+        nonlocal first_current_tick
+        frame=shared_input_frame(browser,role,target,tab_id)
+        attempt['latestFrame']=frame
+        tick=frame['tick']
+        if frame['state']!='current' or frame['ack']!=expected_ack or tick is None or tick<=before['tick']:
+            first_current_tick=None
+            return False
+        if first_current_tick is None:
+            first_current_tick=tick
+            attempt['ackFirstSeenTick']=tick
+        return tick>first_current_tick
+
+    wait_for(witness_frame,'dual_shared_input_peer_frame_missing',timeout=60)
+    attempt['peerFrameRendered']=True
+
+
+def run_shared_easytier(browser, session, report, ensure_app, *, active_input=False):
     from flutter_android_gui import public_host_fingerprint
 
     control=session.control
+    inputs={'a':b'','b':b''} if active_input else None
+    receipt_ids=set()
+    def peer(checkpoint, **kwargs):
+        return shared_peer_state(control,report,checkpoint,inputs=inputs,**kwargs)
     report['stage']='shared_profile_setup'
     wait_for(lambda:named_action_available(browser,'#network-panel','管理网络与共享设备') or
              named_action_available(browser,'#network-panel','新增网络配置'),'dual_shared_network_entry_missing')
@@ -1526,19 +1712,27 @@ def run_shared_easytier(browser, session, report, ensure_app):
     if tabs['et']==tabs['ts']:
         raise GuiFailure('dual_shared_tab_identity_not_distinct')
     report['initialRenderedTicks']=ticks
-    shared_peer_state(control,report,'both_open',live=('a','b'),initial=True)
+    peer('both_open',live=('a','b'),initial=True)
     shared_relays(session,ensure_app,report,'both_open',active=True)
+    if active_input:
+        for phase in ('a_first','b_first'):
+            role=SHARED_WRITES[phase][0]
+            report['stage']='shared_input_'+phase
+            resume_shared_input_tab(browser,role,targets[role],tabs[role],ticks[SHARED_HOSTS[role]])
+            shared_input_once(browser,control,report,phase,targets[role],tabs[role],inputs,receipt_ids,ensure_app)
 
     report['stage']='shared_close_a'
     select_tab(browser,'et')
     if shared_tab_id(browser,'et',targets['et'])!=tabs['et']:
         raise GuiFailure('dual_shared_close_target_mismatch')
-    shared_peer_state(control,report,'before_a_close',live=('a','b'))
+    peer('before_a_close',live=('a','b'))
     if close_shared_tab(browser,'et')!='removed':
-        shared_peer_state(control,report,'a_native_close_unconfirmed',live=('b',))
+        peer('a_native_close_unconfirmed',live=('b',))
         raise GuiFailure('dual_shared_a_native_close_unconfirmed')
     report['aTabRemoved']=True
-    report['aCloseBeforeBTabClose']=shared_peer_state(control,report,'after_a_close',live=('b',),closing='a')
+    report['aCloseBeforeBTabClose']=peer('after_a_close',live=('b',),closing='a')
+    if active_input and report['aCloseBeforeBTabClose'] not in SHARED_CLEAN_CLOSE:
+        raise GuiFailure('dual_shared_a_close_required_before_survivor_input')
 
     report['stage']='shared_resume_b'
     select_tab(browser,'ts')
@@ -1549,7 +1743,13 @@ def run_shared_easytier(browser, session, report, ensure_app):
     first=shared_tick(browser,'ts',targets['ts'],tabs['ts'],after=ticks['b'])
     second=shared_tick(browser,'ts',targets['ts'],tabs['ts'],after=first)
     report['bExplicitlyResumedSameTab']={'firstTick':first,'nextTick':second}
-    shared_peer_state(control,report,'b_resumed',live=('b',))
+    peer('b_resumed',live=('b',))
+    if active_input:
+        report['stage']='shared_input_b_after_a_close'
+        if find_tab(browser,'et') is not None:
+            raise GuiFailure('dual_shared_closed_tab_returned')
+        shared_input_once(browser,control,report,'b_after_a_close',targets['ts'],tabs['ts'],
+                          inputs,receipt_ids,ensure_app)
     shared_relays(session,ensure_app,report,'after_a_close',active=True)
     prior_status=shared_status_sequence(browser)
     browser.click('#nav-network')
@@ -1563,14 +1763,14 @@ def run_shared_easytier(browser, session, report, ensure_app):
     select_tab(browser,'ts')
     if shared_tab_id(browser,'ts',targets['ts'])!=tabs['ts']:
         raise GuiFailure('dual_shared_close_target_mismatch')
-    shared_peer_state(control,report,'before_b_close',live=('b',))
+    peer('before_b_close',live=('b',),require_closed=('a',) if active_input else ())
     if close_shared_tab(browser,'ts')!='removed':
-        shared_peer_state(control,report,'b_native_close_unconfirmed')
+        peer('b_native_close_unconfirmed')
         raise GuiFailure('dual_shared_b_native_close_unconfirmed')
     if find_tab(browser,'et') is not None:
         raise GuiFailure('dual_shared_closed_tab_returned')
     report['bothTabsRemoved']=True
-    report['bCloseBeforeNodeStop']=shared_peer_state(control,report,'after_b_close',closing='b')
+    report['bCloseBeforeNodeStop']=peer('after_b_close',closing='b')
     shared_relays(session,ensure_app,report,'after_b_close',active=True)
 
     report['stage']='shared_stop_node'
@@ -1597,12 +1797,15 @@ def run_shared_easytier(browser, session, report, ensure_app):
         raise GuiFailure('dual_shared_stopped_binding_changed')
     report['nativeStoppedOnOriginalBinding']=True
     shared_relays(session,ensure_app,report,'after_node_stop',active=False)
-    shared_peer_state(control,report,'after_node_stop',require_closed=('a','b'))
+    peer('after_node_stop',require_closed=('a','b'))
     start=start_observer_snapshot(browser)
     if start['sent']!=1 or start['resolved']!=1 or start['rejected']!=0:
         raise GuiFailure('dual_shared_node_start_count_mismatch')
     report['exactlyOneNativeStartAndStop']=True
-    report['bothStockWriteBytes']=0
+    if active_input:
+        report['finalVerifiedInputBytes']={'a':len(inputs['a']),'b':len(inputs['b'])}
+    else:
+        report['bothStockWriteBytes']=0
     failed_closes=[side for side, key in (('a','aCloseBeforeBTabClose'),('b','bCloseBeforeNodeStop'))
                    if report[key] not in SHARED_CLEAN_CLOSE]
     if failed_closes:
@@ -1630,7 +1833,7 @@ def verify_installed_shared_apk(apk, report):
 def run_direction(apk, auth_apk, session, stopped, report):
     control, material = session.control, session.materials
     from android_dual_overlay_reverse import _adb
-    shared=stopped==SHARED_SCENARIO
+    shared=stopped in SHARED_SCENARIOS
     packages=(PACKAGE,) if shared else (PACKAGE,AUTH_PACKAGE)
     assert_owned_avd()
     for package in (PACKAGE, AUTH_PACKAGE):
@@ -1694,7 +1897,7 @@ def run_direction(apk, auth_apk, session, stopped, report):
             def ensure_app():
                 if adb('shell','pidof',PACKAGE,check=False)!=pid:
                     raise GuiFailure('dual_shared_android_process_changed')
-            run_shared_easytier(browser,session,report,ensure_app)
+            run_shared_easytier(browser,session,report,ensure_app,active_input=stopped==SHARED_INPUT_SCENARIO)
             return
         ts_scope=create_network(browser,'ts',material,report)
         create_network(browser,'et',material,report)
@@ -1887,7 +2090,7 @@ def direction_cleanup_proven(current):
             current.get('browserClosed',True) is True and current.get('forwardRemoved',True) is True)
 
 
-def shared_device_passed(current):
+def shared_device_passed(current, *, active_input=False):
     required=('deviceApi35Verified','hostReady','installedApkMatchesInput',
               'ordinaryWebViewHomeVerified','pairingApprovedBoth',
               'distinctFixtureEndpointsAndHostKeys','singleReviewedProfileAndNativeBinding',
@@ -1895,10 +2098,22 @@ def shared_device_passed(current):
               'sameNativeBindingAfterBothTabsClosed','nativeStoppedOnOriginalBinding','exactlyOneNativeStartAndStop',
               'startObserverInstalled','startObserverRestored','sharedNodeObserverRestored',
               'browserClosed','forwardRemoved','packagesRemoved','privateDirectoryRemoved')
+    if active_input:
+        actions=current.get('sharedInputActions')
+        input_ok=(isinstance(actions,dict) and set(actions)==set(SHARED_WRITES)
+                  and current.get('finalVerifiedInputBytes')=={'a':1,'b':2}
+                  and all(isinstance(action,dict) and type(action.get('uiAcceptedBytes')) is int
+                          and action['uiAcceptedBytes']==1
+                          and all(action.get(key) is True for key in ('foregroundTargetVerified',
+                              'nativeConfirmationAttempted','nativeConfirmationObserved',
+                              'peerFrameRendered','peerBytesAndSessionVerified'))
+                          for action in actions.values()))
+    else:
+        input_ok=current.get('bothStockWriteBytes')==0
     return (current.get('stage')=='complete' and all(current.get(key) is True for key in required)
             and current.get('aCloseBeforeBTabClose') in SHARED_CLEAN_CLOSE
             and current.get('bCloseBeforeNodeStop') in SHARED_CLEAN_CLOSE
-            and current.get('bothStockWriteBytes')==0
+            and input_ok
             and current.get('sharedPeerStreams')==SHARED_STREAM_COUNTS
             and current.get('relayRoles')==2 and current.get('reverseMappings')==2
             and direction_cleanup_proven(current))
@@ -1917,9 +2132,10 @@ def main():
     parser.add_argument('--host-source-sha', required=True)
     parser.add_argument('--native-source-sha', required=True)
     parser.add_argument('--apk-source-sha', required=True)
-    parser.add_argument('--scenario', choices=('dual-providers',SHARED_SCENARIO),default='dual-providers')
+    parser.add_argument('--scenario', choices=('dual-providers',*SHARED_SCENARIOS),default='dual-providers')
     args=parser.parse_args()
-    shared=args.scenario==SHARED_SCENARIO
+    shared=args.scenario in SHARED_SCENARIOS
+    active_input=args.scenario==SHARED_INPUT_SCENARIO
     for name,value in (('native-source-sha',args.native_source_sha),('apk-source-sha',args.apk_source_sha),
                        ('host-source-sha',args.host_source_sha)):
         if not re.fullmatch(r'[0-9a-f]{40}',value or ''):raise SystemExit('dual_'+name.replace('-','_')+'_invalid')
@@ -1936,14 +2152,20 @@ def main():
             'apkSha256':hashlib.sha256(paths[0].read_bytes()).hexdigest(),'directions':{}}
     if shared:
         same_source=result['sourceSHA']==args.apk_source_sha
-        result.update(scenario=SHARED_SCENARIO,apkSourceMatchesDriverCommit=same_source,
+        result.update(scenario=args.scenario,apkSourceMatchesDriverCommit=same_source,
             apkFrontendDifference='same commit' if same_source else 'unverified historical APK comparison',
             scope='owned API35 x86_64 emulator; Tauri Android UI and native EasyTier; two real OpenSSH peers through controlled local relays',
             physicalDevice=False,crossNetworkVerified=False,tsAuthorizationUsed=False)
+        if active_input:
+            result.update(apkVariant='normal',physicalImeVerified=False,
+                          inputScope='explicit foreground product drafts; CDP typing and native reviewed confirmation',
+                          hostInputFixture='isolated guarded herdr 0.9.5')
     from android_dual_overlay_session import AndroidDualOverlaySession
     result['hostSourceSHA']=args.host_source_sha
     try:
-        for role in (SHARED_SCENARIO,) if shared else ('ts','et'):
+        if active_input and (not same_source or paths[0].name!='tauri-dual-normal.apk'):
+            raise GuiFailure('dual_shared_normal_same_source_apk_required')
+        for role in (args.scenario,) if shared else ('ts','et'):
             current={'stage':'setup'};result['directions'][role]=current
             try:
                 private=Path(tempfile.mkdtemp(prefix='hp-dual-host-',dir=root));private.chmod(0o700)
@@ -1970,7 +2192,7 @@ def main():
                 if shared:
                     if current.get('sharedPeerStreams')!=SHARED_STREAM_COUNTS:
                         raise GuiFailure('dual_shared_fixture_peer_dial_count_mismatch')
-                    if not shared_device_passed(current):
+                    if not shared_device_passed(current,active_input=active_input):
                         raise GuiFailure('dual_shared_evidence_incomplete')
                     continue
                 required=('tsExplicitAuthorization','pairingApprovedBoth','bindingBoth','bothInputAndDistinctTargets',

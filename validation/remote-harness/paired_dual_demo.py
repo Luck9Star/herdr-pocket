@@ -46,10 +46,12 @@ def command(args, env, timeout=10):
     return value.stdout
 
 
-def fixture_sshd_config(root, port, username):
+def fixture_sshd_config(root, port, username, session='qa-pair'):
+    if not isinstance(session, str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,23}', session) or session == 'default':
+        raise GuiFailure('fixture_session_name_invalid')
     # OpenSSH shares the local-channel permission with TCP forwarding. PermitOpen
     # then restricts both channel types to this fixture's single Unix socket.
-    sock = root / 'config/herdr/sessions/qa-pair/herdr.sock'
+    sock = root / 'config/herdr/sessions' / session / 'herdr.sock'
     pam = 'yes' if sys.platform == 'linux' else 'no'
     return f'''Port {port}
 ListenAddress 127.0.0.1
@@ -108,14 +110,19 @@ def receive(root, role):
 
 
 @contextmanager
-def prepared_pairing_hosts(binary, base, stage_callback=None, input_ack=False):
+def prepared_pairing_hosts(binary, base, stage_callback=None, input_ack=False, *, sessions=None):
     """Own two empty-authorization OpenSSH/herdr fixtures until context exit."""
+    roles = ('et', 'ts')
+    sessions = dict.fromkeys(roles, 'qa-pair') if sessions is None else sessions
+    if set(sessions) != set(roles):
+        raise GuiFailure('fixture_session_roles_invalid')
     processes, targets, metadata = [], {}, {}
     def stage(role, value):
         if stage_callback is not None: stage_callback(role + '_' + value)
     with ExitStack() as stack:
         try:
-            for role in ('et', 'ts'):
+            for role in roles:
+                session = sessions[role]
                 stage(role, 'version')
                 root = base / role; root.mkdir(mode=0o700)
                 env = {'PATH': '/usr/bin:/bin:/usr/sbin:/sbin', 'HOME': str(root),
@@ -133,7 +140,7 @@ def prepared_pairing_hosts(binary, base, stage_callback=None, input_ack=False):
                 with socket.socket() as reserve:
                     reserve.bind(('127.0.0.1', 0)); port = reserve.getsockname()[1]
                 username = pwd.getpwuid(os.getuid()).pw_name
-                (root / 'sshd_config').write_text(fixture_sshd_config(root, port, username))
+                (root / 'sshd_config').write_text(fixture_sshd_config(root, port, username, session))
                 sshd = (['sudo', '-n'] if sys.platform == 'linux' else []) + ['/usr/sbin/sshd']
                 if sys.platform == 'linux':
                     stage(role, 'privsep_prepare')
@@ -152,12 +159,12 @@ def prepared_pairing_hosts(binary, base, stage_callback=None, input_ack=False):
                 config_root = root / 'config/herdr'; config_root.mkdir(parents=True)
                 (config_root / 'config.toml').write_text('[update]\nversion_check = false\nmanifest_check = false\n')
                 stage(role, 'herdr_start')
-                herdr = stack.enter_context(owned_process([root / 'herdr', '--session', 'qa-pair', 'server'],
+                herdr = stack.enter_context(owned_process([root / 'herdr', '--session', session, 'server'],
                     cwd=root, env=env, log=root / 'herdr.log')); processes.append(herdr)
-                sock = config_root / 'sessions/qa-pair/herdr.sock'
+                sock = config_root / 'sessions' / session / 'herdr.sock'
                 wait_for(sock.exists, 'fixture_herdr_not_ready', timeout=10)
                 stage(role, 'workspace_create')
-                created = json.loads(command([root / 'herdr', '--session', 'qa-pair', 'workspace',
+                created = json.loads(command([root / 'herdr', '--session', session, 'workspace',
                     'create', '--cwd', root, '--label', role], env))
                 pane = created['result']['root_pane']['pane_id']
                 shutil.copy2(HERE / 'capture_input.py', root / 'capture_input.py')
@@ -166,10 +173,10 @@ def prepared_pairing_hosts(binary, base, stage_callback=None, input_ack=False):
                 capture = [sys.executable, str(root / 'capture_input.py')]
                 if input_ack:
                     capture += ['--ack-role', role]
-                command([root / 'herdr', '--session', 'qa-pair', 'pane', 'run', pane,
+                command([root / 'herdr', '--session', session, 'pane', 'run', pane,
                     shlex.join(capture)], env)
                 wait_for((root / 'capture-ready').exists, 'fixture_capture_not_ready', timeout=10)
-                config = dict(host='127.0.0.1', port=port, username=username, session='qa-pair',
+                config = dict(host='127.0.0.1', port=port, username=username, session=session,
                     socketPath=str(sock), herdrPath=str(root / 'herdr'), expectedHostKey=public, paneId=pane)
                 (root / 'peer.json').write_text(json.dumps(config)); (root / 'peer.json').chmod(0o600)
                 stage(role, 'profile')

@@ -7,10 +7,12 @@ import 'package:herdr_flutter_probe/host_catalog.dart';
 import 'package:herdr_flutter_probe/host_catalog_page.dart';
 import 'package:herdr_flutter_probe/host_tabs.dart';
 import 'package:herdr_flutter_probe/network_profiles_page.dart';
+import 'package:herdr_flutter_probe/network_runtime.dart' show NetworkNodeBinding;
 import 'package:herdr_flutter_probe/pairing_page.dart';
 import 'package:herdr_flutter_probe/pairing_public_key.dart';
 import 'package:herdr_flutter_probe/pairing.dart' show decodePairing;
 import 'package:herdr_flutter_probe/remote_page.dart';
+import 'package:herdr_flutter_probe/remote_input.dart' show RemoteInputTarget;
 import 'package:herdr_flutter_probe/connection_diagnostics.dart';
 import 'package:herdr_flutter_probe/remote_adapter.dart' show RemoteReadOnlyAdapter;
 import 'dart:typed_data';
@@ -467,11 +469,16 @@ class DualOverlayUiSteps {
   }
 
   String requireNewActiveHostTab(Set<String> before, String hostId, {bool requireRemote = false}) {
-    final tabs = currentHostTabs();
     final current = hostTabIds();
     final added = current.difference(before);
     if (!current.containsAll(before) || added.length != 1) throw StateError('dual_host_tab_change_invalid');
     final id = added.single;
+    requireActiveHostTab(id, hostId, requireRemote: requireRemote);
+    return id;
+  }
+
+  void requireActiveHostTab(String id, String hostId, {bool requireRemote = true}) {
+    final tabs = currentHostTabs();
     final matches = tabs.tabs.where((tab) => tab.id == id && tab.hostId == hostId).toList();
     if (matches.length != 1 || tabs.activeId != id || !matches.single.visible.value) {
       throw StateError('dual_host_tab_target_invalid');
@@ -491,7 +498,6 @@ class DualOverlayUiSteps {
         throw StateError('dual_host_tab_target_invalid');
       }
     }
-    return id;
   }
 
   Future<String> openAndObserve(String role, String hostId) async {
@@ -538,7 +544,7 @@ class DualOverlayUiSteps {
     await existing.until(tester, () => tab.evaluate().isEmpty && close.evaluate().isEmpty);
   }
 
-  Future<void> resumeTab(String role, String tabKey, Terminal previous) async {
+  Future<void> resumeTab(String role, String tabKey, Terminal previous, {String? marker}) async {
     await stage('${role}_resume');
     await existing.tapKey(tester, tabKey);
     final resume = find.byKey(const ValueKey('remote-resume'));
@@ -549,9 +555,86 @@ class DualOverlayUiSteps {
       existing.displayedSequence(tester) != null &&
       !identical(tester.widget<TerminalView>(find.byType(TerminalView)).terminal, previous) &&
       existing.screenHasMarker(tester.widget<TerminalView>(find.byType(TerminalView)).terminal,
-        'Synthetic ${role.toUpperCase()} ACK ONE') &&
+        marker ?? 'Synthetic ${role.toUpperCase()} ACK ONE') &&
       find.textContaining('只读观察中').evaluate().isNotEmpty);
     expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('remote-mode-observe'))).selected, isTrue);
+  }
+
+  RemoteInputTarget sharedInputTarget(String tabKey, String hostId, NetworkNodeBinding binding) {
+    requireActiveHostTab(tabKey.substring('host-tab-'.length), hostId);
+    final remote = find.byType(RemotePage);
+    final page = tester.widget<RemotePage>(remote);
+    final dynamic state = tester.state(remote);
+    final target = state.inputGate.target as RemoteInputTarget?;
+    final route = '${binding.routeProvider}:${binding.profileId}:${binding.profileRevision}:${binding.identityRef}';
+    if (!page.ownsInput || page.networkBinding?.stillCurrent() != true ||
+        page.networkBinding?.profile?.id != binding.profileId ||
+        page.networkBinding?.profile?.revision != binding.profileRevision ||
+        target == null || target.route != route ||
+        target.paneId != state.selectedTarget?.paneId || target.terminalId != state.selectedTarget?.terminalId) {
+      throw StateError('dual_shared_input_target_invalid');
+    }
+    return target;
+  }
+
+  Future<void> commitSharedDraft({
+    required String role, required String character, required String tabKey, required String hostId,
+    required NetworkNodeBinding binding, required RemoteInputTarget original, required Set<String> receipts,
+    required Future<void> Function() beforeConfirmation, required Future<void> Function() afterReceipt,
+  }) async {
+    if (!{'et': {'E'}, 'ts': {'T', 't'}}[role]!.contains(character)) {
+      throw StateError('dual_shared_input_invalid');
+    }
+    RemoteInputTarget currentTarget() {
+      final target = sharedInputTarget(tabKey, hostId, binding);
+      if (!identical(original.connection, target.connection) ||
+          original.generation != target.generation || !original.sameEndpoint(target)) {
+        throw StateError('dual_shared_input_target_changed');
+      }
+      return target;
+    }
+
+    final target = currentTarget();
+    final view = find.byType(TerminalView);
+    final terminal = tester.widget<TerminalView>(view).terminal;
+    final ack = 'Synthetic ${role.toUpperCase()} ACK ${character == 't' ? 'TWO' : 'ONE'}';
+    expect(existing.screenHasMarker(terminal, ack), isFalse);
+    final receipt = find.byKey(const ValueKey('remote-input-receipt'));
+    final previous = receipt.evaluate().isEmpty ? null :
+      RegExp(r'request ([0-9a-f]{32})').firstMatch(tester.widget<Text>(receipt).data ?? '')?.group(1);
+    await existing.tapStablePointer(tester, find.byKey(const ValueKey('remote-mode-draft')));
+    final field = find.byKey(const ValueKey('remote-input-draft'));
+    expect(tester.widget<TextField>(field).controller!.text, isEmpty);
+    await enter('remote-input-draft', character);
+    expect(tester.widget<TextField>(field).focusNode!.hasFocus, isTrue);
+    currentTarget();
+    await existing.tapStablePointer(tester, find.byKey(const ValueKey('remote-input-draft-send')));
+    final confirm = find.byKey(const ValueKey('remote-input-confirm'));
+    void requireReview() {
+      expect(find.text('预览发送文本'), findsOneWidget);
+      expect(find.text(target.label), findsOneWidget);
+      expect(tester.widget<SelectableText>(find.byKey(const ValueKey('remote-input-review-text'))).data, character);
+      expect(tester.widget<FilledButton>(confirm).onPressed, isNotNull);
+    }
+    requireReview();
+    await beforeConfirmation();
+    requireReview();
+    await existing.tapStablePointer(tester, confirm); // One write action. Unknown outcomes end the case.
+    await existing.accepted(tester, previousRequest: previous);
+    currentTarget();
+    final accepted = existing.visibleReceipt(tester, target.paneId, 1);
+    expect(accepted['terminalId'], target.terminalId);
+    expect(receipts.add(accepted['requestId'] as String), isTrue);
+    expect(tester.widget<TextField>(field).controller!.text, isEmpty);
+
+    final sequence = existing.displayedSequence(tester);
+    expect(sequence, isNotNull);
+    await afterReceipt();
+    await existing.until(tester, () => view.evaluate().length == 1 &&
+      identical(tester.widget<TerminalView>(view).terminal, terminal) &&
+      (existing.displayedSequence(tester) ?? -1) > sequence! && existing.screenHasMarker(terminal, ack));
+    currentTarget();
+    await existing.tapStablePointer(tester, find.byKey(const ValueKey('remote-mode-observe')));
   }
 
   Future<void> tapVisibleTerminal() async {

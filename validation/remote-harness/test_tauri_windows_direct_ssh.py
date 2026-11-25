@@ -190,7 +190,7 @@ class ReceiptGate(unittest.TestCase):
     def fixture(self):
         import hashlib
         images={name:name.encode() for name in ('ordinary-terminal.png','ordinary-disconnect.png','ordinary-home.png')}
-        report={'windowActivation':'set_foreground','fingerprintReviewed':True,'returnedHome':True,'credentialFieldsCleared':True,'peer':{},
+        report={'authentication':'password','windowActivation':'set_foreground','fingerprintReviewed':True,'returnedHome':True,'credentialFieldsCleared':True,'peer':{},
           'listener':{'ownedBeforeLaunch':True,'fixtureResourcesClosed':True,'absentFromWin32Table':True,'connectProbe':'refused'},
           'cleanup':{'ownedProcessJobEmpty':True,'peerListenerReleased':True,'fixturePasswordCleared':True,
                      'driverPortsReleased':True,'privateDirectoryRemoved':True}}

@@ -301,18 +301,45 @@ class FlutterIosEncryptedKeyTests(unittest.TestCase):
                  'markerReceived': False, 'sessionClosed': False, **zero}
         for bad_event in ({**event, 'handshakeCompleted': False}, dict(event)):
             with self.subTest(bad_event=bad_event):
+                clock = 0.0
+                sleeps = []
+                def sleep(delay):
+                    nonlocal clock
+                    sleeps.append(delay)
+                    clock += delay
                 peer = SimpleNamespace(
                     wait_for_connections_closed=lambda count: count == 1,
                     snapshot=lambda: {'connections': 1, 'connectionsClosed': True, 'connectionEvents': [bad_event]},
                 )
-                with self.assertRaisesRegex(ios.Failure, 'ios_encrypted_probe_incomplete'):
+                with patch.object(ios.time, 'monotonic', side_effect=lambda: clock), \
+                     patch.object(ios.time, 'sleep', side_effect=sleep), \
+                     self.assertRaisesRegex(ios.Failure, 'ios_encrypted_probe_incomplete'):
                     ios.encrypted_probe_evidence(peer)
+                self.assertGreater(len(sleeps), 1)
+                self.assertAlmostEqual(clock, 5.0)
         good_peer = SimpleNamespace(
             wait_for_connections_closed=lambda count: count == 1,
             snapshot=lambda: {'connections': 1, 'connectionsClosed': True,
                               'connectionEvents': [{**event, 'handshakeCompleted': True}]},
         )
         self.assertEqual(ios.encrypted_probe_evidence(good_peer), {**event, 'handshakeCompleted': True})
+
+    def test_encrypted_probe_evidence_waits_for_delayed_handshake(self):
+        zero = dict.fromkeys(('authAttempts', 'authSuccesses', 'ptyRequests', 'shellRequests', 'inputBytes', 'outputBytes'), 0)
+        event = {'id': 1, 'hostKey': 'A', 'closed': True, 'authAccepted': False,
+                 'markerReceived': False, 'sessionClosed': False, **zero}
+        calls = 0
+        def delayed_snapshot():
+            nonlocal calls
+            calls += 1
+            return {'connections': 1, 'connectionsClosed': True,
+                    'connectionEvents': [{**event, 'handshakeCompleted': calls >= 4}]}
+        race_peer = SimpleNamespace(
+            wait_for_connections_closed=lambda count: count == 1,
+            snapshot=delayed_snapshot,
+        )
+        self.assertEqual(ios.encrypted_probe_evidence(race_peer), {**event, 'handshakeCompleted': True})
+        self.assertEqual(calls, 4)
 
     def test_public_key_only_fixture_rejects_its_password_and_an_unrelated_key(self):
         with EncryptedKeyFixture(channel_deadline=time.monotonic() + 60) as peer:

@@ -559,8 +559,12 @@ def layout_diagnostics(value):
 
 def encrypted_probe_evidence(peer):
     evidence = android_encrypted_probe_evidence(peer)
-    if peer.snapshot()['connectionEvents'][0].get('handshakeCompleted') is not True:
-        raise Failure('ios_encrypted_probe_incomplete')
+    deadline = time.monotonic() + 5
+    while peer.snapshot()['connectionEvents'][0].get('handshakeCompleted') is not True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise Failure('ios_encrypted_probe_incomplete')
+        time.sleep(min(.02, remaining))
     return {**evidence, 'handshakeCompleted': True}
 
 

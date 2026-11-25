@@ -922,6 +922,129 @@ setCleanup(); key.hidden=true; assert.equal(cleared(),false,'key editor hidden')
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertEqual(result.stdout,'')
 
+class DeviceCleanupTests(unittest.TestCase):
+    def setUp(self):
+        root = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
+        self.apk = root / 'fixture.apk'
+        self.apk.write_bytes(b'apk')
+        self.output = root / 'output'
+        self.enterContext(patch.dict(driver.os.environ, {'GITHUB_ACTIONS':'true',
+            'GITHUB_REF':'refs/heads/codex/test', 'ANDROID_SERIAL':driver.SERIAL, 'RUNNER_TEMP':str(root)}, clear=True))
+        self.peer = Fixture()
+        self.reverse = f'tcp:{self.peer.port}'
+        pkg = driver.PACKAGE
+        self.secret = 'raw-adb-detail-' + self.peer.password
+        self.stop = ('shell','am','force-stop',pkg)
+        self.uninstall = ('uninstall',pkg)
+        self.forward_remove = ('forward','--remove','tcp:4567')
+        self.reverse_remove = ('reverse','--remove',self.reverse)
+        self.process_list = ('shell','ps','-A','-o','PID,NAME')
+        self.package_list = ('shell','pm','list','packages','--user','0')
+        self.answers = {
+            ('devices',):f'List of devices attached\n{driver.SERIAL}\tdevice',
+            ('shell','getprop','ro.kernel.qemu'):'1', ('shell','getprop','ro.build.version.sdk'):'35',
+            ('shell','am','get-current-user'):'0', ('shell','pm','list','packages',pkg):'',
+            ('reverse',self.reverse,self.reverse):'', ('install',str(self.apk)):'Success',
+            ('shell','monkey','-p',pkg,'-c','android.intent.category.LAUNCHER','1'):'',
+            ('shell','pidof',pkg):'123', ('shell','cat','/proc/net/unix'):'@webview_devtools_remote_123',
+            ('forward','tcp:0','localabstract:webview_devtools_remote_123'):'4567',
+            self.stop:'', self.uninstall:'Success', self.forward_remove:'', self.reverse_remove:'',
+            self.process_list:f'PID NAME\n1 init\n45 {pkg}.other',
+            self.package_list:f'package:android\npackage:{pkg}.other',
+            ('forward','--list'):f'{driver.SERIAL} tcp:3333 tcp:4567',
+            ('reverse','--list'):f'UsbFfs tcp:3333 {self.reverse}',
+        }
+        def adb(*args, **kwargs):
+            value = self.answers[args]
+            if isinstance(value, Exception):
+                raise value
+            return value
+        self.adb = self.enterContext(patch.object(driver,'adb',side_effect=adb))
+        self.browser = Mock()
+        self.browser.ws = types.SimpleNamespace(connected=False, sock=None)
+        self.enterContext(patch.object(driver,'_connect_ready',return_value=self.browser))
+        self.ui = self.enterContext(patch.object(driver,'exercise_ui',return_value={'disconnected':True}))
+
+    def manifest(self):
+        import direct_ssh_fixture
+        peer = MagicMock(port=self.peer.port)
+        peer.__enter__.return_value = peer
+        peer.snapshot.return_value = {'connections':2, 'authAccepted':True, 'connectionsClosed':True}
+        with patch.object(direct_ssh_fixture,'DirectSshFixture',return_value=peer), \
+             patch.object(driver.sys,'argv',['driver','--apk',str(self.apk),'--output',str(self.output)]), \
+             self.assertRaises(SystemExit) as error:
+            driver.main()
+        self.assertEqual(error.exception.code, 1)
+        report = json.loads((self.output/'manifest.json').read_text())
+        self.assertNotIn(self.secret, json.dumps(report))
+        self.assertNotIn(self.peer.password, json.dumps(report))
+        return report
+
+    def test_first_failure_and_second_open_facts_survive_independent_cleanup_failures(self):
+        facts = [{'ime':{'reason':'owned_hidden'}, 'peerUnchanged':True}]
+        def fail(*args, progress, **kwargs):
+            progress.update(stage='terminal_input', secondOpenFacts=facts)
+            raise driver.GuiFailure('android_control_missing_' + self.secret)
+        self.ui.side_effect = fail
+        self.browser.close.side_effect = RuntimeError(self.secret)
+        self.browser.ws.connected = True
+        self.answers.update({self.stop:RuntimeError(self.secret), self.uninstall:driver.GuiFailure('android_adb_unavailable'),
+            self.forward_remove:driver.GuiFailure('android_adb_command_failed'), self.reverse_remove:RuntimeError(self.secret),
+            self.process_list:f'PID NAME\n1 init\n123 {driver.PACKAGE}:worker', self.package_list:RuntimeError(self.secret),
+            ('forward','--list'):RuntimeError(self.secret), ('reverse','--list'):f'UsbFfs {self.reverse} tcp:3333'})
+        report = self.manifest()
+        self.assertEqual((report['failureStage'],report['errorCode']),('terminal_input','direct_android_control_missing'))
+        self.assertEqual(report['secondOpenFacts'], facts)
+        cleanup = report['cleanupDiagnostic']
+        self.assertEqual((cleanup['failureStage'],cleanup['errorCode']),('cleanup','direct_cleanup_failed'))
+        self.assertEqual(cleanup['steps'], {'browserClose':'direct_driver_failed', 'browserSocket':'present',
+            'forceStop':'direct_driver_failed', 'uninstall':'direct_android_adb_unavailable',
+            'appProcess':'present', 'appPackage':'direct_driver_failed',
+            'forwardRemove':'direct_android_adb_command_failed', 'forwardList':'direct_driver_failed',
+            'reverseRemove':'direct_driver_failed', 'reverseList':'present'})
+        calls = [call.args for call in self.adb.call_args_list]
+        for args in (self.stop,self.uninstall,self.forward_remove,self.reverse_remove,self.process_list,self.package_list,
+                     ('forward','--list'),('reverse','--list')):
+            self.assertEqual(calls.count(args), 1, args)
+        self.browser.close.assert_called_once_with()
+        self.ui.assert_called_once()
+
+    def test_unexpected_ui_error_survives_unconfirmed_reverse_removal(self):
+        def fail(*args, progress, **kwargs):
+            progress['stage'] = 'connect'
+            raise RuntimeError(self.secret)
+        self.ui.side_effect = fail
+        self.answers[('reverse','--list')] = driver.GuiFailure('android_adb_unavailable')
+        report = self.manifest()
+        self.assertEqual((report['failureStage'],report['errorCode']),('connect','direct_fixture_or_driver_failed'))
+        self.assertEqual(report['cleanupDiagnostic']['steps']['reverseList'],'direct_android_adb_unavailable')
+        self.assertNotIn('secondOpenFacts',report)
+
+    def test_cleanup_only_fails_for_present_or_unverifiable_resources_even_after_successful_commands(self):
+        self.answers.update({self.process_list:'', self.package_list:f'package:android\npackage:{driver.PACKAGE}',
+            ('forward','--list'):'unrecognized ' + self.secret, ('reverse','--list'):driver.GuiFailure('android_adb_unavailable')})
+        report = self.manifest()
+        self.assertEqual((report['failureStage'],report['errorCode']),('cleanup','direct_cleanup_failed'))
+        steps = report['cleanupDiagnostic']['steps']
+        self.assertEqual([steps[k] for k in ('appProcess','appPackage','forwardList','reverseList')],
+                         ['unverified','present','unverified','direct_android_adb_unavailable'])
+        self.assertNotIn('secondOpenFacts',report)
+
+    def test_uncertain_removals_pass_only_after_resource_specific_absence_without_replay(self):
+        writes = (self.stop,self.uninstall,self.forward_remove,self.reverse_remove)
+        self.answers.update({args:driver.GuiFailure('android_adb_command_failed') for args in writes})
+        result = driver.run_device(self.apk,self.peer,progress={})
+        self.assertEqual(result['cleanup'], dict.fromkeys(('browser','application','forward','reverse'), True))
+        steps = result['cleanupDiagnostic']['steps']
+        for key in ('browserSocket','appProcess','appPackage','forwardList','reverseList'):
+            self.assertEqual(steps[key], 'absent')
+        for key in ('forceStop','uninstall','forwardRemove','reverseRemove'):
+            self.assertEqual(steps[key], 'direct_android_adb_command_failed')
+        for args in writes:
+            self.assertEqual([call.args for call in self.adb.call_args_list].count(args), 1)
+        self.ui.assert_called_once()
+
+
 class ActiveNavigationTests(unittest.TestCase):
     def peer(self):
         return {'connections':2,'sessionClosed':False,'connectionEvents':[
@@ -968,6 +1091,256 @@ class ActiveNavigationTests(unittest.TestCase):
             with self.assertRaisesRegex(driver.GuiFailure,'direct_active_tap_unproven'):
                 driver.native_active_tap(browser,'#unsupported')
             adb.assert_not_called()
+
+
+    def _ime_gate(self, *, password='synthetic-password', dom=None, ocr=True, foreground=True,
+                  install=True, peer=True, publish=None):
+        browser=Mock(); browser.evidence_dir=None; browser._ime_keyboard_proof_captured=False
+        browser._temporary_install_confirmed=install
+        fixture=Mock(); fixture.password=password; fixture.username='fixture'; fixture.port=2222
+        dom_state={key:True for key in driver.IME_DOM_KEYS} if dom is None else dom
+        foreground_values=[foreground,foreground] if isinstance(foreground,bool) else list(foreground)
+        if peer:
+            fixture.snapshot.return_value=self.peer()
+        else:
+            fixture.snapshot.return_value={'connections':3}
+        if publish is None:
+            def publish(output,png,evidence):
+                (output/'ime-keyboard-opened-native.png').write_bytes(png)
+                (output/'ime-keyboard-opened-native.json').write_text(json.dumps(evidence)+'\n')
+        def ocr_call(png,bounds):
+            if ocr is Exception: raise driver.GuiFailure('direct_ime_proof_ocr_failed')
+            return ocr,'tesseract 5'
+
+        result={'json':None,'png':None,'files':[]}
+        with tempfile.TemporaryDirectory() as evidence:
+            browser.evidence_dir=evidence
+            (Path(evidence)/'ime-keyboard-opened-native.json').write_text('{}\n')
+            with patch.object(driver,'_ime_dom_state',side_effect=lambda b,f:dict(dom_state)), \
+                 patch.object(driver,'_framebuffer_png',return_value=(b'\x89PNG\r\n\x1a\n'+b'0'*32,(393,851))), \
+                 patch.object(driver,'_terminal_geometry',return_value={'g':1}), \
+                 patch.object(driver,'_read_window_hierarchy',return_value='h1'), \
+                 patch.object(driver,'_terminal_framebuffer_bounds',return_value=(0,0,393,200)), \
+                 patch.object(driver,'_webview_frames',side_effect=lambda h:{(0,0,393,851)}), \
+                 patch.object(driver,'_ocr_public_marker',side_effect=ocr_call), \
+                 patch.object(driver,'_foreground_owned',side_effect=lambda:foreground_values.pop(0) if foreground_values else foreground), \
+                 patch.object(driver,'active_diagnostic',return_value={'bounded':True}), \
+                 patch.object(driver,'active_peer'), \
+                 patch.object(driver,'_atomic_publish',side_effect=publish):
+                if not peer:
+                    driver.active_peer.side_effect=driver.GuiFailure('direct_active_peer_changed')
+                driver.capture_native_ime_keyboard_proof(browser,fixture)
+            json_path=Path(evidence)/'ime-keyboard-opened-native.json'
+            png_path=Path(evidence)/'ime-keyboard-opened-native.png'
+            result['json']=json.loads(json_path.read_text()) if json_path.exists() else None
+            result['png']=png_path.read_bytes() if png_path.exists() else None
+            result['files']=sorted(p.name for p in Path(evidence).iterdir())
+        return result
+
+    def test_ime_proof_publishes_only_when_all_public_gates_hold(self):
+        result=self._ime_gate()
+        self.assertEqual(result['json']['status'],'passed')
+        self.assertNotIn('credentialsHeld',result['json'])
+        self.assertTrue(result['png'].startswith(b'\x89PNG'))
+        self.assertIn('ime-keyboard-opened-native.png',result['files'])
+
+    def test_ime_proof_ignores_fixture_password_and_publishes_without_it(self):
+        result=self._ime_gate(password='')
+        self.assertEqual(result['json']['status'],'passed')
+
+    def test_ime_proof_fails_closed_on_credential_value_on_screen(self):
+        result=self._ime_gate(dom={**{key:True for key in driver.IME_DOM_KEYS},'credentialControlsEmpty':False})
+        self.assertEqual((result['json']['status'],result['json']['errorCode']),('failed','direct_ime_proof_page_state_invalid'))
+        self.assertNotIn('ime-keyboard-opened-native.png',result['files'])
+
+    def test_ime_proof_fails_closed_on_wrong_or_error_page(self):
+        for key in ('activeTerminalLive','endpointMatched','connectedBadge','authFormHidden','terminalReadyOnly'):
+            dom={**{k:True for k in driver.IME_DOM_KEYS},key:False}
+            result=self._ime_gate(dom=dom)
+            self.assertEqual((result['json']['status'],result['json']['errorCode']),('failed','direct_ime_proof_page_state_invalid'),key)
+            self.assertNotIn('ime-keyboard-opened-native.png',result['files'])
+
+    def test_ime_proof_fails_closed_when_peer_changes_or_input_appears(self):
+        result=self._ime_gate(peer=False)
+        self.assertEqual((result['json']['status'],result['json']['errorCode']),('failed','direct_active_peer_changed'))
+        self.assertNotIn('ime-keyboard-opened-native.png',result['files'])
+
+    def test_ime_proof_fails_closed_when_foreground_changes(self):
+        result=self._ime_gate(foreground=[True,False])
+        self.assertEqual((result['json']['status'],result['json']['errorCode']),('failed','direct_ime_proof_foreground_lost'))
+        self.assertNotIn('ime-keyboard-opened-native.png',result['files'])
+
+    def test_ime_proof_fails_closed_when_install_not_temporary(self):
+        result=self._ime_gate(install=False)
+        self.assertEqual((result['json']['status'],result['json']['errorCode']),('failed','direct_ime_proof_install_unconfirmed'))
+        self.assertNotIn('ime-keyboard-opened-native.png',result['files'])
+
+    def test_ime_proof_fails_closed_when_ocr_marker_absent(self):
+        result=self._ime_gate(ocr=False)
+        self.assertEqual((result['json']['status'],result['json']['errorCode']),('failed','direct_ime_proof_marker_not_visible'))
+        self.assertNotIn('ime-keyboard-opened-native.png',result['files'])
+
+    def test_ime_proof_mid_abort_publish_leaves_no_public_files(self):
+        def publish(output,png,evidence):
+            raise driver.GuiFailure('direct_ime_proof_publish_failed')
+        result=self._ime_gate(publish=publish)
+        # abort leaves no public image; the bounded failure JSON is the expected record
+        self.assertNotIn('ime-keyboard-opened-native.png',result['files'])
+        self.assertNotIn('ime-keyboard-opened-native.png.tmp',result['files'])
+        self.assertEqual(result['json'].get('errorCode'),'direct_ime_proof_publish_failed')
+
+    def test_ocr_public_marker_real_function_fails_closed_without_tesseract(self):
+        # exercises the real function; on hosts without tesseract (this repo's
+        # local policy: no global installs) the guard must raise, not pass
+        with patch.dict('os.environ', {'PATH': '/nonexistent'}):
+            with self.assertRaises(driver.GuiFailure) as raised:
+                driver._ocr_public_marker(b'\x89PNG\r\n\x1a\n'+b'0'*32, (0,0,10,10))
+            self.assertEqual(str(raised.exception), 'direct_ime_proof_ocr_missing')
+        with patch.object(driver.shutil, 'which', return_value='/fake/tesseract'):
+            with self.assertRaises(driver.GuiFailure) as raised:
+                driver._ocr_public_marker(b'not-a-png', (0,0,10,10))
+            self.assertEqual(str(raised.exception), 'direct_ime_proof_ocr_failed')
+            with self.assertRaises(driver.GuiFailure) as raised:
+                driver._ocr_public_marker(b'\x89PNG\r\n\x1a\n'+b'0'*32, (-5,0,10,10))
+            self.assertEqual(str(raised.exception), 'direct_ime_proof_ocr_failed')
+
+    def test_foreground_owned_requires_exact_package_token(self):
+        from android_gui import PACKAGE
+        good=f'  mCurrentFocus=Window{{4}} {PACKAGE}/MainActivity'
+        imposter=f'  mCurrentFocus=Window{{4}} com.other.pkg{PACKAGE}/x'
+        with patch.object(driver,'adb',return_value=good):
+            self.assertTrue(driver._foreground_owned())
+        with patch.object(driver,'adb',return_value=imposter):
+            self.assertFalse(driver._foreground_owned())
+        with patch.object(driver,'adb',return_value='  unrelated dumpsys line'):
+            self.assertFalse(driver._foreground_owned())
+
+    def test_second_open_checkpoint_records_bounded_facts_and_explicit_misses(self):
+        browser=Mock(); fixture=Mock()
+        fixture.snapshot.return_value=self.peer()
+        diagnostic={'formatVersion':1,'reason':'owned_hidden','serviceCount':1,'displayCount':1,
+                    'focusCount':1,'focusOwner':'owned','editorOwner':'none','imeInsetsState':'hidden',
+                    'visibility':'hidden'}
+        focus={'editorPresent':True,'editorActive':True,'documentFocused':True,'imeKnown':True,'imeVisible':False}
+        bounded_peer={'connections':2,'authAttempts':1,'authSuccesses':1,'ptyRequests':1,
+                      'shellRequests':1,'inputBytes':0,'closed':False}
+        with patch.object(driver,'adb',return_value='dump'), \
+             patch.object(driver,'parse_system_ime',return_value={'diagnostic':diagnostic}), \
+             patch.object(driver,'public_editor_focus',return_value=focus), \
+             patch.object(driver,'active_diagnostic',return_value={'geometry':{'viewport':[393,851,0,851]},'peer':bounded_peer}), \
+             patch.object(driver,'active_peer') as peer:
+            progress={}
+            checkpoint=driver.second_open_checkpoint(browser,fixture,progress)
+        self.assertEqual(checkpoint['ime'],driver.public_ime_diagnostic(diagnostic))
+        self.assertEqual(checkpoint['editorFocus'],focus)
+        self.assertEqual(checkpoint['geometry'],{'viewport':[393,851,0,851]})
+        self.assertEqual(checkpoint['peerCounts'],{'authAttempts':1,'authSuccesses':1,
+            'ptyRequests':1,'shellRequests':1,'inputBytes':0})
+        self.assertFalse(checkpoint['peerClosed'])
+        self.assertTrue(checkpoint['peerUnchanged'])
+        peer.assert_called_once_with(fixture,input_bytes=0)
+        self.assertEqual(progress['secondOpenFacts'],[checkpoint])
+
+    def test_second_open_checkpoint_explicitly_misses_when_driver_facts_absent(self):
+        browser=Mock(); fixture=Mock()
+        fixture.snapshot.return_value=self.peer()
+        browser.evaluate.side_effect=RuntimeError('cdp gone')
+        with patch.object(driver,'adb',side_effect=driver.GuiFailure('android_adb_unavailable')), \
+             patch.object(driver,'active_diagnostic',return_value={}), \
+             patch.object(driver,'active_peer',side_effect=driver.GuiFailure('direct_active_peer_changed')):
+            checkpoint=driver.second_open_checkpoint(browser,fixture)
+        self.assertEqual(checkpoint,{'ime':{},
+            'editorFocus':{'editorPresent':None,'editorActive':None,'documentFocused':None,
+                           'imeKnown':None,'imeVisible':None},
+            'geometry':None,'peerCounts':None,'peerClosed':None,'peerUnchanged':False})
+
+    def test_second_open_checkpoint_keeps_whitelisted_enums_on_system_ime_failure(self):
+        browser=Mock(); fixture=Mock()
+        partial={'formatVersion':1,'reason':'focus_foreign','serviceCount':1,'displayCount':1,
+                 'focusCount':1,'focusOwner':'foreign','editorOwner':'none',
+                 'imeInsetsState':'unavailable','visibility':'unavailable'}
+        failure=driver.SystemImeFailure('android_system_ime_target_mismatch',partial)
+        with patch.object(driver,'adb',return_value='dump'), \
+             patch.object(driver,'parse_system_ime',side_effect=failure), \
+             patch.object(driver,'active_diagnostic',return_value={}), \
+             patch.object(driver,'active_peer'):
+            checkpoint=driver.second_open_checkpoint(browser,fixture)
+        self.assertEqual(checkpoint['ime'],driver.public_ime_diagnostic(partial))
+        self.assertEqual(checkpoint['ime']['reason'],'focus_foreign')
+
+    def test_public_editor_focus_normalizes_shapes_and_nulls_on_miss(self):
+        browser=Mock()
+        good={'editorPresent':True,'editorActive':False,'documentFocused':True,
+              'imeKnown':True,'imeVisible':False}
+        browser.evaluate.return_value=good
+        self.assertEqual(driver.public_editor_focus(browser),good)
+        browser.evaluate.return_value={'editorPresent':'yes'}
+        self.assertEqual(driver.public_editor_focus(browser),
+            {key:None for key in good})
+
+    def test_ime_dom_predicate_whitelists_ready_plus_bare_prompt_only(self):
+        # run the exact JS shipped in _ime_dom_state through the driver's own
+        # evaluate expression via node, against a real xterm-style DOM stub
+        import re as _re, json as _json, subprocess as _sp, tempfile as _tf
+        src=Path(driver.__file__).read_text()
+        body=_re.search(r'value=browser\.evaluate\(r"""(\(\(\)=>\{[\s\S]*?\}\)\(\))"""\.replace', src).group(1)
+        script=f'''
+        globalThis.__pred__=require('fs').readFileSync(process.argv[1],'utf8');
+        globalThis.getComputedStyle=()=>({{visibility:'visible'}});
+        const inner=globalThis.__pred__.trim().replace(/^\\(\\(\\)=>\\{{/,'').replace(/\\}}\\)\\(\\)\\s*;?\\s*$/,'');
+        const fn=new Function('document','{{'+inner+'}}');
+        function mk(rows,cred){{
+          const divs=rows.map(t=>({{textContent:t}}));
+          const el=(vis=true,txt='')=>({{hidden:!vis,getClientRects:()=>vis?[{{}}]:[],textContent:txt}});
+          const ids={{'ssh-live':el(true),'ssh-setup':el(false),'ssh-credentials':el(false),
+            'ssh-live-endpoint':el(true,'fixture@127.0.0.1:2222'),
+            'ssh-password':cred.pw,'ssh-key':cred.key,'ssh-passphrase':cred.pp}};
+          const badge=el(true,'已连接');
+          return fn({{getElementById:id=>id in ids?ids[id]:null,
+            querySelector:s=>s==='.ssh-connected-badge'?badge:null,
+            querySelectorAll:s=>s==='#ssh-terminal .xterm-rows > div'?divs:[]}});}}
+        const hiddenEmpty={{hidden:true,getClientRects:()=>[],value:''}};
+        const okCred={{pw:hiddenEmpty,key:hiddenEmpty,pp:hiddenEmpty}};
+        const noKey={{pw:hiddenEmpty,pp:hiddenEmpty,key:null}};
+        const leakPw={{pw:{{hidden:false,getClientRects:()=>[{{}}],value:'leak'}},key:hiddenEmpty,pp:hiddenEmpty}};
+        const valPw={{pw:{{hidden:true,getClientRects:()=>[],value:'leak'}},key:hiddenEmpty,pp:hiddenEmpty}};
+        const cases=[
+          ['pos',['POCKET-ANDROID-READY','$'],okCred,'all'],
+          ['extra-line',['POCKET-ANDROID-READY','secret'],okCred,'term-false'],
+          ['no-marker',['$'],okCred,'term-false'],
+          ['missing-ctrl',['POCKET-ANDROID-READY','$'],noKey,'creds-false'],
+          ['visible-ctrl',['POCKET-ANDROID-READY','$'],leakPw,'creds-false'],
+          ['valued-ctrl',['POCKET-ANDROID-READY','$'],valPw,'creds-false'],
+        ];
+        let failed=0;
+        for(const [name,rows,cred,want] of cases){{
+          const r=mk(rows,cred);
+          const allOk=Object.values(r).every(Boolean);
+          const ok=want==='all'?allOk:want==='term-false'?!r.terminalReadyOnly:!r.credentialControlsEmpty;
+          if(!ok){{console.log('FAIL',name);failed++;}}
+        }}
+        process.exit(failed?1:0);
+        '''
+        with _tf.TemporaryDirectory() as tmp:
+            pred=Path(tmp)/'pred.js.body'
+            pred.write_text(body.replace('__ARG__', _json.dumps('fixture@127.0.0.1:2222')))
+            result=_sp.run(['node','--input-type=commonjs','-e',script,'--',str(pred)],capture_output=True,text=True)
+        self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+
+    def test_active_navigation_captures_ime_proof_after_keyboard_touch(self):
+        browser=Mock();fixture=Mock();fixture.snapshot.return_value=self.peer();order=[]
+        def native(b,selector): order.append(('tap',selector))
+        def ime(visible):
+            order.append(('ime',visible));return {'diagnostic':{}}
+        with patch.object(driver,'active_view'),patch.object(driver,'active_peer'), \
+             patch.object(driver,'native_active_tap',side_effect=native), \
+             patch.object(driver,'system_keyboard',side_effect=ime), \
+             patch.object(driver,'capture_native_ime_keyboard_proof',side_effect=lambda b,f: order.append(('proof',))) as proof:
+            driver.exercise_active_navigation(browser,fixture)
+        self.assertIn(('tap','#ssh-focus'),order)
+        self.assertIn(('proof',),order)
+        self.assertGreater(order.index(('proof',)),order.index(('tap','#ssh-focus')))
+        proof.assert_called_once_with(browser,fixture)
 
     def test_preexisting_owned_keyboard_is_dismissed_before_native_focus_tap(self):
         browser=Mock();fixture=Mock();order=[]

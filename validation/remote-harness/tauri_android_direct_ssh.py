@@ -15,12 +15,14 @@ from pathlib import Path
 import re
 import struct
 import subprocess
+import shutil
 import sys
 import time
 import uuid
 import xml.etree.ElementTree as ET
 
 from android_gui import AndroidWebView, PACKAGE, SERIAL, adb, dashboard_add_selector, system_keyboard, public_ime_diagnostic
+from flutter_android_gui import parse_system_ime, SystemImeFailure, DeviceFailure
 from paired_gui import GuiFailure, wait_for
 from terminal_screenshot_gate import ECHO_MARKER, ScreenshotGateError, verify_terminal_screenshot
 
@@ -53,6 +55,9 @@ DIRECT_ERROR_CODES = frozenset('''
     direct_unowned_or_invalid_device direct_unsafe_fixture direct_return_home_missing direct_return_home_peer_changed
     direct_setup_layout_unproven direct_mobile_setup_unproven direct_probe_peer_unproven
     direct_active_ui_invalid direct_active_peer_changed direct_active_tap_unproven
+    direct_ime_proof_install_unconfirmed direct_ime_proof_page_state_invalid direct_ime_proof_foreground_lost
+    direct_ime_proof_marker_not_visible direct_ime_proof_ocr_missing direct_ime_proof_ocr_failed
+    direct_ime_proof_publish_failed direct_ime_proof_capture_failed
     direct_webview_not_ready direct_webview_socket_missing
     direct_pem_collapse_unproven direct_pem_redraft_mismatch direct_pem_recollapse_unproven
 '''.split())
@@ -521,6 +526,197 @@ def capture_terminal_proof(browser, fixture, evidence_dir, *, stem):
     if evidence['status']!='passed': raise GuiFailure(evidence['errorCode'])
     return evidence
 
+IME_DOM_KEYS = frozenset(('activeTerminalLive','endpointMatched','connectedBadge','authFormHidden',
+    'credentialControlsEmpty','terminalReadyOnly'))
+
+
+def _ime_dom_state(browser, fixture):
+    """Fixed boolean DOM predicates proving the public screen holds no credentials."""
+    expected=f'{fixture.username}@127.0.0.1:{fixture.port}'
+    value=browser.evaluate(r"""(()=>{
+      const expected=__ARG__;
+      const shown=e=>!!e&&!e.hidden&&e.getClientRects().length>0&&getComputedStyle(e).visibility==='visible';
+      const live=document.getElementById('ssh-live'),setup=document.getElementById('ssh-setup');
+      const auth=document.getElementById('ssh-credentials');
+      const endpoint=document.getElementById('ssh-live-endpoint');
+      const badge=document.querySelector('.ssh-connected-badge');
+      const creds=['ssh-password','ssh-key','ssh-passphrase'].map(id=>document.getElementById(id));
+      // all three credential controls must EXIST (missing DOM => fail, not pass)
+      const credentialControlsEmpty=creds.every(e=>e!==null&&!shown(e)&&e.value==='');
+      const rows=[...document.querySelectorAll('#ssh-terminal .xterm-rows > div')]
+        .map(row=>row.textContent.replace(/\u00a0/g,' ').replace(/\s+/g,' ').trim()).filter(Boolean);
+      // Fixture sends exactly READY + CRLF + '$ ' prompt; allow the bare prompt
+      // line and nothing else beyond the READY marker itself.
+      const terminalReadyOnly=rows.includes('POCKET-ANDROID-READY')&&rows.every(r=>r==='POCKET-ANDROID-READY'||r==='$');
+      return {activeTerminalLive:shown(live)&&!shown(setup),
+        endpointMatched:endpoint&&endpoint.textContent.trim()===expected,
+        connectedBadge:badge&&badge.textContent.trim()==='已连接',
+        authFormHidden:auth!==null&&!shown(auth),
+        credentialControlsEmpty,
+        terminalReadyOnly};
+    })()""".replace('__ARG__', json.dumps(expected)))
+    if not isinstance(value,dict) or set(value)!=IME_DOM_KEYS or not all(type(v) is bool for v in value.values()):
+        return {key:False for key in IME_DOM_KEYS}
+    return value
+
+def public_editor_focus(browser):
+    """Fixed booleans: the terminal textarea exists, is the active element,
+    the document holds focus, and the page's own IME-known/visible classes.
+    Unreadable facts stay null (distinct from False)."""
+    try:
+        value=browser.evaluate(r"""(()=>{
+          const editor=document.querySelector('#ssh-terminal .xterm-helper-textarea');
+          return {editorPresent:!!editor,
+            editorActive:editor===document.activeElement,
+            documentFocused:document.hasFocus(),
+            imeKnown:document.body.classList.contains('ssh-ime-known'),
+            imeVisible:document.body.classList.contains('ssh-ime-visible')};
+        })()""")
+    except Exception:
+        return {key:None for key in ('editorPresent','editorActive','documentFocused','imeKnown','imeVisible')}
+    keys=('editorPresent','editorActive','documentFocused','imeKnown','imeVisible')
+    if not isinstance(value,dict) or any(type(value.get(key)) is not bool for key in keys):
+        return {key:None for key in keys}
+    return {key:value[key] for key in keys}
+
+
+def _foreground_owned():
+    """True only when our package holds the current window focus."""
+    text=adb('shell','dumpsys','window','displays',check=False)
+    for line in text.splitlines():
+        if 'mCurrentFocus' in line:
+            # exact package token, not substring of some other component
+            return re.search(r'mCurrentFocus=.*[ /=]'+re.escape(PACKAGE)+r'($|/|\s)', line) is not None
+    return False
+
+
+def _ocr_public_marker(png, bounds):
+    """True only when OCR of the bounded terminal region shows the READY marker.
+
+    Mirrors terminal_screenshot_gate preprocessing; the transcript itself stays
+    local — only the boolean and engine label are ever published."""
+    executable = shutil.which('tesseract')
+    if executable is None:
+        raise GuiFailure('direct_ime_proof_ocr_missing')
+    try:
+        from PIL import Image, ImageChops, ImageOps, ImageStat
+    except ImportError:
+        raise GuiFailure('direct_ime_proof_ocr_missing') from None
+    x, y, width, height = bounds
+    try:
+        with Image.open(io.BytesIO(png)) as source:
+            if source.format != 'PNG': raise ValueError()
+            source.load()
+            image = source.convert('RGB')
+    except (OSError, ValueError):
+        raise GuiFailure('direct_ime_proof_ocr_failed') from None
+    if x < 0 or y < 0 or width < 1 or height < 1 or x + width > image.width or y + height > image.height:
+        raise GuiFailure('direct_ime_proof_ocr_failed')
+    crop = image.crop((x, y, x + width, y + height))
+    red, green, blue = crop.split()
+    gray = ImageOps.autocontrast(ImageChops.lighter(ImageChops.lighter(red, green), blue))
+    if ImageStat.Stat(gray).mean[0] < 127:
+        gray = ImageOps.invert(gray)
+    gray = ImageOps.expand(gray.resize((width * 2, height * 2)), border=20, fill=255)
+    encoded = io.BytesIO()
+    gray.save(encoded, format='PNG')
+    engine = None
+    ocr_env = dict(os.environ, OMP_THREAD_LIMIT='1')
+    try:
+        version = subprocess.run([executable, '--version'], capture_output=True, timeout=10, check=True, env=ocr_env)
+        match = re.match(rb'tesseract ([0-9.]+)', version.stdout)
+        if match is None: raise ValueError()
+        engine = 'tesseract ' + match[1].decode('ascii')
+        visible = False
+        for psm in (6, 11):
+            result = subprocess.run([executable, 'stdin', 'stdout', '-l', 'eng', '--psm', str(psm),
+                                     '-c', 'load_system_dawg=0', '-c', 'load_freq_dawg=0'],
+                                    input=encoded.getvalue(), capture_output=True, timeout=30, check=True, env=ocr_env)
+            text = result.stdout.decode('utf-8', errors='strict')
+            if any(line.strip().replace(' ', '') == 'POCKET-ANDROID-READY' for line in text.splitlines()):
+                visible = True
+                break
+        return visible, engine
+    except (OSError, subprocess.SubprocessError, UnicodeError, ValueError):
+        raise GuiFailure('direct_ime_proof_ocr_failed') from None
+
+
+
+
+def _atomic_publish(output, png, evidence):
+    """Write PNG+JSON via temp names, then os.replace; abort leaves nothing public."""
+    image_name = 'ime-keyboard-opened-native.png'
+    json_name = 'ime-keyboard-opened-native.json'
+    tmp_image = output / (image_name + '.tmp')
+    tmp_json = output / (json_name + '.tmp')
+    published = []
+    try:
+        tmp_image.write_bytes(png)
+        tmp_json.write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8')
+        os.replace(tmp_image, output / image_name)
+        published.append(output / image_name)
+        os.replace(tmp_json, output / json_name)
+    except Exception:
+        for path in [tmp_image, tmp_json, *published]:
+            try: path.unlink()
+            except OSError: pass
+        raise GuiFailure('direct_ime_proof_publish_failed') from None
+
+
+def capture_native_ime_keyboard_proof(browser, fixture):
+    """Capture the public IME evidence right after the real keyboard touch.
+
+    Fail closed: every gate (owned foreground, DOM public state, peer 0-input,
+    OCR READY marker) must hold on BOTH sides of the in-memory framebuffer
+    capture, or nothing is published and the product assertion fails on its
+    own. Never sends input; fixture.password is deliberately not consulted."""
+    if getattr(browser, '_ime_keyboard_proof_captured', False): return
+    browser._ime_keyboard_proof_captured = True
+    output = getattr(browser, 'evidence_dir', None)
+    if output is None: return
+    output = Path(output)
+    output.mkdir(parents=True, exist_ok=True)
+    def fail(code):
+        (output / 'ime-keyboard-opened-native.json').write_text(
+            json.dumps({'schemaVersion': 2, 'status': 'failed', 'errorCode': code}, indent=2) + '\n',
+            encoding='utf-8')
+    if not getattr(browser, '_temporary_install_confirmed', False):
+        return fail('direct_ime_proof_install_unconfirmed')
+    expected = f'{fixture.username}@127.0.0.1:{fixture.port}'
+    try:
+        dom = _ime_dom_state(browser, fixture)
+        if not all(dom.values()): return fail('direct_ime_proof_page_state_invalid')
+        active_peer(fixture, input_bytes=0)
+        foreground_before = _foreground_owned()
+        if not foreground_before: return fail('direct_ime_proof_foreground_lost')
+        png, size = _framebuffer_png()
+        geometry = _terminal_geometry(browser, expected)
+        hierarchy = _read_window_hierarchy()
+        bounds = _terminal_framebuffer_bounds(geometry, hierarchy, size)
+        marker_visible, ocr_engine = _ocr_public_marker(png, bounds)
+        if not marker_visible: return fail('direct_ime_proof_marker_not_visible')
+        dom_after = _ime_dom_state(browser, fixture)
+        if not all(dom_after.values()): return fail('direct_ime_proof_page_state_invalid')
+        active_peer(fixture, input_bytes=0)
+        if not _foreground_owned(): return fail('direct_ime_proof_foreground_lost')
+        if _webview_frames(hierarchy) != _webview_frames(_read_window_hierarchy()):
+            return fail('direct_ime_proof_foreground_lost')
+        evidence = {'schemaVersion': 2, 'status': 'passed',
+            'captureEngine': 'adb exec-out screencap -p',
+            'image': 'ime-keyboard-opened-native.png',
+            'imageSha256': hashlib.sha256(png).hexdigest(), 'imageSize': list(size),
+            'terminalBounds': list(bounds), 'ocrEngine': ocr_engine,
+            'markerVisible': True, 'domGates': dom, 'foregroundHeld': True,
+            'installTemporary': True, 'inputSent': False, 'credentialsOnScreen': False,
+            'fixedGeometry': active_diagnostic(browser, fixture)}
+        _atomic_publish(output, png, evidence)
+        return
+    except GuiFailure as error:
+        code = str(error)
+        fail(code if re.fullmatch(r'direct_[a-z0-9_]{1,80}', code) else 'direct_ime_proof_capture_failed')
+    except Exception:
+        fail('direct_ime_proof_capture_failed')
+
 
 def staged_setup(browser):
     # The mobile route and the desktop checkbox are mutually exclusive UI witnesses.
@@ -757,6 +953,7 @@ def exercise_active_navigation(browser, fixture, *, progress=None, ime_checks=No
     if progress is not None: progress['stage']='active_keyboard_opened'
     native_active_tap(browser,'#ssh-focus')
     ime(True)
+    capture_native_ime_keyboard_proof(browser, fixture)
     observe('active_keyboard_opened','ssh',True)
     ime(True)
     if progress is not None: progress['stage']='active_keyboard_closed'
@@ -874,6 +1071,7 @@ def fill_credentials(browser, fixture, *, encrypted_key, staged, progress=None):
 
 def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, progress=None):
     """Use actual CDP click/keyboard events and independently check the peer."""
+    browser.evidence_dir = evidence_dir
     if progress is not None: progress['stage']='open_remote'
     entry = dashboard_add_selector(browser)
     browser.click(entry)
@@ -925,11 +1123,21 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
             error.ime_failure=public_ime_diagnostic(getattr(error,'system_ime_diagnostic',None))
             raise
     if progress is not None: progress['stage']='terminal_input'
+    second_open=[]
     if active_navigation:
-        native_active_tap(browser,'#ssh-focus')
-        system_keyboard(True)
-        active_view(browser,fixture,'ssh',keyboard=True)
-        active_peer(fixture)
+        # Before/after facts around the second explicit open: fixed IME enums,
+        # bounded geometry, zero-input peer; retained on any later failure.
+        second_open.append(second_open_checkpoint(browser,fixture,progress))
+        try:
+            native_active_tap(browser,'#ssh-focus')
+            system_keyboard(True)
+            active_view(browser,fixture,'ssh',keyboard=True)
+            active_peer(fixture)
+        except GuiFailure as error:
+            if not hasattr(error,'second_open_checkpoint'):
+                error.second_open_checkpoint=second_open+[second_open_checkpoint(browser,fixture,progress)]
+            raise
+        second_open.append(second_open_checkpoint(browser,fixture,progress))
     else:
         browser.click('#ssh-focus')
     wait_for(lambda: browser.evaluate("document.activeElement === document.querySelector('#ssh-terminal .xterm-helper-textarea')"),
@@ -989,8 +1197,49 @@ def exercise_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, pro
             'terminalInputReceived':True,'terminalEchoRendered':True,'disconnected':True,
             'passwordCleared':True, 'returnedHome':True, **({'helperKeysExact':True} if not encrypted_key else {}),
             **({'ordinaryActive':active_navigation,'activeImeChecks':ime_checks} if active_navigation else {}),
+            **({'secondOpenFacts':second_open} if second_open else {}),
             **({'terminalScreenshot':terminal_proof} if terminal_proof else {}),
             'peer':{k:True for k in ('authAccepted','ptyRequested','shellRequested','markerReceived','sessionClosed')}}
+
+def second_open_checkpoint(browser, fixture, progress=None):
+    """Bounded second-open facts only: IME enums, editor focus booleans,
+    geometry, and bounded same-connection peer counts.
+
+    Read-only; no raw DOM text, credentials, screenshots, taps or focus changes.
+    Every fact is a fixed boolean/enum; an unreadable fact stays null so miss,
+    foreign focus and transition states stay distinguishable. When a writable
+    progress dict is supplied, a copy is stored immediately so later failures
+    (editor focus waits, echo waits) cannot lose this checkpoint.
+    """
+    checkpoint={'peerCounts':None,'peerClosed':None}
+    try:
+        raw=parse_system_ime(adb('shell','dumpsys','input_method'), adb('shell','dumpsys','window','displays'), PACKAGE)
+        checkpoint['ime']=public_ime_diagnostic(raw.get('diagnostic'))
+    except SystemImeFailure as error:
+        # keep the whitelisted enums the classifier already produced
+        checkpoint['ime']=error.public_diagnostic()
+    except (DeviceFailure,GuiFailure):
+        checkpoint['ime']={}
+    checkpoint['editorFocus']=public_editor_focus(browser)
+    diagnostic=active_diagnostic(browser,fixture)
+    checkpoint['geometry']=diagnostic.get('geometry') if isinstance(diagnostic,dict) else None
+    # bounded peer facts already validated by active_diagnostic (int ranges,
+    # exact connection count); never call fixture.snapshot() unbounded here.
+    bounded=diagnostic.get('peer') if isinstance(diagnostic,dict) else None
+    if isinstance(bounded,dict):
+        checkpoint['peerCounts']={key:bounded[key] for key in
+            ('authAttempts','authSuccesses','ptyRequests','shellRequests','inputBytes')
+            if type(bounded.get(key)) is int}
+        checkpoint['peerClosed']=bounded.get('closed') is True
+    try:
+        active_peer(fixture, input_bytes=0)
+        checkpoint['peerUnchanged']=True
+    except (GuiFailure,AttributeError):
+        checkpoint['peerUnchanged']=False
+    if isinstance(progress,dict):
+        stored=progress.setdefault('secondOpenFacts',[])
+        if isinstance(stored,list): stored.append(dict(checkpoint))
+    return checkpoint
 
 
 def exercise_key_change_ui(browser, fixture, *, encrypted_key=False, evidence_dir=None, progress=None):
@@ -1183,6 +1432,81 @@ def _connect_ready(port):
             except GuiFailure: pass
 
 
+def _app_process_present():
+    lines = adb('shell', 'ps', '-A', '-o', 'PID,NAME').splitlines()
+    if not lines or lines[0].split() != ['PID', 'NAME']:
+        return None
+    rows = [line.split(maxsplit=1) for line in lines[1:]]
+    if not all(len(row) == 2 and row[0].isdigit() for row in rows) or not any(pid == '1' for pid, _ in rows):
+        return None
+    return any(name.split(':', 1)[0] == PACKAGE for _, name in rows)
+
+
+def _app_package_present():
+    packages = adb('shell', 'pm', 'list', 'packages', '--user', '0').splitlines()
+    if 'package:android' not in packages or not all(re.fullmatch(r'package:[\w.]+', line, re.ASCII) for line in packages):
+        return None
+    return 'package:' + PACKAGE in packages
+
+
+def _mapping_present(direction, local, remote=None):
+    rows = [row.split() for row in adb(direction, '--list').splitlines()]
+    if not all(len(row) == 3 and all(re.fullmatch(r'[a-z][a-z0-9-]*:\S+', item) for item in row[1:]) for row in rows):
+        return None
+    # Forward lists are host-wide. Reverse lists belong to the selected device.
+    return any((direction == 'reverse' or owner == SERIAL) and
+               (source == local if local is not None else target == remote) for owner, source, target in rows)
+
+
+def _browser_socket_present(browser):
+    if browser.ws.connected is True:
+        return True
+    if browser.ws.connected is False and browser.ws.sock is None:
+        return False
+    return None
+
+
+def _device_cleanup(browser, install_attempted, forwarded, socket_target, reverse, reverse_added):
+    steps = {}
+
+    def record(stage, action, *, readback=False):
+        try:
+            value = action()
+        except Exception as error:
+            steps[stage] = public_driver_error(error) if isinstance(error, GuiFailure) else 'direct_driver_failed'
+        else:
+            if not readback:
+                steps[stage] = 'returned'
+            elif value is True:
+                steps[stage] = 'present'
+            elif value is False:
+                steps[stage] = 'absent'
+            else:
+                steps[stage] = 'unverified'
+
+    if browser is not None:
+        record('browserClose', lambda: browser.close())
+        record('browserSocket', lambda: _browser_socket_present(browser), readback=True)
+    if install_attempted:
+        record('forceStop', lambda: adb('shell', 'am', 'force-stop', PACKAGE))
+        record('uninstall', lambda: adb('uninstall', PACKAGE, timeout=60))
+        record('appProcess', _app_process_present, readback=True)
+        record('appPackage', _app_package_present, readback=True)
+    if socket_target is not None:
+        if forwarded is not None:
+            record('forwardRemove', lambda: adb('forward', '--remove', forwarded))
+        record('forwardList', lambda: _mapping_present('forward', forwarded, socket_target), readback=True)
+    if reverse is not None:
+        if reverse_added:
+            record('reverseRemove', lambda: adb('reverse', '--remove', reverse))
+        record('reverseList', lambda: _mapping_present('reverse', reverse), readback=True)
+
+    probes = ('browserSocket', 'appProcess', 'appPackage', 'forwardList', 'reverseList')
+    if any(steps[key] != 'absent' for key in probes if key in steps):
+        return {'status':'failed', 'failureStage':'cleanup', 'errorCode':'direct_cleanup_failed', 'steps':steps}
+    return {'status':'passed', 'steps':steps}
+
+
 def run_device(apk, fixture, *, encrypted_key=False, key_change=False, evidence_dir=None, progress=None):
     if progress is not None: progress['stage']='device_preflight'
     if (os.environ.get('GITHUB_ACTIONS') != 'true' or os.environ.get('ANDROID_SERIAL') != SERIAL or
@@ -1194,13 +1518,15 @@ def run_device(apk, fixture, *, encrypted_key=False, key_change=False, evidence_
             adb('shell','am','get-current-user') != '0' or
             'package:' + PACKAGE in adb('shell','pm','list','packages',PACKAGE)):
         raise GuiFailure('direct_unowned_or_invalid_device')
-    reverse=f'tcp:{fixture.port}'
-    installed=False; forwarded=None; browser=None; reverse_added=False; cleanup=[]
+    reverse = forwarded = socket_target = browser = None
+    reverse_added = install_attempted = False
     try:
         if progress is not None: progress['stage']='reverse_setup'
+        reverse=f'tcp:{fixture.port}'
         adb('reverse',reverse,reverse);reverse_added=True
         if progress is not None: progress['stage']='install_app'
-        adb('install',str(apk),timeout=90);installed=True
+        install_attempted=True  # the owned device preflight established the package was absent
+        adb('install',str(apk),timeout=90)
         if progress is not None: progress['stage']='launch_app'
         adb('shell','monkey','-p',PACKAGE,'-c','android.intent.category.LAUNCHER','1')
         pid=wait_for(lambda:adb('shell','pidof',PACKAGE,check=False),'direct_app_missing',timeout=60)
@@ -1210,11 +1536,13 @@ def run_device(apk, fixture, *, encrypted_key=False, key_change=False, evidence_
         wait_for(lambda:'@'+socket_name in adb('shell','cat','/proc/net/unix',check=False),
                  'direct_webview_socket_missing',timeout=60)
         if progress is not None: progress['stage']='webview_forward'
-        port=adb('forward','tcp:0','localabstract:'+socket_name)
+        socket_target='localabstract:'+socket_name
+        port=adb('forward','tcp:0',socket_target)
         if not port.isdigit() or not 1 <= int(port) <= 65535:raise GuiFailure('direct_forward_invalid')
         forwarded='tcp:'+port
         if progress is not None: progress['stage']='webview_ready'
         browser=wait_for(lambda:_connect_ready(int(port)),'direct_webview_not_ready',timeout=60)
+        browser._temporary_install_confirmed=True  # fresh install verified above; pm list showed absence
         if progress is not None: progress['stage']='rotation_ui' if key_change else 'open_remote'
         if key_change:
             result=exercise_key_change_ui(browser,fixture,encrypted_key=encrypted_key,
@@ -1222,28 +1550,15 @@ def run_device(apk, fixture, *, encrypted_key=False, key_change=False, evidence_
         else:
             result=exercise_ui(browser,fixture,encrypted_key=encrypted_key,evidence_dir=evidence_dir,progress=progress)
     finally:
-        if browser:
-            try: browser.close()
-            except Exception: cleanup.append('browser')
-        if installed:
-            try:
-                adb('shell','am','force-stop',PACKAGE);adb('uninstall',PACKAGE,timeout=60)
-                if adb('shell','pidof',PACKAGE,check=False) or 'package:'+PACKAGE in adb('shell','pm','list','packages',PACKAGE):
-                    cleanup.append('application')
-            except GuiFailure: cleanup.append('application')
-        if forwarded:
-            try:
-                adb('forward','--remove',forwarded)
-                if any(forwarded in row.split() for row in adb('forward','--list').splitlines()): cleanup.append('forward')
-            except GuiFailure: cleanup.append('forward')
-        if reverse_added:
-            try:
-                adb('reverse','--remove',reverse)
-                if any(reverse in row.split() for row in adb('reverse','--list').splitlines()): cleanup.append('reverse')
-            except GuiFailure: cleanup.append('reverse')
-        if cleanup:
-            if progress is not None: progress['stage']='cleanup'
-            raise GuiFailure('direct_cleanup_failed')
+        cleanup = _device_cleanup(browser, install_attempted, forwarded, socket_target, reverse, reverse_added)
+        if progress is not None:
+            progress['cleanupDiagnostic'] = cleanup
+    # An exception from the primary path propagates directly through the finally block.
+    if progress is not None:
+        progress['stage'] = 'cleanup'
+    if cleanup['status'] == 'failed':
+        raise GuiFailure('direct_cleanup_failed')
+    result['cleanupDiagnostic'] = cleanup
     result['cleanup']={'browser':True,'application':True,'forward':True,'reverse':True}
     return result
 
@@ -1295,12 +1610,12 @@ def main():
                                                     key_change=True,evidence_dir=output)
         else:
             from direct_ssh_fixture import DirectSshFixture
-            from tauri_encrypted_key_fixture import EncryptedKeyFixture
             report.update(run_case(DirectSshFixture(observe_helper_keys=True,screen_proof=True),evidence_dir=output))
             report['phase']='host_key_rotation'
             rotation=DirectSshFixture(rotate_after_probe=True,observe_helper_keys=True,screen_proof=True)
             report['rotation']=run_case(rotation,key_change=True,evidence_dir=output)
             report['rotation']['s10Screenshot']=(output/'s10-host-key-change-android.png').exists()
+            from tauri_encrypted_key_fixture import EncryptedKeyFixture
             report['phase']='encrypted_key'
             report['encryptedKey']=run_case(EncryptedKeyFixture(),encrypted_key=True)
         report['phase']='complete'
@@ -1316,11 +1631,24 @@ def main():
             report['activeImeChecks']=[public_ime_diagnostic(item) for item in ime_checks]
         ime_failure=public_ime_diagnostic(getattr(error,'ime_failure',None))
         if ime_failure: report['activeImeFailure']=ime_failure
+        second_open_facts=getattr(error,'second_open_checkpoint',None)
+        if isinstance(second_open_facts,list) and 1<=len(second_open_facts)<=3:
+            report['secondOpenFacts']=second_open_facts
+        stored_facts=progress.get('secondOpenFacts')
+        if isinstance(stored_facts,list) and 1<=len(stored_facts)<=3:
+            report['secondOpenFacts']=stored_facts
         report['errorCode']=public_driver_error(error)
         if progress.get('stage') in DRIVER_STAGES: report['failureStage']=progress['stage']
     except Exception:
         report['errorCode']='direct_fixture_or_driver_failed'
+        stored_facts=progress.get('secondOpenFacts')
+        if isinstance(stored_facts,list) and 1<=len(stored_facts)<=3:
+            report['secondOpenFacts']=stored_facts
         if progress.get('stage') in DRIVER_STAGES: report['failureStage']=progress['stage']
+    if report['status'] == 'failed':
+        report.pop('cleanupDiagnostic', None)  # a completed earlier scenario has its own cleanup
+        if 'cleanupDiagnostic' in progress:
+            report['cleanupDiagnostic'] = progress['cleanupDiagnostic']
     (output/'manifest.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
     if report['status']!='passed': raise SystemExit(1)
 

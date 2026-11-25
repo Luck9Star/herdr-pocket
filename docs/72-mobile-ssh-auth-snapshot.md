@@ -110,6 +110,16 @@ R7 验收范围为受控回环密码认证与 XCTest 输入。之后由[原生�
 
 ZIP 同时保留 `key-change-review.png` 核对原图和 `preconnect.png` 已遮罩的连接前原图。R1 未执行私钥与主机换钥组合，随后由 [R3](#独立加密私钥与主机换钥-r3)补验。实体设备、物理键盘、系统中文 IME 和真实跨网仍待验。[仓库原件及成员校验清单](evidence/flutter-ios-encrypted-key-r1-20261119/README.md)
 
+### 握手闸门整合复验
+
+**未通过 — 闸门前提待修。** 2026-11-25，整合分支 `codex/consolidate-worktrees-20261125` 给驱动加了 `encrypted_probe_evidence` 闸门：错误口令的首次探测必须以 `handshakeCompleted` 结束，否则报 `ios_encrypted_probe_incomplete`；随后 `6f4a7ba9` 又在该处加 5 秒有界等待。`b54e2f9d` 的[作业 139056546495](https://github.com/Luck9Star/herdr-pocket/actions/runs/45570764970/job/139056546495)与 `6f4a7ba9` 的[对照作业 139076595272](https://github.com/Luck9Star/herdr-pocket/actions/runs/45576780810/job/139076595272)均在 `encrypted_review` 以该码失败。两次的普通密码、密码换钥与八个移动端检查点均通过。
+
+两次失败的首条探测一致：`handshakeCompleted` 为假，`phase` 为 `handshake`，`closeReason` 为 `peer_eof`，`handshakeMs` 为空，`hostKeyAlgorithm` 为 `unknown`，分别在 193 与 48 毫秒后关闭。[R4 通过作业](https://github.com/Luck9Star/herdr-pocket/actions/runs/44667921130/job/136061669086)的首条探测与之相同，174 毫秒关闭。也就是说 iOS 客户端在错误口令时于握手阶段即断开，握手不会完成，上文 R1 与 R4 记录的"只有首次探测、服务端零认证"即此行为。连接关闭后等待 5 秒不改变结果，闸门要求的前提在当前 App 上不成立。
+
+同日 `6f4a7ba9` 的[另一作业 139066588935](https://github.com/Luck9Star/herdr-pocket/actions/runs/45573788604/job/139066588935)在更早的 `keyboard_shown` 以 `TestFailure` 失败，位于 `direct_ssh_ui_steps.dart` 第 366 行，该文件与主线相同；其余两次运行该步骤通过，记为偶发，未再复现。
+
+本节不推翻 R1、R3、R4 的通过结论。闸门来自未在设备上通过的工作草稿，保留为待修项：须先确定错误口令的本地拒绝应以何种可观测证据为准，再决定修改 App 在握手前断开的行为，还是改写闸门。在此之前，整合分支的 iOS 加密私钥案不能计为通过，密码与私钥切换后的状态与可见输入清空检查也未执行到。
+
 ## R22 Android 设备证据
 
 两次作业使用受控 API 35 x86_64 模拟器与回环 SSH，均完成普通连接、主机密钥变化、终端回显和断开。两次使用不同源码，原始 ZIP 已完整重新下载并计算 SHA256。[可复核的运行、工件及内部结果索引](evidence/mobile-ssh-auth-r23/r22-actions.json)

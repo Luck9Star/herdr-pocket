@@ -109,7 +109,7 @@ class PublicEvidenceTests(unittest.TestCase):
         return {'status': 'passed', 'fingerprintReviewed': True, 'terminalInputReceived': True,
                 'disconnected': True, 'returnedHome': True,
                 'wrongPassphrase': {'rejected': True, 'peer': {'id': 1, 'hostKey': 'A',
-                    'closed': True, **attempts}},
+                    'closed': True, 'handshakeCompleted': True, **attempts}},
                 'modeSwitch': {'passwordToKeyCleared': True, 'keyToPasswordCleared': True, 'sameTrust': True},
                 'acceptedSession': {'id': 2, 'hostKey': 'A', 'authAttempts': 1, 'authSuccesses': 1,
                     'ptyRequests': 1, 'shellRequests': 1, 'inputBytes': 9, 'outputBytes': 12,
@@ -325,24 +325,38 @@ class PublicEvidenceTests(unittest.TestCase):
             (root / 'result.json').write_text(json.dumps(report))
             expected = {'result.json', *report['artifacts'], *batch.TERMINAL_PROOFS.values(), proof}
             self.assertEqual(publish('completed'), expected)
+            (root / 'preconnect.png').write_bytes(data)
+            report['artifacts']['preconnect.png'] = report['artifacts'][png]
+            (root / 'result.json').write_text(json.dumps(report))
+            with self.assertRaisesRegex(batch.BatchFailure, 'ios_batch_encrypted_key_image_reused'):
+                publish('preconnect-image-replay')
+            del report['artifacts']['preconnect.png']
+            (root / 'preconnect.png').unlink()
+            (root / 'result.json').write_text(json.dumps(report))
             (root / proof).unlink()
             with self.assertRaisesRegex(batch.BatchFailure, 'file_invalid'):
                 publish('missing-ocr')
 
     def test_flutter_publication_rejects_missing_trust_cleanup_and_replayed_actions(self):
+        missing = object()
         for path, value in ((('modeSwitch', 'sameTrust'), 1), (('modeSwitch', 'keyToPasswordCleared'), False),
                 (('wrongPassphrase', 'peer', 'authAttempts'), 1), (('wrongPassphrase', 'peer', 'id'), True),
+                (('wrongPassphrase', 'peer', 'handshakeCompleted'), False),
+                (('wrongPassphrase', 'peer', 'handshakeCompleted'), missing),
                 (('acceptedSession', 'id'), 3), (('acceptedSession', 'hostKey'), 'B'),
                 (('acceptedSession', 'authSuccesses'), True), (('acceptedSession', 'ptyRequests'), 2),
                 (('acceptedSession', 'shellRequests'), 2), (('acceptedSession', 'inputBytes'), 18),
                 (('acceptedSession', 'singleMarkerLineExact'), False), (('acceptedSession', 'outputBytes'), 0),
                 (('peerClosedBeforeDriverExit',), False), (('returnedHome',), False)):
-            with self.subTest(path=path):
+            with self.subTest(path=path, value=value):
                 case = self.encrypted_key_case()
                 target = case
                 for key in path[:-1]:
                     target = target[key]
-                target[path[-1]] = value
+                if value is missing:
+                    del target[path[-1]]
+                else:
+                    target[path[-1]] = value
                 self.assertFalse(batch.encrypted_key_case_valid(case))
 
     def test_wrong_source_cannot_export_even_a_result(self):

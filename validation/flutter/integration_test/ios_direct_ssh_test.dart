@@ -97,15 +97,49 @@ Future<Map<String, bool>> checkIosCredentialSwitches(
   const pem = 'synthetic key draft\nfor the mode switch only';
   final secret = control('direct-secret');
   final summary = control('direct-edit-pem');
+  final passphrase = control('direct-passphrase');
   bool empty() => state.secret.text.isEmpty && state.passphrase.text.isEmpty;
   bool trusted() =>
-      state.fingerprint == fingerprint && state.checkedTarget == state.target;
+      state.hostKeyReviewRequired == false &&
+      state.fingerprint == fingerprint &&
+      state.checkedTarget == state.target;
+  bool unauthenticated() =>
+      state.connected == false &&
+      state.busy == false &&
+      state.connectPhase == DirectSshConnectPhase.idle &&
+      state.connectCredentialCaptured == false &&
+      state.connectPasswordRequested == false &&
+      find.byType(TerminalView).evaluate().isEmpty;
+  void expectVisibleSecretsCleared() {
+    expect(state.secret.text, isEmpty);
+    expect(state.passphrase.text, isEmpty);
+    // direct-secret only collapses (pemCollapsed) when secret is non-empty.
+    if (state.keyAuth == true && state.pemCollapsed == true) {
+      expect(secret, findsNothing);
+      expect(summary, findsOneWidget);
+    } else {
+      expect(summary, findsNothing);
+      expect(secret, findsOneWidget);
+      expect(tester.widget<TextField>(secret).controller!.text, isEmpty);
+    }
+    if (state.keyAuth == true) {
+      expect(passphrase, findsOneWidget);
+      expect(tester.widget<TextField>(passphrase).controller!.text, isEmpty);
+    } else {
+      expect(passphrase, findsNothing);
+    }
+  }
+
   expect(state.keyAuth, isFalse);
   expect(trusted(), isTrue);
+  expect(unauthenticated(), isTrue);
+  expectVisibleSecretsCleared();
   await fill('direct-secret', 'mode-switch-password');
   await tap(tester, 'direct-auth-key');
-  final passwordCleared = state.keyAuth == true && empty() && trusted();
+  final passwordCleared =
+      state.keyAuth == true && empty() && trusted() && unauthenticated();
   expect(passwordCleared, isTrue);
+  expectVisibleSecretsCleared();
   await fill('direct-secret', pem);
   await fill('direct-passphrase', 'mode-switch-passphrase');
   expect(secret, findsNothing);
@@ -135,10 +169,12 @@ Future<Map<String, bool>> checkIosCredentialSwitches(
     timeoutReason: 'direct_ssh_ios_ui_timeout_mode_switch_keyboard_closed',
   );
   await tap(tester, 'direct-auth-password');
-  final keyCleared = state.keyAuth == false && empty();
+  final keyCleared =
+      state.keyAuth == false && empty() && trusted() && unauthenticated();
   expect(keyCleared, isTrue);
   expect(summary, findsNothing);
   expect(trusted(), isTrue);
+  expectVisibleSecretsCleared();
   return {
     'passwordToKeyCleared': passwordCleared,
     'keyToPasswordCleared': keyCleared,

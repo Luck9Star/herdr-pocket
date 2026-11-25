@@ -23,7 +23,8 @@ from flutter_direct_ssh_android import (PUBLIC_FIELDS as FIELDS, ROTATION_PUBLIC
                                        ENCRYPTED_PUBLIC_FIELDS, ENCRYPTED_ROTATION_PUBLIC_FIELDS,
                                        ENCRYPTED_ROTATION_CHECKPOINTS, ENCRYPTED_UI_PHASES, checked_encrypted_stage,
                                        closed_rotation_evidence,
-                                       encrypted_probe_evidence, safe_encrypted_connect_diagnostic, safe_encrypted_diagnostic,
+                                       encrypted_probe_evidence as android_encrypted_probe_evidence,
+                                       safe_encrypted_connect_diagnostic, safe_encrypted_diagnostic,
                                        ORDINARY_MOBILE_PHASES, Failure as SharedFailure, checked_rotation_stage,
                                        ordinary_mobile_checkpoint, ordinary_session_evidence,
                                        require_ordinary_mobile_checkpoints, rotation_checkpoint,
@@ -554,6 +555,13 @@ def layout_diagnostics(value):
         if valid:
             result.append(dict(event))
     return result
+
+
+def encrypted_probe_evidence(peer):
+    evidence = android_encrypted_probe_evidence(peer)
+    if peer.snapshot()['connectionEvents'][0].get('handshakeCompleted') is not True:
+        raise Failure('ios_encrypted_probe_incomplete')
+    return {**evidence, 'handshakeCompleted': True}
 
 
 def deliver_encrypted_credentials(exchange, peer):

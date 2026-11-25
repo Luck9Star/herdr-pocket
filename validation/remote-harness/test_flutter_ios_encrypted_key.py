@@ -178,6 +178,12 @@ class FlutterIosEncryptedKeyTests(unittest.TestCase):
             self.assertEqual(names, {'result.json', 'encrypted-rotation-review.png', 'encrypted-rotation-terminal.png',
                                      'encrypted-rotation-terminal-ocr.json'})
 
+    @staticmethod
+    def _wait_handshake(peer):
+        deadline = time.monotonic() + 2
+        while not peer.snapshot()['connectionEvents'][0]['handshakeCompleted'] and time.monotonic() < deadline:
+            time.sleep(.01)
+
     def test_single_rotating_encrypted_peer_and_exact_command_guard(self):
         for command, exact in ((b'hp-check\r', True), (b'\nhp-check\r', False)):
             with self.subTest(exact=exact), tempfile.TemporaryDirectory() as directory, EncryptedKeyFixture(
@@ -188,6 +194,8 @@ class FlutterIosEncryptedKeyTests(unittest.TestCase):
                     with paramiko.Transport(('127.0.0.1', peer.port)) as probe:
                         probe.start_client(timeout=5)
                         self.assertEqual(probe.get_remote_server_key().fingerprint, fingerprint)
+                        if count == 1:
+                            self._wait_handshake(peer)
                     if count == 1:
                         checkpoints['review'] = ios.encrypted_probe_evidence(peer)
                     elif count == 2:
@@ -245,11 +253,13 @@ class FlutterIosEncryptedKeyTests(unittest.TestCase):
                 probe.start_client(timeout=5)
                 reviewed = probe.get_remote_server_key()
                 self.assertEqual(reviewed.fingerprint, peer.fingerprint)
+                self._wait_handshake(peer)
             review = ios.encrypted_probe_evidence(peer)
             with self.assertRaises(paramiko.SSHException):
                 paramiko.Ed25519Key.from_private_key(io.StringIO(values['privateKey']), password='wrong')
             rejected = ios.encrypted_probe_evidence(peer)
             self.assertEqual(review, rejected)
+            self.assertIs(rejected['handshakeCompleted'], True)
             self.assertTrue(all(rejected[k] == 0 for k in ('authAttempts', 'authSuccesses', 'ptyRequests',
                                                           'shellRequests', 'inputBytes', 'outputBytes')))
             key = paramiko.Ed25519Key.from_private_key(io.StringIO(values['privateKey']), password=values['passphrase'])
@@ -284,6 +294,25 @@ class FlutterIosEncryptedKeyTests(unittest.TestCase):
             with self.assertRaisesRegex(ios.Failure, 'checkpoints_incomplete'):
                 ios.encrypted_case_evidence(exchange, peer, checkpoints)
         self.assertFalse(any((peer.private_key, peer.passphrase, peer.wrong_passphrase)))
+
+    def test_encrypted_probe_evidence_requires_completed_handshake(self):
+        zero = dict.fromkeys(('authAttempts', 'authSuccesses', 'ptyRequests', 'shellRequests', 'inputBytes', 'outputBytes'), 0)
+        event = {'id': 1, 'hostKey': 'A', 'closed': True, 'authAccepted': False,
+                 'markerReceived': False, 'sessionClosed': False, **zero}
+        for bad_event in ({**event, 'handshakeCompleted': False}, dict(event)):
+            with self.subTest(bad_event=bad_event):
+                peer = SimpleNamespace(
+                    wait_for_connections_closed=lambda count: count == 1,
+                    snapshot=lambda: {'connections': 1, 'connectionsClosed': True, 'connectionEvents': [bad_event]},
+                )
+                with self.assertRaisesRegex(ios.Failure, 'ios_encrypted_probe_incomplete'):
+                    ios.encrypted_probe_evidence(peer)
+        good_peer = SimpleNamespace(
+            wait_for_connections_closed=lambda count: count == 1,
+            snapshot=lambda: {'connections': 1, 'connectionsClosed': True,
+                              'connectionEvents': [{**event, 'handshakeCompleted': True}]},
+        )
+        self.assertEqual(ios.encrypted_probe_evidence(good_peer), {**event, 'handshakeCompleted': True})
 
     def test_public_key_only_fixture_rejects_its_password_and_an_unrelated_key(self):
         with EncryptedKeyFixture(channel_deadline=time.monotonic() + 60) as peer:

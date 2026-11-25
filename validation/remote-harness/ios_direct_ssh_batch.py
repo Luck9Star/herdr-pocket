@@ -55,7 +55,7 @@ def encrypted_key_case_valid(case):
     wrong = case.get('wrongPassphrase')
     peer = wrong.get('peer') if isinstance(wrong, dict) else None
     if (not isinstance(wrong, dict) or wrong.get('rejected') is not True or not isinstance(peer, dict)
-            or peer.get('closed') is not True
+            or peer.get('closed') is not True or peer.get('handshakeCompleted') is not True
             or any(type(peer.get(key)) is not int or peer[key] != 0 for key in
                    ('authAttempts', 'authSuccesses', 'ptyRequests', 'shellRequests', 'inputBytes', 'outputBytes'))):
         return False
@@ -119,7 +119,9 @@ def encrypted_rotation_case_valid(report):
             return False
     probe = checkpoints['review']
     probe_fields = {'id', 'hostKey', 'closed', 'authAccepted', 'markerReceived', 'sessionClosed', *zero}
-    if (not isinstance(probe, dict) or set(probe) != probe_fields or
+    if (not isinstance(probe, dict) or set(probe) - {'handshakeCompleted'} != probe_fields or
+            ('handshakeCompleted' in probe and
+             (probe['handshakeCompleted'] is not True or events[0].get('handshakeCompleted') is not True)) or
             any(type(probe[name]) is not type(events[0][name]) or probe[name] != events[0][name] for name in probe_fields)
             or checkpoints['rejected'] != checkpoints['cancelled']):
         return False
@@ -259,7 +261,7 @@ def publish_evidence(root, destination, *, shell, source_sha, include_encrypted_
             raise BatchFailure('ios_batch_encrypted_rotation_artifact_ref_invalid')
     if passed and include_encrypted_key:
         encrypted_image = next(iter(ENCRYPTED_KEY_PROOF))
-        if artifacts[encrypted_image] in {artifacts[name] for name in REQUIRED_IMAGES}:
+        if artifacts[encrypted_image] in {digest for name, digest in artifacts.items() if name != encrypted_image}:
             raise BatchFailure('ios_batch_encrypted_key_image_reused')
         cases = report.get('cases')
         case = cases.get('encryptedKey') if isinstance(cases, dict) else None
